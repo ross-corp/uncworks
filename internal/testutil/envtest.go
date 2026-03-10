@@ -26,7 +26,7 @@ func EnsureEnvtestAssets() {
 		if err == nil {
 			path := strings.TrimSpace(string(out))
 			if path != "" {
-				os.Setenv("KUBEBUILDER_ASSETS", path)
+				_ = os.Setenv("KUBEBUILDER_ASSETS", path)
 				return
 			}
 		}

@@ -23,7 +23,7 @@ func startTestGateway(t *testing.T) (agentv1.AgentSidecarServiceClient, func()) 
 	gw.grpcServer = grpc.NewServer()
 	agentv1.RegisterAgentSidecarServiceServer(gw.grpcServer, gw)
 
-	go gw.grpcServer.Serve(lis)
+	go func() { _ = gw.grpcServer.Serve(lis) }()
 
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -32,7 +32,7 @@ func startTestGateway(t *testing.T) (agentv1.AgentSidecarServiceClient, func()) 
 
 	client := agentv1.NewAgentSidecarServiceClient(conn)
 	return client, func() {
-		conn.Close()
+		_ = conn.Close()
 		gw.grpcServer.GracefulStop()
 	}
 }

@@ -46,7 +46,7 @@ func (h *WebSocketHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
 		delete(h.clients, conn)
 		h.mu.Unlock()
-		conn.Close()
+		_ = conn.Close()
 	}()
 
 	h.mu.Lock()

@@ -34,7 +34,7 @@ func getTestPool(t *testing.T) *pgxpool.Pool {
 func cleanupTables(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
-	pool.Exec(ctx, "DROP TABLE IF EXISTS agent_states, agent_queue")
+	_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS agent_states, agent_queue")
 }
 
 func TestStore_Migrate(t *testing.T) {
@@ -62,7 +62,9 @@ func TestStore_SaveAndGetState(t *testing.T) {
 
 	store := NewStore(pool)
 	ctx := context.Background()
-	store.Migrate(ctx)
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	state := &AgentState{
@@ -104,13 +106,17 @@ func TestStore_UpdatePhase(t *testing.T) {
 
 	store := NewStore(pool)
 	ctx := context.Background()
-	store.Migrate(ctx)
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	store.SaveState(ctx, &AgentState{
+	if err := store.SaveState(ctx, &AgentState{
 		ID: "state-2", AgentRunID: "ar-2", Phase: "Pending", Prompt: "p", RepoURL: "r",
 		CreatedAt: now, UpdatedAt: now,
-	})
+	}); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
 
 	if err := store.UpdatePhase(ctx, "ar-2", "Running", "Pod started"); err != nil {
 		t.Fatalf("UpdatePhase failed: %v", err)
@@ -132,7 +138,9 @@ func TestStore_UpdatePhase_NotFound(t *testing.T) {
 
 	store := NewStore(pool)
 	ctx := context.Background()
-	store.Migrate(ctx)
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
 
 	err := store.UpdatePhase(ctx, "nonexistent", "Running", "msg")
 	if err == nil {
@@ -147,20 +155,26 @@ func TestStore_ListByPhase(t *testing.T) {
 
 	store := NewStore(pool)
 	ctx := context.Background()
-	store.Migrate(ctx)
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	for i := 0; i < 3; i++ {
-		store.SaveState(ctx, &AgentState{
+		if err := store.SaveState(ctx, &AgentState{
 			ID: fmt.Sprintf("state-%d", i), AgentRunID: fmt.Sprintf("ar-%d", i),
 			Phase: "Pending", Prompt: "p", RepoURL: "r",
 			CreatedAt: now.Add(time.Duration(i) * time.Second), UpdatedAt: now,
-		})
+		}); err != nil {
+			t.Fatalf("SaveState: %v", err)
+		}
 	}
-	store.SaveState(ctx, &AgentState{
+	if err := store.SaveState(ctx, &AgentState{
 		ID: "state-running", AgentRunID: "ar-running", Phase: "Running", Prompt: "p", RepoURL: "r",
 		CreatedAt: now, UpdatedAt: now,
-	})
+	}); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
 
 	pending, err := store.ListByPhase(ctx, "Pending")
 	if err != nil {
@@ -178,19 +192,28 @@ func TestStore_Queue(t *testing.T) {
 
 	store := NewStore(pool)
 	ctx := context.Background()
-	store.Migrate(ctx)
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
 	// Enqueue two entries with different priorities
-	store.Enqueue(ctx, &QueueEntry{
+	if err := store.Enqueue(ctx, &QueueEntry{
 		ID: "q-1", AgentRunID: "ar-low", Priority: 0, UserID: "user1", CreatedAt: now,
-	})
-	store.Enqueue(ctx, &QueueEntry{
+	}); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if err := store.Enqueue(ctx, &QueueEntry{
 		ID: "q-2", AgentRunID: "ar-high", Priority: 10, UserID: "user2", CreatedAt: now,
-	})
+	}); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
 
-	length, _ := store.QueueLength(ctx)
+	length, err := store.QueueLength(ctx)
+	if err != nil {
+		t.Fatalf("QueueLength: %v", err)
+	}
 	if length != 2 {
 		t.Errorf("got queue length %d, want 2", length)
 	}
@@ -204,13 +227,18 @@ func TestStore_Queue(t *testing.T) {
 		t.Errorf("got AgentRunID %q, want %q", entry.AgentRunID, "ar-high")
 	}
 
-	length, _ = store.QueueLength(ctx)
+	length, err = store.QueueLength(ctx)
+	if err != nil {
+		t.Fatalf("QueueLength: %v", err)
+	}
 	if length != 1 {
 		t.Errorf("got queue length %d, want 1", length)
 	}
 
 	// Dequeue empty queue
-	store.Dequeue(ctx) // remove last
+	if _, err := store.Dequeue(ctx); err != nil {
+		t.Fatalf("Dequeue: %v", err)
+	}
 	entry, err = store.Dequeue(ctx)
 	if err != nil {
 		t.Fatalf("Dequeue on empty failed: %v", err)

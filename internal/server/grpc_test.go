@@ -22,7 +22,7 @@ func startTestServer(t *testing.T) (apiv1.AOTServiceClient, func()) {
 	}
 
 	s := NewGRPCServer(0)
-	go s.server.Serve(lis)
+	go func() { _ = s.server.Serve(lis) }()
 
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -31,7 +31,7 @@ func startTestServer(t *testing.T) (apiv1.AOTServiceClient, func()) {
 
 	client := apiv1.NewAOTServiceClient(conn)
 	return client, func() {
-		conn.Close()
+		_ = conn.Close()
 		s.Stop()
 	}
 }
@@ -115,13 +115,15 @@ func TestListAgentRuns(t *testing.T) {
 
 	// Create two runs
 	for _, prompt := range []string{"task 1", "task 2"} {
-		client.CreateAgentRun(context.Background(), &apiv1.CreateAgentRunRequest{
+		if _, err := client.CreateAgentRun(context.Background(), &apiv1.CreateAgentRunRequest{
 			Spec: &apiv1.AgentRunSpec{
 				Backend: apiv1.Backend_BACKEND_POD,
 				RepoUrl: "https://github.com/example/repo.git",
 				Prompt:  prompt,
 			},
-		})
+		}); err != nil {
+			t.Fatalf("CreateAgentRun: %v", err)
+		}
 	}
 
 	resp, err := client.ListAgentRuns(context.Background(), &apiv1.ListAgentRunsRequest{})
@@ -138,13 +140,15 @@ func TestListAgentRuns_WithLimit(t *testing.T) {
 	defer cleanup()
 
 	for i := 0; i < 5; i++ {
-		client.CreateAgentRun(context.Background(), &apiv1.CreateAgentRunRequest{
+		if _, err := client.CreateAgentRun(context.Background(), &apiv1.CreateAgentRunRequest{
 			Spec: &apiv1.AgentRunSpec{
 				Backend: apiv1.Backend_BACKEND_POD,
 				RepoUrl: "https://github.com/example/repo.git",
 				Prompt:  "task",
 			},
-		})
+		}); err != nil {
+			t.Fatalf("CreateAgentRun: %v", err)
+		}
 	}
 
 	resp, err := client.ListAgentRuns(context.Background(), &apiv1.ListAgentRunsRequest{Limit: 2})

@@ -33,11 +33,14 @@ func setupReconciler(t *testing.T) (*AgentRunReconciler, client.Client, func()) 
 		t.Fatalf("start envtest: %v", err)
 	}
 
-	aotv1alpha1.AddToScheme(scheme.Scheme)
+	if err := aotv1alpha1.AddToScheme(scheme.Scheme); err != nil {
+		_ = testEnv.Stop()
+		t.Fatalf("add scheme: %v", err)
+	}
 
 	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	if err != nil {
-		testEnv.Stop()
+		_ = testEnv.Stop()
 		t.Fatalf("create client: %v", err)
 	}
 
@@ -46,7 +49,7 @@ func setupReconciler(t *testing.T) (*AgentRunReconciler, client.Client, func()) 
 		Scheme: scheme.Scheme,
 	}
 
-	return reconciler, k8sClient, func() { testEnv.Stop() }
+	return reconciler, k8sClient, func() { _ = testEnv.Stop() }
 }
 
 // newAgentRun is a helper that creates a minimal AgentRun with sensible defaults.

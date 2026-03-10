@@ -12,18 +12,18 @@ import (
 
 // AgentState represents the persistent state of an agent run in the shared brain.
 type AgentState struct {
-	ID           string
-	AgentRunID   string
-	Phase        string
-	Message      string
-	Prompt       string
-	RepoURL      string
-	Branch       string
-	TraceID      string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	CompletedAt  *time.Time
-	Metadata     map[string]string
+	ID          string
+	AgentRunID  string
+	Phase       string
+	Message     string
+	Prompt      string
+	RepoURL     string
+	Branch      string
+	TraceID     string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	CompletedAt *time.Time
+	Metadata    map[string]string
 }
 
 // QueueEntry represents a queued agent run waiting for a slot.

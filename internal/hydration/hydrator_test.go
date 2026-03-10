@@ -107,7 +107,9 @@ func TestHydrator_DefaultBranch(t *testing.T) {
 	}
 
 	h := NewHydrator(config, runner)
-	h.Run(context.Background())
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
 
 	wt := runner.commands[1]
 	// Should use "main" as the base branch

@@ -254,9 +254,9 @@ func (g *Gateway) StopAgent(_ context.Context, req *agentv1.StopAgentRequest) (*
 	}
 
 	if req.Force {
-		proc.cmd.Process.Kill()
+		_ = proc.cmd.Process.Kill()
 	} else {
-		proc.cmd.Process.Signal(os.Interrupt)
+		_ = proc.cmd.Process.Signal(os.Interrupt)
 	}
 
 	return &agentv1.StopAgentResponse{Stopped: true}, nil

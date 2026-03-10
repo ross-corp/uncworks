@@ -138,5 +138,5 @@ func TestE2E_KubeVirtBackendRejection(t *testing.T) {
 	t.Logf("KubeVirt AgentRun created (CRD accepted, controller would reject)")
 
 	// Cleanup
-	k8sClient.Delete(ctx, agentRun)
+	_ = k8sClient.Delete(ctx, agentRun)
 }

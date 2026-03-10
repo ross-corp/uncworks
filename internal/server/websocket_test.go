@@ -26,7 +26,7 @@ func dialHub(t *testing.T, hub *WebSocketHub) (*websocket.Conn, func()) {
 	}
 
 	return conn, func() {
-		conn.Close()
+		_ = conn.Close()
 		srv.Close()
 	}
 }
@@ -52,7 +52,7 @@ func unsubscribe(t *testing.T, conn *websocket.Conn, agentRunID string) {
 // readWSMessage reads a single WSMessage from the conn with a timeout.
 func readWSMessage(t *testing.T, conn *websocket.Conn, timeout time.Duration) (WSMessage, bool) {
 	t.Helper()
-	conn.SetReadDeadline(time.Now().Add(timeout))
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
 	var msg WSMessage
 	if err := conn.ReadJSON(&msg); err != nil {
 		return msg, false
@@ -103,11 +103,11 @@ func TestWebSocketHub_ClientRegistration(t *testing.T) {
 	waitForClient(t, hub, 2)
 
 	// Close first client; hub should remove it.
-	conn1.Close()
+	_ = conn1.Close()
 	waitForClient(t, hub, 1)
 
 	// Close second client; hub should be empty.
-	conn2.Close()
+	_ = conn2.Close()
 	waitForClient(t, hub, 0)
 }
 

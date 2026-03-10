@@ -14,11 +14,17 @@ func TestHydrator_DevboxSetup(t *testing.T) {
 
 	// Create a fake workspace with devbox.json
 	srcDir := filepath.Join(tmpDir, "src")
-	os.MkdirAll(srcDir, 0o755)
-	os.WriteFile(filepath.Join(srcDir, "devbox.json"), []byte(`{"packages":["bun@latest"]}`), 0o644)
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "devbox.json"), []byte(`{"packages":["bun@latest"]}`), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	// Pre-create the bare dir so clone is skipped
-	os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755)
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	config := &Config{
 		RepoURL:      "https://github.com/example/repo.git",
@@ -52,8 +58,12 @@ func TestHydrator_DevboxConfigNotFound(t *testing.T) {
 
 	// Create workspace but no devbox.json in src
 	srcDir := filepath.Join(tmpDir, "src")
-	os.MkdirAll(srcDir, 0o755)
-	os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755)
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	config := &Config{
 		RepoURL:      "https://github.com/example/repo.git",
@@ -75,7 +85,9 @@ func TestHydrator_DevboxConfigNotFound(t *testing.T) {
 func TestHydrator_NoDevboxSkipped(t *testing.T) {
 	runner := NewMockRunner()
 	tmpDir := t.TempDir()
-	os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755)
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	config := &Config{
 		RepoURL:      "https://github.com/example/repo.git",
@@ -104,9 +116,15 @@ func TestHydrator_DevboxInstallFailure(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	srcDir := filepath.Join(tmpDir, "src")
-	os.MkdirAll(srcDir, 0o755)
-	os.WriteFile(filepath.Join(srcDir, "devbox.json"), []byte(`{}`), 0o644)
-	os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755)
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "devbox.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	config := &Config{
 		RepoURL:      "https://github.com/example/repo.git",

@@ -28,14 +28,17 @@ func setupTestEnv(t *testing.T) (client.Client, func()) {
 		t.Fatalf("start envtest: %v", err)
 	}
 
-	aotv1alpha1.AddToScheme(scheme.Scheme)
+	if err := aotv1alpha1.AddToScheme(scheme.Scheme); err != nil {
+		_ = testEnv.Stop()
+		t.Fatalf("add scheme: %v", err)
+	}
 	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	if err != nil {
 		t.Fatalf("create client: %v", err)
 	}
 
 	return k8sClient, func() {
-		testEnv.Stop()
+		_ = testEnv.Stop()
 	}
 }
 

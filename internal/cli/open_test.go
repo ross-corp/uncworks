@@ -27,7 +27,9 @@ func setupTestRepo(t *testing.T) string {
 
 	// Create an initial commit so we can create worktrees
 	mainDir := filepath.Join(dir, "main")
-	os.WriteFile(filepath.Join(mainDir, "README.md"), []byte("test"), 0o644)
+	if err := os.WriteFile(filepath.Join(mainDir, "README.md"), []byte("test"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 	for _, args := range [][]string{
 		{"git", "-C", mainDir, "add", "."},
 		{"git", "-C", mainDir, "commit", "-m", "init"},
