@@ -15,7 +15,7 @@
 
 ## 3. Execution Pod & Devbox
 
-- [ ] 3.1 Build Go-based Hydration Init-Container and verify with integration tests.
+- [x] 3.1 Build Go-based Hydration Init-Container and verify with integration tests.
 - [ ] 3.2 Build Go-based RPC Gateway Sidecar and verify with gRPC contract tests.
 - [ ] 3.3 Create a base Docker image with `devbox` and `bun` runtime pre-installed.
 - [ ] 3.4 Implement automated tests for the `devbox shell` execution context.
