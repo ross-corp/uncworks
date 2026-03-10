@@ -1,0 +1,53 @@
+## 1. LiteLLM Configuration
+
+- [ ] 1.1 Create `deploy/litellm/` directory
+- [ ] 1.2 Create `deploy/litellm/litellm-config.yaml`: model_list with Ollama primary (ollama_chat/llama3.1:8b), OpenRouter fallback (openrouter/meta-llama/llama-3.1-8b-instruct:free), premium tier (anthropic/claude-sonnet-4-20250514), fallback chain, rate limiting
+- [ ] 1.3 Create `deploy/litellm/README.md`: deployment instructions for LiteLLM Helm chart to k0s
+- [ ] 1.4 Document `LITELLM_BASE_URL` environment variable (default: `http://litellm:4000`)
+- [ ] 1.5 Document LiteLLM master key management via Kubernetes Secret
+
+## 2. Ollama Configuration
+
+- [ ] 2.1 Create `deploy/ollama/` directory
+- [ ] 2.2 Create `deploy/ollama/README.md`: deployment instructions for Ollama Helm chart to k0s
+- [ ] 2.3 Document model pull commands for CI model (qwen2.5:0.5b) and dev model (llama3.1:8b)
+- [ ] 2.4 Document Ollama service DNS (http://ollama:11434) for LiteLLM configuration
+
+## 3. Virtual Key Lifecycle Activities
+
+- [ ] 3.1 Create `internal/litellm/` package directory
+- [ ] 3.2 Implement `Client` in `internal/litellm/client.go`: HTTP client for LiteLLM Admin API (key/generate, key/delete, spend tracking)
+- [ ] 3.3 Implement `ProvisionLLMKey` Temporal activity in `internal/temporal/activities.go`: calls LiteLLM `/key/generate` with budget cap and model restrictions based on model tier
+- [ ] 3.4 Implement `RevokeLLMKey` Temporal activity: calls LiteLLM `/key/delete` to revoke the virtual key
+- [ ] 3.5 Update `AgentRunWorkflow`: call `ProvisionLLMKey` after pod creation, inject key into pod env
+- [ ] 3.6 Update `AgentRunWorkflow`: call `RevokeLLMKey` in cleanup (success, failure, cancel, TTL expiry)
+- [ ] 3.7 Add retry policy with exponential backoff to `ProvisionLLMKey` activity (handle LiteLLM unavailability)
+
+## 4. Agent Pod Environment Injection
+
+- [ ] 4.1 Add `LITELLM_BASE_URL` to controller/worker configuration (env var, default `http://litellm:4000`)
+- [ ] 4.2 Update pod spec construction: add `OPENAI_BASE_URL` env var (value: `$LITELLM_BASE_URL/v1`) to agent container
+- [ ] 4.3 Update pod spec construction: add `OPENAI_API_KEY` env var (value: provisioned virtual key) to agent container
+- [ ] 4.4 Add optional `model_tier` field to `AgentRunSpec` proto message (default: `"default"`)
+- [ ] 4.5 Regenerate proto code after adding `model_tier` field
+- [ ] 4.6 Update CRD types in `api/v1alpha1/types.go` to include `ModelTier` field
+
+## 5. k0s Deployment Tasks
+
+- [ ] 5.1 Add `task k0s:litellm` target: deploys LiteLLM Helm chart to k0s cluster with reference config
+- [ ] 5.2 Add `task k0s:ollama` target: deploys Ollama Helm chart to k0s cluster
+- [ ] 5.3 Add `task k0s:ollama:pull` target: pulls models into running Ollama instance
+- [ ] 5.4 Update `task k0s:deps` (or create it): orchestrates deploying all dependencies (PostgreSQL, Temporal, LiteLLM, Ollama)
+
+## 6. Testing
+
+- [ ] 6.1 Write unit tests for `internal/litellm/client.go`: mock HTTP responses for key/generate, key/delete
+- [ ] 6.2 Write unit tests for `ProvisionLLMKey` and `RevokeLLMKey` activities with mocked LiteLLM client
+- [ ] 6.3 Write integration test: provision key → verify via LiteLLM API → revoke key → verify revoked
+- [ ] 6.4 Verify agent pod receives correct `OPENAI_BASE_URL` and `OPENAI_API_KEY` env vars
+
+## 7. Documentation
+
+- [ ] 7.1 Update docs/user-guide.md: add LiteLLM section covering configuration, model tiers, spend tracking
+- [ ] 7.2 Update README.md: add LiteLLM to architecture diagram and dependencies list
+- [ ] 7.3 Document model tier options and how they map to LiteLLM model routing
