@@ -12,8 +12,19 @@ tasks:
 
   # --- Testing ---
   test:
-    desc: Run all tests
+    desc: Run all tests (parallel)
     deps: [test:go, test:web, test:extension, test:tui]
+
+  test:all:
+    desc: Run full test pipeline sequentially (schema → unit → contract → temporal → integration → e2e)
+    cmds:
+      - task: proto:lint
+      - task: proto:breaking
+      - task: test:unit
+      - task: test:contract
+      - task: test:temporal
+      - task: test:integration
+      - task: test:e2e
 
   test:go:
     desc: Run Go tests (unit + integration)
@@ -27,7 +38,7 @@ tasks:
     env:
       KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
     cmds:
-      - go test ./e2e/... -v -count=1
+      - go test -tags e2e ./e2e/... -v -count=1 -timeout 30m
 
   test:web:
     desc: Run Playwright E2E tests for web dashboard

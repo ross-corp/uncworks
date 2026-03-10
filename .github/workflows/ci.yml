@@ -1,3 +1,29 @@
+# CI Pipeline — five-stage test pyramid
+#
+# Stage 1: Schema Gate     — buf lint + breaking change detection (no infra)
+# Stage 2: Unit Tests      — Go unit tests + TS type checks (envtest for CRD tests)
+# Stage 3: Lint            — golangci-lint (runs parallel with unit tests)
+# Stage 4: Contract Tests  — ConnectRPC server contract + protovalidate (envtest)
+# Stage 5: Integration     — testcontainers PostgreSQL (requires Docker) [commented out]
+# Stage 6: E2E             — full cluster tests (requires k0s, Temporal, LiteLLM) [commented out]
+#
+# Infrastructure requirements per stage:
+#   schema-gate:     buf CLI only
+#   unit-tests:      Go, Node.js 22, setup-envtest
+#   lint:            Go, golangci-lint
+#   contract-tests:  Go, setup-envtest
+#   integration:     Go, Docker (for testcontainers-go PostgreSQL)
+#   e2e:             Go, k0s cluster, PostgreSQL, Temporal, LiteLLM/Ollama
+#
+# Each stage can be run independently via Taskfile targets:
+#   task proto:lint        — Stage 1a
+#   task proto:breaking    — Stage 1b
+#   task test:unit         — Stage 2 (fast, no Docker)
+#   task test:contract     — Stage 4
+#   task test:integration  — Stage 5 (requires Docker)
+#   task test:e2e          — Stage 6 (requires k0s cluster + all deps)
+#   task test:all          — All stages sequentially
+
 name: CI
 
 on:
@@ -15,6 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: bufbuild/buf-setup-action@v1
       - run: buf lint
       - run: buf breaking --against '.git#branch=main'
@@ -82,7 +110,8 @@ jobs:
   #   name: Integration Tests
   #   needs: contract-tests
   #   runs-on: ubuntu-latest
-  #   # Requires Docker for testcontainers
+  #   # Requires: Docker (ubuntu-latest has it by default)
+  #   # Runs testcontainers-go with PostgreSQL 16
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: actions/setup-go@v5
@@ -94,8 +123,8 @@ jobs:
   #   name: E2E Tests
   #   needs: integration-tests
   #   runs-on: ubuntu-latest
-  #   # Requires: k0s cluster, PostgreSQL, Temporal, LiteLLM, Ollama
-  #   # Run on dedicated runner or self-hosted with GPU
+  #   # Requires: k0s cluster, PostgreSQL, Temporal server, LiteLLM, Ollama
+  #   # Should run on self-hosted runner with Docker and optionally GPU
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: actions/setup-go@v5
