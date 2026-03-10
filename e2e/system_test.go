@@ -24,7 +24,20 @@ func getE2EClient(t *testing.T) client.Client {
 
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
-		kubeconfig = "kubeconfig"
+		// Try common locations relative to project root
+		candidates := []string{
+			"kubeconfig",
+			"hack/../kubeconfig",
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				kubeconfig = c
+				break
+			}
+		}
+		if kubeconfig == "" {
+			kubeconfig = "kubeconfig"
+		}
 	}
 
 	if _, err := os.Stat(kubeconfig); os.IsNotExist(err) {
