@@ -3,9 +3,6 @@
   "packages": [
     "go@latest",
     "nodejs@22",
-    "protobuf@latest",
-    "go-protobuf@latest",
-    "protoc-gen-go-grpc@latest",
     "k0sctl@latest",
     "kubectl@latest",
     "postgresql@16",

@@ -71,9 +71,19 @@ tasks:
 
   # --- Code Generation ---
   proto:gen:
-    desc: Generate Go code from protobuf definitions
+    desc: Generate Go and TypeScript code from protobuf definitions
     cmds:
-      - ./hack/proto-gen.sh
+      - buf generate
+
+  proto:lint:
+    desc: Lint protobuf files
+    cmds:
+      - buf lint
+
+  proto:breaking:
+    desc: Check for breaking proto changes against main
+    cmds:
+      - buf breaking --against '.git#branch=main'
 
   # --- Infrastructure ---
   k0s:setup:

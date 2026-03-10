@@ -1,0 +1,15 @@
+version: v2
+modules:
+  - path: proto
+    name: buf.build/uncworks/aot
+lint:
+  use:
+    - STANDARD
+  except:
+    # Response type naming: changing these would be a breaking API change.
+    # AgentRun, AgentRunEvent, AgentOutput, AgentStatus are used directly
+    # as response types for clarity.
+    - RPC_RESPONSE_STANDARD_NAME
+breaking:
+  use:
+    - FILE

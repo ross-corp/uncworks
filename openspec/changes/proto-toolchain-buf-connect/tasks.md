@@ -1,14 +1,14 @@
 ## 1. Buf Toolchain Setup
 
-- [ ] 1.1 Add `buf` to `devbox.json`, remove `protoc-gen-go` and `protoc-gen-go-grpc` (buf manages plugins)
-- [ ] 1.2 Create `buf.yaml` at project root: v2 format, module path `proto/`, lint rules DEFAULT, breaking rules FILE
-- [ ] 1.3 Create `buf.gen.yaml`: Go plugins (protoc-gen-go, protoc-gen-go-grpc) outputting to `gen/go/`, TypeScript plugins (protoc-gen-es, protoc-gen-connect-es) outputting to `gen/ts/`
-- [ ] 1.4 Run `buf generate` and verify Go output in `gen/go/` matches current generated code
-- [ ] 1.5 Run `buf generate` and verify TypeScript output in `gen/ts/` produces valid Connect client stubs
-- [ ] 1.6 Run `buf lint` and fix any violations in `proto/api.proto` and `proto/agent.proto`
-- [ ] 1.7 Delete `hack/proto-gen.sh`
-- [ ] 1.8 Update `Taskfile.yml`: replace `proto:gen` with `buf generate`, add `proto:lint` and `proto:breaking` targets
-- [ ] 1.9 Commit `buf.lock` to version control
+- [x] 1.1 Add `buf` to `devbox.json`, remove `protoc-gen-go` and `protoc-gen-go-grpc` (buf manages plugins)
+- [x] 1.2 Create `buf.yaml` at project root: v2 format, module path `proto/`, lint rules DEFAULT, breaking rules FILE
+- [x] 1.3 Create `buf.gen.yaml`: Go plugins (protoc-gen-go, protoc-gen-go-grpc) outputting to `gen/go/`, TypeScript plugins (protoc-gen-es, protoc-gen-connect-es) outputting to `gen/ts/`
+- [x] 1.4 Run `buf generate` and verify Go output in `gen/go/` matches current generated code
+- [x] 1.5 Run `buf generate` and verify TypeScript output in `gen/ts/` produces valid Connect client stubs
+- [x] 1.6 Run `buf lint` and fix any violations in `proto/api.proto` and `proto/agent.proto`
+- [x] 1.7 Delete `hack/proto-gen.sh`
+- [x] 1.8 Update `Taskfile.yml`: replace `proto:gen` with `buf generate`, add `proto:lint` and `proto:breaking` targets
+- [x] 1.9 Commit `buf.lock` to version control
 
 ## 2. Protovalidate Annotations
 
