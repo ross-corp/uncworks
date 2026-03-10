@@ -77,8 +77,8 @@ kubeconfig
 # AOT Binaries
 aot
 aot-*
-apiserver
-controller
+/apiserver
+/controller
 
 # Playwright
 test-results/
