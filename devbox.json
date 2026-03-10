@@ -6,13 +6,13 @@
     "protobuf@latest",
     "go-protobuf@latest",
     "protoc-gen-go-grpc@latest",
+    "k0sctl@latest",
     "kubectl@latest",
     "postgresql@16"
   ],
   "shell": {
     "init_hook": [
-      "echo '==> AOT development environment ready'",
-      "echo '    Note: k0s must be installed separately (https://docs.k0sproject.io/stable/install/)'"
+      "echo '==> AOT development environment ready'"
     ],
     "scripts": {
       "test:go": "go test ./...",
