@@ -77,6 +77,12 @@ kubeconfig
 # AOT Binaries
 aot
 aot-*
+apiserver
+controller
+
+# Playwright
+test-results/
+playwright-report/
 
 # Temp files
 *.tmp

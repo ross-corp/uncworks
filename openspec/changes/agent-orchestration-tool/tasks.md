@@ -1,15 +1,15 @@
 ## 1. Foundation, Testing Infra & Protocols
 
-- [ ] 1.1 Set up Local Testing Environment: Install `k0s` and initialize a single-node cluster with `kine` (SQLite).
-- [ ] 1.2 Initialize Playwright E2E suite and verify against a dummy SolidJS app.
-- [ ] 1.3 Define Protobufs: Create `api.proto` (Client <-> Control Plane) and `agent.proto` (Control Plane <-> Sidecar).
-- [ ] 1.4 Define `AgentRun` CRD with support for `Pod`, `KubeVirt`, and `External` backends (Golang).
-- [ ] 1.5 Write integration tests for CRD lifecycle using Go's `envtest`.
+- [x] 1.1 Set up Local Testing Environment: Install `k0s` and initialize a single-node cluster with `kine` (SQLite).
+- [x] 1.2 Initialize Playwright E2E suite and verify against a dummy SolidJS app.
+- [x] 1.3 Define Protobufs: Create `api.proto` (Client <-> Control Plane) and `agent.proto` (Control Plane <-> Sidecar).
+- [x] 1.4 Define `AgentRun` CRD with support for `Pod`, `KubeVirt`, and `External` backends (Golang).
+- [x] 1.5 Write integration tests for CRD lifecycle using Go's `envtest`.
 
 ## 2. Go Control Plane & Shared Logic
 
-- [ ] 2.1 Set up the Go API Server with gRPC and WebSocket support.
-- [ ] 2.2 Implement the K8s Controller to watch `AgentRun` CRDs (Pod-only initially, stubs for others).
+- [x] 2.1 Set up the Go API Server with gRPC and WebSocket support.
+- [x] 2.2 Implement the K8s Controller to watch `AgentRun` CRDs (Pod-only initially, stubs for others).
 - [ ] 2.3 Set up PostgreSQL Shared Brain and write unit tests for agent state persistence.
 - [ ] 2.4 Create a shared TypeScript logic package (`@aot/shared`) for gRPC clients and Solid stores.
 

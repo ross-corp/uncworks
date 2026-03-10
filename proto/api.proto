@@ -1,0 +1,136 @@
+// api.proto — Client <-> Control Plane gRPC API
+syntax = "proto3";
+
+package aot.api.v1;
+
+option go_package = "github.com/uncworks/aot/gen/go/api/v1;apiv1";
+
+import "google/protobuf/timestamp.proto";
+
+// AOTService is the main API for clients (Web UI, TUI, CLI) to interact with the Control Plane.
+service AOTService {
+  // CreateAgentRun submits a new agent run request.
+  rpc CreateAgentRun(CreateAgentRunRequest) returns (CreateAgentRunResponse);
+
+  // GetAgentRun retrieves the current state of an agent run.
+  rpc GetAgentRun(GetAgentRunRequest) returns (AgentRun);
+
+  // ListAgentRuns lists agent runs with optional filters.
+  rpc ListAgentRuns(ListAgentRunsRequest) returns (ListAgentRunsResponse);
+
+  // WatchAgentRun streams real-time updates for an agent run.
+  rpc WatchAgentRun(WatchAgentRunRequest) returns (stream AgentRunEvent);
+
+  // CancelAgentRun requests cancellation of a running agent.
+  rpc CancelAgentRun(CancelAgentRunRequest) returns (CancelAgentRunResponse);
+
+  // SendHumanInput provides human-in-the-loop input to a paused agent.
+  rpc SendHumanInput(SendHumanInputRequest) returns (SendHumanInputResponse);
+}
+
+// Backend specifies the execution backend for an agent run.
+enum Backend {
+  BACKEND_UNSPECIFIED = 0;
+  BACKEND_POD = 1;
+  BACKEND_KUBEVIRT = 2;
+  BACKEND_EXTERNAL = 3;
+}
+
+// AgentRunPhase represents the lifecycle phase of an agent run.
+enum AgentRunPhase {
+  AGENT_RUN_PHASE_UNSPECIFIED = 0;
+  AGENT_RUN_PHASE_PENDING = 1;
+  AGENT_RUN_PHASE_RUNNING = 2;
+  AGENT_RUN_PHASE_WAITING_FOR_INPUT = 3;
+  AGENT_RUN_PHASE_SUCCEEDED = 4;
+  AGENT_RUN_PHASE_FAILED = 5;
+  AGENT_RUN_PHASE_CANCELLED = 6;
+}
+
+message AgentRun {
+  string id = 1;
+  string name = 2;
+  AgentRunSpec spec = 3;
+  AgentRunStatus status = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message AgentRunSpec {
+  Backend backend = 1;
+  string repo_url = 2;
+  string branch = 3;
+  string prompt = 4;
+  string devbox_config = 5;
+  int32 ttl_seconds = 6;
+  map<string, string> env_vars = 7;
+}
+
+message AgentRunStatus {
+  AgentRunPhase phase = 1;
+  string message = 2;
+  string pod_name = 3;
+  string trace_id = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+}
+
+message CreateAgentRunRequest {
+  AgentRunSpec spec = 1;
+}
+
+message CreateAgentRunResponse {
+  AgentRun agent_run = 1;
+}
+
+message GetAgentRunRequest {
+  string id = 1;
+}
+
+message ListAgentRunsRequest {
+  AgentRunPhase phase_filter = 1;
+  int32 limit = 2;
+  string cursor = 3;
+}
+
+message ListAgentRunsResponse {
+  repeated AgentRun agent_runs = 1;
+  string next_cursor = 2;
+}
+
+message WatchAgentRunRequest {
+  string id = 1;
+}
+
+message AgentRunEvent {
+  string agent_run_id = 1;
+  AgentRunEventType type = 2;
+  string payload = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+enum AgentRunEventType {
+  AGENT_RUN_EVENT_TYPE_UNSPECIFIED = 0;
+  AGENT_RUN_EVENT_TYPE_PHASE_CHANGED = 1;
+  AGENT_RUN_EVENT_TYPE_LOG = 2;
+  AGENT_RUN_EVENT_TYPE_TOOL_CALL = 3;
+  AGENT_RUN_EVENT_TYPE_WAITING_FOR_INPUT = 4;
+  AGENT_RUN_EVENT_TYPE_COMPLETED = 5;
+}
+
+message CancelAgentRunRequest {
+  string id = 1;
+}
+
+message CancelAgentRunResponse {
+  AgentRun agent_run = 1;
+}
+
+message SendHumanInputRequest {
+  string agent_run_id = 1;
+  string input = 2;
+}
+
+message SendHumanInputResponse {
+  bool accepted = 1;
+}
