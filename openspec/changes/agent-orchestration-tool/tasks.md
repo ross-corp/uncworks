@@ -23,8 +23,8 @@
 ## 4. Agent Harness (pi-mono Extension)
 
 - [x] 4.1 Develop the `pi-aot-extension` (TypeScript) and verify with Bun test runner.
-- [ ] 4.2 Implement OTel tracing and verify span emission via an OTel Collector sidecar.
-- [ ] 4.3 Implement `/ask_human` tool and verify HITL signaling via a mock gRPC client.
+- [x] 4.2 Implement OTel tracing and verify span emission via an OTel Collector sidecar.
+- [x] 4.3 Implement `/ask_human` tool and verify HITL signaling via a mock gRPC client.
 
 ## 5. Client Interfaces (SolidJS + OpenTUI)
 
