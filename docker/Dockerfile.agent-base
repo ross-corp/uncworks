@@ -1,0 +1,26 @@
+# Base image for AOT agent pods with devbox and bun pre-installed.
+FROM debian:bookworm-slim AS base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    ca-certificates \
+    unzip \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install devbox
+RUN curl -fsSL https://get.jetify.com/devbox | bash -s -- -f
+
+# Install bun
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
+
+# Verify installations
+RUN devbox version && bun --version && git --version
+
+# Set up workspace
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
+ENTRYPOINT ["/bin/bash"]
