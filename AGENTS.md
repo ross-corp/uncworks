@@ -34,8 +34,10 @@ Controller tests require envtest (auto-resolved via `internal/testutil.EnsureEnv
 
 ### Lint
 ```bash
-task lint           # go vet + TypeScript type checks
+task lint           # golangci-lint + TypeScript type checks
 ```
+
+Linting uses [golangci-lint](https://golangci-lint.run/) v2 (config: `.golangci.yml`). Enabled linters: govet, errcheck, staticcheck, unused, ineffassign, gocritic, misspell. Formatter: gofmt. Generated code in `gen/go/` is excluded.
 
 ### Infrastructure
 ```bash
