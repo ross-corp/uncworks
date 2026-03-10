@@ -9,6 +9,7 @@
 package agentv1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -842,11 +843,11 @@ var File_aot_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_aot_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x18aot/agent/v1/agent.proto\x12\faot.agent.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xef\x01\n" +
-	"\x11StartAgentRequest\x12 \n" +
-	"\fagent_run_id\x18\x01 \x01(\tR\n" +
-	"agentRunId\x12\x16\n" +
-	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x12\x1b\n" +
+	"\x18aot/agent/v1/agent.proto\x12\faot.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x81\x02\n" +
+	"\x11StartAgentRequest\x12)\n" +
+	"\fagent_run_id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\n" +
+	"agentRunId\x12\x1f\n" +
+	"\x06prompt\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06prompt\x12\x1b\n" +
 	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x12G\n" +
 	"\benv_vars\x18\x04 \x03(\v2,.aot.agent.v1.StartAgentRequest.EnvVarsEntryR\aenvVars\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +

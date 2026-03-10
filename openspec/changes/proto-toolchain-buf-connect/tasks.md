@@ -12,11 +12,11 @@
 
 ## 2. Protovalidate Annotations
 
-- [ ] 2.1 Add `buf.build/bufbuild/protovalidate` dependency to `buf.yaml`
-- [ ] 2.2 Add protovalidate annotations to `proto/api.proto`: `AgentRunSpec.repo_url` (URI), `prompt` (non-empty), `backend` (not UNSPECIFIED), `ttl_seconds` (> 0 when set)
-- [ ] 2.3 Add protovalidate annotations to `proto/agent.proto`: `StartAgentRequest.agent_run_id` (non-empty), `prompt` (non-empty)
-- [ ] 2.4 Run `buf generate` to regenerate code with validation descriptors
-- [ ] 2.5 Add `bufbuild/protovalidate-go` to `go.mod` for server-side validation
+- [x] 2.1 Add `buf.build/bufbuild/protovalidate` dependency to `buf.yaml`
+- [x] 2.2 Add protovalidate annotations to `proto/api.proto`: `AgentRunSpec.repo_url` (URI), `prompt` (non-empty), `backend` (not UNSPECIFIED), `ttl_seconds` (> 0 when set)
+- [x] 2.3 Add protovalidate annotations to `proto/agent.proto`: `StartAgentRequest.agent_run_id` (non-empty), `prompt` (non-empty)
+- [x] 2.4 Run `buf generate` to regenerate code with validation descriptors
+- [x] 2.5 Add `bufbuild/protovalidate-go` to `go.mod` for server-side validation
 
 ## 3. ConnectRPC Server
 

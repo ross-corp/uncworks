@@ -5,6 +5,7 @@ package aot.agent.v1;
 
 option go_package = "github.com/uncworks/aot/gen/go/agent/v1;agentv1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
 
 // AgentSidecarService runs in the RPC Gateway sidecar inside each Agent Pod.
@@ -33,8 +34,8 @@ service AgentNotificationService {
 }
 
 message StartAgentRequest {
-  string agent_run_id = 1;
-  string prompt = 2;
+  string agent_run_id = 1 [(buf.validate.field).string.min_len = 1];
+  string prompt = 2 [(buf.validate.field).string.min_len = 1];
   string repo_path = 3;
   map<string, string> env_vars = 4;
 }

@@ -9,6 +9,7 @@
 package apiv1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -1002,7 +1003,7 @@ var File_aot_api_v1_api_proto protoreflect.FileDescriptor
 const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"\x14aot/api/v1/api.proto\x12\n" +
-	"aot.api.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x86\x02\n" +
+	"aot.api.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x86\x02\n" +
 	"\bAgentRun\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12,\n" +
@@ -1011,14 +1012,14 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xcc\x02\n" +
-	"\fAgentRunSpec\x12-\n" +
-	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendR\abackend\x12\x19\n" +
-	"\brepo_url\x18\x02 \x01(\tR\arepoUrl\x12\x16\n" +
-	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x16\n" +
-	"\x06prompt\x18\x04 \x01(\tR\x06prompt\x12#\n" +
-	"\rdevbox_config\x18\x05 \x01(\tR\fdevboxConfig\x12\x1f\n" +
-	"\vttl_seconds\x18\x06 \x01(\x05R\n" +
+	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xf2\x02\n" +
+	"\fAgentRunSpec\x127\n" +
+	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x12#\n" +
+	"\brepo_url\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\arepoUrl\x12\x16\n" +
+	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x1f\n" +
+	"\x06prompt\x18\x04 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06prompt\x12#\n" +
+	"\rdevbox_config\x18\x05 \x01(\tR\fdevboxConfig\x12(\n" +
+	"\vttl_seconds\x18\x06 \x01(\x05B\a\xbaH\x04\x1a\x02(\x00R\n" +
 	"ttlSeconds\x12@\n" +
 	"\benv_vars\x18\a \x03(\v2%.aot.api.v1.AgentRunSpec.EnvVarsEntryR\aenvVars\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +

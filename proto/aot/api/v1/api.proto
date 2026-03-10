@@ -5,6 +5,7 @@ package aot.api.v1;
 
 option go_package = "github.com/uncworks/aot/gen/go/api/v1;apiv1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
 
 // AOTService is the main API for clients (Web UI, TUI, CLI) to interact with the Control Plane.
@@ -57,12 +58,12 @@ message AgentRun {
 }
 
 message AgentRunSpec {
-  Backend backend = 1;
-  string repo_url = 2;
+  Backend backend = 1 [(buf.validate.field).enum = {not_in: [0]}];
+  string repo_url = 2 [(buf.validate.field).string.uri = true];
   string branch = 3;
-  string prompt = 4;
+  string prompt = 4 [(buf.validate.field).string.min_len = 1];
   string devbox_config = 5;
-  int32 ttl_seconds = 6;
+  int32 ttl_seconds = 6 [(buf.validate.field).int32.gte = 0];
   map<string, string> env_vars = 7;
 }
 
