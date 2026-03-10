@@ -1,16 +1,16 @@
 ## 1. Devbox Completeness
 
-- [ ] 1.1 Add `lefthook@latest` to devbox.json packages
-- [ ] 1.2 Add `golangci-lint@latest` to devbox.json packages
-- [ ] 1.3 Add `buf@latest` to devbox.json packages
-- [ ] 1.4 Add `grpcurl@latest` to devbox.json packages
-- [ ] 1.5 Add `kubernetes-helm@latest` to devbox.json packages
-- [ ] 1.6 Add `temporal-cli@latest` to devbox.json packages
-- [ ] 1.7 Add `go-task@latest` to devbox.json packages
-- [ ] 1.8 Add `setup-envtest@latest` to devbox.json packages
-- [ ] 1.9 Add `lefthook install` to devbox.json init_hook array
-- [ ] 1.10 Run `devbox install` to generate updated devbox.lock
-- [ ] 1.11 Verify all tools are available on PATH after `devbox shell`
+- [x] 1.1 Add `lefthook@latest` to devbox.json packages
+- [x] 1.2 Add `golangci-lint@latest` to devbox.json packages
+- [x] 1.3 Add `buf@latest` to devbox.json packages
+- [x] 1.4 Add `grpcurl@latest` to devbox.json packages
+- [x] 1.5 Add `kubernetes-helm@latest` to devbox.json packages
+- [x] 1.6 Add `temporal-cli@latest` to devbox.json packages
+- [x] 1.7 Add `go-task@latest` to devbox.json packages
+- [x] 1.8 Add `setup-envtest@latest` to devbox.json packages
+- [x] 1.9 Add `lefthook install` to devbox.json init_hook array
+- [x] 1.10 Run `devbox install` to generate updated devbox.lock
+- [x] 1.11 Verify all tools are available on PATH after `devbox shell`
 
 ## 2. golangci-lint Configuration
 
