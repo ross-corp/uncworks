@@ -1,0 +1,23 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+formatters:
+  enable:
+    - gofmt
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+    - gocritic
+    - misspell
+
+issues:
+  exclude-dirs:
+    - gen/go
+  exclude-generated: strict
