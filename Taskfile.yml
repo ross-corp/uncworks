@@ -120,6 +120,12 @@ tasks:
       - buf breaking --against '.git#branch=main'
 
   # --- Infrastructure ---
+  temporal:dev:
+    desc: Start Temporal dev server (SQLite, no external deps)
+    cmds:
+      - temporal server start-dev --db-filename .temporal.db
+
+
   k0s:setup:
     desc: Initialize local k0s cluster (requires sudo)
     cmds:

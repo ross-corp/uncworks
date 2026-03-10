@@ -1,9 +1,9 @@
 ## 1. Temporal SDK and Tooling Setup
 
-- [ ] 1.1 Add `go.temporal.io/sdk` to `go.mod`
-- [ ] 1.2 Add `temporal-cli` to `devbox.json`
-- [ ] 1.3 Add `task temporal:dev` target to `Taskfile.yml` that runs `temporal server start-dev --db-filename .temporal.db`
-- [ ] 1.4 Add `helm` to `devbox.json` (if not already present)
+- [x] 1.1 Add `go.temporal.io/sdk` to `go.mod` — v1.41.0
+- [x] 1.2 Add `temporal-cli` to `devbox.json` — already present
+- [x] 1.3 Add `task temporal:dev` target to `Taskfile.yml` that runs `temporal server start-dev --db-filename .temporal.db`
+- [x] 1.4 Add `helm` to `devbox.json` (if not already present) — already present as kubernetes-helm@latest
 
 ## 2. Workflow and Activity Definitions
 
