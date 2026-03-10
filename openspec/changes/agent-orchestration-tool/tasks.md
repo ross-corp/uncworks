@@ -10,8 +10,8 @@
 
 - [x] 2.1 Set up the Go API Server with gRPC and WebSocket support.
 - [x] 2.2 Implement the K8s Controller to watch `AgentRun` CRDs (Pod-only initially, stubs for others).
-- [ ] 2.3 Set up PostgreSQL Shared Brain and write unit tests for agent state persistence.
-- [ ] 2.4 Create a shared TypeScript logic package (`@aot/shared`) for gRPC clients and Solid stores.
+- [x] 2.3 Set up PostgreSQL Shared Brain and write unit tests for agent state persistence.
+- [x] 2.4 Create a shared TypeScript logic package (`@aot/shared`) for gRPC clients and Solid stores.
 
 ## 3. Execution Pod & Devbox
 

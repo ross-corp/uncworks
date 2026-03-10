@@ -1,0 +1,58 @@
+/** Backend type for an AgentRun. */
+export type Backend = "Pod" | "KubeVirt" | "External";
+
+/** Lifecycle phase of an AgentRun. */
+export type AgentRunPhase =
+  | "Pending"
+  | "Running"
+  | "WaitingForInput"
+  | "Succeeded"
+  | "Failed"
+  | "Cancelled";
+
+/** Spec for creating an AgentRun. */
+export interface AgentRunSpec {
+  backend: Backend;
+  repoURL: string;
+  branch?: string;
+  prompt: string;
+  devboxConfig?: string;
+  ttlSeconds?: number;
+  envVars?: Record<string, string>;
+  image?: string;
+}
+
+/** Status of an AgentRun. */
+export interface AgentRunStatus {
+  phase: AgentRunPhase;
+  message?: string;
+  podName?: string;
+  traceID?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+/** Full AgentRun object. */
+export interface AgentRun {
+  id: string;
+  name: string;
+  spec: AgentRunSpec;
+  status: AgentRunStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Event emitted for an AgentRun. */
+export type AgentRunEventType =
+  | "phase_changed"
+  | "log"
+  | "tool_call"
+  | "waiting_for_input"
+  | "completed";
+
+export interface AgentRunEvent {
+  agentRunId: string;
+  type: AgentRunEventType;
+  payload: string;
+  timestamp: string;
+}
