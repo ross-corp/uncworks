@@ -58,6 +58,11 @@ tasks:
     cmds:
       - go test ./test/contract/... -count=1 -v
 
+  test:temporal:
+    desc: Run Temporal workflow tests (requires temporal-workflow-engine)
+    cmds:
+      - go test ./test/temporal/... -count=1 -v
+
   # --- Build ---
   build:
     desc: Build all Go binaries

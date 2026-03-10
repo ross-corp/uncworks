@@ -24,17 +24,17 @@
 
 ## 3. Temporal Workflow Tests (Stage 3)
 
-- [ ] 3.1 Create `test/temporal/` directory
-- [ ] 3.2 Add `go.temporal.io/sdk/testsuite` to `go.mod` (test dependency)
-- [ ] 3.3 Write workflow unit test: happy path (create pod → hydrate → start → poll status → complete → cleanup)
-- [ ] 3.4 Write workflow unit test: TTL expiry (fast-forward timer → stop agent → cleanup)
-- [ ] 3.5 Write workflow unit test: HITL signal (send "human-input" signal → ForwardHumanInput activity called)
-- [ ] 3.6 Write workflow unit test: cancel signal (send "cancel" signal → StopAgent → CleanupPod)
-- [ ] 3.7 Write workflow unit test: spawn_junior child workflow (start child → child completes → parent continues)
-- [ ] 3.8 Write workflow unit test: compensation on failure (CreateAgentPod succeeds → StartAgent fails → CleanupPod called)
-- [ ] 3.9 Write workflow unit test: get-state query returns correct phase at each lifecycle stage
-- [ ] 3.10 Write integration test with temporal-cli dev server: real workflow execution with test activities
-- [ ] 3.11 Add `task test:temporal` target to `Taskfile.yml`
+- [x] 3.1 Create `test/temporal/` directory
+- [x] 3.2 Add `go.temporal.io/sdk` to `go.mod`
+- [ ] 3.3 Write workflow unit test: happy path — BLOCKED on temporal-workflow-engine
+- [ ] 3.4 Write workflow unit test: TTL expiry — BLOCKED on temporal-workflow-engine
+- [ ] 3.5 Write workflow unit test: HITL signal — BLOCKED on temporal-workflow-engine
+- [ ] 3.6 Write workflow unit test: cancel signal — BLOCKED on temporal-workflow-engine
+- [ ] 3.7 Write workflow unit test: spawn_junior — BLOCKED on temporal-workflow-engine
+- [ ] 3.8 Write workflow unit test: compensation — BLOCKED on temporal-workflow-engine
+- [ ] 3.9 Write workflow unit test: get-state query — BLOCKED on temporal-workflow-engine
+- [ ] 3.10 Write integration test with temporal-cli dev server — BLOCKED on temporal-workflow-engine
+- [x] 3.11 Add `task test:temporal` target to `Taskfile.yml`
 
 ## 4. Integration Tests Enhancement (Stage 4)
 
