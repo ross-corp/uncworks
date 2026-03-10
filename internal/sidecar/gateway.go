@@ -29,7 +29,6 @@ type Gateway struct {
 	mu         sync.RWMutex
 	process    *AgentProcess
 	grpcServer *grpc.Server
-	notifier   agentv1.AgentNotificationServiceClient
 }
 
 // AgentProcess wraps the agent harness process.
@@ -139,9 +138,11 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 	go func() {
 		scanner := bufio.NewScanner(proc.stdout)
 		for scanner.Scan() {
+			line := make([]byte, len(scanner.Bytes()))
+			copy(line, scanner.Bytes())
 			output := &agentv1.AgentOutput{
 				Type:      agentv1.OutputType_OUTPUT_TYPE_STDOUT,
-				Data:      scanner.Bytes(),
+				Data:      line,
 				Timestamp: timestamppb.Now(),
 			}
 			proc.mu.Lock()
@@ -212,7 +213,10 @@ func (g *Gateway) SendInput(_ context.Context, req *agentv1.SendInputRequest) (*
 		return nil, status.Error(codes.FailedPrecondition, "agent not accepting input")
 	}
 
-	if _, err := proc.stdin.Write(append(req.Data, '\n')); err != nil {
+	data := make([]byte, len(req.Data)+1)
+	copy(data, req.Data)
+	data[len(req.Data)] = '\n'
+	if _, err := proc.stdin.Write(data); err != nil {
 		return nil, status.Errorf(codes.Internal, "write to stdin: %v", err)
 	}
 

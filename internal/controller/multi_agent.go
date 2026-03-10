@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -15,7 +16,7 @@ import (
 func SpawnJunior(ctx context.Context, k8sClient client.Client, parentRun *aotv1alpha1.AgentRun, task string) (*aotv1alpha1.AgentRun, error) {
 	logger := log.FromContext(ctx)
 
-	juniorName := fmt.Sprintf("%s-junior-%d", parentRun.Name, len(parentRun.Name))
+	juniorName := fmt.Sprintf("%s-junior-%d", parentRun.Name, time.Now().UnixMilli()%100000)
 
 	junior := &aotv1alpha1.AgentRun{
 		ObjectMeta: metav1.ObjectMeta{

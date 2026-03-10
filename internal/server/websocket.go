@@ -100,6 +100,10 @@ func (h *WebSocketHub) Broadcast(agentRunID string, event any) {
 }
 
 func mustMarshal(v any) json.RawMessage {
-	b, _ := json.Marshal(v)
+	b, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("WebSocket payload marshal error: %v", err)
+		return json.RawMessage(`{}`)
+	}
 	return b
 }

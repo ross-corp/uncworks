@@ -86,6 +86,8 @@ func (h *Hydrator) cloneRepo(ctx context.Context) error {
 
 	if _, err := os.Stat(bareDir); err == nil {
 		return nil // Already cloned
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("check bare dir: %w", err)
 	}
 
 	args := []string{"clone", "--bare", h.config.RepoURL, bareDir}
@@ -113,8 +115,11 @@ func (h *Hydrator) setupDevbox(ctx context.Context) error {
 
 	// Check if devbox.json exists in the worktree
 	devboxPath := filepath.Join(worktreeDir, h.config.DevboxConfig)
-	if _, err := os.Stat(devboxPath); os.IsNotExist(err) {
-		return fmt.Errorf("devbox config not found: %s", devboxPath)
+	if _, err := os.Stat(devboxPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("devbox config not found: %s", devboxPath)
+		}
+		return fmt.Errorf("check devbox config: %w", err)
 	}
 
 	// Install devbox packages

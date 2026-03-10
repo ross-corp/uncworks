@@ -53,5 +53,7 @@ func main() {
 
 	log.Println("Shutting down...")
 	grpcServer.Stop()
-	httpServer.Shutdown(context.Background())
+	if err := httpServer.Shutdown(context.Background()); err != nil {
+		log.Printf("HTTP shutdown error: %v", err)
+	}
 }
