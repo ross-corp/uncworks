@@ -53,6 +53,11 @@ tasks:
     cmds:
       - npx tsx --test src/**/*.test.ts
 
+  test:contract:
+    desc: Run server contract tests (ConnectRPC + protovalidate)
+    cmds:
+      - go test ./test/contract/... -count=1 -v
+
   # --- Build ---
   build:
     desc: Build all Go binaries

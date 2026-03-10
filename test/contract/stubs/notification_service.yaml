@@ -1,0 +1,11 @@
+# GripMock stubs for aot.agent.v1.AgentNotificationService
+# Used for client contract testing against a mock gRPC server
+
+- service: aot.agent.v1.AgentNotificationService
+  method: NotifyEvent
+  input:
+    contains:
+      agent_run_id: "test"
+  output:
+    data:
+      acknowledged: true

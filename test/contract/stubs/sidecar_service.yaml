@@ -1,0 +1,30 @@
+# GripMock stubs for aot.agent.v1.AgentSidecarService
+# Used for client contract testing against a mock gRPC server
+
+- service: aot.agent.v1.AgentSidecarService
+  method: GetStatus
+  input:
+    equals:
+      agent_run_id: "test"
+  output:
+    data:
+      state: 0  # UNSPECIFIED
+
+- service: aot.agent.v1.AgentSidecarService
+  method: StopAgent
+  input:
+    equals:
+      agent_run_id: "test"
+  output:
+    data:
+      stopped: true
+
+- service: aot.agent.v1.AgentSidecarService
+  method: SendInput
+  input:
+    equals:
+      agent_run_id: "test"
+      data: "aGVsbG8="  # base64 "hello"
+  output:
+    error: "no agent process running"
+    code: 9  # FAILED_PRECONDITION

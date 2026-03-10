@@ -1,0 +1,103 @@
+# GripMock stubs for aot.api.v1.AOTService
+# Used for client contract testing against a mock gRPC server
+
+- service: aot.api.v1.AOTService
+  method: CreateAgentRun
+  input:
+    contains:
+      spec:
+        backend: 1
+        prompt: "test prompt"
+  output:
+    data:
+      agent_run:
+        id: "ar-mock-1"
+        name: "ar-mock-1"
+        spec:
+          backend: 1
+          repo_url: "https://github.com/example/repo.git"
+          prompt: "test prompt"
+        status:
+          phase: 1
+          message: "Queued"
+
+- service: aot.api.v1.AOTService
+  method: GetAgentRun
+  input:
+    equals:
+      id: "ar-mock-1"
+  output:
+    data:
+      id: "ar-mock-1"
+      name: "ar-mock-1"
+      spec:
+        backend: 1
+        repo_url: "https://github.com/example/repo.git"
+        prompt: "test prompt"
+      status:
+        phase: 1
+        message: "Queued"
+
+- service: aot.api.v1.AOTService
+  method: GetAgentRun
+  input:
+    equals:
+      id: "nonexistent"
+  output:
+    error: "agent run not found"
+    code: 5  # NOT_FOUND
+
+- service: aot.api.v1.AOTService
+  method: ListAgentRuns
+  input:
+    equals: {}
+  output:
+    data:
+      agent_runs:
+        - id: "ar-mock-1"
+          name: "ar-mock-1"
+          status:
+            phase: 1
+
+- service: aot.api.v1.AOTService
+  method: CancelAgentRun
+  input:
+    equals:
+      id: "ar-mock-1"
+  output:
+    data:
+      agent_run:
+        id: "ar-mock-1"
+        name: "ar-mock-1"
+        status:
+          phase: 6
+          message: "Cancelled by user"
+
+- service: aot.api.v1.AOTService
+  method: CancelAgentRun
+  input:
+    equals:
+      id: "nonexistent"
+  output:
+    error: "agent run not found"
+    code: 5  # NOT_FOUND
+
+- service: aot.api.v1.AOTService
+  method: SendHumanInput
+  input:
+    equals:
+      agent_run_id: "ar-mock-1"
+      input: "hello"
+  output:
+    data:
+      accepted: true
+
+- service: aot.api.v1.AOTService
+  method: SendHumanInput
+  input:
+    equals:
+      agent_run_id: "nonexistent"
+      input: "hello"
+  output:
+    error: "agent run not found"
+    code: 5  # NOT_FOUND
