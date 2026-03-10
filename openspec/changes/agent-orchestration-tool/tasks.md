@@ -30,8 +30,8 @@
 
 - [x] 5.1 Build the SolidJS Web UI and write Playwright tests for agent monitoring.
 - [x] 5.2 Build the SolidJS TUI using OpenTUI and verify terminal rendering.
-- [ ] 5.3 Integrate shared `@aot/shared` logic into both UIs and verify reactive state sync.
-- [ ] 5.4 Implement the `aot open` CLI command (Go) to find local worktrees and open `$EDITOR`.
+- [x] 5.3 Integrate shared `@aot/shared` logic into both UIs and verify reactive state sync.
+- [x] 5.4 Implement the `aot open` CLI command (Go) to find local worktrees and open `$EDITOR`.
 
 ## 6. Verification & Roadmap
 
