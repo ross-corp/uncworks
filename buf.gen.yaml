@@ -8,6 +8,10 @@ plugins:
     out: gen/go
     opt:
       - module=github.com/uncworks/aot/gen/go
+  - remote: buf.build/connectrpc/go
+    out: gen/go
+    opt:
+      - module=github.com/uncworks/aot/gen/go
   - remote: buf.build/bufbuild/es
     out: gen/ts
     opt:

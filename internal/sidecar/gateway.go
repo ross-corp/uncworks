@@ -1,4 +1,4 @@
-// Package sidecar implements the RPC Gateway sidecar that bridges gRPC and the agent harness process.
+// Package sidecar implements the RPC Gateway sidecar that bridges ConnectRPC and the agent harness process.
 package sidecar
 
 import (
@@ -7,28 +7,30 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"connectrpc.com/connect"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
+	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 )
 
 // Gateway is the RPC Gateway sidecar server.
 type Gateway struct {
-	agentv1.UnimplementedAgentSidecarServiceServer
+	agentv1connect.UnimplementedAgentSidecarServiceHandler
+	agentv1connect.UnimplementedAgentNotificationServiceHandler
 	port int
 
-	mu         sync.RWMutex
-	process    *AgentProcess
-	grpcServer *grpc.Server
+	mu      sync.RWMutex
+	process *AgentProcess
+	server  *http.Server
 }
 
 // AgentProcess wraps the agent harness process.
@@ -48,46 +50,51 @@ func NewGateway(port int) *Gateway {
 	return &Gateway{port: port}
 }
 
-// Start begins listening for gRPC connections from the Control Plane.
+// Start begins listening for ConnectRPC connections from the Control Plane.
 func (g *Gateway) Start() error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", g.port))
-	if err != nil {
-		return fmt.Errorf("failed to listen on port %d: %w", g.port, err)
+	mux := http.NewServeMux()
+
+	path, handler := agentv1connect.NewAgentSidecarServiceHandler(g)
+	mux.Handle(path, handler)
+
+	nPath, nHandler := agentv1connect.NewAgentNotificationServiceHandler(g)
+	mux.Handle(nPath, nHandler)
+
+	g.server = &http.Server{
+		Addr:    fmt.Sprintf(":%d", g.port),
+		Handler: h2c.NewHandler(mux, &http2.Server{}),
 	}
 
-	g.grpcServer = grpc.NewServer()
-	agentv1.RegisterAgentSidecarServiceServer(g.grpcServer, g)
-
 	log.Printf("RPC Gateway listening on :%d", g.port)
-	return g.grpcServer.Serve(lis)
+	return g.server.ListenAndServe()
 }
 
 // Stop gracefully stops the gateway.
 func (g *Gateway) Stop() {
-	if g.grpcServer != nil {
-		g.grpcServer.GracefulStop()
+	if g.server != nil {
+		_ = g.server.Close()
 	}
 }
 
-func (g *Gateway) StartAgent(_ context.Context, req *agentv1.StartAgentRequest) (*agentv1.StartAgentResponse, error) {
+func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.StartAgentRequest]) (*connect.Response[agentv1.StartAgentResponse], error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	if g.process != nil && g.process.state == agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING {
-		return &agentv1.StartAgentResponse{Started: false, Error: "agent already running"}, nil
+		return connect.NewResponse(&agentv1.StartAgentResponse{Started: false, Error: "agent already running"}), nil
 	}
 
-	proc, err := startAgentProcess(req)
+	proc, err := startAgentProcess(req.Msg)
 	if err != nil {
-		return &agentv1.StartAgentResponse{Started: false, Error: err.Error()}, nil
+		return connect.NewResponse(&agentv1.StartAgentResponse{Started: false, Error: err.Error()}), nil
 	}
 
 	g.process = proc
 
 	// Monitor process in background
-	go g.monitorProcess(req.AgentRunId)
+	go g.monitorProcess(req.Msg.AgentRunId)
 
-	return &agentv1.StartAgentResponse{Started: true}, nil
+	return connect.NewResponse(&agentv1.StartAgentResponse{Started: true}), nil
 }
 
 func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
@@ -177,13 +184,13 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 	log.Printf("Agent process finished: %s (state=%v)", agentRunID, proc.state)
 }
 
-func (g *Gateway) StreamOutput(_ *agentv1.StreamOutputRequest, stream grpc.ServerStreamingServer[agentv1.AgentOutput]) error {
+func (g *Gateway) StreamOutput(_ context.Context, req *connect.Request[agentv1.StreamOutputRequest], stream *connect.ServerStream[agentv1.AgentOutput]) error {
 	g.mu.RLock()
 	proc := g.process
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return status.Error(codes.FailedPrecondition, "no agent process running")
+		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
 	}
 
 	ch := make(chan *agentv1.AgentOutput, 100)
@@ -199,39 +206,39 @@ func (g *Gateway) StreamOutput(_ *agentv1.StreamOutputRequest, stream grpc.Serve
 	return nil
 }
 
-func (g *Gateway) SendInput(_ context.Context, req *agentv1.SendInputRequest) (*agentv1.SendInputResponse, error) {
+func (g *Gateway) SendInput(_ context.Context, req *connect.Request[agentv1.SendInputRequest]) (*connect.Response[agentv1.SendInputResponse], error) {
 	g.mu.RLock()
 	proc := g.process
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return nil, status.Error(codes.FailedPrecondition, "no agent process running")
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
 	}
 
 	if proc.state != agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING &&
 		proc.state != agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT {
-		return nil, status.Error(codes.FailedPrecondition, "agent not accepting input")
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("agent not accepting input"))
 	}
 
-	data := make([]byte, len(req.Data)+1)
-	copy(data, req.Data)
-	data[len(req.Data)] = '\n'
+	data := make([]byte, len(req.Msg.Data)+1)
+	copy(data, req.Msg.Data)
+	data[len(req.Msg.Data)] = '\n'
 	if _, err := proc.stdin.Write(data); err != nil {
-		return nil, status.Errorf(codes.Internal, "write to stdin: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("write to stdin: %v", err))
 	}
 
-	return &agentv1.SendInputResponse{Accepted: true}, nil
+	return connect.NewResponse(&agentv1.SendInputResponse{Accepted: true}), nil
 }
 
-func (g *Gateway) GetStatus(_ context.Context, _ *agentv1.GetStatusRequest) (*agentv1.AgentStatus, error) {
+func (g *Gateway) GetStatus(_ context.Context, _ *connect.Request[agentv1.GetStatusRequest]) (*connect.Response[agentv1.AgentStatus], error) {
 	g.mu.RLock()
 	proc := g.process
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return &agentv1.AgentStatus{
+		return connect.NewResponse(&agentv1.AgentStatus{
 			State: agentv1.AgentProcessState_AGENT_PROCESS_STATE_UNSPECIFIED,
-		}, nil
+		}), nil
 	}
 
 	s := &agentv1.AgentStatus{
@@ -241,23 +248,23 @@ func (g *Gateway) GetStatus(_ context.Context, _ *agentv1.GetStatusRequest) (*ag
 	if proc.cmd.Process != nil {
 		s.Pid = int32(proc.cmd.Process.Pid)
 	}
-	return s, nil
+	return connect.NewResponse(s), nil
 }
 
-func (g *Gateway) StopAgent(_ context.Context, req *agentv1.StopAgentRequest) (*agentv1.StopAgentResponse, error) {
+func (g *Gateway) StopAgent(_ context.Context, req *connect.Request[agentv1.StopAgentRequest]) (*connect.Response[agentv1.StopAgentResponse], error) {
 	g.mu.Lock()
 	proc := g.process
 	g.mu.Unlock()
 
 	if proc == nil || proc.cmd.Process == nil {
-		return &agentv1.StopAgentResponse{Stopped: true}, nil
+		return connect.NewResponse(&agentv1.StopAgentResponse{Stopped: true}), nil
 	}
 
-	if req.Force {
+	if req.Msg.Force {
 		_ = proc.cmd.Process.Kill()
 	} else {
 		_ = proc.cmd.Process.Signal(os.Interrupt)
 	}
 
-	return &agentv1.StopAgentResponse{Stopped: true}, nil
+	return connect.NewResponse(&agentv1.StopAgentResponse{Stopped: true}), nil
 }

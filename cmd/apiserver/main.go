@@ -8,52 +8,61 @@ import (
 	"os/signal"
 	"syscall"
 
+	"connectrpc.com/connect"
+	"connectrpc.com/grpchealth"
+	"connectrpc.com/grpcreflect"
+	"connectrpc.com/validate"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
+
+	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
 	"github.com/uncworks/aot/internal/server"
 )
 
 func main() {
-	grpcPort := 50051
-	httpPort := ":8080"
+	addr := ":50051"
 
-	grpcServer := server.NewGRPCServer(grpcPort)
-	wsHub := server.NewWebSocketHub()
+	svc := server.NewAOTServiceHandler()
 
-	// HTTP server for WebSocket and health check
+	// Protovalidate interceptor rejects invalid requests with INVALID_ARGUMENT
+	validateInterceptor := validate.NewInterceptor()
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", wsHub.HandleWebSocket)
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+
+	// Register AOTService handler
+	path, handler := apiv1connect.NewAOTServiceHandler(svc,
+		connect.WithInterceptors(validateInterceptor),
+	)
+	mux.Handle(path, handler)
+
+	// Health check
+	checker := grpchealth.NewStaticChecker(apiv1connect.AOTServiceName)
+	mux.Handle(grpchealth.NewHandler(checker))
+
+	// Reflection for grpcurl compatibility
+	reflector := grpcreflect.NewStaticReflector(apiv1connect.AOTServiceName)
+	mux.Handle(grpcreflect.NewHandlerV1(reflector))
+	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
 
 	httpServer := &http.Server{
-		Addr:    httpPort,
-		Handler: mux,
+		Addr: addr,
+		// h2c enables HTTP/2 without TLS for gRPC clients
+		Handler: h2c.NewHandler(mux, &http2.Server{}),
 	}
 
-	// Start gRPC server
 	go func() {
-		if err := grpcServer.Start(); err != nil {
-			log.Fatalf("gRPC server failed: %v", err)
-		}
-	}()
-
-	// Start HTTP server
-	go func() {
-		log.Printf("HTTP server listening on %s", httpPort)
+		log.Printf("AOT API server listening on %s (gRPC + Connect + gRPC-Web)", addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP server failed: %v", err)
+			log.Fatalf("Server failed: %v", err)
 		}
 	}()
 
-	// Graceful shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
 	log.Println("Shutting down...")
-	grpcServer.Stop()
 	if err := httpServer.Shutdown(context.Background()); err != nil {
-		log.Printf("HTTP shutdown error: %v", err)
+		log.Printf("Shutdown error: %v", err)
 	}
 }

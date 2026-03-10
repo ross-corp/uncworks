@@ -20,16 +20,16 @@
 
 ## 3. ConnectRPC Server
 
-- [ ] 3.1 Add `connectrpc.com/connect` and `connectrpc.com/grpcreflect` to `go.mod`
-- [ ] 3.2 Add `connectrpc.com/validate` (protovalidate interceptor) to `go.mod`
-- [ ] 3.3 Rewrite `internal/server/grpc.go` as ConnectRPC handlers: implement `AOTService` using `connect.NewUnaryHandler` / `connect.NewServerStreamHandler`
-- [ ] 3.4 Add protovalidate Connect interceptor to reject invalid requests with INVALID_ARGUMENT
-- [ ] 3.5 Update `cmd/apiserver/main.go`: single `net/http` server on `:50051` serving gRPC + Connect + gRPC-Web protocols via `connectrpc.com/grpchealth` and handler mux
-- [ ] 3.6 Rewrite `internal/sidecar/gateway.go` as ConnectRPC handlers for `AgentSidecarService` and `AgentNotificationService`
-- [ ] 3.7 Update `cmd/sidecar/main.go` to use ConnectRPC server on `:50052`
-- [ ] 3.8 Delete `internal/server/websocket.go`
-- [ ] 3.9 Remove `:8080` HTTP server and `/ws` endpoint from `cmd/apiserver/main.go`
-- [ ] 3.10 Update all Go unit tests (`internal/server/grpc_test.go`) to test ConnectRPC handlers
+- [x] 3.1 Add `connectrpc.com/connect` and `connectrpc.com/grpcreflect` to `go.mod`
+- [x] 3.2 Add `connectrpc.com/validate` (protovalidate interceptor) to `go.mod`
+- [x] 3.3 Rewrite `internal/server/grpc.go` as ConnectRPC handlers: implement `AOTService` using `connect.NewUnaryHandler` / `connect.NewServerStreamHandler`
+- [x] 3.4 Add protovalidate Connect interceptor to reject invalid requests with INVALID_ARGUMENT
+- [x] 3.5 Update `cmd/apiserver/main.go`: single `net/http` server on `:50051` serving gRPC + Connect + gRPC-Web protocols via `connectrpc.com/grpchealth` and handler mux
+- [x] 3.6 Rewrite `internal/sidecar/gateway.go` as ConnectRPC handlers for `AgentSidecarService` and `AgentNotificationService`
+- [x] 3.7 Update `cmd/sidecar/main.go` to use ConnectRPC server on `:50052`
+- [x] 3.8 Delete `internal/server/websocket.go`
+- [x] 3.9 Remove `:8080` HTTP server and `/ws` endpoint from `cmd/apiserver/main.go`
+- [x] 3.10 Update all Go unit tests (`internal/server/grpc_test.go`) to test ConnectRPC handlers
 
 ## 4. TypeScript Connect Client
 

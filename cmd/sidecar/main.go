@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -21,7 +22,7 @@ func main() {
 	gw := sidecar.NewGateway(port)
 
 	go func() {
-		if err := gw.Start(); err != nil {
+		if err := gw.Start(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Gateway failed: %v", err)
 		}
 	}()
