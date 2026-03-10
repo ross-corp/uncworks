@@ -99,6 +99,16 @@ SolidJS + Vite. Connects to API server via WebSocket for real-time updates.
 5. Sidecar streams output back to control plane via gRPC
 6. Clients watch via `WatchAgentRun` (gRPC stream) or WebSocket
 
+## Git Hooks & Releases
+
+Git hooks are managed by [Lefthook](https://lefthook.dev/) (config: `lefthook.yml`). Hooks install automatically on `devbox shell` entry, or manually via `task hooks:install`.
+
+- **pre-commit**: gofmt, golangci-lint (new changes only), buf lint, TypeScript type checks
+- **commit-msg**: Enforces [Conventional Commits](https://www.conventionalcommits.org/) via commitlint
+- **pre-push**: Go tests, buf breaking change detection
+
+Releases use [Release Please](https://github.com/googleapis/release-please). Conventional commit messages on `main` automatically generate changelogs and version bumps via `.github/workflows/release-please.yml`. The workflow uses the default `GITHUB_TOKEN` — no additional secrets required.
+
 ## Conventions
 
 - **Diagrams**: Always use Mermaid in markdown. Never use ASCII box-drawing diagrams.
@@ -107,6 +117,7 @@ SolidJS + Vite. Connects to API server via WebSocket for real-time updates.
 - **CRD group**: `aot.uncworks.io/v1alpha1`
 - **Labels**: `aot.uncworks.io/parent`, `aot.uncworks.io/role`, `aot.uncworks.io/managed`
 - **Ports**: API server `:50051` (gRPC), `:8080` (HTTP/WS). Sidecar `:50052`.
+- **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `ci:`, `chore:`).
 
 ## OpenSpec
 

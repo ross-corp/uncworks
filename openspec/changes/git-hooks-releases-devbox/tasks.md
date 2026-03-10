@@ -44,12 +44,12 @@
 
 ## 5. Release Please
 
-- [ ] 5.1 Create `release-please-config.json` at project root: release-type `go`, package `.`, changelog-sections configuration
-- [ ] 5.2 Create `.release-please-manifest.json` at project root with initial version `{"." : "0.1.0"}`
-- [ ] 5.3 Create `.github/workflows/release-please.yml`: trigger on push to main, use `googleapis/release-please-action@v4`
-- [ ] 5.4 Configure workflow permissions: contents:write, pull-requests:write
-- [ ] 5.5 Document RELEASE_PLEASE_TOKEN secret requirement in deploy/ or docs/
-- [ ] 5.6 Test by pushing a conventional commit to main and verifying Release PR creation
+- [x] 5.1 Create `release-please-config.json` at project root: release-type `go`, package `.`, changelog-sections configuration
+- [x] 5.2 Create `.release-please-manifest.json` at project root with initial version `{"." : "0.1.0"}`
+- [x] 5.3 Create `.github/workflows/release-please.yml`: trigger on push to main, use `googleapis/release-please-action@v4`
+- [x] 5.4 Configure workflow permissions: contents:write, pull-requests:write
+- [x] 5.5 Document RELEASE_PLEASE_TOKEN secret requirement in deploy/ or docs/
+- [x] 5.6 Test by pushing a conventional commit to main and verifying Release PR creation
 
 ## 6. Verification
 
