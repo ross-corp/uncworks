@@ -63,6 +63,18 @@ tasks:
     cmds:
       - go test ./test/temporal/... -count=1 -v
 
+  test:integration:
+    desc: Run integration tests (requires Docker for testcontainers)
+    cmds:
+      - go test -tags integration ./... -count=1 -v
+
+  test:unit:
+    desc: Run unit tests only (fast, no Docker)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -short ./api/... ./internal/... -count=1
+
   # --- Build ---
   build:
     desc: Build all Go binaries

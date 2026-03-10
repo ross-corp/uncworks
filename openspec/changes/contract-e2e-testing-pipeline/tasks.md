@@ -38,13 +38,13 @@
 
 ## 4. Integration Tests Enhancement (Stage 4)
 
-- [ ] 4.1 Add `github.com/testcontainers/testcontainers-go` to `go.mod`
-- [ ] 4.2 Rewrite `internal/brain/store_test.go` to use testcontainers PostgreSQL instead of mock/local DB
-- [ ] 4.3 Write controller integration test with envtest: verify CRD → Temporal workflow bridge (mock Temporal client)
-- [ ] 4.4 Write controller integration test: verify workflow state → CRD status sync
-- [ ] 4.5 Add Go build tag `integration` to integration tests
-- [ ] 4.6 Add `task test:integration` target to `Taskfile.yml` that runs `go test -tags integration`
-- [ ] 4.7 Update `task test:unit` to run `go test -short` (excludes integration)
+- [x] 4.1 Add `github.com/testcontainers/testcontainers-go` to `go.mod`
+- [x] 4.2 Rewrite `internal/brain/store_test.go` to use testcontainers PostgreSQL (8 tests pass with real PG)
+- [ ] 4.3 Write controller integration test with envtest: verify CRD → Temporal workflow bridge — BLOCKED on temporal-workflow-engine
+- [ ] 4.4 Write controller integration test: verify workflow state → CRD status sync — BLOCKED on temporal-workflow-engine
+- [x] 4.5 Add Go build tag `integration` to integration tests — directory-based separation used instead
+- [x] 4.6 Add `task test:integration` target to `Taskfile.yml`
+- [x] 4.7 Update `task test:unit` to run `go test -short` (excludes integration)
 
 ## 5. E2E Tests with LLM (Stage 5)
 
