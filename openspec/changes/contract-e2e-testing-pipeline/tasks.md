@@ -1,10 +1,10 @@
 ## 1. Schema Contract Tests (Stage 1)
 
-- [ ] 1.1 Add `task proto:lint` target to `Taskfile.yml` that runs `buf lint`
-- [ ] 1.2 Add `task proto:breaking` target to `Taskfile.yml` that runs `buf breaking --against '.git#branch=main'`
-- [ ] 1.3 Verify `buf lint` passes on current protos (fix any violations from proto-toolchain change)
-- [ ] 1.4 Verify `buf breaking` passes (baseline is current main)
-- [ ] 1.5 Document schema contract tests in CI pipeline configuration
+- [x] 1.1 Add `task proto:lint` target to `Taskfile.yml` that runs `buf lint` — already exists from proto-toolchain change
+- [x] 1.2 Add `task proto:breaking` target to `Taskfile.yml` that runs `buf breaking --against '.git#branch=main'` — already exists
+- [x] 1.3 Verify `buf lint` passes on current protos (fix any violations from proto-toolchain change) — verified, zero violations
+- [x] 1.4 Verify `buf breaking` passes (baseline is current main) — verified
+- [x] 1.5 Document schema contract tests in CI pipeline configuration — .github/workflows/ci.yml created
 
 ## 2. GripMock Service Contract Tests (Stage 3)
 

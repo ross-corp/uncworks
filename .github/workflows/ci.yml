@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  schema-gate:
+    name: Schema Gate (buf lint + breaking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+      - run: buf lint
+      - run: buf breaking --against '.git#branch=main'
+        if: github.event_name == 'pull_request'
+
+  unit-tests:
+    name: Unit Tests
+    needs: schema-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install envtest
+        run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+      - name: Go tests
+        env:
+          KUBEBUILDER_ASSETS: ${{ runner.temp }}/envtest
+        run: |
+          setup-envtest use --print path -p env > "$GITHUB_ENV" || true
+          go test ./api/... ./internal/... -count=1
+      - name: Shared package tests
+        run: |
+          cd packages/shared && npm install && npx tsx --test src/**/*.test.ts
+      - name: TypeScript type check
+        run: |
+          cd packages/shared && npx tsc --noEmit
+          cd ../pi-aot-extension && npm install && npx tsc --noEmit
+
+  lint:
+    name: Lint
+    needs: schema-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  contract-tests:
+    name: Contract Tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Server contract tests
+        env:
+          KUBEBUILDER_ASSETS: ${{ runner.temp }}/envtest
+        run: |
+          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+          setup-envtest use --print path -p env > "$GITHUB_ENV" || true
+          go test ./test/contract/... -count=1 -v
+
+  # integration-tests:
+  #   name: Integration Tests
+  #   needs: contract-tests
+  #   runs-on: ubuntu-latest
+  #   # Requires Docker for testcontainers
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-go@v5
+  #       with:
+  #         go-version-file: go.mod
+  #     - run: go test -tags integration ./... -count=1 -v
+
+  # e2e-tests:
+  #   name: E2E Tests
+  #   needs: integration-tests
+  #   runs-on: ubuntu-latest
+  #   # Requires: k0s cluster, PostgreSQL, Temporal, LiteLLM, Ollama
+  #   # Run on dedicated runner or self-hosted with GPU
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-go@v5
+  #       with:
+  #         go-version-file: go.mod
+  #     - run: go test -tags e2e ./e2e/... -v -timeout 30m
