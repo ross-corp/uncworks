@@ -1,0 +1,16 @@
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: gen/go
+    opt:
+      - module=github.com/uncworks/aot/gen/go
+  - remote: buf.build/grpc/go
+    out: gen/go
+    opt:
+      - module=github.com/uncworks/aot/gen/go
+  - remote: buf.build/connectrpc/go
+    out: gen/go
+    opt:
+      - module=github.com/uncworks/aot/gen/go
+inputs:
+  - directory: proto

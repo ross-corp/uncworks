@@ -73,7 +73,8 @@ tasks:
   proto:gen:
     desc: Generate Go and TypeScript code from protobuf definitions
     cmds:
-      - buf generate
+      - buf generate --template buf.gen.go.yaml
+      - buf generate --template buf.gen.ts.yaml --include-imports
 
   proto:lint:
     desc: Lint protobuf files

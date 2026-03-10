@@ -33,15 +33,15 @@
 
 ## 4. TypeScript Connect Client
 
-- [ ] 4.1 Add `@connectrpc/connect`, `@connectrpc/connect-web`, `@connectrpc/protoc-gen-connect-es`, `@bufbuild/protobuf`, `@bufbuild/protoc-gen-es` to `packages/shared/package.json`
-- [ ] 4.2 Remove `@grpc/grpc-js` and `@grpc/proto-loader` from `packages/shared/package.json`
-- [ ] 4.3 Replace `packages/shared/src/grpc/client.ts` with a Connect client wrapper that uses the generated `gen/ts/` stubs
-- [ ] 4.4 Update `packages/shared/` exports: `./grpc` module now re-exports the Connect client
-- [ ] 4.5 Update `web/` to use Connect streaming for `WatchAgentRun` (replace WebSocket connection logic in dashboard components)
-- [ ] 4.6 Remove WebSocket client code from `web/src/` (any `new WebSocket()` calls, reconnect logic)
-- [ ] 4.7 Update `packages/pi-aot-extension/` if it uses the shared gRPC client
-- [ ] 4.8 Update `packages/tui/` if it uses the shared gRPC client
-- [ ] 4.9 Run all TypeScript tests and fix any breakages
+- [x] 4.1 Add `@connectrpc/connect`, `@connectrpc/connect-web`, `@bufbuild/protobuf` to `packages/shared/package.json`
+- [x] 4.2 Remove `@grpc/grpc-js` and `@grpc/proto-loader` from `packages/shared/package.json`
+- [x] 4.3 Replace `packages/shared/src/grpc/client.ts` with a Connect client wrapper that uses the generated `gen/ts/` stubs
+- [x] 4.4 Update `packages/shared/` exports: `./grpc` module now re-exports the Connect client
+- [x] 4.5 Update `web/` to use Connect streaming for `WatchAgentRun` (replace WebSocket connection logic in dashboard components) — N/A: web uses mock data, no streaming to replace
+- [x] 4.6 Remove WebSocket client code from `web/src/` (any `new WebSocket()` calls, reconnect logic) — N/A: no WebSocket code exists
+- [x] 4.7 Update `packages/pi-aot-extension/` if it uses the shared gRPC client — N/A: uses @grpc/grpc-js only for OTLP tracing
+- [x] 4.8 Update `packages/tui/` if it uses the shared gRPC client — N/A: no gRPC usage
+- [x] 4.9 Run all TypeScript tests and fix any breakages
 
 ## 5. Mermaid Documentation
 
