@@ -1,37 +1,40 @@
-## 1. Protocols & CRD Definitions
+## 1. Foundation, Testing Infra & Protocols
 
-- [ ] 1.1 Define Protobufs: Create `api.proto` (Client <-> Control Plane) and `agent.proto` (Control Plane <-> Pod Sidecar)
-- [ ] 1.2 Generate Go gRPC code from Protobufs
-- [ ] 1.3 Define Kubernetes CRDs for `AgentTemplate` and `AgentRun`
-- [ ] 1.4 Generate Go client and controller boilerplate for CRDs
+- [ ] 1.1 Set up Local Testing Environment: Install `k0s` and initialize a single-node cluster with `kine` (SQLite).
+- [ ] 1.2 Initialize Playwright E2E suite and verify against a dummy SolidJS app.
+- [ ] 1.3 Define Protobufs: Create `api.proto` (Client <-> Control Plane) and `agent.proto` (Control Plane <-> Sidecar).
+- [ ] 1.4 Define `AgentRun` CRD with support for `Pod`, `KubeVirt`, and `External` backends (Golang).
+- [ ] 1.5 Write integration tests for CRD lifecycle using Go's `envtest`.
 
-## 2. Go Control Plane Foundation
+## 2. Go Control Plane & Shared Logic
 
-- [ ] 2.1 Set up the API Server (gRPC/REST) in Go
-- [ ] 2.2 Implement the K8s Controller to watch `AgentRun` CRDs and manage Pod lifecycle
-- [ ] 2.3 Implement the PostgreSQL database schema and connection logic (Shared Brain)
-- [ ] 2.4 Build the basic Job Queuing and priority logic in the Orchestrator
+- [ ] 2.1 Set up the Go API Server with gRPC and WebSocket support.
+- [ ] 2.2 Implement the K8s Controller to watch `AgentRun` CRDs (Pod-only initially, stubs for others).
+- [ ] 2.3 Set up PostgreSQL Shared Brain and write unit tests for agent state persistence.
+- [ ] 2.4 Create a shared TypeScript logic package (`@aot/shared`) for gRPC clients and Solid stores.
 
-## 3. Execution Pod Components
+## 3. Execution Pod & Devbox
 
-- [ ] 3.1 Build the Go-based Hydration Init-Container for Git Worktree provisioning
-- [ ] 3.2 Build the Go-based RPC Gateway Sidecar (gRPC to stdin/stdout)
-- [ ] 3.3 Create the Base Docker Image with `devbox` and `pi-mono` runtime dependencies
+- [ ] 3.1 Build Go-based Hydration Init-Container and verify with integration tests.
+- [ ] 3.2 Build Go-based RPC Gateway Sidecar and verify with gRPC contract tests.
+- [ ] 3.3 Create a base Docker image with `devbox` and `bun` runtime pre-installed.
+- [ ] 3.4 Implement automated tests for the `devbox shell` execution context.
 
 ## 4. Agent Harness (pi-mono Extension)
 
-- [ ] 4.1 Create the TypeScript `pi-aot-extension` for the `pi-mono` harness
-- [ ] 4.2 Implement OTel tracing logic within the extension (Span propagation)
-- [ ] 4.3 Implement the `/ask_human` tool and RPC signal for HITL workflow
+- [ ] 4.1 Develop the `pi-aot-extension` (TypeScript) and verify with Bun test runner.
+- [ ] 4.2 Implement OTel tracing and verify span emission via an OTel Collector sidecar.
+- [ ] 4.3 Implement `/ask_human` tool and verify HITL signaling via a mock gRPC client.
 
-## 5. Client Interfaces (TUI & Web)
+## 5. Client Interfaces (SolidJS + OpenTUI)
 
-- [ ] 5.1 Build the Bubbletea-based TUI Fleet Dashboard in Go
-- [ ] 5.2 Build the Next.js Web UI for OTel trace visualization and agent monitoring
-- [ ] 5.3 Implement the `aot open` CLI command to locate and open local worktrees
+- [ ] 5.1 Build the SolidJS Web UI and write Playwright tests for agent monitoring.
+- [ ] 5.2 Build the SolidJS TUI using OpenTUI and verify terminal rendering.
+- [ ] 5.3 Integrate shared `@aot/shared` logic into both UIs and verify reactive state sync.
+- [ ] 5.4 Implement the `aot open` CLI command (Go) to find local worktrees and open `$EDITOR`.
 
-## 6. Advanced Multi-Agent Orchestration
+## 6. Verification & Roadmap
 
-- [ ] 6.1 Implement the `spawn_junior` tool for the Senior Agent harness
-- [ ] 6.2 Add pgvector RAG endpoints to the Control Plane for cross-run memory
-- [ ] 6.3 Implement the Multi-Agent Review Loop workflow (Junior PR -> Senior Review)
+- [ ] 6.1 Execute full system E2E test suite (Local k0s + Playwright + Agent fixed PR).
+- [ ] 6.2 Implement Multi-Agent "Senior" tool (`spawn_junior`) and verify child pod creation.
+- [ ] 6.3 Final regression test pass across all "Testing Taxonomy" layers.

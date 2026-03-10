@@ -1,72 +1,39 @@
-# Design: Agent Orchestration Tool (AOT) Control Plane & Execution
+## Context
 
-## Architecture Overview
+The AOT architecture aims to provide a unified environment for both local and remote agent orchestration. This update shifts the UI stack from a Go-based TUI to a **SolidJS-based TUI and WebUI** to ensure high reactive performance and shared component logic. We are also adopting **k0s** as our Kubernetes distribution, introducing **backend-agnostic AgentRuns**, and enforcing a **Test-First mandate**.
 
-The system is designed as a **Cloud-Native Service-Oriented Architecture (SOA)** built on Kubernetes. It abstracts the "Agent Harness" (initially `pi-mono`) from the Orchestration and State layers, ensuring composability and observability from day one.
+## Goals / Non-Goals
 
-### Core Philosophy
-- **Loose Coupling:** The Orchestrator does not care *how* the agent works, only that it complies with an RPC/Event interface.
-- **Observability First:** OpenTelemetry (OTel) tracing is baked into the control plane and injected into the agent execution harness.
-- **Kube-Native Scheduling:** Leverage Kubernetes Custom Resource Definitions (CRDs) for stateful agent definitions, enabling Knative for scale-to-zero or event-driven execution in the future.
+**Goals:**
+- **SolidJS Everywhere**: Use a single reactive framework (SolidJS) for both the Web Dashboard and the Terminal Dashboard (via OpenTUI).
+- **Test-First Reliability**: 100% verification for every change (E2E, integration, unit, smoke, race, contact).
+- **Multi-Backend AgentRuns**: Support `Pod` (initial), `KubeVirt`, and `External` (SSH/Lima/VM) execution modes in the `AgentRun` CRD.
+- **K8s Isolation via k0s**: Use a lightweight, single-binary Kubernetes distribution (k0s) to manage the agent lifecycle.
+- **Universal Devboxes**: Enforce the `bun` runtime in all agent pods via `devbox.json` for consistent tool execution.
 
----
+**Non-Goals:**
+- **Automated k0s installation**: The Go orchestrator will NOT manage k0s installation initially (handled via manual scripts/Helm).
+- **Full KubeVirt/External implementation**: Only the `Pod` backend will be fully implemented in 1.0.0; others will be stubbed in the CRD and roadmap.
 
-## 1. The Control Plane (Kubernetes Services)
+## Decisions
 
-### A. The API Server & Orchestrator (Go / Rust)
-The central nervous system of AOT.
-*   **Role:** Exposes gRPC/REST endpoints for the Web and TUI clients. Manages the lifecycle of Agent workloads.
-*   **CRD Management:** Translates a user request (e.g., "Fix Issue #42") into a K8s `AgentRun` Custom Resource.
-*   **Routing:** Handles human-in-the-loop (HITL) communication by routing WebSocket streams from the Client to the specific `AgentRun` Pod.
+### 1. UI Stack: SolidJS + OpenTUI + Playwright
+- **Rationale**: Building two separate UIs (Go TUI and React/Solid Web) doubles development time and state management complexity. Using SolidJS for both allows us to share business logic, gRPC clients, and state stores. OpenTUI (powered by Zig and Yoga Flexbox) gives us a high-performance terminal renderer that integrates with SolidJS.
 
-### B. Shared Brain (PostgreSQL / Vector DB)
-*   **Role:** The persistent state for multi-agent collaboration.
-*   **Implementation:** A StatefulSet running PostgreSQL (with pgvector for RAG/Memory) deployed in-cluster by default, with configuration options to point to external databases (e.g., Supabase, RDS).
-*   **Function:** Stores project context, previous run history, and long-term agent memory.
+### 2. Orchestration: k0s and Backend-Agnostic AgentRuns
+- **Rationale**: k0s is a zero-friction, single-binary distribution. The `AgentRun` CRD will use a `Spec.Backend` field to switch between `Pod`, `KubeVirt`, or `External`. This future-proofs the system for deeper isolation (VMs) or external runners (SSH).
 
-### C. Observability Stack (OpenTelemetry Collector)
-*   **Role:** Central aggregation for distributed traces.
-*   **Function:** The API Server, the LiteLLM Proxy, and the Agent Harness all push traces to this collector (which can then forward to Jaeger, Datadog, etc.).
+### 3. Execution: Bun + Devbox
+- **Rationale**: Bun is extremely fast for agent tools (scripts, linting). By enforcing `devbox` in the agent pod, we ensure the agent has exactly the tools it needs without bloating the base container image.
 
----
+### 4. Testing Taxonomy
+- **Unit**: Go (backend), Solid/Jest (frontend).
+- **Integration**: Go/Testcontainers for Postgres and K8s interactions.
+- **E2E**: Full system flows using a real k0s cluster and Playwright.
+- **Contract**: gRPC-based verification between Control Plane and Agent Pods.
 
-## 2. The Execution Plane (The Agent Pod)
+## Risks / Trade-offs
 
-When an `AgentRun` CRD is created, K8s schedules a Pod (or a KubeVirt VM).
-
-### The Container Layout
-Instead of a monolithic container, we use a **Sidecar Pattern** within the Pod to enforce service boundaries.
-
-#### Container 1: The Devbox Environment (User Code)
-*   **Image:** A base Ubuntu image dynamically provisioned via `devbox.json` (or `devcontainer.json`).
-*   **Role:** The sandbox where code is checked out, built, and tested.
-
-#### Container 2: The Agent Harness (`pi-mono`)
-*   **Role:** The LLM execution loop. It interacts with the Devbox container via shared volumes and localized IPC.
-*   **Extension API:** We utilize `pi-mono`'s Extension SDK to build an "AOT Extension". This extension:
-    1.  Hooks into `pi.on("tool_call")` to emit OTel Spans for every tool execution.
-    2.  Provides a custom `/ask_human` tool that pauses the session and sends an RPC event back to the Control Plane for HITL.
-
-#### Container 3: The RPC Gateway (Sidecar)
-*   **Role:** Translates `pi-mono`'s internal JSONL/RPC over stdin/stdout into standard gRPC streams that the Control Plane can route to the frontend clients.
-*   **Why?** This ensures we can swap out `pi-mono` in the future for another harness (like AutoGPT or a custom Python loop) simply by writing a new Gateway sidecar that implements our standard `Agent.proto` interface.
-
----
-
-## 3. Interaction Models
-
-### Human-in-the-Loop (HITL)
-1.  **Agent Pauses:** The `pi-mono` harness (via our AOT extension) hits a blocked state or uses the `/ask_human` tool.
-2.  **Event Emitted:** The RPC sidecar catches this and emits a `WaitingForInput` event to the Control Plane via gRPC.
-3.  **Client Notification:** The Control Plane pushes this to the TUI/Web client via WebSocket.
-4.  **Human Responds:** The user types a response, which flows back down to the specific Pod's stdin.
-
-### Multi-Agent Communication
-*   **The Orchestrator Approach:** A "Senior Agent" pod emits an event to the Control Plane requesting a sub-task. The Control Plane creates a *new* `AgentRun` CRD for a "Junior Agent".
-*   **State Sharing:** They do not communicate directly. They share state by committing code to a Git branch or writing records to the Shared PostgreSQL Brain.
-
----
-
-## 4. Why CRDs and Knative?
-*   **CRDs (`AgentTemplate`, `AgentRun`):** Allow us to use standard `kubectl` to monitor agents. You could type `kubectl get agentruns -w` to see the status of your AI fleet.
-*   **Knative Eventing (Future-Proofing):** By building on K8s, we can eventually bind agents to Knative event sources. Example: A GitHub Webhook fires (Push event) -> Knative creates an `AgentRun` to review the code -> Agent spins up, reviews, posts a comment, and spins down to zero.
+- **[Risk] OpenTUI Maturity**: OpenTUI is high-performance but relatively new. → **Mitigation**: Maintain clear abstraction layers in the UI.
+- **[Risk] Test Overhead**: A "Test-Everything" mandate increases implementation time. → **Mitigation**: Invest in fast CI (using Bun and k0s) to keep iteration speed high.
+- **[Risk] KubeVirt Complexity**: Supporting VMs in K8s is complex. → **Mitigation**: Implement as a "Stub" first, ensuring the CRD schema supports it before the full controller logic is built.
