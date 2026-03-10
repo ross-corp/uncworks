@@ -52,26 +52,18 @@ While Stripe uses a 2-retry limit, we can build a more granular **"Failure Class
 
 ## 5. Interaction Diagram: Queuing & Execution
 
-```text
-User Request
-  │
-  ▼
-[Control Plane: API Server]
-  │
-  ├─▶ [Check Quotas & Priority]
-  │     │ 
-  │     ├─▶ Limit Reached? ──▶ [Queue in Postgres]
-  │     └─▶ Limit OK? ───────▶ [Create AgentRun CRD]
-  │
-  ▼
-[K8s Scheduler]
-  │
-  ├─▶ [Select Pre-warmed Pod] ──┐
-  │                             │ (Inject Context & Rules)
-  ▼                             ▼
-[Agent Pod: Execution] <────────┘
-  │
-  ├─▶ [OTel: Trace "Thinking"]
-  ├─▶ [OTel: Trace "Coding"]
-  └─▶ [Finish / TTL Expired] ──▶ [Cleanup / Push PR]
+```mermaid
+graph TD
+    User["User Request"] --> API["Control Plane: API Server"]
+    API --> Check["Check Quotas & Priority"]
+    Check -->|Limit Reached| Queue["Queue in Postgres"]
+    Check -->|Limit OK| CRD["Create AgentRun CRD"]
+    CRD --> Sched["K8s Scheduler"]
+    Queue -.->|"When slot available"| CRD
+    Sched --> PreWarm["Select Pre-warmed Pod"]
+    PreWarm -->|"Inject Context & Rules"| Exec["Agent Pod: Execution"]
+    Exec --> Trace1["OTel: Trace 'Thinking'"]
+    Exec --> Trace2["OTel: Trace 'Coding'"]
+    Exec --> Finish["Finish / TTL Expired"]
+    Finish --> Cleanup["Cleanup / Push PR"]
 ```

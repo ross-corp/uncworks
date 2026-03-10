@@ -8,43 +8,33 @@ AOT runs AI coding agents on Kubernetes. You submit a task (a prompt + a git rep
 
 ## Architecture
 
-```
-                         Clients
-              +-----------+-----------+
-              |           |           |
-           Web UI       TUI        CLI
-          (SolidJS)  (SolidJS)   (aot open)
-              |           |           |
-              +-----+-----+-----------+
-                    |
-              gRPC / WebSocket
-                    |
-         +----------v-----------+
-         |     API Server       |     <-- gRPC service (AOTService)
-         |   + WebSocket Hub    |     <-- real-time event streaming
-         +----------+-----------+
-                    |
-         +----------v-----------+
-         |     Controller       |     <-- K8s reconciler for AgentRun CRD
-         +----+------+----+----+
-              |      |         |
-           Pod   KubeVirt  External    <-- execution backends
-              |    (planned)  (SSH)
-              |
-    +---------v-----------+
-    |    Agent Pod         |
-    |  +----------------+ |
-    |  | init: hydration | |  <-- git clone + devbox setup
-    |  +----------------+ |
-    |  | agent container | |  <-- runs the AI coding agent
-    |  +----------------+ |
-    |  | rpc-gateway     | |  <-- sidecar: gRPC bridge to control plane
-    |  +----------------+ |
-    +---------+-----------+
-              |
-    +---------v-----------+
-    |   PostgreSQL (brain) |   <-- shared state store + queue
-    +-----------------------+
+```mermaid
+graph TD
+    subgraph Clients
+        WebUI["Web UI (SolidJS)"]
+        TUI["TUI (SolidJS)"]
+        CLI["CLI (aot open)"]
+    end
+
+    WebUI & TUI & CLI -->|gRPC / WebSocket| API
+
+    subgraph ControlPlane["Control Plane"]
+        API["API Server\ngRPC service (AOTService)\n+ WebSocket Hub"]
+        API --> Controller["Controller\nK8s reconciler for AgentRun CRD"]
+    end
+
+    Controller -->|Pod| AgentPod
+    Controller -.->|"KubeVirt (planned)"| KV["VM"]
+    Controller -.->|"External (SSH)"| Ext["Remote Machine"]
+
+    subgraph AgentPod["Agent Pod"]
+        Init["init: hydration\ngit clone + devbox setup"]
+        Agent["agent container\nruns the AI coding agent"]
+        Sidecar["rpc-gateway\nsidecar: gRPC bridge to control plane"]
+    end
+
+    Sidecar --> API
+    Agent --> PG[("PostgreSQL (brain)\nshared state store + queue")]
 ```
 
 ### Data flow
@@ -147,7 +137,19 @@ The core CRD. Each `AgentRun` declares:
 | `envVars`     | Additional environment variables                   |
 | `image`       | Override for the agent container image             |
 
-Lifecycle phases: `Pending` -> `Running` -> `Succeeded` / `Failed` / `Cancelled`. An agent can also enter `WaitingForInput` during HITL interactions.
+Lifecycle phases:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: CreateAgentRun
+    Pending --> Running: Pod provisioned
+    Running --> WaitingForInput: ask_human called
+    WaitingForInput --> Running: SendHumanInput
+    Running --> Succeeded: Task completed
+    Running --> Failed: Error or TTL exceeded
+    Running --> Cancelled: CancelAgentRun
+    Pending --> Failed: Pod creation failed
+```
 
 ### Backends
 

@@ -66,26 +66,20 @@ To ensure **Readability and Composability**, the system injects a standard "Agen
 
 ## 5. Architectural Diagram: Go Backend & Sync
 
-```text
-       [ TUI Client (Go) ]       [ Web Client (Next.js) ]
-                │                         │
-                └───────────┬─────────────┘
-                            │ (gRPC / Protobuf)
-                            ▼
-                  [ AOT API Server (Go) ]
-                            │
-            ┌───────────────┴───────────────┐
-            ▼                               ▼
-    [ Orchestrator ]               [ Shared Brain ]
-    (K8s CRD Controller)           (Postgres + pgvector)
-            │
-            ▼
-    [ Agent Pod (K8s) ]
-    ┌──────────────────────────────────────────────────────────┐
-    │  [ RPC Gateway Sidecar (Go) ] <─▶ [ pi-mono Harness ]    │
-    │             │                             │              │
-    │             └─────────────┬───────────────┘              │
-    │                           ▼                              │
-    │  [ Devbox Container ] <──▶ [ Local Path / Git Worktree ] │
-    └──────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    TUI["TUI Client (Go)"] --> API
+    Web["Web Client (Next.js)"] --> API
+
+    API["AOT API Server (Go)\ngRPC / Protobuf"]
+    API --> Orch["Orchestrator\nK8s CRD Controller"]
+    API --> Brain["Shared Brain\nPostgres + pgvector"]
+
+    Orch --> Pod
+
+    subgraph Pod["Agent Pod (K8s)"]
+        RPC["RPC Gateway Sidecar (Go)"] <--> Harness["pi-mono Harness"]
+        Harness --> Devbox["Devbox Container"]
+        Devbox <--> Worktree["Local Path / Git Worktree"]
+    end
 ```

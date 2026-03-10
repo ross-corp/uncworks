@@ -161,6 +161,18 @@ kubectl apply -f agentrun.yaml
 
 ### AgentRun Phases
 
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: CreateAgentRun
+    Pending --> Running: Pod provisioned
+    Running --> WaitingForInput: ask_human called
+    WaitingForInput --> Running: SendHumanInput
+    Running --> Succeeded: Task completed
+    Running --> Failed: Error or TTL exceeded
+    Running --> Cancelled: CancelAgentRun
+    Pending --> Failed: Pod creation failed
+```
+
 | Phase             | Meaning                                         |
 |-------------------|------------------------------------------------|
 | `Pending`         | AgentRun created, pod not yet provisioned       |
@@ -262,6 +274,24 @@ AOT supports hierarchical multi-agent execution through the `spawn_junior` mecha
 
 ### How It Works
 
+```mermaid
+sequenceDiagram
+    participant Senior as Senior Agent
+    participant Ext as pi-aot-extension
+    participant CP as Control Plane
+    participant Junior as Junior Agent
+
+    Senior->>Ext: spawn_junior("Write tests for auth")
+    Ext->>CP: CreateAgentRun (child)
+    CP-->>Ext: junior run ID
+    Ext-->>Senior: "Junior spawned: run-456"
+    CP->>Junior: Provision pod + start agent
+    Junior->>CP: StreamOutput (progress)
+    Junior->>CP: NotifyEvent (COMPLETED)
+    Senior->>CP: GetAgentRun("run-456")
+    CP-->>Senior: status: Succeeded
+```
+
 1. A "senior" agent is running inside its pod.
 2. The agent harness (via the pi-aot-extension) exposes a `spawn_junior` tool.
 3. When the senior agent calls `spawn_junior` with a task description, the extension sends a request to the control plane.
@@ -309,6 +339,24 @@ A senior agent is asked to "refactor the payment module and add tests." It might
 HITL allows agents to pause and request clarification from a human operator.
 
 ### How It Works
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant Sidecar as RPC Gateway
+    participant CP as Control Plane
+    participant Client as User (Web/TUI/CLI)
+
+    Agent->>Sidecar: ask_human("Which DB?")
+    Sidecar->>CP: NotifyEvent(WAITING_FOR_INPUT)
+    CP-->>Client: WatchAgentRun event: WaitingForInput
+    Note over Client: User sees the question
+    Client->>CP: SendHumanInput("Use PostgreSQL")
+    CP->>Sidecar: SendInput("Use PostgreSQL")
+    Sidecar->>Agent: stdin write
+    Note over Agent: Resumes execution
+    Sidecar->>CP: NotifyEvent(phase: RUNNING)
+```
 
 1. The agent harness exposes an `ask_human` tool via the pi-aot-extension.
 2. When the agent calls `ask_human` with a question, the agent's process state transitions to `WAITING_FOR_INPUT`.
