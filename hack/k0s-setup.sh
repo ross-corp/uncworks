@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${SCRIPT_DIR}/k0s-config.yaml"
 KUBECONFIG_OUT="${SCRIPT_DIR}/../kubeconfig"
+REAL_USER="${SUDO_USER:-$(whoami)}"
 
 echo "==> Checking k0s..."
 if ! command -v k0s &>/dev/null; then
@@ -19,7 +20,7 @@ echo "==> k0s version: $(k0s version)"
 if k0s status &>/dev/null; then
   echo "==> Stopping existing k0s cluster..."
   k0s stop || true
-  k0s reset --yes || true
+  k0s reset || true
 fi
 
 echo "==> Installing k0s controller with worker (single-node)..."
@@ -29,16 +30,17 @@ echo "==> Starting k0s..."
 k0s start
 
 echo "==> Waiting for k0s to be ready..."
-for i in $(seq 1 60); do
-  if k0s kubectl get nodes &>/dev/null; then
+for i in $(seq 1 90); do
+  if k0s kubectl get nodes 2>/dev/null | grep -q "Ready"; then
     break
   fi
-  echo "    waiting... (${i}/60)"
+  echo "    waiting... (${i}/90)"
   sleep 2
 done
 
 echo "==> Generating kubeconfig..."
 k0s kubeconfig admin > "${KUBECONFIG_OUT}"
+chown "${REAL_USER}:${REAL_USER}" "${KUBECONFIG_OUT}"
 chmod 600 "${KUBECONFIG_OUT}"
 
 echo "==> Cluster ready!"

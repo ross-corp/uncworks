@@ -12,15 +12,26 @@
   ],
   "shell": {
     "init_hook": [
-      "echo '==> AOT development environment ready'"
+      "echo '==> AOT development environment ready'",
+      "echo '    Run \"task\" to see available commands'"
     ],
     "scripts": {
-      "test:go": "go test ./...",
-      "test:web": "cd web && npx playwright test",
-      "test:ext": "cd packages/pi-aot-extension && npx tsx --test src/**/*.test.ts",
-      "proto:gen": "./hack/proto-gen.sh",
-      "k0s:setup": "sudo ./hack/k0s-setup.sh",
-      "k0s:teardown": "sudo ./hack/k0s-teardown.sh"
+      "test": "task test",
+      "test:go": "task test:go",
+      "test:e2e": "task test:e2e",
+      "test:web": "task test:web",
+      "test:ext": "task test:extension",
+      "test:tui": "task test:tui",
+      "test:shared": "task test:shared",
+      "build": "task build",
+      "build:web": "task build:web",
+      "proto:gen": "task proto:gen",
+      "k0s:setup": "task k0s:setup",
+      "k0s:teardown": "task k0s:teardown",
+      "k0s:crd": "task k0s:crd",
+      "dev:web": "task dev:web",
+      "install": "task install",
+      "lint": "task lint"
     }
   }
 }

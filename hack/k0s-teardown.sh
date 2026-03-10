@@ -7,7 +7,7 @@ echo "==> Stopping k0s..."
 k0s stop || true
 
 echo "==> Resetting k0s..."
-k0s reset --yes || true
+k0s reset || true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 rm -f "${SCRIPT_DIR}/../kubeconfig"

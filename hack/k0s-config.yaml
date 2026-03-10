@@ -7,10 +7,7 @@ spec:
     type: kine
     kine:
       dataSource: "sqlite:///var/lib/k0s/db/state.db"
-  api:
-    address: 127.0.0.1
-    port: 6443
   network:
-    provider: kube-router
+    provider: kuberouter
     podCIDR: 10.244.0.0/16
     serviceCIDR: 10.96.0.0/12
