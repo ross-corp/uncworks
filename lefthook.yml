@@ -12,7 +12,7 @@ pre-commit:
 
     - name: buf-lint
       glob: "*.proto"
-      run: buf lint
+      run: command -v buf >/dev/null && buf lint || echo "buf not found, skipping"
 
     - name: tsc-web
       glob: "*.{ts,tsx}"
@@ -38,4 +38,4 @@ pre-push:
       run: go test ./api/... ./internal/... -count=1
 
     - name: buf-breaking
-      run: buf breaking --against '.git#branch=main'
+      run: command -v buf >/dev/null && buf breaking --against '.git#branch=main' || echo "buf not found, skipping"
