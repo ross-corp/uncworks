@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	"github.com/uncworks/aot/internal/testutil"
 )
 
 var (
@@ -26,6 +27,7 @@ var (
 )
 
 func TestAPIs(t *testing.T) {
+	testutil.EnsureEnvtestAssets()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "AgentRun CRD Suite")
 }

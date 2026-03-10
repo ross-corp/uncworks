@@ -11,9 +11,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	"github.com/uncworks/aot/internal/testutil"
 )
 
 func setupTestEnv(t *testing.T) (client.Client, func()) {
+	testutil.EnsureEnvtestAssets()
 	t.Helper()
 
 	testEnv := &envtest.Environment{
