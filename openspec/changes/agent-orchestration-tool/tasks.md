@@ -37,4 +37,4 @@
 
 - [x] 6.1 Execute full system E2E test suite (Local k0s + Playwright + Agent fixed PR).
 - [x] 6.2 Implement Multi-Agent "Senior" tool (`spawn_junior`) and verify child pod creation.
-- [ ] 6.3 Final regression test pass across all "Testing Taxonomy" layers.
+- [x] 6.3 Final regression test pass across all "Testing Taxonomy" layers.

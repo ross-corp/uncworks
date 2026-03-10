@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/main/.schema/devbox.schema.json",
+  "packages": [
+    "go@latest",
+    "nodejs@22",
+    "protobuf@latest",
+    "go-protobuf@latest",
+    "protoc-gen-go-grpc@latest",
+    "k0s@latest",
+    "kubectl@latest",
+    "postgresql@16"
+  ],
+  "shell": {
+    "init_hook": [
+      "echo '==> AOT development environment ready'"
+    ],
+    "scripts": {
+      "test:go": "go test ./...",
+      "test:web": "cd web && npx playwright test",
+      "test:ext": "cd packages/pi-aot-extension && npx tsx --test src/**/*.test.ts",
+      "proto:gen": "./hack/proto-gen.sh",
+      "k0s:setup": "sudo ./hack/k0s-setup.sh",
+      "k0s:teardown": "sudo ./hack/k0s-teardown.sh"
+    }
+  }
+}

@@ -79,6 +79,7 @@ kubeconfig
 /aot-*
 /apiserver
 /controller
+/bin/
 
 # Playwright
 test-results/

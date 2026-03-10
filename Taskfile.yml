@@ -1,0 +1,114 @@
+version: "3"
+
+vars:
+  KUBEBUILDER_ASSETS:
+    sh: "setup-envtest use --print path 2>/dev/null || echo ''"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # --- Testing ---
+  test:
+    desc: Run all tests
+    deps: [test:go, test:web, test:extension, test:tui]
+
+  test:go:
+    desc: Run Go tests (unit + integration)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test ./api/... ./internal/... -count=1
+
+  test:e2e:
+    desc: Run Go E2E tests (requires running k0s cluster)
+    cmds:
+      - go test ./e2e/... -v -count=1
+
+  test:web:
+    desc: Run Playwright E2E tests for web dashboard
+    dir: web
+    cmds:
+      - npx playwright test
+
+  test:extension:
+    desc: Run pi-aot-extension tests
+    dir: packages/pi-aot-extension
+    cmds:
+      - npx tsx --test src/**/*.test.ts
+
+  test:tui:
+    desc: Run TUI renderer tests
+    dir: packages/tui
+    cmds:
+      - npx tsx --test src/**/*.test.ts
+
+  test:shared:
+    desc: Run @aot/shared tests
+    dir: packages/shared
+    cmds:
+      - npx tsx --test src/**/*.test.ts
+
+  # --- Build ---
+  build:
+    desc: Build all Go binaries
+    cmds:
+      - go build -o ./bin/apiserver ./cmd/apiserver
+      - go build -o ./bin/controller ./cmd/controller
+      - go build -o ./bin/hydration ./cmd/hydration
+      - go build -o ./bin/sidecar ./cmd/sidecar
+      - go build -o ./bin/aot ./cmd/aot
+
+  build:web:
+    desc: Build web dashboard
+    dir: web
+    cmds:
+      - npx vite build
+
+  # --- Code Generation ---
+  proto:gen:
+    desc: Generate Go code from protobuf definitions
+    cmds:
+      - ./hack/proto-gen.sh
+
+  # --- Infrastructure ---
+  k0s:setup:
+    desc: Initialize local k0s cluster (requires sudo)
+    cmds:
+      - sudo ./hack/k0s-setup.sh
+
+  k0s:teardown:
+    desc: Tear down local k0s cluster (requires sudo)
+    cmds:
+      - sudo ./hack/k0s-teardown.sh
+
+  k0s:crd:
+    desc: Apply AgentRun CRD to cluster
+    cmds:
+      - kubectl apply -f deploy/crds/agentrun-crd.yaml
+
+  # --- Development ---
+  dev:web:
+    desc: Start web dashboard dev server
+    dir: web
+    cmds:
+      - npx vite
+
+  install:
+    desc: Install all dependencies
+    cmds:
+      - go mod tidy
+      - cd web && npm install
+      - cd packages/shared && npm install
+      - cd packages/pi-aot-extension && npm install
+      - cd packages/tui && npm install
+
+  lint:
+    desc: Run linters
+    cmds:
+      - go vet ./...
+      - cd web && npx tsc --noEmit
+      - cd packages/shared && npx tsc --noEmit
+      - cd packages/pi-aot-extension && npx tsc --noEmit
