@@ -36,7 +36,7 @@ devbox shell
 This installs and activates:
 - Go (latest)
 - Node.js 22
-- protobuf + protoc-gen-go + protoc-gen-go-grpc
+- buf (proto toolchain)
 - k0sctl + kubectl
 - PostgreSQL 16
 
@@ -62,7 +62,7 @@ task build
 ```
 
 This produces five binaries in `./bin/`:
-- `apiserver` -- gRPC API server + WebSocket hub
+- `apiserver` -- ConnectRPC API server (gRPC + Connect + gRPC-Web)
 - `controller` -- Kubernetes controller for AgentRun reconciliation
 - `hydration` -- init-container that clones repos and runs devbox
 - `sidecar` -- RPC Gateway that bridges agent containers to the control plane
@@ -75,6 +75,35 @@ kubectl get crd agentruns.aot.uncworks.io
 ```
 
 You should see the AgentRun CRD registered.
+
+---
+
+## Data Flow
+
+```mermaid
+sequenceDiagram
+    participant Client as Client (Web/TUI/CLI)
+    participant API as API Server
+    participant Ctrl as Controller
+    participant Pod as Agent Pod
+    participant SC as Sidecar (rpc-gateway)
+    participant Brain as Brain (PostgreSQL)
+
+    Client->>API: CreateAgentRun (ConnectRPC)
+    API->>Ctrl: New AgentRun CRD
+    Ctrl->>Pod: Create Pod (init + agent + sidecar)
+    Pod->>Pod: Hydration (git clone + devbox)
+    Pod->>Brain: Store agent state
+    Pod->>SC: Agent output stream
+    SC->>API: NotifyEvent (status updates)
+    API->>Client: WatchAgentRun (server-streaming)
+    Client->>API: SendHumanInput (if HITL)
+    API->>SC: Forward input
+    SC->>Pod: stdin write
+    Pod->>SC: Final result
+    SC->>API: NotifyEvent (COMPLETED)
+    API->>Client: Event: Succeeded
+```
 
 ---
 

@@ -16,10 +16,10 @@ graph TD
         CLI["CLI (aot open)"]
     end
 
-    WebUI & TUI & CLI -->|gRPC / WebSocket| API
+    WebUI & TUI & CLI -->|ConnectRPC| API
 
     subgraph ControlPlane["Control Plane"]
-        API["API Server\ngRPC service (AOTService)\n+ WebSocket Hub"]
+        API["API Server\nConnectRPC (AOTService)\ngRPC + Connect + gRPC-Web"]
         API --> Controller["Controller\nK8s reconciler for AgentRun CRD"]
     end
 
@@ -44,7 +44,7 @@ graph TD
 3. The hydration init-container clones the repo and runs `devbox install`.
 4. The agent container executes the prompt in the workspace.
 5. The sidecar streams output and events back to the control plane.
-6. Clients watch progress via `WatchAgentRun` (gRPC server-streaming) or WebSocket.
+6. Clients watch progress via `WatchAgentRun` (ConnectRPC server-streaming).
 
 ---
 
@@ -163,7 +163,7 @@ A senior agent can call the `spawn_junior` tool to create a child `AgentRun` for
 
 ### Human-in-the-Loop (HITL)
 
-Agents can call the `ask_human` tool to pause and request clarification. The `AgentRun` phase transitions to `WaitingForInput`. Clients send responses via the `SendHumanInput` gRPC RPC, and the agent resumes.
+Agents can call the `ask_human` tool to pause and request clarification. The `AgentRun` phase transitions to `WaitingForInput`. Clients send responses via the `SendHumanInput` RPC, and the agent resumes.
 
 ### Shared Brain
 
