@@ -53,10 +53,10 @@
 
 ## 6. Verification
 
-- [ ] 6.1 Verify `devbox shell` provides all declared tools
-- [ ] 6.2 Verify `lefthook install` runs automatically on shell entry
-- [ ] 6.3 Verify pre-commit hook catches Go lint violations
-- [ ] 6.4 Verify commit-msg hook rejects non-conventional messages
-- [ ] 6.5 Verify pre-push hook runs tests and buf breaking
-- [ ] 6.6 Verify `task lint` uses golangci-lint
-- [ ] 6.7 Verify release-please workflow file is valid YAML
+- [x] 6.1 Verify `devbox shell` provides all declared tools
+- [x] 6.2 Verify `lefthook install` runs automatically on shell entry
+- [x] 6.3 Verify pre-commit hook catches Go lint violations
+- [x] 6.4 Verify commit-msg hook rejects non-conventional messages
+- [x] 6.5 Verify pre-push hook runs tests and buf breaking
+- [x] 6.6 Verify `task lint` uses golangci-lint
+- [x] 6.7 Verify release-please workflow file is valid YAML
