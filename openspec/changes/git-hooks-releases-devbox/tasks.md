@@ -14,33 +14,33 @@
 
 ## 2. golangci-lint Configuration
 
-- [ ] 2.1 Create `.golangci.yml` at project root with linters: govet, errcheck, staticcheck, unused, gosimple, ineffassign, gocritic, gofmt, misspell
-- [ ] 2.2 Configure timeout (3 minutes), Go version, and exclude patterns for generated code (`gen/go/`)
-- [ ] 2.3 Update `Taskfile.yml`: change `lint` task Go command from `go vet ./...` to `golangci-lint run ./...`
-- [ ] 2.4 Run `golangci-lint run ./...` and fix any violations
-- [ ] 2.5 Update AGENTS.md to document golangci-lint usage
+- [x] 2.1 Create `.golangci.yml` at project root with linters: govet, errcheck, staticcheck, unused, gosimple, ineffassign, gocritic, gofmt, misspell
+- [x] 2.2 Configure timeout (3 minutes), Go version, and exclude patterns for generated code (`gen/go/`)
+- [x] 2.3 Update `Taskfile.yml`: change `lint` task Go command from `go vet ./...` to `golangci-lint run ./...`
+- [x] 2.4 Run `golangci-lint run ./...` and fix any violations
+- [x] 2.5 Update AGENTS.md to document golangci-lint usage
 
 ## 3. Conventional Commits (commitlint)
 
-- [ ] 3.1 Create root-level `package.json` with `@commitlint/cli` and `@commitlint/config-conventional` as devDependencies
-- [ ] 3.2 Create `commitlint.config.js` extending `@commitlint/config-conventional`
-- [ ] 3.3 Run `npm install` at root to install commitlint
-- [ ] 3.4 Add root `node_modules/` is already in .gitignore (verify)
-- [ ] 3.5 Test commitlint: `echo "bad message" | npx commitlint` should fail; `echo "feat: good message" | npx commitlint` should pass
+- [x] 3.1 Create root-level `package.json` with `@commitlint/cli` and `@commitlint/config-conventional` as devDependencies
+- [x] 3.2 Create `commitlint.config.js` extending `@commitlint/config-conventional`
+- [x] 3.3 Run `npm install` at root to install commitlint
+- [x] 3.4 Add root `node_modules/` is already in .gitignore (verify)
+- [x] 3.5 Test commitlint: `echo "bad message" | npx commitlint` should fail; `echo "feat: good message" | npx commitlint` should pass
 
 ## 4. Lefthook Git Hooks
 
-- [ ] 4.1 Create `lefthook.yml` at project root
-- [ ] 4.2 Configure pre-commit: `go fmt` with `stage_fixed: true` on `*.go` glob
-- [ ] 4.3 Configure pre-commit: `golangci-lint run --new-from-rev=HEAD` on `*.go` glob
-- [ ] 4.4 Configure pre-commit: `buf lint` on `*.proto` glob
-- [ ] 4.5 Configure pre-commit: `tsc --noEmit` for web and packages (parallel)
-- [ ] 4.6 Configure commit-msg: `npx commitlint --edit {1}`
-- [ ] 4.7 Configure pre-push: `go test ./api/... ./internal/... -count=1`
-- [ ] 4.8 Configure pre-push: `buf breaking --against '.git#branch=main'`
-- [ ] 4.9 Run `lefthook install` and verify hooks are in `.git/hooks/`
-- [ ] 4.10 Test full flow: make a commit with bad message (should fail), fix message (should pass), push (tests should run)
-- [ ] 4.11 Add `task hooks:install` target to Taskfile.yml as alias for `lefthook install`
+- [x] 4.1 Create `lefthook.yml` at project root
+- [x] 4.2 Configure pre-commit: `go fmt` with `stage_fixed: true` on `*.go` glob
+- [x] 4.3 Configure pre-commit: `golangci-lint run --new-from-rev=HEAD` on `*.go` glob
+- [x] 4.4 Configure pre-commit: `buf lint` on `*.proto` glob
+- [x] 4.5 Configure pre-commit: `tsc --noEmit` for web and packages (parallel)
+- [x] 4.6 Configure commit-msg: `npx commitlint --edit {1}`
+- [x] 4.7 Configure pre-push: `go test ./api/... ./internal/... -count=1`
+- [x] 4.8 Configure pre-push: `buf breaking --against '.git#branch=main'`
+- [x] 4.9 Run `lefthook install` and verify hooks are in `.git/hooks/`
+- [x] 4.10 Test full flow: make a commit with bad message (should fail), fix message (should pass), push (tests should run)
+- [x] 4.11 Add `task hooks:install` target to Taskfile.yml as alias for `lefthook install`
 
 ## 5. Release Please
 

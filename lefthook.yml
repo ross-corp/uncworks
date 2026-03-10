@@ -1,0 +1,41 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: go-fmt
+      glob: "*.go"
+      run: gofmt -l -w {staged_files} && git add {staged_files}
+      stage_fixed: true
+
+    - name: golangci-lint
+      glob: "*.go"
+      run: golangci-lint run --new-from-rev=HEAD
+
+    - name: buf-lint
+      glob: "*.proto"
+      run: buf lint
+
+    - name: tsc-web
+      glob: "*.{ts,tsx}"
+      run: cd web && npx tsc --noEmit
+
+    - name: tsc-shared
+      glob: "*.{ts,tsx}"
+      run: cd packages/shared && npx tsc --noEmit
+
+    - name: tsc-extension
+      glob: "*.{ts,tsx}"
+      run: cd packages/pi-aot-extension && npx tsc --noEmit
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: npx commitlint --edit {1}
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: go-test
+      run: go test ./api/... ./internal/... -count=1
+
+    - name: buf-breaking
+      run: buf breaking --against '.git#branch=main'

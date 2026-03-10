@@ -114,3 +114,8 @@ tasks:
       - cd web && npx tsc --noEmit
       - cd packages/shared && npx tsc --noEmit
       - cd packages/pi-aot-extension && npx tsc --noEmit
+
+  hooks:install:
+    desc: Install git hooks via lefthook
+    cmds:
+      - lefthook install
