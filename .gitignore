@@ -92,6 +92,9 @@ playwright-report/
 .DS_Store
 Thumbs.db
 
+# AI tooling configs (local only)
+.claude/
+.gemini/
+
 # Project-specific non-ignores
-!.gemini/
 !openspec/
