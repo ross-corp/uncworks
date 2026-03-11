@@ -61,18 +61,18 @@
 
 ## 7. Brain Store Updates
 
-- [ ] 7.1 Remove queue-related functions from `internal/brain/store.go` (replaced by Temporal task queues)
-- [ ] 7.2 Keep metadata storage functions (agent output, trace IDs, completion records)
-- [ ] 7.3 Update brain store tests to reflect removed queue functionality
+- [x] 7.1 Remove queue-related functions from `internal/brain/store.go` (replaced by Temporal task queues)
+- [x] 7.2 Keep metadata storage functions (agent output, trace IDs, completion records)
+- [x] 7.3 Update brain store tests to reflect removed queue functionality
 
 ## 8. Deployment Documentation
 
-- [ ] 8.1 Create `deploy/temporal/` directory with deployment documentation
-- [ ] 8.2 Document deploying `temporalio/helm-charts` to k0s with PostgreSQL backend
-- [ ] 8.3 Document Temporal database setup: separate `temporal` and `temporal_visibility` databases on shared PostgreSQL
-- [ ] 8.4 Document shard count recommendation (512 for production)
-- [ ] 8.5 Document `TEMPORAL_HOST`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` environment variables
-- [ ] 8.6 Update docs/user-guide.md with Temporal architecture section
+- [x] 8.1 Create `deploy/temporal/` directory with deployment documentation
+- [x] 8.2 Document deploying `temporalio/helm-charts` to k0s with PostgreSQL backend
+- [x] 8.3 Document Temporal database setup: separate `temporal` and `temporal_visibility` databases on shared PostgreSQL
+- [x] 8.4 Document shard count recommendation (512 for production)
+- [x] 8.5 Document `TEMPORAL_HOST`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` environment variables
+- [x] 8.6 Update docs/user-guide.md with Temporal architecture section
 
 ## 9. Verification
 

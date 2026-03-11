@@ -11,8 +11,9 @@ This guide covers all typical user paths: setting up a local cluster, creating a
 3. [Monitoring Agents](#monitoring-agents)
 4. [Multi-Agent Workflows](#multi-agent-workflows)
 5. [Human-in-the-Loop (HITL)](#human-in-the-loop-hitl)
-6. [Local Development with k0s](#local-development-with-k0s)
-7. [The aot CLI](#the-aot-cli)
+6. [Temporal Workflow Engine](#temporal-workflow-engine)
+7. [Local Development with k0s](#local-development-with-k0s)
+8. [The aot CLI](#the-aot-cli)
 
 ---
 
@@ -426,6 +427,38 @@ kubectl get agentruns -w
 # gRPC streaming
 # WatchAgentRun events with type WAITING_FOR_INPUT include the question in the payload
 ```
+
+---
+
+## Temporal Workflow Engine
+
+AOT uses [Temporal](https://temporal.io/) for durable agent lifecycle orchestration. Temporal replaces the controller's polling-based reconcile loop with a workflow engine that provides:
+
+- **Durable execution**: Workflow state survives controller restarts, node failures, and network partitions
+- **Native HITL**: Human input is delivered via Temporal signals — no polling or fragile direct routing
+- **Child workflows**: `spawn_junior` creates a child workflow with proper parent-child lifecycle management
+- **Timer-based TTL**: Workflow timers enforce TTL without controller involvement
+- **Compensation**: Automatic pod cleanup on any workflow failure via deferred activities
+
+### Starting the Dev Server
+
+```bash
+task temporal:dev
+```
+
+This starts a local Temporal server backed by SQLite. The Temporal UI is available at `http://localhost:8233`.
+
+### How It Works
+
+The K8s controller acts as a thin bridge:
+
+1. **New AgentRun CRD** → Controller starts a Temporal workflow and annotates the CRD with the workflow ID
+2. **Existing CRD** → Controller queries the workflow state and syncs it to the CRD status
+3. **Deleted CRD** → Controller cancels the Temporal workflow
+
+The workflow orchestrates the full lifecycle: pod creation → hydration → agent start → status polling → cleanup.
+
+For production deployment details, see `deploy/temporal/README.md`.
 
 ---
 

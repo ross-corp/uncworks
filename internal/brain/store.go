@@ -26,15 +26,6 @@ type AgentState struct {
 	Metadata    map[string]string
 }
 
-// QueueEntry represents a queued agent run waiting for a slot.
-type QueueEntry struct {
-	ID         string
-	AgentRunID string
-	Priority   int
-	UserID     string
-	CreatedAt  time.Time
-}
-
 // Store provides access to the shared brain database.
 type Store struct {
 	pool *pgxpool.Pool
@@ -62,16 +53,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 			completed_at TIMESTAMPTZ
 		);
 
-		CREATE TABLE IF NOT EXISTS agent_queue (
-			id TEXT PRIMARY KEY,
-			agent_run_id TEXT UNIQUE NOT NULL,
-			priority INT NOT NULL DEFAULT 0,
-			user_id TEXT NOT NULL,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-
 		CREATE INDEX IF NOT EXISTS idx_agent_states_phase ON agent_states(phase);
-		CREATE INDEX IF NOT EXISTS idx_agent_queue_priority ON agent_queue(priority DESC, created_at ASC);
 	`)
 	return err
 }
@@ -142,34 +124,4 @@ func (s *Store) ListByPhase(ctx context.Context, phase string) ([]*AgentState, e
 		states = append(states, s)
 	}
 	return states, rows.Err()
-}
-
-// Enqueue adds an agent run to the queue.
-func (s *Store) Enqueue(ctx context.Context, entry *QueueEntry) error {
-	_, err := s.pool.Exec(ctx, `
-		INSERT INTO agent_queue (id, agent_run_id, priority, user_id, created_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, entry.ID, entry.AgentRunID, entry.Priority, entry.UserID, entry.CreatedAt)
-	return err
-}
-
-// Dequeue removes and returns the highest-priority queue entry.
-func (s *Store) Dequeue(ctx context.Context) (*QueueEntry, error) {
-	entry := &QueueEntry{}
-	err := s.pool.QueryRow(ctx, `
-		DELETE FROM agent_queue
-		WHERE id = (SELECT id FROM agent_queue ORDER BY priority DESC, created_at ASC LIMIT 1)
-		RETURNING id, agent_run_id, priority, user_id, created_at
-	`).Scan(&entry.ID, &entry.AgentRunID, &entry.Priority, &entry.UserID, &entry.CreatedAt)
-	if err == pgx.ErrNoRows {
-		return nil, nil
-	}
-	return entry, err
-}
-
-// QueueLength returns the number of entries in the queue.
-func (s *Store) QueueLength(ctx context.Context) (int, error) {
-	var count int
-	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM agent_queue`).Scan(&count)
-	return count, err
 }
