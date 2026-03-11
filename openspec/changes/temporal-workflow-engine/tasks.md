@@ -43,21 +43,21 @@
 
 ## 5. Controller Simplification
 
-- [ ] 5.1 Add Temporal client initialization to controller setup (reads `TEMPORAL_HOST`, `TEMPORAL_NAMESPACE`)
-- [ ] 5.2 Refactor `Reconcile()`: on new AgentRun (no `aot.uncworks.io/workflow-id` annotation), start Temporal workflow and annotate CRD
-- [ ] 5.3 Refactor `Reconcile()`: on existing AgentRun (has workflow ID), query Temporal workflow state and sync to CRD status
-- [ ] 5.4 Refactor `Reconcile()`: on AgentRun deletion, cancel Temporal workflow
-- [ ] 5.5 Extract pod spec building logic from controller into shared function (used by `CreateAgentPod` activity)
-- [ ] 5.6 Remove direct pod creation/deletion from controller reconcile loop
-- [ ] 5.7 Remove TTL checking logic from controller (now handled by workflow timer)
-- [ ] 5.8 Remove direct HITL routing from controller (now handled by Temporal signal)
+- [x] 5.1 Add Temporal client initialization to controller setup (reads `TEMPORAL_HOST`, `TEMPORAL_NAMESPACE`)
+- [x] 5.2 Refactor `Reconcile()`: on new AgentRun (no `aot.uncworks.io/workflow-id` annotation), start Temporal workflow and annotate CRD
+- [x] 5.3 Refactor `Reconcile()`: on existing AgentRun (has workflow ID), query Temporal workflow state and sync to CRD status
+- [x] 5.4 Refactor `Reconcile()`: on AgentRun deletion, cancel Temporal workflow
+- [x] 5.5 Extract pod spec building logic from controller into shared function (used by `CreateAgentPod` activity) — BuildAgentPod in internal/temporal/activities.go
+- [x] 5.6 Remove direct pod creation/deletion from controller reconcile loop
+- [x] 5.7 Remove TTL checking logic from controller (now handled by workflow timer)
+- [x] 5.8 Remove direct HITL routing from controller (now handled by Temporal signal)
 
 ## 6. API Server Updates
 
-- [ ] 6.1 Add Temporal client to API server initialization
-- [ ] 6.2 Update `SendHumanInput` handler: send Temporal "human-input" signal to workflow instead of direct sidecar call
-- [ ] 6.3 Update `CancelAgentRun` handler: cancel Temporal workflow instead of directly deleting pod
-- [ ] 6.4 Update `GetAgentRun` handler: optionally query Temporal workflow state for real-time status
+- [x] 6.1 Add Temporal client to API server initialization — optional TemporalClient field on handler
+- [x] 6.2 Update `SendHumanInput` handler: send Temporal "human-input" signal to workflow instead of direct sidecar call
+- [x] 6.3 Update `CancelAgentRun` handler: cancel Temporal workflow instead of directly deleting pod
+- [x] 6.4 Update `GetAgentRun` handler: optionally query Temporal workflow state for real-time status
 
 ## 7. Brain Store Updates
 

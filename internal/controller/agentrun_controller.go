@@ -1,4 +1,8 @@
 // Package controller implements the Kubernetes controller for AgentRun CRDs.
+// The controller acts as a thin bridge between K8s CRDs and Temporal workflows:
+// - New CRD → start Temporal workflow, annotate with workflow ID
+// - Existing CRD → query Temporal workflow state, sync to CRD status
+// - Deleted CRD → cancel Temporal workflow
 package controller
 
 import (
@@ -6,7 +10,6 @@ import (
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,19 +17,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/workflowservice/v1"
+	temporalclient "go.temporal.io/sdk/client"
+
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
 const (
-	defaultAgentImage = "ghcr.io/uncworks/aot-agent:latest"
-	sidecarImage      = "ghcr.io/uncworks/aot-sidecar:latest"
-	initImage         = "ghcr.io/uncworks/aot-init:latest"
+	// annotationWorkflowID stores the Temporal workflow ID on the AgentRun CRD.
+	annotationWorkflowID = "aot.uncworks.io/workflow-id"
+
+	// reconcileInterval is the requeue interval for syncing workflow state.
+	reconcileInterval = 30 * time.Second
 )
 
-// AgentRunReconciler reconciles AgentRun objects.
+// AgentRunReconciler reconciles AgentRun objects by bridging to Temporal workflows.
 type AgentRunReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme         *runtime.Scheme
+	TemporalClient temporalclient.Client
+	TaskQueue      string
 }
 
 // +kubebuilder:rbac:groups=aot.uncworks.io,resources=agentruns,verbs=get;list;watch;create;update;patch;delete
@@ -45,165 +57,187 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Handle based on backend type
-	switch agentRun.Spec.Backend {
-	case aotv1alpha1.BackendPod:
-		return r.reconcilePod(ctx, &agentRun)
-	case aotv1alpha1.BackendKubeVirt:
-		return r.handleNotImplemented(ctx, &agentRun, "KubeVirt")
-	case aotv1alpha1.BackendExternal:
-		return r.handleNotImplemented(ctx, &agentRun, "External")
-	default:
-		logger.Error(fmt.Errorf("unknown backend: %s", agentRun.Spec.Backend), "unsupported backend")
-		return ctrl.Result{}, nil
+	// Check if the CRD is being deleted
+	if !agentRun.DeletionTimestamp.IsZero() {
+		return r.handleDeletion(ctx, &agentRun)
 	}
+
+	// Check for workflow ID annotation
+	workflowID := agentRun.Annotations[annotationWorkflowID]
+
+	if workflowID == "" {
+		// New CRD — start Temporal workflow
+		return r.startWorkflow(ctx, &agentRun)
+	}
+
+	// Existing CRD — sync workflow state to CRD status
+	logger.V(1).Info("Syncing workflow state", "workflowID", workflowID)
+	return r.syncWorkflowState(ctx, &agentRun, workflowID)
 }
 
-func (r *AgentRunReconciler) reconcilePod(ctx context.Context, agentRun *aotv1alpha1.AgentRun) (ctrl.Result, error) {
+// startWorkflow creates a new Temporal workflow for the AgentRun and annotates the CRD.
+func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1alpha1.AgentRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Check if pod already exists
-	podName := fmt.Sprintf("agentrun-%s", agentRun.Name)
-	var existingPod corev1.Pod
-	err := r.Get(ctx, client.ObjectKey{
-		Namespace: agentRun.Namespace,
-		Name:      podName,
-	}, &existingPod)
-
-	if err == nil {
-		// Pod exists, sync status
-		return r.syncPodStatus(ctx, agentRun, &existingPod)
+	// Handle unsupported backends
+	switch agentRun.Spec.Backend {
+	case aotv1alpha1.BackendKubeVirt:
+		return r.handleNotImplemented(ctx, agentRun, "KubeVirt")
+	case aotv1alpha1.BackendExternal:
+		return r.handleNotImplemented(ctx, agentRun, "External")
 	}
 
-	if !errors.IsNotFound(err) {
-		return ctrl.Result{}, err
+	workflowInput := aottemporal.WorkflowInput{
+		AgentRunName: agentRun.Name,
+		Namespace:    agentRun.Namespace,
+		RepoURL:      agentRun.Spec.RepoURL,
+		Branch:       agentRun.Spec.Branch,
+		Prompt:       agentRun.Spec.Prompt,
+		DevboxConfig: agentRun.Spec.DevboxConfig,
+		TTLSeconds:   agentRun.Spec.TTLSeconds,
+		Image:        agentRun.Spec.Image,
+		EnvVars:      agentRun.Spec.EnvVars,
 	}
 
-	// Check TTL
-	if agentRun.Status.Phase == aotv1alpha1.AgentRunPhaseRunning && agentRun.Status.StartedAt != nil {
-		elapsed := time.Since(agentRun.Status.StartedAt.Time)
-		ttl := time.Duration(agentRun.Spec.TTLSeconds) * time.Second
-		if elapsed > ttl {
-			logger.Info("AgentRun exceeded TTL, marking failed")
-			agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
-			agentRun.Status.Message = "Exceeded TTL"
-			now := metav1.Now()
-			agentRun.Status.CompletedAt = &now
-			return ctrl.Result{}, r.Status().Update(ctx, agentRun)
-		}
+	taskQueue := r.TaskQueue
+	if taskQueue == "" {
+		taskQueue = aottemporal.TaskQueue
 	}
 
-	// Create the pod
-	pod := r.buildAgentPod(agentRun, podName)
-
-	if err := ctrl.SetControllerReference(agentRun, pod, r.Scheme); err != nil {
-		return ctrl.Result{}, err
+	workflowID := fmt.Sprintf("agentrun-%s", agentRun.Name)
+	run, err := r.TemporalClient.ExecuteWorkflow(ctx, temporalclient.StartWorkflowOptions{
+		ID:        workflowID,
+		TaskQueue: taskQueue,
+	}, aottemporal.AgentRunWorkflow, workflowInput)
+	if err != nil {
+		logger.Error(err, "Failed to start Temporal workflow")
+		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
+		agentRun.Status.Message = fmt.Sprintf("Failed to start workflow: %v", err)
+		return ctrl.Result{}, r.Status().Update(ctx, agentRun)
 	}
 
-	logger.Info("Creating Agent Pod", "pod", podName)
-	if err := r.Create(ctx, pod); err != nil {
+	logger.Info("Started Temporal workflow", "workflowID", run.GetID(), "runID", run.GetRunID())
+
+	// Annotate CRD with workflow ID
+	if agentRun.Annotations == nil {
+		agentRun.Annotations = make(map[string]string)
+	}
+	agentRun.Annotations[annotationWorkflowID] = run.GetID()
+	if err := r.Update(ctx, agentRun); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Update status
 	now := metav1.Now()
 	agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseRunning
-	agentRun.Status.PodName = podName
+	agentRun.Status.PodName = fmt.Sprintf("agentrun-%s", agentRun.Name)
 	agentRun.Status.StartedAt = &now
-	agentRun.Status.Message = "Pod created"
-	return ctrl.Result{RequeueAfter: 30 * time.Second}, r.Status().Update(ctx, agentRun)
+	agentRun.Status.Message = "Temporal workflow started"
+	return ctrl.Result{RequeueAfter: reconcileInterval}, r.Status().Update(ctx, agentRun)
 }
 
-func (r *AgentRunReconciler) buildAgentPod(agentRun *aotv1alpha1.AgentRun, podName string) *corev1.Pod {
-	image := agentRun.Spec.Image
-	if image == "" {
-		image = defaultAgentImage
+// syncWorkflowState queries the Temporal workflow and syncs state to the CRD.
+func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *aotv1alpha1.AgentRun, workflowID string) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Query workflow state
+	resp, err := r.TemporalClient.QueryWorkflow(ctx, workflowID, "", aottemporal.QueryGetState)
+	if err != nil {
+		logger.V(1).Info("Failed to query workflow, may have completed", "error", err)
+		// Workflow may have completed and been archived — check execution
+		desc, descErr := r.TemporalClient.DescribeWorkflowExecution(ctx, workflowID, "")
+		if descErr != nil {
+			return ctrl.Result{RequeueAfter: reconcileInterval}, nil
+		}
+		// Map Temporal execution status to CRD phase
+		return r.syncFromDescription(ctx, agentRun, desc)
 	}
 
-	envVars := []corev1.EnvVar{
-		{Name: "AOT_AGENT_RUN_ID", Value: agentRun.Name},
-		{Name: "AOT_REPO_URL", Value: agentRun.Spec.RepoURL},
-		{Name: "AOT_BRANCH", Value: agentRun.Spec.Branch},
-		{Name: "AOT_PROMPT", Value: agentRun.Spec.Prompt},
-	}
-	for k, v := range agentRun.Spec.EnvVars {
-		envVars = append(envVars, corev1.EnvVar{Name: k, Value: v})
+	var state aottemporal.WorkflowState
+	if err := resp.Get(&state); err != nil {
+		logger.Error(err, "Failed to decode workflow state")
+		return ctrl.Result{RequeueAfter: reconcileInterval}, nil
 	}
 
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: agentRun.Namespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":       "aot-agent",
-				"app.kubernetes.io/managed-by": "aot-controller",
-				"aot.uncworks.io/agentrun":     agentRun.Name,
-			},
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			InitContainers: []corev1.Container{
-				{
-					Name:  "hydration",
-					Image: initImage,
-					Env:   envVars,
-					VolumeMounts: []corev1.VolumeMount{
-						{Name: "workspace", MountPath: "/workspace"},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "agent",
-					Image: image,
-					Env:   envVars,
-					VolumeMounts: []corev1.VolumeMount{
-						{Name: "workspace", MountPath: "/workspace"},
-					},
-				},
-				{
-					Name:  "rpc-gateway",
-					Image: sidecarImage,
-					Ports: []corev1.ContainerPort{
-						{Name: "grpc", ContainerPort: 50052, Protocol: corev1.ProtocolTCP},
-					},
-					Env: []corev1.EnvVar{
-						{Name: "AOT_AGENT_RUN_ID", Value: agentRun.Name},
-					},
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "workspace",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
-					},
-				},
-			},
-		},
+	// Map workflow state to CRD status
+	updated := false
+	newPhase := mapPhase(state.Phase)
+	if agentRun.Status.Phase != newPhase {
+		agentRun.Status.Phase = newPhase
+		updated = true
 	}
+	if agentRun.Status.Message != state.Message {
+		agentRun.Status.Message = state.Message
+		updated = true
+	}
+	if state.PodName != "" && agentRun.Status.PodName != state.PodName {
+		agentRun.Status.PodName = state.PodName
+		updated = true
+	}
+
+	// Set CompletedAt for terminal states
+	if isTerminal(newPhase) && agentRun.Status.CompletedAt == nil {
+		now := metav1.Now()
+		agentRun.Status.CompletedAt = &now
+		updated = true
+	}
+
+	if updated {
+		if err := r.Status().Update(ctx, agentRun); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	// Don't requeue for terminal states
+	if isTerminal(newPhase) {
+		return ctrl.Result{}, nil
+	}
+	return ctrl.Result{RequeueAfter: reconcileInterval}, nil
 }
 
-func (r *AgentRunReconciler) syncPodStatus(ctx context.Context, agentRun *aotv1alpha1.AgentRun, pod *corev1.Pod) (ctrl.Result, error) {
-	switch pod.Status.Phase {
-	case corev1.PodSucceeded:
-		if agentRun.Status.Phase != aotv1alpha1.AgentRunPhaseSucceeded {
-			agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseSucceeded
-			agentRun.Status.Message = "Agent completed successfully"
-			now := metav1.Now()
-			agentRun.Status.CompletedAt = &now
-			return ctrl.Result{}, r.Status().Update(ctx, agentRun)
+// syncFromDescription syncs CRD status from a Temporal workflow description
+// when the workflow can no longer be queried (completed/terminated).
+func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *aotv1alpha1.AgentRun, desc *workflowservice.DescribeWorkflowExecutionResponse) (ctrl.Result, error) {
+	status := desc.GetWorkflowExecutionInfo().GetStatus()
+
+	switch status {
+	case enums.WORKFLOW_EXECUTION_STATUS_COMPLETED:
+		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseSucceeded
+		agentRun.Status.Message = "Workflow completed"
+	case enums.WORKFLOW_EXECUTION_STATUS_FAILED:
+		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
+		agentRun.Status.Message = "Workflow failed"
+	case enums.WORKFLOW_EXECUTION_STATUS_CANCELED:
+		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseCancelled
+		agentRun.Status.Message = "Workflow cancelled"
+	case enums.WORKFLOW_EXECUTION_STATUS_TERMINATED:
+		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
+		agentRun.Status.Message = "Workflow terminated"
+	case enums.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:
+		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
+		agentRun.Status.Message = "Workflow timed out"
+	default:
+		return ctrl.Result{RequeueAfter: reconcileInterval}, nil
+	}
+
+	if agentRun.Status.CompletedAt == nil {
+		now := metav1.Now()
+		agentRun.Status.CompletedAt = &now
+	}
+
+	return ctrl.Result{}, r.Status().Update(ctx, agentRun)
+}
+
+// handleDeletion cancels the Temporal workflow when the CRD is deleted.
+func (r *AgentRunReconciler) handleDeletion(ctx context.Context, agentRun *aotv1alpha1.AgentRun) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	workflowID := agentRun.Annotations[annotationWorkflowID]
+	if workflowID != "" {
+		logger.Info("Cancelling Temporal workflow for deleted AgentRun", "workflowID", workflowID)
+		if err := r.TemporalClient.CancelWorkflow(ctx, workflowID, ""); err != nil {
+			logger.Error(err, "Failed to cancel workflow, may already be completed")
 		}
-	case corev1.PodFailed:
-		if agentRun.Status.Phase != aotv1alpha1.AgentRunPhaseFailed {
-			agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
-			agentRun.Status.Message = "Agent pod failed"
-			now := metav1.Now()
-			agentRun.Status.CompletedAt = &now
-			return ctrl.Result{}, r.Status().Update(ctx, agentRun)
-		}
-	case corev1.PodRunning:
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -215,10 +249,35 @@ func (r *AgentRunReconciler) handleNotImplemented(ctx context.Context, agentRun 
 	return ctrl.Result{}, r.Status().Update(ctx, agentRun)
 }
 
+// mapPhase converts workflow state phase strings to CRD phase constants.
+func mapPhase(workflowPhase string) aotv1alpha1.AgentRunPhase {
+	switch workflowPhase {
+	case "Pending", "Creating", "Hydrating":
+		return aotv1alpha1.AgentRunPhasePending
+	case "Running":
+		return aotv1alpha1.AgentRunPhaseRunning
+	case "WaitingForInput":
+		return aotv1alpha1.AgentRunPhaseWaitingForInput
+	case "Succeeded":
+		return aotv1alpha1.AgentRunPhaseSucceeded
+	case "Failed":
+		return aotv1alpha1.AgentRunPhaseFailed
+	case "Cancelled", "Cancelling":
+		return aotv1alpha1.AgentRunPhaseCancelled
+	default:
+		return aotv1alpha1.AgentRunPhasePending
+	}
+}
+
+func isTerminal(phase aotv1alpha1.AgentRunPhase) bool {
+	return phase == aotv1alpha1.AgentRunPhaseSucceeded ||
+		phase == aotv1alpha1.AgentRunPhaseFailed ||
+		phase == aotv1alpha1.AgentRunPhaseCancelled
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *AgentRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.AgentRun{}).
-		Owns(&corev1.Pod{}).
 		Complete(r)
 }

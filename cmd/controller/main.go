@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"log"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -9,8 +11,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	temporalclient "go.temporal.io/sdk/client"
+
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/controller"
+	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
 var scheme = runtime.NewScheme()
@@ -21,27 +26,54 @@ func init() {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatalf("Controller failed: %v", err)
+	}
+}
+
+func run() error {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+
+	temporalHost := envOrDefault("TEMPORAL_HOST", "localhost:7233")
+	temporalNamespace := envOrDefault("TEMPORAL_NAMESPACE", "default")
+	taskQueue := envOrDefault("TEMPORAL_TASK_QUEUE", aottemporal.TaskQueue)
+
+	// Create Temporal client for workflow management
+	tc, err := temporalclient.Dial(temporalclient.Options{
+		HostPort:  temporalHost,
+		Namespace: temporalNamespace,
+	})
+	if err != nil {
+		return fmt.Errorf("create Temporal client: %w", err)
+	}
+	defer tc.Close()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 	})
 	if err != nil {
-		ctrl.Log.Error(err, "unable to start manager")
-		os.Exit(1)
+		return fmt.Errorf("start manager: %w", err)
 	}
 
 	if err = (&controller.AgentRunReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		TemporalClient: tc,
+		TaskQueue:      taskQueue,
 	}).SetupWithManager(mgr); err != nil {
-		ctrl.Log.Error(err, "unable to create controller", "controller", "AgentRun")
-		os.Exit(1)
+		return fmt.Errorf("create controller: %w", err)
 	}
 
 	ctrl.Log.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		ctrl.Log.Error(err, "problem running manager")
-		os.Exit(1)
+		return fmt.Errorf("run manager: %w", err)
 	}
+	return nil
+}
+
+func envOrDefault(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
 }

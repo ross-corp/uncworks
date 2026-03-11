@@ -54,6 +54,19 @@ type HumanInputSignal struct {
 	Input string
 }
 
+// Activity function references used by the workflow.
+// These are set by the worker at startup and used for activity dispatch.
+// Using variable references allows the test suite to mock them.
+var (
+	CreateAgentPodActivity    func(Activities) func(interface{}, CreateAgentPodInput) (*CreateAgentPodOutput, error)
+	WaitForHydrationActivity  func(Activities) func(interface{}, WaitForHydrationInput) error
+	StartAgentActivity        func(Activities) func(interface{}, StartAgentInput) error
+	GetAgentStatusActivity    func(Activities) func(interface{}, GetAgentStatusInput) (*GetAgentStatusOutput, error)
+	ForwardHumanInputActivity func(Activities) func(interface{}, ForwardHumanInputInput) error
+	StopAgentActivity         func(Activities) func(interface{}, StopAgentInput) error
+	CleanupPodActivity        func(Activities) func(interface{}, CleanupPodInput) error
+)
+
 // AgentRunWorkflow orchestrates the full lifecycle of an agent run.
 //
 // Lifecycle: CreatePod → WaitForHydration → StartAgent → poll status → cleanup
@@ -84,6 +97,9 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	actCtx := workflow.WithActivityOptions(ctx, activityOpts)
 
+	// Activity references — using the struct method names for proper registration
+	var a *Activities
+
 	// Compensation: ensure pod cleanup on any failure
 	var podName string
 	defer func() {
@@ -92,7 +108,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			cleanupCtx = workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
 				StartToCloseTimeout: 30 * time.Second,
 			})
-			_ = workflow.ExecuteActivity(cleanupCtx, "CleanupPod", CleanupPodInput{
+			_ = workflow.ExecuteActivity(cleanupCtx, a.CleanupPod, CleanupPodInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
 			}).Get(cleanupCtx, nil)
@@ -116,7 +132,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 
 	var createOutput CreateAgentPodOutput
-	if err := workflow.ExecuteActivity(actCtx, "CreateAgentPod", podInput).Get(ctx, &createOutput); err != nil {
+	if err := workflow.ExecuteActivity(actCtx, a.CreateAgentPod, podInput).Get(ctx, &createOutput); err != nil {
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to create pod: %v", err)
 		return err
@@ -134,7 +150,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	hydrationCtx := workflow.WithActivityOptions(ctx, hydrationOpts)
 
-	if err := workflow.ExecuteActivity(hydrationCtx, "WaitForHydration", WaitForHydrationInput{
+	if err := workflow.ExecuteActivity(hydrationCtx, a.WaitForHydration, WaitForHydrationInput{
 		PodName:   podName,
 		Namespace: input.Namespace,
 	}).Get(ctx, nil); err != nil {
@@ -147,7 +163,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	state.Phase = "Running"
 	state.Message = "Starting agent"
 
-	if err := workflow.ExecuteActivity(actCtx, "StartAgent", StartAgentInput{
+	if err := workflow.ExecuteActivity(actCtx, a.StartAgent, StartAgentInput{
 		PodName:   podName,
 		Namespace: input.Namespace,
 		Prompt:    input.Prompt,
@@ -184,7 +200,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			state.Phase = "Cancelling"
 			state.Message = "Cancel signal received"
 
-			_ = workflow.ExecuteActivity(actCtx, "StopAgent", StopAgentInput{
+			_ = workflow.ExecuteActivity(actCtx, a.StopAgent, StopAgentInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
 			}).Get(ctx, nil)
@@ -198,7 +214,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			var signal HumanInputSignal
 			ch.Receive(ctx, &signal)
 
-			_ = workflow.ExecuteActivity(actCtx, "ForwardHumanInput", ForwardHumanInputInput{
+			_ = workflow.ExecuteActivity(actCtx, a.ForwardHumanInput, ForwardHumanInputInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
 				Input:     signal.Input,
@@ -213,7 +229,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			state.Phase = "Failed"
 			state.Message = "Exceeded TTL"
 
-			_ = workflow.ExecuteActivity(actCtx, "StopAgent", StopAgentInput{
+			_ = workflow.ExecuteActivity(actCtx, a.StopAgent, StopAgentInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
 			}).Get(ctx, nil)
@@ -222,7 +238,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		// Poll agent status
 		selector.AddFuture(pollTimer, func(f workflow.Future) {
 			var statusOutput GetAgentStatusOutput
-			err := workflow.ExecuteActivity(actCtx, "GetAgentStatus", GetAgentStatusInput{
+			err := workflow.ExecuteActivity(actCtx, a.GetAgentStatus, GetAgentStatusInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
 			}).Get(ctx, &statusOutput)

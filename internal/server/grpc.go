@@ -9,17 +9,21 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	temporalclient "go.temporal.io/sdk/client"
+
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
+	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
 // AOTServiceHandler implements the AOTService ConnectRPC handler.
 type AOTServiceHandler struct {
 	apiv1connect.UnimplementedAOTServiceHandler
 
-	mu       sync.RWMutex
-	runs     map[string]*apiv1.AgentRun
-	watchers map[string][]chan *apiv1.AgentRunEvent
+	mu             sync.RWMutex
+	runs           map[string]*apiv1.AgentRun
+	watchers       map[string][]chan *apiv1.AgentRunEvent
+	TemporalClient temporalclient.Client
 }
 
 // NewAOTServiceHandler creates a new AOTService handler.
@@ -57,14 +61,27 @@ func (s *AOTServiceHandler) CreateAgentRun(_ context.Context, req *connect.Reque
 	return connect.NewResponse(&apiv1.CreateAgentRunResponse{AgentRun: run}), nil
 }
 
-func (s *AOTServiceHandler) GetAgentRun(_ context.Context, req *connect.Request[apiv1.GetAgentRunRequest]) (*connect.Response[apiv1.AgentRun], error) {
+func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Request[apiv1.GetAgentRunRequest]) (*connect.Response[apiv1.AgentRun], error) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	run, ok := s.runs[req.Msg.Id]
+	s.mu.RUnlock()
+
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
 	}
+
+	// Optionally enrich with real-time Temporal state
+	if s.TemporalClient != nil {
+		workflowID := fmt.Sprintf("agentrun-%s", req.Msg.Id)
+		resp, err := s.TemporalClient.QueryWorkflow(ctx, workflowID, "", aottemporal.QueryGetState)
+		if err == nil {
+			var state aottemporal.WorkflowState
+			if resp.Get(&state) == nil {
+				run = cloneRunWithStatus(run, mapWorkflowStateToProto(state))
+			}
+		}
+	}
+
 	return connect.NewResponse(run), nil
 }
 
@@ -110,23 +127,33 @@ func (s *AOTServiceHandler) WatchAgentRun(_ context.Context, req *connect.Reques
 	return nil
 }
 
-func (s *AOTServiceHandler) CancelAgentRun(_ context.Context, req *connect.Request[apiv1.CancelAgentRunRequest]) (*connect.Response[apiv1.CancelAgentRunResponse], error) {
+func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Request[apiv1.CancelAgentRunRequest]) (*connect.Response[apiv1.CancelAgentRunResponse], error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	run, ok := s.runs[req.Msg.Id]
+	s.mu.Unlock()
+
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
 	}
 
+	// Cancel via Temporal workflow if client is configured
+	if s.TemporalClient != nil {
+		workflowID := fmt.Sprintf("agentrun-%s", req.Msg.Id)
+		if err := s.TemporalClient.CancelWorkflow(ctx, workflowID, ""); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cancel workflow: %w", err))
+		}
+	}
+
+	s.mu.Lock()
 	run.Status.Phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
 	run.Status.Message = "Cancelled by user"
 	run.UpdatedAt = timestamppb.Now()
+	s.mu.Unlock()
 
 	return connect.NewResponse(&apiv1.CancelAgentRunResponse{AgentRun: run}), nil
 }
 
-func (s *AOTServiceHandler) SendHumanInput(_ context.Context, req *connect.Request[apiv1.SendHumanInputRequest]) (*connect.Response[apiv1.SendHumanInputResponse], error) {
+func (s *AOTServiceHandler) SendHumanInput(ctx context.Context, req *connect.Request[apiv1.SendHumanInputRequest]) (*connect.Response[apiv1.SendHumanInputResponse], error) {
 	s.mu.RLock()
 	run, ok := s.runs[req.Msg.AgentRunId]
 	s.mu.RUnlock()
@@ -136,6 +163,15 @@ func (s *AOTServiceHandler) SendHumanInput(_ context.Context, req *connect.Reque
 
 	if run.Status.Phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("agent is not waiting for input"))
+	}
+
+	// Send via Temporal signal if client is configured
+	if s.TemporalClient != nil {
+		workflowID := fmt.Sprintf("agentrun-%s", req.Msg.AgentRunId)
+		signal := aottemporal.HumanInputSignal{Input: req.Msg.Input}
+		if err := s.TemporalClient.SignalWorkflow(ctx, workflowID, "", aottemporal.SignalHumanInput, signal); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("signal workflow: %w", err))
+		}
 	}
 
 	return connect.NewResponse(&apiv1.SendHumanInputResponse{Accepted: true}), nil
@@ -153,5 +189,39 @@ func (s *AOTServiceHandler) EmitEvent(agentRunID string, event *apiv1.AgentRunEv
 		default:
 			// Drop if channel full
 		}
+	}
+}
+
+// cloneRunWithStatus creates a copy of an AgentRun with a new status to avoid mutating the stored version.
+func cloneRunWithStatus(run *apiv1.AgentRun, status *apiv1.AgentRunStatus) *apiv1.AgentRun {
+	return &apiv1.AgentRun{
+		Id:        run.Id,
+		Name:      run.Name,
+		Spec:      run.Spec,
+		Status:    status,
+		CreatedAt: run.CreatedAt,
+		UpdatedAt: run.UpdatedAt,
+	}
+}
+
+// mapWorkflowStateToProto converts a Temporal workflow state to a proto status.
+func mapWorkflowStateToProto(state aottemporal.WorkflowState) *apiv1.AgentRunStatus {
+	phase := apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+	switch state.Phase {
+	case "Running":
+		phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+	case "WaitingForInput":
+		phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+	case "Succeeded":
+		phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+	case "Failed":
+		phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+	case "Cancelled", "Cancelling":
+		phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+	}
+	return &apiv1.AgentRunStatus{
+		Phase:   phase,
+		Message: state.Message,
+		PodName: state.PodName,
 	}
 }
