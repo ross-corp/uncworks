@@ -1,0 +1,33 @@
+AOT has been installed.
+
+Components deployed:
+  - Controller
+  - Temporal Worker
+  - API Server ({{ .Values.apiserver.service.type }})
+{{- if .Values.web.enabled }}
+  - Web Dashboard ({{ .Values.web.service.type }})
+{{- end }}
+
+To check status:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+API Server:
+{{- if eq .Values.apiserver.service.type "NodePort" }}
+  export NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+  export API_PORT=$(kubectl get svc {{ include "aot.fullname" . }}-apiserver -n {{ .Release.Namespace }} -o jsonpath='{.spec.ports[0].nodePort}')
+  echo "API: http://$NODE_IP:$API_PORT"
+{{- else }}
+  kubectl port-forward svc/{{ include "aot.fullname" . }}-apiserver {{ .Values.apiserver.port }}:{{ .Values.apiserver.port }} -n {{ .Release.Namespace }}
+{{- end }}
+
+{{- if .Values.web.enabled }}
+
+Web Dashboard:
+{{- if eq .Values.web.service.type "NodePort" }}
+  export NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+  export WEB_PORT=$(kubectl get svc {{ include "aot.fullname" . }}-web -n {{ .Release.Namespace }} -o jsonpath='{.spec.ports[0].nodePort}')
+  echo "Web: http://$NODE_IP:$WEB_PORT"
+{{- else }}
+  kubectl port-forward svc/{{ include "aot.fullname" . }}-web {{ .Values.web.port }}:{{ .Values.web.port }} -n {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

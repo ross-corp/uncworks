@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aot.fullname" . }}-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "aot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "aot.fullname" . }}
+      containers:
+        - name: worker
+          image: {{ include "aot.controlplaneImage" . }}
+          imagePullPolicy: {{ .Values.images.controlplane.pullPolicy }}
+          command: ["/usr/local/bin/temporal-worker"]
+          env:
+            - name: TEMPORAL_HOST
+              value: {{ .Values.temporal.host | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ .Values.temporal.namespace | quote }}
+            - name: AOT_AGENT_IMAGE
+              value: "{{ .Values.images.agent.repository }}:{{ .Values.images.agent.tag | default .Chart.AppVersion }}"
+            - name: AOT_SIDECAR_IMAGE
+              value: "{{ .Values.images.sidecar.repository }}:{{ .Values.images.sidecar.tag | default .Chart.AppVersion }}"
+            - name: AOT_INIT_IMAGE
+              value: "{{ .Values.images.init.repository }}:{{ .Values.images.init.tag | default .Chart.AppVersion }}"
+            {{- if .Values.llm.baseUrl }}
+            - name: LLM_BASE_URL
+              value: {{ .Values.llm.baseUrl | quote }}
+            {{- end }}
+            {{- if .Values.llm.apiKey }}
+            - name: LLM_API_KEY
+              value: {{ .Values.llm.apiKey | quote }}
+            {{- end }}
+          {{- with .Values.worker.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

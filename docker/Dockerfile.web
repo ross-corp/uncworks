@@ -1,0 +1,5 @@
+# Serves the pre-built AOT web dashboard via nginx.
+# Usage: docker build -f Dockerfile.web -t aot-web:local ../uncworks/web
+FROM nginx:alpine
+COPY dist/ /usr/share/nginx/html/
+EXPOSE 3000

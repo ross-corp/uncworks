@@ -115,11 +115,13 @@ tasks:
       - go build -o ./bin/temporal-worker ./cmd/temporal-worker
 
   docker:build:
-    desc: Build all agent pod Docker images locally
+    desc: Build all Docker images locally
     cmds:
       - docker build -f docker/Dockerfile.hydration -t aot-init:local .
       - docker build -f docker/Dockerfile.sidecar -t aot-sidecar:local .
       - docker build -f docker/Dockerfile.agent-base -t aot-agent:local .
+      - docker build -f docker/Dockerfile.controlplane -t aot-controlplane:local .
+      - docker build -f docker/Dockerfile.web -t aot-web:local web/
 
   k0s:images:
     desc: Import locally-built Docker images into k0s (requires sudo)

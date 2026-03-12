@@ -1,0 +1,67 @@
+# -- Temporal configuration (required)
+temporal:
+  # -- Temporal Frontend gRPC address (e.g. "temporal:7233")
+  host: ""
+  # -- Temporal namespace
+  namespace: default
+
+# -- LLM endpoint configuration (optional)
+llm:
+  # -- LiteLLM/Ollama/OpenAI base URL (e.g. "http://ollama:11434")
+  baseUrl: ""
+  # -- API key for the LLM endpoint
+  apiKey: ""
+
+# -- Container image references
+images:
+  controlplane:
+    repository: ghcr.io/uncworks/aot-controlplane
+    tag: ""  # defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+  init:
+    repository: ghcr.io/uncworks/aot-init
+    tag: ""
+    pullPolicy: IfNotPresent
+  sidecar:
+    repository: ghcr.io/uncworks/aot-sidecar
+    tag: ""
+    pullPolicy: IfNotPresent
+  agent:
+    repository: ghcr.io/uncworks/aot-agent
+    tag: ""
+    pullPolicy: IfNotPresent
+  web:
+    repository: ghcr.io/uncworks/aot-web
+    tag: ""
+    pullPolicy: IfNotPresent
+
+# -- Controller configuration
+controller:
+  replicas: 1
+  metricsPort: 8095
+  resources: {}
+
+# -- Temporal Worker configuration
+worker:
+  replicas: 1
+  resources: {}
+
+# -- API Server configuration
+apiserver:
+  replicas: 1
+  port: 50055
+  resources: {}
+  service:
+    type: ClusterIP
+
+# -- Web Dashboard configuration
+web:
+  # -- Enable the web dashboard
+  enabled: true
+  replicas: 1
+  port: 3000
+  resources: {}
+  service:
+    type: ClusterIP
+    # -- NodePort (only used when type is NodePort)
+    nodePort: ""

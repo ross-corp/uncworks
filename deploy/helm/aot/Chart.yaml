@@ -1,0 +1,12 @@
+apiVersion: v2
+name: aot
+description: AOT — Autonomous Orchestration of Tasks on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/ross-corp/uncworks
+sources:
+  - https://github.com/ross-corp/uncworks
+maintainers:
+  - name: uncworks
+    url: https://github.com/ross-corp

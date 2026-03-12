@@ -1,0 +1,16 @@
+# Builds all AOT control plane binaries in one image.
+# Usage: docker build -f Dockerfile.controlplane -t aot-controlplane:local ../uncworks
+FROM golang:1.25-bookworm AS builder
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /apiserver ./cmd/apiserver
+RUN CGO_ENABLED=0 go build -o /controller ./cmd/controller
+RUN CGO_ENABLED=0 go build -o /temporal-worker ./cmd/temporal-worker
+
+FROM gcr.io/distroless/static-debian12
+COPY --from=builder /apiserver /usr/local/bin/apiserver
+COPY --from=builder /controller /usr/local/bin/controller
+COPY --from=builder /temporal-worker /usr/local/bin/temporal-worker
