@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,6 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
+	"github.com/uncworks/aot/internal/eventbus"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 	"github.com/uncworks/aot/internal/testutil"
 )
@@ -350,3 +353,88 @@ func TestIsTerminal(t *testing.T) {
 		t.Error("Pending should not be terminal")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// 4. EventBus integration
+// ---------------------------------------------------------------------------
+
+// recordingBus captures published events for test assertions.
+type recordingBus struct {
+	mu     sync.Mutex
+	events []*apiv1.AgentRunEvent
+}
+
+func (r *recordingBus) Publish(_ string, event *apiv1.AgentRunEvent) {
+	r.mu.Lock()
+	r.events = append(r.events, event)
+	r.mu.Unlock()
+}
+
+func (r *recordingBus) Subscribe(string) (<-chan *apiv1.AgentRunEvent, int) {
+	return make(chan *apiv1.AgentRunEvent, 1), 0
+}
+
+func (r *recordingBus) Unsubscribe(string, int) {}
+
+func (r *recordingBus) getEvents() []*apiv1.AgentRunEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]*apiv1.AgentRunEvent, len(r.events))
+	copy(out, r.events)
+	return out
+}
+
+func TestEventBus_HandleNotImplementedEmitsEvent(t *testing.T) {
+	reconciler, k8sClient, cleanup := setupReconciler(t)
+	defer cleanup()
+
+	bus := &recordingBus{}
+	reconciler.EventBus = bus
+
+	ctx := context.Background()
+	ar := newAgentRun("event-test", func(a *aotv1alpha1.AgentRun) {
+		a.Spec.Backend = aotv1alpha1.BackendKubeVirt
+	})
+	if err := k8sClient.Create(ctx, ar); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	_, err := reconciler.handleNotImplemented(ctx, ar, "KubeVirt")
+	if err != nil {
+		t.Fatalf("handleNotImplemented: %v", err)
+	}
+
+	events := bus.getEvents()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED {
+		t.Errorf("expected COMPLETED event type, got %v", events[0].Type)
+	}
+	if events[0].AgentRunId != "event-test" {
+		t.Errorf("expected agent run ID event-test, got %s", events[0].AgentRunId)
+	}
+}
+
+func TestEventBus_NilBusDoesNotPanic(t *testing.T) {
+	reconciler, k8sClient, cleanup := setupReconciler(t)
+	defer cleanup()
+	// EventBus is nil by default
+	ctx := context.Background()
+
+	ar := newAgentRun("no-bus", func(a *aotv1alpha1.AgentRun) {
+		a.Spec.Backend = aotv1alpha1.BackendKubeVirt
+	})
+	if err := k8sClient.Create(ctx, ar); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Should not panic with nil EventBus
+	_, err := reconciler.handleNotImplemented(ctx, ar, "KubeVirt")
+	if err != nil {
+		t.Fatalf("handleNotImplemented: %v", err)
+	}
+}
+
+// Verify the interface is satisfied at compile time.
+var _ eventbus.EventBus = (*recordingBus)(nil)

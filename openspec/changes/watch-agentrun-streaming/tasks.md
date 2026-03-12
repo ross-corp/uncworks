@@ -1,14 +1,14 @@
 ## 1. Event Bus Core
 
-- [ ] 1.1 Create `internal/eventbus/eventbus.go` with `EventBus` interface (`Publish`, `Subscribe`, `Unsubscribe`) and channel-based implementation
-- [ ] 1.2 Write `internal/eventbus/eventbus_test.go` — single subscriber, multi-subscriber, cross-run isolation, slow-client drop, unsubscribe cleanup, empty topic removal
-- [ ] 1.3 Add `NoOpEventBus` for tests that don't need event delivery
+- [x] 1.1 Create `internal/eventbus/eventbus.go` with `EventBus` interface (`Publish`, `Subscribe`, `Unsubscribe`) and channel-based implementation
+- [x] 1.2 Write `internal/eventbus/eventbus_test.go` — single subscriber, multi-subscriber, cross-run isolation, slow-client drop, unsubscribe cleanup, empty topic removal
+- [x] 1.3 Add `NoOpEventBus` for tests that don't need event delivery
 
 ## 2. Controller Integration
 
-- [ ] 2.1 Add `EventBus` field to `AgentRunReconciler` struct and inject it at construction in `cmd/controller/main.go`
-- [ ] 2.2 Call `bus.Publish()` after each status subresource update in `reconcilePod()` — phase change, TTL expiry
-- [ ] 2.3 Write tests verifying events are emitted on phase transitions (mock EventBus)
+- [x] 2.1 Add `EventBus` field to `AgentRunReconciler` struct and inject it at construction in `cmd/controller/main.go`
+- [x] 2.2 Call `bus.Publish()` after each status subresource update in `reconcilePod()` — phase change, TTL expiry
+- [x] 2.3 Write tests verifying events are emitted on phase transitions (mock EventBus)
 
 ## 3. gRPC WatchAgentRun Streaming
 

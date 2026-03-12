@@ -16,6 +16,7 @@ import (
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/controller"
+	"github.com/uncworks/aot/internal/eventbus"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
@@ -61,12 +62,14 @@ func run() error {
 		return fmt.Errorf("start manager: %w", err)
 	}
 
+	bus := eventbus.NewChannelBus()
 	if err = (&controller.AgentRunReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		TemporalClient: tc,
 		TaskQueue:      taskQueue,
 		LiteLLMBaseURL: litellmBaseURL,
+		EventBus:       bus,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("create controller: %w", err)
 	}

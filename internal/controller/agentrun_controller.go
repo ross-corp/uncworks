@@ -23,6 +23,8 @@ import (
 	temporalclient "go.temporal.io/sdk/client"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
+	"github.com/uncworks/aot/internal/eventbus"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
@@ -44,6 +46,7 @@ type AgentRunReconciler struct {
 	TemporalClient temporalclient.Client
 	TaskQueue      string
 	LiteLLMBaseURL string
+	EventBus       eventbus.EventBus
 }
 
 // +kubebuilder:rbac:groups=aot.uncworks.io,resources=agentruns,verbs=get;list;watch;create;update;patch;delete
@@ -162,7 +165,11 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 	agentRun.Status.PodName = fmt.Sprintf("agentrun-%s", agentRun.Name)
 	agentRun.Status.StartedAt = &now
 	agentRun.Status.Message = "Temporal workflow started"
-	return ctrl.Result{RequeueAfter: reconcileInterval}, r.Status().Update(ctx, agentRun)
+	if err := r.Status().Update(ctx, agentRun); err != nil {
+		return ctrl.Result{}, err
+	}
+	r.emitPhaseEvent(agentRun, apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED)
+	return ctrl.Result{RequeueAfter: reconcileInterval}, nil
 }
 
 // syncWorkflowState queries the Temporal workflow and syncs state to the CRD.
@@ -215,6 +222,11 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 		if err := r.Status().Update(ctx, agentRun); err != nil {
 			return ctrl.Result{}, err
 		}
+		eventType := apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED
+		if isTerminal(newPhase) {
+			eventType = apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED
+		}
+		r.emitPhaseEvent(agentRun, eventType)
 	}
 
 	// Don't requeue for terminal states
@@ -254,7 +266,11 @@ func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *
 		agentRun.Status.CompletedAt = &now
 	}
 
-	return ctrl.Result{}, r.Status().Update(ctx, agentRun)
+	if err := r.Status().Update(ctx, agentRun); err != nil {
+		return ctrl.Result{}, err
+	}
+	r.emitPhaseEvent(agentRun, apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED)
+	return ctrl.Result{}, nil
 }
 
 // cancelWorkflow cancels the Temporal workflow associated with the AgentRun.
@@ -276,7 +292,11 @@ func (r *AgentRunReconciler) cancelWorkflow(ctx context.Context, agentRun *aotv1
 func (r *AgentRunReconciler) handleNotImplemented(ctx context.Context, agentRun *aotv1alpha1.AgentRun, backend string) (ctrl.Result, error) {
 	agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
 	agentRun.Status.Message = fmt.Sprintf("%s backend is not yet implemented", backend)
-	return ctrl.Result{}, r.Status().Update(ctx, agentRun)
+	if err := r.Status().Update(ctx, agentRun); err != nil {
+		return ctrl.Result{}, err
+	}
+	r.emitPhaseEvent(agentRun, apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED)
+	return ctrl.Result{}, nil
 }
 
 // mapPhase converts workflow state phase strings to CRD phase constants.
@@ -303,6 +323,18 @@ func isTerminal(phase aotv1alpha1.AgentRunPhase) bool {
 	return phase == aotv1alpha1.AgentRunPhaseSucceeded ||
 		phase == aotv1alpha1.AgentRunPhaseFailed ||
 		phase == aotv1alpha1.AgentRunPhaseCancelled
+}
+
+// emitPhaseEvent publishes a phase-change event to the event bus.
+func (r *AgentRunReconciler) emitPhaseEvent(agentRun *aotv1alpha1.AgentRun, eventType apiv1.AgentRunEventType) {
+	if r.EventBus == nil {
+		return
+	}
+	r.EventBus.Publish(agentRun.Name, &apiv1.AgentRunEvent{
+		AgentRunId: agentRun.Name,
+		Type:       eventType,
+		Payload:    string(agentRun.Status.Phase),
+	})
 }
 
 // SetupWithManager sets up the controller with the Manager.
