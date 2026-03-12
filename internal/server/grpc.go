@@ -136,12 +136,10 @@ func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Req
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
 	}
 
-	// Cancel via Temporal workflow if client is configured
+	// Cancel via Temporal workflow if client is configured (best-effort)
 	if s.TemporalClient != nil {
 		workflowID := fmt.Sprintf("agentrun-%s", req.Msg.Id)
-		if err := s.TemporalClient.CancelWorkflow(ctx, workflowID, ""); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cancel workflow: %w", err))
-		}
+		_ = s.TemporalClient.CancelWorkflow(ctx, workflowID, "")
 	}
 
 	s.mu.Lock()

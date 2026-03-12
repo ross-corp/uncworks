@@ -10,6 +10,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsconfig "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	temporalclient "go.temporal.io/sdk/client"
 
@@ -48,8 +49,12 @@ func run() error {
 	}
 	defer tc.Close()
 
+	metricsAddr := envOrDefault("METRICS_ADDR", ":8090")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
+		Metrics: metricsconfig.Options{
+			BindAddress: metricsAddr,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("start manager: %w", err)

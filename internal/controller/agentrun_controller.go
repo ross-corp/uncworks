@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.temporal.io/api/enums/v1"
@@ -28,6 +29,9 @@ import (
 const (
 	// annotationWorkflowID stores the Temporal workflow ID on the AgentRun CRD.
 	annotationWorkflowID = "aot.uncworks.io/workflow-id"
+
+	// finalizerName ensures the controller cancels the Temporal workflow before the CRD is deleted.
+	finalizerName = "aot.uncworks.io/workflow-cleanup"
 
 	// reconcileInterval is the requeue interval for syncing workflow state.
 	reconcileInterval = 30 * time.Second
@@ -57,9 +61,26 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Check if the CRD is being deleted
+	// Handle deletion with finalizer
 	if !agentRun.DeletionTimestamp.IsZero() {
-		return r.handleDeletion(ctx, &agentRun)
+		if controllerutil.ContainsFinalizer(&agentRun, finalizerName) {
+			if err := r.cancelWorkflow(ctx, &agentRun); err != nil {
+				logger.Error(err, "Failed to cancel workflow during deletion")
+			}
+			controllerutil.RemoveFinalizer(&agentRun, finalizerName)
+			if err := r.Update(ctx, &agentRun); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Ensure finalizer is set
+	if !controllerutil.ContainsFinalizer(&agentRun, finalizerName) {
+		controllerutil.AddFinalizer(&agentRun, finalizerName)
+		if err := r.Update(ctx, &agentRun); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Check for workflow ID annotation
@@ -124,6 +145,11 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 	}
 	agentRun.Annotations[annotationWorkflowID] = run.GetID()
 	if err := r.Update(ctx, agentRun); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Re-fetch to get the latest resourceVersion after the annotation update
+	if err := r.Get(ctx, client.ObjectKeyFromObject(agentRun), agentRun); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -228,19 +254,20 @@ func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *
 	return ctrl.Result{}, r.Status().Update(ctx, agentRun)
 }
 
-// handleDeletion cancels the Temporal workflow when the CRD is deleted.
-func (r *AgentRunReconciler) handleDeletion(ctx context.Context, agentRun *aotv1alpha1.AgentRun) (ctrl.Result, error) {
+// cancelWorkflow cancels the Temporal workflow associated with the AgentRun.
+func (r *AgentRunReconciler) cancelWorkflow(ctx context.Context, agentRun *aotv1alpha1.AgentRun) error {
 	logger := log.FromContext(ctx)
 
 	workflowID := agentRun.Annotations[annotationWorkflowID]
-	if workflowID != "" {
-		logger.Info("Cancelling Temporal workflow for deleted AgentRun", "workflowID", workflowID)
-		if err := r.TemporalClient.CancelWorkflow(ctx, workflowID, ""); err != nil {
-			logger.Error(err, "Failed to cancel workflow, may already be completed")
-		}
+	if workflowID == "" {
+		return nil
 	}
 
-	return ctrl.Result{}, nil
+	logger.Info("Cancelling Temporal workflow for deleted AgentRun", "workflowID", workflowID)
+	if err := r.TemporalClient.CancelWorkflow(ctx, workflowID, ""); err != nil {
+		logger.Error(err, "Failed to cancel workflow, may already be completed")
+	}
+	return nil
 }
 
 func (r *AgentRunReconciler) handleNotImplemented(ctx context.Context, agentRun *aotv1alpha1.AgentRun, backend string) (ctrl.Result, error) {

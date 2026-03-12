@@ -133,6 +133,11 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 	var createOutput CreateAgentPodOutput
 	if err := workflow.ExecuteActivity(actCtx, a.CreateAgentPod, podInput).Get(ctx, &createOutput); err != nil {
+		if temporal.IsCanceledError(err) {
+			state.Phase = "Cancelled"
+			state.Message = "Cancelled during pod creation"
+			return err
+		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to create pod: %v", err)
 		return err
@@ -154,6 +159,11 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		PodName:   podName,
 		Namespace: input.Namespace,
 	}).Get(ctx, nil); err != nil {
+		if temporal.IsCanceledError(err) {
+			state.Phase = "Cancelled"
+			state.Message = "Cancelled during hydration"
+			return err
+		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Hydration failed: %v", err)
 		return err
@@ -168,6 +178,11 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		Namespace: input.Namespace,
 		Prompt:    input.Prompt,
 	}).Get(ctx, nil); err != nil {
+		if temporal.IsCanceledError(err) {
+			state.Phase = "Cancelled"
+			state.Message = "Cancelled during agent start"
+			return err
+		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to start agent: %v", err)
 		return err

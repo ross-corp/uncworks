@@ -15,14 +15,33 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
+	temporalclient "go.temporal.io/sdk/client"
+
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
 	"github.com/uncworks/aot/internal/server"
 )
 
 func main() {
-	addr := ":50051"
+	addr := envOrDefault("LISTEN_ADDR", ":50051")
 
 	svc := server.NewAOTServiceHandler()
+
+	// Connect to Temporal if configured
+	temporalHost := os.Getenv("TEMPORAL_HOST")
+	if temporalHost != "" {
+		temporalNamespace := envOrDefault("TEMPORAL_NAMESPACE", "default")
+		tc, err := temporalclient.Dial(temporalclient.Options{
+			HostPort:  temporalHost,
+			Namespace: temporalNamespace,
+		})
+		if err != nil {
+			log.Printf("WARNING: Failed to connect to Temporal at %s: %v", temporalHost, err)
+		} else {
+			defer tc.Close()
+			svc.TemporalClient = tc
+			log.Printf("Connected to Temporal at %s (namespace: %s)", temporalHost, temporalNamespace)
+		}
+	}
 
 	// Protovalidate interceptor rejects invalid requests with INVALID_ARGUMENT
 	validateInterceptor := validate.NewInterceptor()
@@ -65,4 +84,11 @@ func main() {
 	if err := httpServer.Shutdown(context.Background()); err != nil {
 		log.Printf("Shutdown error: %v", err)
 	}
+}
+
+func envOrDefault(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
 }
