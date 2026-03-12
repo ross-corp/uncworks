@@ -1,17 +1,17 @@
 ## 1. LiteLLM Configuration
 
-- [ ] 1.1 Create `deploy/litellm/` directory
-- [ ] 1.2 Create `deploy/litellm/litellm-config.yaml`: model_list with Ollama primary (ollama_chat/llama3.1:8b), OpenRouter fallback (openrouter/meta-llama/llama-3.1-8b-instruct:free), premium tier (anthropic/claude-sonnet-4-20250514), fallback chain, rate limiting
-- [ ] 1.3 Create `deploy/litellm/README.md`: deployment instructions for LiteLLM Helm chart to k0s
-- [ ] 1.4 Document `LITELLM_BASE_URL` environment variable (default: `http://litellm:4000`)
-- [ ] 1.5 Document LiteLLM master key management via Kubernetes Secret
+- [x] 1.1 Create `deploy/litellm/` directory
+- [x] 1.2 Create `deploy/litellm/litellm-config.yaml`: model_list with Ollama primary (ollama_chat/llama3.1:8b), OpenRouter fallback (openrouter/meta-llama/llama-3.1-8b-instruct:free), premium tier (anthropic/claude-sonnet-4-20250514), fallback chain, rate limiting
+- [x] 1.3 Create `deploy/litellm/README.md`: deployment instructions for LiteLLM Helm chart to k0s
+- [x] 1.4 Document `LITELLM_BASE_URL` environment variable (default: `http://litellm:4000`)
+- [x] 1.5 Document LiteLLM master key management via Kubernetes Secret
 
 ## 2. Ollama Configuration
 
-- [ ] 2.1 Create `deploy/ollama/` directory
-- [ ] 2.2 Create `deploy/ollama/README.md`: deployment instructions for Ollama Helm chart to k0s
-- [ ] 2.3 Document model pull commands for CI model (qwen2.5:0.5b) and dev model (llama3.1:8b)
-- [ ] 2.4 Document Ollama service DNS (http://ollama:11434) for LiteLLM configuration
+- [x] 2.1 Create `deploy/ollama/` directory
+- [x] 2.2 Create `deploy/ollama/README.md`: deployment instructions for Ollama Helm chart to k0s
+- [x] 2.3 Document model pull commands for CI model (qwen2.5:0.5b) and dev model (llama3.1:8b)
+- [x] 2.4 Document Ollama service DNS (http://ollama:11434) for LiteLLM configuration
 
 ## 3. Virtual Key Lifecycle Activities
 

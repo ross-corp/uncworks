@@ -1,0 +1,60 @@
+# LiteLLM Proxy configuration for AOT.
+# Reference: https://docs.litellm.ai/docs/proxy/configs
+#
+# Model tiers:
+#   default       — Ollama local models (no cost, no external calls)
+#   default-cloud — OpenRouter free tier (free but rate-limited)
+#   premium       — Anthropic/OpenAI via API keys
+
+model_list:
+  # --- Default tier: Ollama local models ---
+  - model_name: "default"
+    litellm_params:
+      model: "ollama_chat/llama3.1:8b"
+      api_base: "http://ollama:11434"
+    model_info:
+      tier: "default"
+
+  # --- Default-cloud tier: OpenRouter free models ---
+  - model_name: "default-cloud"
+    litellm_params:
+      model: "openrouter/meta-llama/llama-3.1-8b-instruct:free"
+      # OPENROUTER_API_KEY set via environment variable
+    model_info:
+      tier: "default-cloud"
+
+  # --- Premium tier: Anthropic ---
+  - model_name: "premium"
+    litellm_params:
+      model: "anthropic/claude-sonnet-4-20250514"
+      # ANTHROPIC_API_KEY set via environment variable
+    model_info:
+      tier: "premium"
+
+  # --- CI/testing: tiny Ollama model ---
+  - model_name: "ci"
+    litellm_params:
+      model: "ollama_chat/qwen2.5:0.5b"
+      api_base: "http://ollama:11434"
+    model_info:
+      tier: "default"
+
+litellm_settings:
+  # Fallback chain: default -> default-cloud
+  fallbacks:
+    - {"default": ["default-cloud"]}
+
+  # Rate limiting (requests per minute per key)
+  max_parallel_requests: 10
+
+  # Drop unsupported params instead of erroring
+  drop_params: true
+
+general_settings:
+  # PostgreSQL for virtual key storage and spend tracking.
+  # Shares the existing PostgreSQL instance, separate database.
+  database_url: "postgresql://litellm:litellm@postgres:5432/litellm"
+
+  # Master key is loaded from LITELLM_MASTER_KEY environment variable.
+  # Do NOT hardcode it here — set it via Kubernetes Secret.
+  master_key: "os.environ/LITELLM_MASTER_KEY"
