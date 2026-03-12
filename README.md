@@ -21,9 +21,11 @@ graph TD
     subgraph ControlPlane["Control Plane"]
         API["API Server\nConnectRPC (AOTService)\ngRPC + Connect + gRPC-Web"]
         API --> Controller["Controller\nK8s reconciler for AgentRun CRD"]
+        Controller --> Temporal["Temporal\nWorkflow Engine"]
+        Temporal --> Worker["Temporal Worker\nActivity execution"]
     end
 
-    Controller -->|Pod| AgentPod
+    Worker -->|Pod| AgentPod
     Controller -.->|"KubeVirt (planned)"| KV["VM"]
     Controller -.->|"External (SSH)"| Ext["Remote Machine"]
 
@@ -33,6 +35,9 @@ graph TD
         Sidecar["rpc-gateway\nsidecar: gRPC bridge to control plane"]
     end
 
+    Agent -->|"OPENAI_BASE_URL\nOPENAI_API_KEY"| LiteLLM["LiteLLM Proxy\nmodel routing + spend tracking"]
+    LiteLLM --> Ollama["Ollama\nlocal models"]
+    LiteLLM -.-> Cloud["Cloud APIs\nAnthropic, OpenRouter"]
     Sidecar --> API
     Agent --> PG[("PostgreSQL (brain)\nshared state store + queue")]
 ```
@@ -40,11 +45,14 @@ graph TD
 ### Data flow
 
 1. Client calls `CreateAgentRun` via gRPC (or applies a CRD with kubectl).
-2. The Controller sees the new `AgentRun` and creates a Pod with three containers: hydration init-container, agent, and rpc-gateway sidecar.
-3. The hydration init-container clones the repo and runs `devbox install`.
-4. The agent container executes the prompt in the workspace.
-5. The sidecar streams output and events back to the control plane.
-6. Clients watch progress via `WatchAgentRun` (ConnectRPC server-streaming).
+2. The Controller starts a Temporal workflow and annotates the CRD with the workflow ID.
+3. The workflow provisions a LiteLLM virtual key (scoped per-agent with budget + model restrictions).
+4. The workflow creates a Pod with three containers: hydration init-container, agent, and rpc-gateway sidecar. The agent container receives `OPENAI_BASE_URL` and `OPENAI_API_KEY` for LLM access via LiteLLM.
+5. The hydration init-container clones the repo and runs `devbox install`.
+6. The agent container executes the prompt in the workspace. All LLM calls route through LiteLLM.
+7. The sidecar streams output and events back to the control plane.
+8. Clients watch progress via `WatchAgentRun` (ConnectRPC server-streaming).
+9. On completion, the workflow revokes the virtual key and cleans up the pod.
 
 ---
 
@@ -136,6 +144,7 @@ The core CRD. Each `AgentRun` declares:
 | `ttlSeconds`  | Maximum lifetime (default 3600)                    |
 | `envVars`     | Additional environment variables                   |
 | `image`       | Override for the agent container image             |
+| `modelTier`   | LLM model tier: `default`, `default-cloud`, `premium` |
 
 Lifecycle phases:
 
@@ -165,6 +174,14 @@ A senior agent can call the `spawn_junior` tool to create a child `AgentRun` for
 
 Agents can call the `ask_human` tool to pause and request clarification. The `AgentRun` phase transitions to `WaitingForInput`. Clients send responses via the `SendHumanInput` RPC, and the agent resumes.
 
+### Temporal Workflow Engine
+
+AOT uses [Temporal](https://temporal.io/) for durable agent lifecycle orchestration. The controller starts a Temporal workflow for each AgentRun, which manages pod creation, hydration, agent execution, status polling, TTL enforcement, and cleanup. Workflow state survives restarts and node failures.
+
+### LiteLLM Gateway
+
+[LiteLLM](https://docs.litellm.ai/) provides an OpenAI-compatible proxy for centralized LLM routing. Each agent receives a scoped virtual key with model restrictions and budget caps. Supports local models via Ollama, free cloud models via OpenRouter, and premium models via Anthropic/OpenAI.
+
 ### Shared Brain
 
 PostgreSQL-backed state store (`internal/brain`) that persists agent state, metadata, and a priority queue for scheduling.
@@ -190,9 +207,13 @@ All commands use [Task](https://taskfile.dev/) (see `Taskfile.yml`):
 | `task test:shared` | @aot/shared package tests                  |
 | `task lint`        | Run Go vet + TypeScript type checks         |
 | `task dev:web`     | Start web dashboard dev server              |
+| `task temporal:dev`| Start Temporal dev server (SQLite)          |
 | `task k0s:setup`   | Initialize local k0s cluster (sudo)         |
 | `task k0s:teardown`| Tear down local k0s cluster (sudo)          |
 | `task k0s:crd`     | Apply AgentRun CRD to cluster               |
+| `task k0s:deps`    | Deploy all infra deps (CRD + Ollama + LiteLLM) |
+| `task k0s:litellm` | Deploy LiteLLM proxy to k0s                |
+| `task k0s:ollama`  | Deploy Ollama to k0s                        |
 
 ---
 
@@ -202,6 +223,7 @@ All commands use [Task](https://taskfile.dev/) (see `Taskfile.yml`):
 cmd/
   apiserver/       -- gRPC API server binary
   controller/      -- K8s controller binary
+  temporal-worker/ -- Temporal worker binary
   hydration/       -- init-container binary (git clone + devbox)
   sidecar/         -- RPC Gateway sidecar binary
   aot/             -- CLI (aot open)
@@ -209,6 +231,8 @@ api/v1alpha1/      -- AgentRun CRD Go types
 internal/
   server/          -- gRPC server + WebSocket hub
   controller/      -- AgentRun reconciler + multi_agent (SpawnJunior)
+  temporal/        -- Temporal workflows and activities
+  litellm/         -- LiteLLM Admin API client
   brain/           -- PostgreSQL shared state store
   hydration/       -- workspace provisioning logic
   sidecar/         -- RPC Gateway implementation
@@ -222,6 +246,9 @@ packages/
   tui/             -- SolidJS TUI with ANSI renderer
 web/               -- SolidJS Web Dashboard (Vite)
 deploy/crds/       -- AgentRun CRD YAML manifest
+deploy/litellm/    -- LiteLLM proxy configuration
+deploy/ollama/     -- Ollama deployment docs
+deploy/temporal/   -- Temporal server deployment docs
 docker/            -- Dockerfiles (agent-base, hydration, sidecar)
 hack/              -- k0s setup/teardown scripts, proto-gen
 e2e/               -- system E2E tests

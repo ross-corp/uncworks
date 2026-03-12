@@ -48,6 +48,6 @@
 
 ## 7. Documentation
 
-- [ ] 7.1 Update docs/user-guide.md: add LiteLLM section covering configuration, model tiers, spend tracking
-- [ ] 7.2 Update README.md: add LiteLLM to architecture diagram and dependencies list
-- [ ] 7.3 Document model tier options and how they map to LiteLLM model routing
+- [x] 7.1 Update docs/user-guide.md: add LiteLLM section covering configuration, model tiers, spend tracking
+- [x] 7.2 Update README.md: add LiteLLM to architecture diagram and dependencies list
+- [x] 7.3 Document model tier options and how they map to LiteLLM model routing

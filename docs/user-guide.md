@@ -12,8 +12,9 @@ This guide covers all typical user paths: setting up a local cluster, creating a
 4. [Multi-Agent Workflows](#multi-agent-workflows)
 5. [Human-in-the-Loop (HITL)](#human-in-the-loop-hitl)
 6. [Temporal Workflow Engine](#temporal-workflow-engine)
-7. [Local Development with k0s](#local-development-with-k0s)
-8. [The aot CLI](#the-aot-cli)
+7. [LiteLLM Gateway](#litellm-gateway)
+8. [Local Development with k0s](#local-development-with-k0s)
+9. [The aot CLI](#the-aot-cli)
 
 ---
 
@@ -186,6 +187,7 @@ kubectl apply -f agentrun.yaml
 | `ttlSeconds`    | no       | 3600     | Maximum lifetime in seconds                       |
 | `envVars`       | no       | --       | Map of additional environment variables           |
 | `image`         | no       | (default)| Override for agent container image                |
+| `modelTier`     | no       | `default`| LLM model tier (`default`, `default-cloud`, `premium`) |
 | `externalConfig`| no       | --       | SSH config for External backend                   |
 | `kubeVirtConfig`| no       | --       | VM config for KubeVirt backend                    |
 
@@ -459,6 +461,77 @@ The K8s controller acts as a thin bridge:
 The workflow orchestrates the full lifecycle: pod creation → hydration → agent start → status polling → cleanup.
 
 For production deployment details, see `deploy/temporal/README.md`.
+
+---
+
+## LiteLLM Gateway
+
+AOT uses [LiteLLM](https://docs.litellm.ai/) as an OpenAI-compatible proxy for centralized LLM routing, per-agent virtual keys, and spend tracking. Each agent pod automatically receives an `OPENAI_BASE_URL` and `OPENAI_API_KEY` that route all LLM requests through LiteLLM.
+
+### Model Tiers
+
+Model tiers control which LLM backends an agent can access. Set the tier in your AgentRun spec via the `modelTier` field.
+
+| Tier            | Models Available                                         | Cost        |
+|-----------------|----------------------------------------------------------|-------------|
+| `default`       | Ollama local (`llama3.1:8b`), OpenRouter free fallback  | Free        |
+| `default-cloud` | Ollama local, OpenRouter free                            | Free        |
+| `premium`       | All of `default` + Anthropic Claude, OpenAI              | Pay-per-use |
+
+The default tier uses local Ollama models with automatic fallback to OpenRouter's free tier if Ollama is unavailable.
+
+### Virtual Key Lifecycle
+
+When an agent run starts:
+1. The Temporal workflow calls `ProvisionLLMKey` to create a scoped virtual key via the LiteLLM Admin API
+2. The key is injected into the agent pod as `OPENAI_API_KEY`
+3. `OPENAI_BASE_URL` is set to `<LITELLM_BASE_URL>/v1`
+4. The agent's LLM calls are routed through LiteLLM with model restrictions and budget caps
+
+When the agent run completes (success, failure, cancellation, or TTL expiry):
+1. The workflow calls `RevokeLLMKey` to delete the virtual key
+2. This prevents any further LLM calls on that key
+
+### Spend Tracking
+
+Each virtual key tracks cumulative spend. Set a per-run budget via the `maxBudget` field in the AgentRun spec. LiteLLM rejects requests once the budget is exhausted.
+
+### Configuration
+
+The LiteLLM proxy configuration is at `deploy/litellm/litellm-config.yaml`. Key environment variables:
+
+| Variable            | Component        | Default                | Description                           |
+|---------------------|------------------|------------------------|---------------------------------------|
+| `LITELLM_BASE_URL`  | Controller/Worker| `http://litellm:4000`  | LiteLLM proxy URL                    |
+| `LITELLM_MASTER_KEY`| Temporal Worker  | (required)             | Master key for LiteLLM Admin API     |
+
+### Deploying LiteLLM
+
+```bash
+# Deploy LiteLLM + Ollama to k0s
+task k0s:deps
+
+# Pull models into Ollama
+task k0s:ollama:pull
+```
+
+See `deploy/litellm/README.md` and `deploy/ollama/README.md` for detailed instructions.
+
+### Using a Custom Model Tier
+
+```yaml
+apiVersion: aot.uncworks.io/v1alpha1
+kind: AgentRun
+metadata:
+  name: my-premium-run
+spec:
+  backend: Pod
+  repoURL: https://github.com/example/repo.git
+  branch: main
+  prompt: "Refactor the auth module"
+  modelTier: premium
+  ttlSeconds: 3600
+```
 
 ---
 
