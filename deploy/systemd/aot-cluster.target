@@ -1,0 +1,5 @@
+[Unit]
+Description=AOT Development Cluster (all services)
+
+[Install]
+WantedBy=default.target

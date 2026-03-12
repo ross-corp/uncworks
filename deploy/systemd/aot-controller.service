@@ -1,0 +1,16 @@
+[Unit]
+Description=AOT Controller
+After=aot-temporal.service
+Requires=aot-temporal.service
+PartOf=aot-cluster.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/Documents/Github/rosh-bullshit/uncworks/deploy/systemd/env/controller.env
+WorkingDirectory=%h/Documents/Github/rosh-bullshit/uncworks
+ExecStart=%h/Documents/Github/rosh-bullshit/uncworks/bin/controller
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=aot-cluster.target

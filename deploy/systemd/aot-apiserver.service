@@ -1,0 +1,16 @@
+[Unit]
+Description=AOT API Server
+After=aot-temporal.service
+Requires=aot-temporal.service
+PartOf=aot-cluster.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/Documents/Github/rosh-bullshit/uncworks/deploy/systemd/env/apiserver.env
+WorkingDirectory=%h/Documents/Github/rosh-bullshit/uncworks
+ExecStart=%h/Documents/Github/rosh-bullshit/uncworks/bin/apiserver
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=aot-cluster.target
