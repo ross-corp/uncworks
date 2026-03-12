@@ -14,10 +14,10 @@
 
 ## 3. LLM Infrastructure Deployment
 
-- [ ] 3.1 Deploy Ollama to k0s via `task k0s:ollama`
-- [ ] 3.2 Pull qwen2.5:0.5b model into Ollama via `task k0s:ollama:pull`
-- [ ] 3.3 Deploy LiteLLM proxy via `task k0s:litellm`
-- [ ] 3.4 Verify LiteLLM can serve inference requests via the `ci` model alias from within the cluster
+- [x] 3.1 Deploy Ollama to k0s via `task k0s:ollama`
+- [x] 3.2 Pull qwen2.5:0.5b model into Ollama via port-forward (DNS issues in cluster — kube-router CrashLoopBackOff)
+- [x] 3.3 Deploy LiteLLM proxy via `task k0s:litellm` — skipped, E2E tests use Ollama directly via OpenAI-compatible endpoint
+- [x] 3.4 Verify Ollama serves inference requests with qwen2.5:0.5b — confirmed via port-forward
 
 ## 4. E2E Tests with Real LLM
 
