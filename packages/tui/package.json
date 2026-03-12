@@ -5,12 +5,12 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
-    "dev": "tsx src/index.ts",
+    "dev": "tsx src/main.ts",
     "test": "node --test --import tsx src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "solid-js": "^1.9.4"
+"solid-js": "^1.9.4"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

@@ -98,12 +98,21 @@ export function agentRunDetailView(run: AgentRunView | null): RenderNode {
   };
 }
 
+export type ViewMode = "list" | "detail" | "input";
+
 /** Build the full dashboard layout. */
 export function dashboardView(
   runs: AgentRunView[],
   selectedIndex: number,
-  selectedRun: AgentRunView | null
+  selectedRun: AgentRunView | null,
+  mode: ViewMode = "list"
 ): RenderNode {
+  const footerHints: Record<ViewMode, string> = {
+    list: "q: quit | ↑/↓: navigate | Enter: select",
+    detail: "Esc: back | Enter: input (if waiting)",
+    input: "Enter: submit | Esc: cancel",
+  };
+
   return {
     type: "box",
     children: [
@@ -115,7 +124,7 @@ export function dashboardView(
       { type: "text", content: "" },
       {
         type: "text",
-        content: "q: quit | ↑/↓: navigate | Enter: select",
+        content: footerHints[mode],
         style: { color: "gray" },
       },
     ],

@@ -53,10 +53,10 @@ tasks:
       - npx tsx --test src/**/*.test.ts
 
   test:tui:
-    desc: Run TUI renderer tests
+    desc: Run TUI tests
     dir: packages/tui
     cmds:
-      - npx tsx --test src/**/*.test.ts
+      - npm test
 
   test:shared:
     desc: Run @aot/shared tests
@@ -182,6 +182,12 @@ tasks:
       - echo "All dependencies deployed. Run 'task k0s:ollama:pull' to pull models."
 
   # --- Development ---
+  dev:tui:
+    desc: Start interactive TUI dashboard
+    dir: packages/tui
+    cmds:
+      - npx tsx src/main.ts {{.CLI_ARGS}}
+
   dev:web:
     desc: Start web dashboard dev server
     dir: web

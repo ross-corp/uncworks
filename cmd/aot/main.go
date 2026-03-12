@@ -3,21 +3,45 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/uncworks/aot/internal/cli"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: aot <command>\nCommands: open\n")
+		fmt.Fprintf(os.Stderr, "Usage: aot <command>\nCommands: open, dashboard\n")
 		os.Exit(1)
 	}
 
 	switch os.Args[1] {
 	case "open":
 		cmdOpen()
+	case "dashboard":
+		cmdDashboard()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
+		os.Exit(1)
+	}
+}
+
+func cmdDashboard() {
+	args := []string{"packages/tui/src/main.ts"}
+	// Pass --server flag if provided
+	for i := 2; i < len(os.Args); i++ {
+		args = append(args, os.Args[i])
+	}
+
+	cmd := exec.Command("tsx", args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		fmt.Fprintf(os.Stderr, "Error running dashboard: %v\n", err)
 		os.Exit(1)
 	}
 }
