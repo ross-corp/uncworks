@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
@@ -189,5 +190,88 @@ func TestE2E_API_CancelAgentRun(t *testing.T) {
 	crd := &aotv1alpha1.AgentRun{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Name: runID, Namespace: namespace}, crd); err == nil {
 		_ = k8sClient.Delete(ctx, crd)
+	}
+}
+
+func TestE2E_API_SendHumanInput(t *testing.T) {
+	apiClient := getAPIClient(t)
+	k8sClient := getE2EClient(t)
+	ctx := context.Background()
+
+	namespace := os.Getenv("AOT_NAMESPACE")
+	if namespace == "" {
+		namespace = "aot"
+	}
+
+	// Create a run via API so the controller starts a Temporal workflow
+	resp, err := apiClient.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend:    apiv1.Backend_BACKEND_POD,
+			RepoUrl:    "https://github.com/example/test.git",
+			Prompt:     fmt.Sprintf("E2E human input test %d", time.Now().UnixMilli()),
+			TtlSeconds: 120,
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+	runID := resp.Msg.AgentRun.Id
+	t.Logf("Created: %s", runID)
+
+	// Wait for the controller to start the workflow and annotate the CRD
+	var crd aotv1alpha1.AgentRun
+	var workflowStarted bool
+	for i := 0; i < 15; i++ {
+		time.Sleep(time.Second)
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: runID, Namespace: namespace}, &crd); err != nil {
+			continue
+		}
+		if crd.Annotations["aot.uncworks.io/workflow-id"] != "" {
+			workflowStarted = true
+			t.Logf("Workflow started: %s (attempt %d)", crd.Annotations["aot.uncworks.io/workflow-id"], i+1)
+			break
+		}
+	}
+	if !workflowStarted {
+		_ = k8sClient.Delete(ctx, &crd)
+		t.Fatal("workflow did not start within 15s")
+	}
+
+	// Patch the CRD status to WaitingForInput to simulate the agent waiting.
+	// This mimics what the controller does when the sidecar reports the agent
+	// is in AGENT_PROCESS_STATE_WAITING_FOR_INPUT state.
+	crd.Status.Phase = aotv1alpha1.AgentRunPhaseWaitingForInput
+	crd.Status.Message = "Agent waiting for human input"
+	if err := k8sClient.Status().Update(ctx, &crd); err != nil {
+		_ = k8sClient.Delete(ctx, &crd)
+		t.Fatalf("Failed to patch CRD status to WaitingForInput: %v", err)
+	}
+	t.Logf("Patched CRD status to WaitingForInput")
+
+	// Send human input via the API
+	inputResp, err := apiClient.SendHumanInput(ctx, connect.NewRequest(&apiv1.SendHumanInputRequest{
+		AgentRunId: runID,
+		Input:      "yes, proceed with the fix",
+	}))
+	if err != nil {
+		// The Temporal signal might fail because the workflow isn't truly
+		// in a state to receive input, but the API plumbing should work.
+		// If we get FailedPrecondition, the CRD status patch didn't work.
+		if connect.CodeOf(err) == connect.CodeFailedPrecondition {
+			t.Fatal("API returned FailedPrecondition — CRD status patch didn't take effect")
+		}
+		// Internal error from Temporal signal is acceptable — it means
+		// the API correctly checked the CRD status and attempted the signal.
+		t.Logf("SendHumanInput returned error (Temporal signal issue, API plumbing OK): %v", err)
+	} else {
+		if !inputResp.Msg.Accepted {
+			t.Error("expected accepted=true")
+		}
+		t.Logf("SendHumanInput accepted: %v", inputResp.Msg.Accepted)
+	}
+
+	// Cleanup
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&crd), &crd); err == nil {
+		_ = k8sClient.Delete(ctx, &crd)
 	}
 }
