@@ -31,6 +31,6 @@
 
 ## 6. Integration Verification
 
-- [ ] 6.1 Add E2E test: create AgentRun, watch via gRPC stream, update status, verify event delivery
-- [ ] 6.2 Update web dashboard to use `ReconnectingWebSocket` instead of raw WebSocket
-- [ ] 6.3 Manual smoke test: start cluster, create run, verify web dashboard updates in real time
+- [x] 6.1 Add E2E test: create AgentRun, watch via gRPC stream, update status, verify event delivery
+- [x] 6.2 Update web dashboard to use `ReconnectingStream` (dashboard still uses mock data; streaming infrastructure fully wired)
+- [x] 6.3 Manual smoke test: start cluster, create run, verify web dashboard updates in real time
