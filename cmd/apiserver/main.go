@@ -18,13 +18,15 @@ import (
 	temporalclient "go.temporal.io/sdk/client"
 
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
+	"github.com/uncworks/aot/internal/eventbus"
 	"github.com/uncworks/aot/internal/server"
 )
 
 func main() {
 	addr := envOrDefault("LISTEN_ADDR", ":50051")
 
-	svc := server.NewAOTServiceHandler()
+	bus := eventbus.NewChannelBus()
+	svc := server.NewAOTServiceHandler(bus)
 
 	// Connect to Temporal if configured
 	temporalHost := os.Getenv("TEMPORAL_HOST")

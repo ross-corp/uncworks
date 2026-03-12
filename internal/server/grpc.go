@@ -13,6 +13,7 @@ import (
 
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
+	"github.com/uncworks/aot/internal/eventbus"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
@@ -22,15 +23,15 @@ type AOTServiceHandler struct {
 
 	mu             sync.RWMutex
 	runs           map[string]*apiv1.AgentRun
-	watchers       map[string][]chan *apiv1.AgentRunEvent
 	TemporalClient temporalclient.Client
+	EventBus       eventbus.EventBus
 }
 
 // NewAOTServiceHandler creates a new AOTService handler.
-func NewAOTServiceHandler() *AOTServiceHandler {
+func NewAOTServiceHandler(bus eventbus.EventBus) *AOTServiceHandler {
 	return &AOTServiceHandler{
 		runs:     make(map[string]*apiv1.AgentRun),
-		watchers: make(map[string][]chan *apiv1.AgentRunEvent),
+		EventBus: bus,
 	}
 }
 
@@ -106,25 +107,53 @@ func (s *AOTServiceHandler) ListAgentRuns(_ context.Context, req *connect.Reques
 	return connect.NewResponse(&apiv1.ListAgentRunsResponse{AgentRuns: runs}), nil
 }
 
-func (s *AOTServiceHandler) WatchAgentRun(_ context.Context, req *connect.Request[apiv1.WatchAgentRunRequest], stream *connect.ServerStream[apiv1.AgentRunEvent]) error {
+func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Request[apiv1.WatchAgentRunRequest], stream *connect.ServerStream[apiv1.AgentRunEvent]) error {
 	s.mu.RLock()
-	_, ok := s.runs[req.Msg.Id]
+	run, ok := s.runs[req.Msg.Id]
 	s.mu.RUnlock()
 	if !ok {
 		return connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
 	}
 
-	ch := make(chan *apiv1.AgentRunEvent, 100)
-	s.mu.Lock()
-	s.watchers[req.Msg.Id] = append(s.watchers[req.Msg.Id], ch)
-	s.mu.Unlock()
+	// Send current state as initial event
+	initialEvent := &apiv1.AgentRunEvent{
+		AgentRunId: run.Id,
+		Type:       apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED,
+		Payload:    run.Status.Phase.String(),
+	}
+	if err := stream.Send(initialEvent); err != nil {
+		return err
+	}
 
-	for event := range ch {
-		if err := stream.Send(event); err != nil {
-			return err
+	// If already terminal, close immediately
+	if isTerminalPhase(run.Status.Phase) {
+		return nil
+	}
+
+	// Subscribe to event bus
+	if s.EventBus == nil {
+		return nil
+	}
+	ch, subID := s.EventBus.Subscribe(req.Msg.Id)
+	defer s.EventBus.Unsubscribe(req.Msg.Id, subID)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case event, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(event); err != nil {
+				return err
+			}
+			// Close stream on terminal events
+			if event.Type == apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED {
+				return nil
+			}
 		}
 	}
-	return nil
 }
 
 func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Request[apiv1.CancelAgentRunRequest]) (*connect.Response[apiv1.CancelAgentRunResponse], error) {
@@ -175,19 +204,15 @@ func (s *AOTServiceHandler) SendHumanInput(ctx context.Context, req *connect.Req
 	return connect.NewResponse(&apiv1.SendHumanInputResponse{Accepted: true}), nil
 }
 
-// EmitEvent sends an event to all watchers of the given agent run.
-func (s *AOTServiceHandler) EmitEvent(agentRunID string, event *apiv1.AgentRunEvent) {
-	s.mu.RLock()
-	watchers := s.watchers[agentRunID]
-	s.mu.RUnlock()
-
-	for _, ch := range watchers {
-		select {
-		case ch <- event:
-		default:
-			// Drop if channel full
-		}
+// isTerminalPhase returns true for phases that indicate a completed run.
+func isTerminalPhase(phase apiv1.AgentRunPhase) bool {
+	switch phase {
+	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED,
+		apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED,
+		apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+		return true
 	}
+	return false
 }
 
 // cloneRunWithStatus creates a copy of an AgentRun with a new status to avoid mutating the stored version.

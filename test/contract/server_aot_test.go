@@ -20,7 +20,7 @@ import (
 func startAOTServer(t *testing.T, withValidation bool) (apiv1connect.AOTServiceClient, func()) {
 	t.Helper()
 
-	svc := server.NewAOTServiceHandler()
+	svc := server.NewAOTServiceHandler(nil)
 	mux := http.NewServeMux()
 
 	var opts []connect.HandlerOption

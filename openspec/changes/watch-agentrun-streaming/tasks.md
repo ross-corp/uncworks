@@ -12,15 +12,15 @@
 
 ## 3. gRPC WatchAgentRun Streaming
 
-- [ ] 3.1 Add `EventBus` field to `GRPCServer` struct and inject at construction
-- [ ] 3.2 Rewrite `WatchAgentRun` to: send current state, subscribe to bus, stream events, unsubscribe on context done or run completion
-- [ ] 3.3 Write tests for WatchAgentRun — initial state delivery, event streaming, client disconnect cleanup, stream close on completion
+- [x] 3.1 Add `EventBus` field to `GRPCServer` struct and inject at construction
+- [x] 3.2 Rewrite `WatchAgentRun` to: send current state, subscribe to bus, stream events, unsubscribe on context done or run completion
+- [x] 3.3 Write tests for WatchAgentRun — initial state delivery, event streaming, client disconnect cleanup, stream close on completion
 
 ## 4. WebSocket Hub Integration
 
-- [ ] 4.1 Refactor `Hub` to accept an `EventBus` and subscribe to it per active topic
-- [ ] 4.2 Auto-subscribe to bus when first WebSocket client subscribes to a run; auto-unsubscribe when last client leaves
-- [ ] 4.3 Write tests for WebSocket hub receiving events from bus and broadcasting to clients
+- [x] 4.1 Refactor `Hub` to accept an `EventBus` and subscribe to it per active topic
+- [x] 4.2 Auto-subscribe to bus when first WebSocket client subscribes to a run; auto-unsubscribe when last client leaves
+- [x] 4.3 Write tests for WebSocket hub receiving events from bus and broadcasting to clients
 
 ## 5. TypeScript WebSocket Reconnection
 
