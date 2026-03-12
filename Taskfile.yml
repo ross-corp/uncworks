@@ -142,6 +142,45 @@ tasks:
     cmds:
       - kubectl apply -f deploy/crds/agentrun-crd.yaml
 
+  k0s:litellm:
+    desc: Deploy LiteLLM proxy to k0s cluster
+    cmds:
+      - helm repo add litellm https://litellm-helm.github.io/litellm-helm 2>/dev/null || true
+      - helm repo update
+      - >-
+        kubectl create secret generic litellm-master-key
+        --from-literal=LITELLM_MASTER_KEY="sk-aot-$(openssl rand -hex 16)"
+        --dry-run=client -o yaml | kubectl apply -f -
+      - >-
+        helm upgrade --install litellm litellm/litellm-helm
+        --set masterKeySecretName=litellm-master-key
+        --set masterKeySecretKey=LITELLM_MASTER_KEY
+        --set-file configFile=deploy/litellm/litellm-config.yaml
+
+  k0s:ollama:
+    desc: Deploy Ollama to k0s cluster
+    cmds:
+      - helm repo add ollama-helm https://otwld.github.io/ollama-helm 2>/dev/null || true
+      - helm repo update
+      - >-
+        helm upgrade --install ollama ollama-helm/ollama
+        --set ollama.gpu.enabled=false
+        --set resources.requests.memory=8Gi
+
+  k0s:ollama:pull:
+    desc: Pull models into running Ollama instance
+    cmds:
+      - kubectl exec -it deploy/ollama -- ollama pull qwen2.5:0.5b
+      - kubectl exec -it deploy/ollama -- ollama pull llama3.1:8b
+
+  k0s:deps:
+    desc: Deploy all infrastructure dependencies to k0s
+    cmds:
+      - task: k0s:crd
+      - task: k0s:ollama
+      - task: k0s:litellm
+      - echo "All dependencies deployed. Run 'task k0s:ollama:pull' to pull models."
+
   # --- Development ---
   dev:web:
     desc: Start web dashboard dev server

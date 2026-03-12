@@ -178,6 +178,69 @@ func TestBuildAgentPod_EnvVars(t *testing.T) {
 	}
 }
 
+func TestBuildAgentPod_LLMEnvVars(t *testing.T) {
+	input := aottemporal.CreateAgentPodInput{
+		Name:           "agentrun-llm",
+		Namespace:      "default",
+		AgentRunName:   "llm-test",
+		RepoURL:        "https://github.com/example/repo.git",
+		Branch:         "main",
+		Prompt:         "do the thing",
+		LLMKey:         "sk-test-key-123",
+		LiteLLMBaseURL: "http://litellm:4000",
+	}
+	pod := aottemporal.BuildAgentPod(input)
+
+	// Agent container should have OPENAI_BASE_URL and OPENAI_API_KEY
+	agentEnv := pod.Spec.Containers[0].Env
+	envMap := make(map[string]string, len(agentEnv))
+	for _, e := range agentEnv {
+		envMap[e.Name] = e.Value
+	}
+
+	if envMap["OPENAI_BASE_URL"] != "http://litellm:4000/v1" {
+		t.Errorf("expected OPENAI_BASE_URL=http://litellm:4000/v1, got %s", envMap["OPENAI_BASE_URL"])
+	}
+	if envMap["OPENAI_API_KEY"] != "sk-test-key-123" {
+		t.Errorf("expected OPENAI_API_KEY=sk-test-key-123, got %s", envMap["OPENAI_API_KEY"])
+	}
+
+	// Init container should NOT have LLM env vars
+	initEnv := pod.Spec.InitContainers[0].Env
+	for _, e := range initEnv {
+		if e.Name == "OPENAI_BASE_URL" || e.Name == "OPENAI_API_KEY" {
+			t.Errorf("init container should not have %s", e.Name)
+		}
+	}
+
+	// Sidecar should NOT have LLM env vars
+	sidecarEnv := pod.Spec.Containers[1].Env
+	for _, e := range sidecarEnv {
+		if e.Name == "OPENAI_BASE_URL" || e.Name == "OPENAI_API_KEY" {
+			t.Errorf("sidecar should not have %s", e.Name)
+		}
+	}
+}
+
+func TestBuildAgentPod_NoLLMEnvVars(t *testing.T) {
+	input := aottemporal.CreateAgentPodInput{
+		Name:         "agentrun-nollm",
+		Namespace:    "default",
+		AgentRunName: "nollm-test",
+		RepoURL:      "https://github.com/example/repo.git",
+		Branch:       "main",
+		Prompt:       "do the thing",
+	}
+	pod := aottemporal.BuildAgentPod(input)
+
+	agentEnv := pod.Spec.Containers[0].Env
+	for _, e := range agentEnv {
+		if e.Name == "OPENAI_BASE_URL" || e.Name == "OPENAI_API_KEY" {
+			t.Errorf("agent container should not have %s when LLM not configured", e.Name)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 2. handleNotImplemented
 // ---------------------------------------------------------------------------

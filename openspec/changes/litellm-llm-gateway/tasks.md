@@ -34,17 +34,17 @@
 
 ## 5. k0s Deployment Tasks
 
-- [ ] 5.1 Add `task k0s:litellm` target: deploys LiteLLM Helm chart to k0s cluster with reference config
-- [ ] 5.2 Add `task k0s:ollama` target: deploys Ollama Helm chart to k0s cluster
-- [ ] 5.3 Add `task k0s:ollama:pull` target: pulls models into running Ollama instance
-- [ ] 5.4 Update `task k0s:deps` (or create it): orchestrates deploying all dependencies (PostgreSQL, Temporal, LiteLLM, Ollama)
+- [x] 5.1 Add `task k0s:litellm` target: deploys LiteLLM Helm chart to k0s cluster with reference config
+- [x] 5.2 Add `task k0s:ollama` target: deploys Ollama Helm chart to k0s cluster
+- [x] 5.3 Add `task k0s:ollama:pull` target: pulls models into running Ollama instance
+- [x] 5.4 Update `task k0s:deps` (or create it): orchestrates deploying all dependencies (PostgreSQL, Temporal, LiteLLM, Ollama)
 
 ## 6. Testing
 
-- [ ] 6.1 Write unit tests for `internal/litellm/client.go`: mock HTTP responses for key/generate, key/delete
-- [ ] 6.2 Write unit tests for `ProvisionLLMKey` and `RevokeLLMKey` activities with mocked LiteLLM client
-- [ ] 6.3 Write integration test: provision key → verify via LiteLLM API → revoke key → verify revoked
-- [ ] 6.4 Verify agent pod receives correct `OPENAI_BASE_URL` and `OPENAI_API_KEY` env vars
+- [x] 6.1 Write unit tests for `internal/litellm/client.go`: mock HTTP responses for key/generate, key/delete
+- [x] 6.2 Write unit tests for `ProvisionLLMKey` and `RevokeLLMKey` activities with mocked LiteLLM client
+- [x] 6.3 Write integration test: provision key → verify via LiteLLM API → revoke key → verify revoked
+- [x] 6.4 Verify agent pod receives correct `OPENAI_BASE_URL` and `OPENAI_API_KEY` env vars
 
 ## 7. Documentation
 
