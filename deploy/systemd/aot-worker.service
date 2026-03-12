@@ -1,0 +1,16 @@
+[Unit]
+Description=AOT Temporal Worker
+After=aot-temporal.service
+Requires=aot-temporal.service
+PartOf=aot-cluster.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/uncworks/deploy/systemd/env/worker.env
+WorkingDirectory=%h/uncworks
+ExecStart=%h/uncworks/bin/temporal-worker
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=aot-cluster.target

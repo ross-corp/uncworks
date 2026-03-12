@@ -1,0 +1,15 @@
+[Unit]
+Description=AOT Web Dashboard (Vite Dev Server)
+After=aot-apiserver.service
+PartOf=aot-cluster.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/uncworks/deploy/systemd/env/web.env
+WorkingDirectory=%h/uncworks/web
+ExecStart=/usr/bin/npx vite --port 3000 --host
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=aot-cluster.target

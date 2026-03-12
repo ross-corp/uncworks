@@ -1,0 +1,14 @@
+[Unit]
+Description=AOT Temporal Dev Server
+PartOf=aot-cluster.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/uncworks/deploy/systemd/env/temporal.env
+WorkingDirectory=%h/uncworks
+ExecStart=%h/.temporalio/bin/temporal server start-dev --db-filename .temporal.db --log-level warn
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=aot-cluster.target

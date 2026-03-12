@@ -85,6 +85,9 @@ kubeconfig
 test-results/
 playwright-report/
 
+# Systemd env files (local machine-specific)
+deploy/systemd/env/*.env
+
 # Temp files
 *.tmp
 
