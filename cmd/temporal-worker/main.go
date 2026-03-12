@@ -6,7 +6,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -79,6 +81,7 @@ func run() error {
 	activities := &aottemporal.Activities{
 		K8sClient:     k8sClient,
 		LiteLLMClient: litellmClient,
+		HTTPClient:    &http.Client{Timeout: 30 * time.Second},
 	}
 
 	// Create worker
