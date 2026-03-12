@@ -102,7 +102,7 @@ func TestHydrator_DefaultBranch(t *testing.T) {
 	runner := NewMockRunner()
 	config := &Config{
 		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "", // Empty branch should default to "main"
+		Branch:       "", // Empty branch should detect from HEAD or fall back to "main"
 		WorkspaceDir: t.TempDir(),
 	}
 
@@ -111,10 +111,39 @@ func TestHydrator_DefaultBranch(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	wt := runner.commands[1]
-	// Should use "main" as the base branch
+	// Commands: clone, symbolic-ref (detect default branch), worktree add
+	if runner.CommandCount() != 3 {
+		t.Fatalf("expected 3 commands, got %d", runner.CommandCount())
+	}
+
+	// symbolic-ref returns "" from mock → falls back to "main"
+	wt := runner.commands[2]
 	if wt.Args[5] != "main" {
 		t.Errorf("expected default branch main, got %s", wt.Args[5])
+	}
+}
+
+func TestHydrator_DefaultBranchFromHEAD(t *testing.T) {
+	runner := NewMockRunner()
+	// Mock git symbolic-ref to return "master"
+	runner.On("git symbolic-ref --short HEAD", MockResult{Output: "master"})
+	config := &Config{
+		RepoURL:      "https://github.com/example/repo.git",
+		Branch:       "",
+		WorkspaceDir: t.TempDir(),
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	wt := runner.commands[2]
+	if wt.Args[5] != "master" {
+		t.Errorf("expected branch master from HEAD, got %s", wt.Args[5])
+	}
+	if wt.Args[3] != "aot/master" {
+		t.Errorf("expected worktree branch aot/master, got %s", wt.Args[3])
 	}
 }
 
