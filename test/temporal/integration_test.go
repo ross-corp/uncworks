@@ -189,8 +189,8 @@ func (m *mockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateA
 	return &aottemporal.CreateAgentPodOutput{PodName: "mock-pod"}, nil
 }
 
-func (m *mockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) error {
-	return nil
+func (m *mockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.10"}, nil
 }
 
 func (m *mockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
@@ -229,8 +229,8 @@ func (m *hitlMockActivities) ProvisionLLMKey(_ context.Context, _ aottemporal.Pr
 func (m *hitlMockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateAgentPodInput) (*aottemporal.CreateAgentPodOutput, error) {
 	return &aottemporal.CreateAgentPodOutput{PodName: "mock-hitl-pod"}, nil
 }
-func (m *hitlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) error {
-	return nil
+func (m *hitlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.11"}, nil
 }
 func (m *hitlMockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
 	return nil
@@ -268,8 +268,8 @@ func (m *ttlMockActivities) ProvisionLLMKey(_ context.Context, _ aottemporal.Pro
 func (m *ttlMockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateAgentPodInput) (*aottemporal.CreateAgentPodOutput, error) {
 	return &aottemporal.CreateAgentPodOutput{PodName: "mock-ttl-pod"}, nil
 }
-func (m *ttlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) error {
-	return nil
+func (m *ttlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.12"}, nil
 }
 func (m *ttlMockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
 	return nil

@@ -188,10 +188,11 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	hydrationCtx := workflow.WithActivityOptions(ctx, hydrationOpts)
 
+	var hydrationOutput WaitForHydrationOutput
 	if err := workflow.ExecuteActivity(hydrationCtx, ActivityWaitForHydration, WaitForHydrationInput{
 		PodName:   podName,
 		Namespace: input.Namespace,
-	}).Get(ctx, nil); err != nil {
+	}).Get(ctx, &hydrationOutput); err != nil {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during hydration"
@@ -201,6 +202,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		state.Message = fmt.Sprintf("Hydration failed: %v", err)
 		return err
 	}
+	podIP := hydrationOutput.PodIP
 
 	// --- Step 4: Start agent ---
 	state.Phase = "Running"
@@ -209,6 +211,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	if err := workflow.ExecuteActivity(actCtx, ActivityStartAgent, StartAgentInput{
 		PodName:   podName,
 		Namespace: input.Namespace,
+		PodIP:     podIP,
 		Prompt:    input.Prompt,
 	}).Get(ctx, nil); err != nil {
 		if temporal.IsCanceledError(err) {
@@ -248,6 +251,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			if err := workflow.ExecuteActivity(actCtx, ActivityStopAgent, StopAgentInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
+				PodIP:     podIP,
 			}).Get(ctx, nil); err != nil {
 				workflow.GetLogger(ctx).Warn("Failed to stop agent during cancel", "error", err)
 			}
@@ -264,6 +268,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			if err := workflow.ExecuteActivity(actCtx, ActivityForwardHumanInput, ForwardHumanInputInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
+				PodIP:     podIP,
 				Input:     signal.Input,
 			}).Get(ctx, nil); err != nil {
 				workflow.GetLogger(ctx).Warn("Failed to forward human input", "error", err)
@@ -281,6 +286,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			if err := workflow.ExecuteActivity(actCtx, ActivityStopAgent, StopAgentInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
+				PodIP:     podIP,
 			}).Get(ctx, nil); err != nil {
 				workflow.GetLogger(ctx).Warn("Failed to stop agent after TTL", "error", err)
 			}
@@ -292,6 +298,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			err := workflow.ExecuteActivity(actCtx, ActivityGetAgentStatus, GetAgentStatusInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
+				PodIP:     podIP,
 			}).Get(ctx, &statusOutput)
 
 			if err == nil {

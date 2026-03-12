@@ -91,24 +91,30 @@ type WaitForHydrationInput struct {
 	Namespace string
 }
 
+// WaitForHydrationOutput contains the result of waiting for hydration.
+type WaitForHydrationOutput struct {
+	PodIP string
+}
+
 // WaitForHydration polls the pod's init container status until hydration completes.
-func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydrationInput) error {
+// Returns the pod IP so subsequent activities can reach the sidecar directly.
+func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydrationInput) (*WaitForHydrationOutput, error) {
 	for {
 		var pod corev1.Pod
 		if err := a.K8sClient.Get(ctx, client.ObjectKey{
 			Namespace: input.Namespace,
 			Name:      input.PodName,
 		}, &pod); err != nil {
-			return fmt.Errorf("get pod: %w", err)
+			return nil, fmt.Errorf("get pod: %w", err)
 		}
 
 		for _, initStatus := range pod.Status.InitContainerStatuses {
 			if initStatus.Name == "hydration" {
 				if initStatus.State.Terminated != nil {
 					if initStatus.State.Terminated.ExitCode == 0 {
-						return nil
+						return &WaitForHydrationOutput{PodIP: pod.Status.PodIP}, nil
 					}
-					return fmt.Errorf("hydration failed with exit code %d: %s",
+					return nil, fmt.Errorf("hydration failed with exit code %d: %s",
 						initStatus.State.Terminated.ExitCode,
 						initStatus.State.Terminated.Message)
 				}
@@ -117,17 +123,17 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 
 		// Pod is running (past init) — hydration succeeded
 		if pod.Status.Phase == corev1.PodRunning {
-			return nil
+			return &WaitForHydrationOutput{PodIP: pod.Status.PodIP}, nil
 		}
 		if pod.Status.Phase == corev1.PodFailed {
-			return fmt.Errorf("pod failed before hydration completed")
+			return nil, fmt.Errorf("pod failed before hydration completed")
 		}
 
 		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for hydration: pod %s", input.PodName))
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-time.After(2 * time.Second):
 		}
 	}
@@ -137,18 +143,20 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 type SidecarRPCInput struct {
 	PodName   string
 	Namespace string
+	PodIP     string
 }
 
 // StartAgentInput contains the parameters for starting the agent.
 type StartAgentInput struct {
 	PodName   string
 	Namespace string
+	PodIP     string
 	Prompt    string
 }
 
 // StartAgent calls the sidecar StartAgent RPC, retrying until the sidecar is ready.
 func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) error {
-	sc := a.sidecarClient(input.PodName, input.Namespace)
+	sc := a.sidecarClient(input.PodIP)
 
 	// Retry until sidecar is ready (it may still be starting)
 	var lastErr error
@@ -179,6 +187,7 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 type GetAgentStatusInput struct {
 	PodName   string
 	Namespace string
+	PodIP     string
 }
 
 // GetAgentStatusOutput contains the agent's current status.
@@ -189,7 +198,7 @@ type GetAgentStatusOutput struct {
 
 // GetAgentStatus calls the sidecar GetStatus RPC.
 func (a *Activities) GetAgentStatus(ctx context.Context, input GetAgentStatusInput) (*GetAgentStatusOutput, error) {
-	sidecarClient := a.sidecarClient(input.PodName, input.Namespace)
+	sidecarClient := a.sidecarClient(input.PodIP)
 
 	resp, err := sidecarClient.GetStatus(ctx, connect.NewRequest(&agentv1.GetStatusRequest{}))
 	if err != nil {
@@ -207,12 +216,13 @@ func (a *Activities) GetAgentStatus(ctx context.Context, input GetAgentStatusInp
 type ForwardHumanInputInput struct {
 	PodName   string
 	Namespace string
+	PodIP     string
 	Input     string
 }
 
 // ForwardHumanInput calls the sidecar SendInput RPC.
 func (a *Activities) ForwardHumanInput(ctx context.Context, input ForwardHumanInputInput) error {
-	sidecarClient := a.sidecarClient(input.PodName, input.Namespace)
+	sidecarClient := a.sidecarClient(input.PodIP)
 
 	_, err := sidecarClient.SendInput(ctx, connect.NewRequest(&agentv1.SendInputRequest{
 		Data: []byte(input.Input),
@@ -227,12 +237,13 @@ func (a *Activities) ForwardHumanInput(ctx context.Context, input ForwardHumanIn
 type StopAgentInput struct {
 	PodName   string
 	Namespace string
+	PodIP     string
 	Force     bool
 }
 
 // StopAgent calls the sidecar StopAgent RPC.
 func (a *Activities) StopAgent(ctx context.Context, input StopAgentInput) error {
-	sidecarClient := a.sidecarClient(input.PodName, input.Namespace)
+	sidecarClient := a.sidecarClient(input.PodIP)
 
 	_, err := sidecarClient.StopAgent(ctx, connect.NewRequest(&agentv1.StopAgentRequest{
 		Force: input.Force,
@@ -438,10 +449,9 @@ func (a *Activities) RevokeLLMKey(ctx context.Context, input RevokeLLMKeyInput) 
 }
 
 // sidecarClient creates a ConnectRPC client for the sidecar running in the given pod.
-// In a real cluster, this resolves to the pod's IP. For simplicity, we use the pod
-// DNS name within the cluster: <pod-name>.<namespace>.svc.cluster.local.
-func (a *Activities) sidecarClient(podName, namespace string) agentv1connect.AgentSidecarServiceClient {
-	addr := fmt.Sprintf("http://%s.%s:%d", podName, namespace, sidecarPort)
+// Uses the pod IP directly since pod DNS names don't resolve without a headless Service.
+func (a *Activities) sidecarClient(podIP string) agentv1connect.AgentSidecarServiceClient {
+	addr := fmt.Sprintf("http://%s:%d", podIP, sidecarPort)
 	httpClient := a.HTTPClient
 	if httpClient == nil {
 		httpClient = http.DefaultClient
