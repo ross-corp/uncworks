@@ -46,6 +46,17 @@ tasks:
     cmds:
       - go test -tags e2e ./e2e/... -v -count=1 -timeout 30m
 
+  test:e2e:infra:
+    desc: Build images, import into k0s, and run LLM E2E tests
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
+      AOT_AGENT_IMAGE: aot-agent:local
+      AOT_SIDECAR_IMAGE: aot-sidecar:local
+      AOT_INIT_IMAGE: aot-init:local
+    cmds:
+      - task: k0s:images
+      - go test -tags e2e ./e2e/... -run TestE2E_LLM -v -count=1 -timeout 30m
+
   test:web:
     desc: Run Playwright E2E tests for web dashboard
     dir: web

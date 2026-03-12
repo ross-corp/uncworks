@@ -21,9 +21,9 @@
 
 ## 4. E2E Tests with Real LLM
 
-- [ ] 4.1 Design deterministic E2E prompt for lifecycle test (simple file creation task)
-- [ ] 4.2 Write E2E lifecycle test: create AgentRun → agent pod starts → LLM processes prompt → workflow completes
-- [ ] 4.3 Design deterministic E2E prompt for HITL test
-- [ ] 4.4 Write E2E HITL test: agent waits for input → send human input → agent resumes → completes
-- [ ] 4.5 Write E2E multi-agent test: parent spawns junior → junior completes → parent completes
-- [ ] 4.6 Add `task test:e2e:infra` target that builds images, imports, deploys LLM deps before running E2E tests
+- [x] 4.1 Design deterministic E2E prompt for lifecycle test (simple file creation task)
+- [x] 4.2 Write E2E lifecycle test: create AgentRun → agent pod starts → LLM processes prompt → workflow completes
+- [x] 4.3 Design deterministic E2E prompt for HITL test
+- [x] 4.4 Write E2E HITL test: agent waits for input → send human input → agent resumes → completes
+- [x] 4.5 Write E2E multi-agent test: parent spawns junior → junior completes → parent completes
+- [x] 4.6 Add `task test:e2e:infra` target that builds images, imports, deploys LLM deps before running E2E tests
