@@ -23,7 +23,7 @@ import (
 )
 
 func main() {
-	addr := envOrDefault("LISTEN_ADDR", ":50051")
+	addr := envOrDefault("LISTEN_ADDR", ":50055")
 
 	bus := eventbus.NewChannelBus()
 	svc := server.NewAOTServiceHandler(bus)

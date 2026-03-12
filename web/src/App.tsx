@@ -4,7 +4,7 @@ import type { AgentRun } from "../../packages/shared/src/types/agent-run";
 import AgentRunList, { type AgentRunItem } from "./components/AgentRunList";
 import AgentRunDetail from "./components/AgentRunDetail";
 
-// In dev mode, vite proxies /aot.api.v1.AOTService/* to the API server.
+// In dev mode, vite proxies /aot.api.v1.AOTService/* to the API server (port 50055).
 // In production, set VITE_API_URL to the API server URL.
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 

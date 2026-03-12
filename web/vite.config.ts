@@ -8,7 +8,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/aot.api.v1.AOTService": {
-        target: "http://localhost:50051",
+        target: "http://localhost:50055",
         changeOrigin: true,
       },
     },
