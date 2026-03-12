@@ -8,7 +8,7 @@ option go_package = "github.com/uncworks/aot/gen/go/api/v1;apiv1";
 import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
 
-// AOTService is the main API for clients (Web UI, TUI, CLI) to interact with the Control Plane.
+// AOTService is the main API for clients (Web UI, CLI) to interact with the Control Plane.
 service AOTService {
   // CreateAgentRun submits a new agent run request.
   rpc CreateAgentRun(CreateAgentRunRequest) returns (CreateAgentRunResponse);
@@ -57,10 +57,17 @@ message AgentRun {
   google.protobuf.Timestamp updated_at = 6;
 }
 
+// Repository specifies a git repository to clone into the agent workspace.
+message Repository {
+  string url = 1 [(buf.validate.field).string.uri = true];
+  string branch = 2;
+  // Directory name under /workspace/src/. Derived from repo URL if empty.
+  string path = 3;
+}
+
 message AgentRunSpec {
   Backend backend = 1 [(buf.validate.field).enum = {not_in: [0]}];
-  string repo_url = 2 [(buf.validate.field).string.uri = true];
-  string branch = 3;
+  repeated Repository repos = 2 [(buf.validate.field).repeated.min_items = 1];
   string prompt = 4 [(buf.validate.field).string.min_len = 1];
   string devbox_config = 5;
   int32 ttl_seconds = 6 [(buf.validate.field).int32.gte = 0];

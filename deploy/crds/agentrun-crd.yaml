@@ -36,7 +36,7 @@ spec:
               type: object
               required:
                 - backend
-                - repoURL
+                - repos
                 - prompt
               properties:
                 backend:
@@ -46,10 +46,19 @@ spec:
                     - KubeVirt
                     - External
                   default: Pod
-                repoURL:
-                  type: string
-                branch:
-                  type: string
+                repos:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - url
+                    properties:
+                      url:
+                        type: string
+                      branch:
+                        type: string
+                      path:
+                        type: string
                 prompt:
                   type: string
                 devboxConfig:

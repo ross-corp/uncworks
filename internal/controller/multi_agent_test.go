@@ -56,8 +56,7 @@ func TestSpawnJunior(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend: aotv1alpha1.BackendPod,
-			RepoURL: "https://github.com/example/repo.git",
-			Branch:  "main",
+			Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 			Prompt:  "Senior task",
 		},
 	}

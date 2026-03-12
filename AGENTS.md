@@ -19,12 +19,11 @@ task proto:gen      # regenerate Go code from .proto files
 
 ### Test
 ```bash
-task test           # all tests (Go + web + extension + TUI)
+task test           # all tests (Go + web + extension)
 task test:go        # Go unit + integration tests
 task test:e2e       # E2E tests (requires running k0s cluster)
 task test:web       # Playwright tests (web dashboard)
 task test:extension # pi-aot-extension tests
-task test:tui       # TUI renderer tests
 task test:shared    # @aot/shared package tests
 ```
 
@@ -84,8 +83,6 @@ Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `hac
 
 - **`@aot/shared`** — gRPC client wrapper + reactive agent state store
 - **`@aot/pi-extension`** — Agent harness extension: `ask_human` tool (HITL), `spawn_junior` tool (multi-agent), OTel tracing
-- **`@aot/tui`** — SolidJS TUI with ANSI renderer
-
 ### Web dashboard (`web/`)
 
 SolidJS + Vite. Connects to API server via WebSocket for real-time updates.

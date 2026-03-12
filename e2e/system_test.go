@@ -75,8 +75,7 @@ func TestE2E_AgentRunLifecycle(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			RepoURL:    "https://github.com/example/test-repo.git",
-			Branch:     "main",
+			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/test-repo.git", Branch: "main"}},
 			Prompt:     "E2E test: fix the failing integration tests",
 			TTLSeconds: 300,
 		},
@@ -120,7 +119,7 @@ func TestE2E_KubeVirtBackendRejection(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend: aotv1alpha1.BackendKubeVirt,
-			RepoURL: "https://github.com/example/repo.git",
+			Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git"}},
 			Prompt:  "E2E test: KubeVirt should be stubbed",
 			KubeVirtConfig: &aotv1alpha1.KubeVirtBackendConfig{
 				CPUs:     2,

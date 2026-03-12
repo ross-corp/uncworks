@@ -2,11 +2,24 @@ package temporal
 
 import (
 	"fmt"
+	"net/url"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
+
+// repoNameFromURL derives a directory name from a git URL.
+func repoNameFromURL(repoURL string) string {
+	if u, err := url.Parse(repoURL); err == nil && u.Path != "" {
+		base := filepath.Base(u.Path)
+		return strings.TrimSuffix(base, ".git")
+	}
+	base := filepath.Base(repoURL)
+	return strings.TrimSuffix(base, ".git")
+}
 
 const (
 	// TaskQueue is the default Temporal task queue for agent runs.
@@ -29,12 +42,18 @@ const (
 	heartbeatInterval = 10 * time.Second
 )
 
+// Repository describes a single git repository for an agent run.
+type Repository struct {
+	URL    string `json:"url"`
+	Branch string `json:"branch,omitempty"`
+	Path   string `json:"path,omitempty"`
+}
+
 // WorkflowInput contains the parameters for starting an AgentRunWorkflow.
 type WorkflowInput struct {
 	AgentRunName   string
 	Namespace      string
-	RepoURL        string
-	Branch         string
+	Repos          []Repository
 	Prompt         string
 	DevboxConfig   string
 	TTLSeconds     int32
@@ -154,8 +173,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		Name:           fmt.Sprintf("agentrun-%s", input.AgentRunName),
 		Namespace:      input.Namespace,
 		AgentRunName:   input.AgentRunName,
-		RepoURL:        input.RepoURL,
-		Branch:         input.Branch,
+		Repos:          input.Repos,
 		Prompt:         input.Prompt,
 		DevboxConfig:   input.DevboxConfig,
 		Image:          input.Image,
@@ -204,6 +222,16 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	podIP := hydrationOutput.PodIP
 
+	// Compute the primary workspace path from the first repo
+	workspacePath := "/workspace/src"
+	if len(input.Repos) > 0 {
+		repoPath := input.Repos[0].Path
+		if repoPath == "" {
+			repoPath = repoNameFromURL(input.Repos[0].URL)
+		}
+		workspacePath = "/workspace/src/" + repoPath
+	}
+
 	// --- Step 4: Start agent ---
 	state.Phase = "Running"
 	state.Message = "Starting agent"
@@ -213,6 +241,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		Namespace: input.Namespace,
 		PodIP:     podIP,
 		Prompt:    input.Prompt,
+		RepoPath:  workspacePath,
 	}).Get(ctx, nil); err != nil {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
@@ -335,8 +364,7 @@ type SpawnJuniorInput struct {
 	ParentRunName  string
 	Namespace      string
 	Task           string
-	RepoURL        string
-	Branch         string
+	Repos          []Repository
 	DevboxConfig   string
 	TTLSeconds     int32
 	Image          string
@@ -362,8 +390,7 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 	childInput := WorkflowInput{
 		AgentRunName:   juniorName,
 		Namespace:      input.Namespace,
-		RepoURL:        input.RepoURL,
-		Branch:         input.Branch,
+		Repos:          input.Repos,
 		Prompt:         input.Task,
 		DevboxConfig:   input.DevboxConfig,
 		TTLSeconds:     input.TTLSeconds,

@@ -27,7 +27,6 @@
       "test:e2e": "task test:e2e",
       "test:web": "task test:web",
       "test:ext": "task test:extension",
-      "test:tui": "task test:tui",
       "test:shared": "task test:shared",
       "build": "task build",
       "build:web": "task build:web",

@@ -15,7 +15,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file aot/api/v1/api.proto.
  */
 export const file_aot_api_v1_api: GenFile = /*@__PURE__*/
-  fileDesc("ChRhb3QvYXBpL3YxL2FwaS5wcm90bxIKYW90LmFwaS52MSLYAQoIQWdlbnRSdW4SCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRImCgRzcGVjGAMgASgLMhguYW90LmFwaS52MS5BZ2VudFJ1blNwZWMSKgoGc3RhdHVzGAQgASgLMhouYW90LmFwaS52MS5BZ2VudFJ1blN0YXR1cxIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLYAgoMQWdlbnRSdW5TcGVjEi4KB2JhY2tlbmQYASABKA4yEy5hb3QuYXBpLnYxLkJhY2tlbmRCCLpIBYIBAiAAEhoKCHJlcG9fdXJsGAIgASgJQgi6SAVyA4gBARIOCgZicmFuY2gYAyABKAkSFwoGcHJvbXB0GAQgASgJQge6SARyAhABEhUKDWRldmJveF9jb25maWcYBSABKAkSHAoLdHRsX3NlY29uZHMYBiABKAVCB7pIBBoCKAASNwoIZW52X3ZhcnMYByADKAsyJS5hb3QuYXBpLnYxLkFnZW50UnVuU3BlYy5FbnZWYXJzRW50cnkSEgoKbW9kZWxfdGllchgIIAEoCRINCgVpbWFnZRgJIAEoCRISCgptYXhfYnVkZ2V0GAogASgBGi4KDEVudlZhcnNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIugBCg5BZ2VudFJ1blN0YXR1cxIoCgVwaGFzZRgBIAEoDjIZLmFvdC5hcGkudjEuQWdlbnRSdW5QaGFzZRIPCgdtZXNzYWdlGAIgASgJEhAKCHBvZF9uYW1lGAMgASgJEhAKCHRyYWNlX2lkGAQgASgJEi4KCnN0YXJ0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjAKDGNvbXBsZXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFQoNd29ya3RyZWVfcGF0aBgHIAEoCSI/ChVDcmVhdGVBZ2VudFJ1blJlcXVlc3QSJgoEc3BlYxgBIAEoCzIYLmFvdC5hcGkudjEuQWdlbnRSdW5TcGVjIkEKFkNyZWF0ZUFnZW50UnVuUmVzcG9uc2USJwoJYWdlbnRfcnVuGAEgASgLMhQuYW90LmFwaS52MS5BZ2VudFJ1biIgChJHZXRBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkiZgoUTGlzdEFnZW50UnVuc1JlcXVlc3QSLwoMcGhhc2VfZmlsdGVyGAEgASgOMhkuYW90LmFwaS52MS5BZ2VudFJ1blBoYXNlEg0KBWxpbWl0GAIgASgFEg4KBmN1cnNvchgDIAEoCSJWChVMaXN0QWdlbnRSdW5zUmVzcG9uc2USKAoKYWdlbnRfcnVucxgBIAMoCzIULmFvdC5hcGkudjEuQWdlbnRSdW4SEwoLbmV4dF9jdXJzb3IYAiABKAkiIgoUV2F0Y2hBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkikgEKDUFnZW50UnVuRXZlbnQSFAoMYWdlbnRfcnVuX2lkGAEgASgJEisKBHR5cGUYAiABKA4yHS5hb3QuYXBpLnYxLkFnZW50UnVuRXZlbnRUeXBlEg8KB3BheWxvYWQYAyABKAkSLQoJdGltZXN0YW1wGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIjChVDYW5jZWxBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkiQQoWQ2FuY2VsQWdlbnRSdW5SZXNwb25zZRInCglhZ2VudF9ydW4YASABKAsyFC5hb3QuYXBpLnYxLkFnZW50UnVuIjwKFVNlbmRIdW1hbklucHV0UmVxdWVzdBIUCgxhZ2VudF9ydW5faWQYASABKAkSDQoFaW5wdXQYAiABKAkiKgoWU2VuZEh1bWFuSW5wdXRSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoCCpfCgdCYWNrZW5kEhcKE0JBQ0tFTkRfVU5TUEVDSUZJRUQQABIPCgtCQUNLRU5EX1BPRBABEhQKEEJBQ0tFTkRfS1VCRVZJUlQQAhIUChBCQUNLRU5EX0VYVEVSTkFMEAMq6wEKDUFnZW50UnVuUGhhc2USHwobQUdFTlRfUlVOX1BIQVNFX1VOU1BFQ0lGSUVEEAASGwoXQUdFTlRfUlVOX1BIQVNFX1BFTkRJTkcQARIbChdBR0VOVF9SVU5fUEhBU0VfUlVOTklORxACEiUKIUFHRU5UX1JVTl9QSEFTRV9XQUlUSU5HX0ZPUl9JTlBVVBADEh0KGUFHRU5UX1JVTl9QSEFTRV9TVUNDRUVERUQQBBIaChZBR0VOVF9SVU5fUEhBU0VfRkFJTEVEEAUSHQoZQUdFTlRfUlVOX1BIQVNFX0NBTkNFTExFRBAGKvMBChFBZ2VudFJ1bkV2ZW50VHlwZRIkCiBBR0VOVF9SVU5fRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEiYKIkFHRU5UX1JVTl9FVkVOVF9UWVBFX1BIQVNFX0NIQU5HRUQQARIcChhBR0VOVF9SVU5fRVZFTlRfVFlQRV9MT0cQAhIiCh5BR0VOVF9SVU5fRVZFTlRfVFlQRV9UT09MX0NBTEwQAxIqCiZBR0VOVF9SVU5fRVZFTlRfVFlQRV9XQUlUSU5HX0ZPUl9JTlBVVBAEEiIKHkFHRU5UX1JVTl9FVkVOVF9UWVBFX0NPTVBMRVRFRBAFMoIECgpBT1RTZXJ2aWNlElcKDkNyZWF0ZUFnZW50UnVuEiEuYW90LmFwaS52MS5DcmVhdGVBZ2VudFJ1blJlcXVlc3QaIi5hb3QuYXBpLnYxLkNyZWF0ZUFnZW50UnVuUmVzcG9uc2USQwoLR2V0QWdlbnRSdW4SHi5hb3QuYXBpLnYxLkdldEFnZW50UnVuUmVxdWVzdBoULmFvdC5hcGkudjEuQWdlbnRSdW4SVAoNTGlzdEFnZW50UnVucxIgLmFvdC5hcGkudjEuTGlzdEFnZW50UnVuc1JlcXVlc3QaIS5hb3QuYXBpLnYxLkxpc3RBZ2VudFJ1bnNSZXNwb25zZRJOCg1XYXRjaEFnZW50UnVuEiAuYW90LmFwaS52MS5XYXRjaEFnZW50UnVuUmVxdWVzdBoZLmFvdC5hcGkudjEuQWdlbnRSdW5FdmVudDABElcKDkNhbmNlbEFnZW50UnVuEiEuYW90LmFwaS52MS5DYW5jZWxBZ2VudFJ1blJlcXVlc3QaIi5hb3QuYXBpLnYxLkNhbmNlbEFnZW50UnVuUmVzcG9uc2USVwoOU2VuZEh1bWFuSW5wdXQSIS5hb3QuYXBpLnYxLlNlbmRIdW1hbklucHV0UmVxdWVzdBoiLmFvdC5hcGkudjEuU2VuZEh1bWFuSW5wdXRSZXNwb25zZUItWitnaXRodWIuY29tL3VuY3dvcmtzL2FvdC9nZW4vZ28vYXBpL3YxO2FwaXYxYgZwcm90bzM", [file_buf_validate_validate, file_google_protobuf_timestamp]);
+  fileDesc("ChRhb3QvYXBpL3YxL2FwaS5wcm90bxIKYW90LmFwaS52MSLYAQoIQWdlbnRSdW4SCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRImCgRzcGVjGAMgASgLMhguYW90LmFwaS52MS5BZ2VudFJ1blNwZWMSKgoGc3RhdHVzGAQgASgLMhouYW90LmFwaS52MS5BZ2VudFJ1blN0YXR1cxIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJBCgpSZXBvc2l0b3J5EhUKA3VybBgBIAEoCUIIukgFcgOIAQESDgoGYnJhbmNoGAIgASgJEgwKBHBhdGgYAyABKAki3QIKDEFnZW50UnVuU3BlYxIuCgdiYWNrZW5kGAEgASgOMhMuYW90LmFwaS52MS5CYWNrZW5kQgi6SAWCAQIgABIvCgVyZXBvcxgCIAMoCzIWLmFvdC5hcGkudjEuUmVwb3NpdG9yeUIIukgFkgECCAESFwoGcHJvbXB0GAQgASgJQge6SARyAhABEhUKDWRldmJveF9jb25maWcYBSABKAkSHAoLdHRsX3NlY29uZHMYBiABKAVCB7pIBBoCKAASNwoIZW52X3ZhcnMYByADKAsyJS5hb3QuYXBpLnYxLkFnZW50UnVuU3BlYy5FbnZWYXJzRW50cnkSEgoKbW9kZWxfdGllchgIIAEoCRINCgVpbWFnZRgJIAEoCRISCgptYXhfYnVkZ2V0GAogASgBGi4KDEVudlZhcnNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIugBCg5BZ2VudFJ1blN0YXR1cxIoCgVwaGFzZRgBIAEoDjIZLmFvdC5hcGkudjEuQWdlbnRSdW5QaGFzZRIPCgdtZXNzYWdlGAIgASgJEhAKCHBvZF9uYW1lGAMgASgJEhAKCHRyYWNlX2lkGAQgASgJEi4KCnN0YXJ0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjAKDGNvbXBsZXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFQoNd29ya3RyZWVfcGF0aBgHIAEoCSI/ChVDcmVhdGVBZ2VudFJ1blJlcXVlc3QSJgoEc3BlYxgBIAEoCzIYLmFvdC5hcGkudjEuQWdlbnRSdW5TcGVjIkEKFkNyZWF0ZUFnZW50UnVuUmVzcG9uc2USJwoJYWdlbnRfcnVuGAEgASgLMhQuYW90LmFwaS52MS5BZ2VudFJ1biIgChJHZXRBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkiZgoUTGlzdEFnZW50UnVuc1JlcXVlc3QSLwoMcGhhc2VfZmlsdGVyGAEgASgOMhkuYW90LmFwaS52MS5BZ2VudFJ1blBoYXNlEg0KBWxpbWl0GAIgASgFEg4KBmN1cnNvchgDIAEoCSJWChVMaXN0QWdlbnRSdW5zUmVzcG9uc2USKAoKYWdlbnRfcnVucxgBIAMoCzIULmFvdC5hcGkudjEuQWdlbnRSdW4SEwoLbmV4dF9jdXJzb3IYAiABKAkiIgoUV2F0Y2hBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkikgEKDUFnZW50UnVuRXZlbnQSFAoMYWdlbnRfcnVuX2lkGAEgASgJEisKBHR5cGUYAiABKA4yHS5hb3QuYXBpLnYxLkFnZW50UnVuRXZlbnRUeXBlEg8KB3BheWxvYWQYAyABKAkSLQoJdGltZXN0YW1wGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIjChVDYW5jZWxBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkiQQoWQ2FuY2VsQWdlbnRSdW5SZXNwb25zZRInCglhZ2VudF9ydW4YASABKAsyFC5hb3QuYXBpLnYxLkFnZW50UnVuIjwKFVNlbmRIdW1hbklucHV0UmVxdWVzdBIUCgxhZ2VudF9ydW5faWQYASABKAkSDQoFaW5wdXQYAiABKAkiKgoWU2VuZEh1bWFuSW5wdXRSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoCCpfCgdCYWNrZW5kEhcKE0JBQ0tFTkRfVU5TUEVDSUZJRUQQABIPCgtCQUNLRU5EX1BPRBABEhQKEEJBQ0tFTkRfS1VCRVZJUlQQAhIUChBCQUNLRU5EX0VYVEVSTkFMEAMq6wEKDUFnZW50UnVuUGhhc2USHwobQUdFTlRfUlVOX1BIQVNFX1VOU1BFQ0lGSUVEEAASGwoXQUdFTlRfUlVOX1BIQVNFX1BFTkRJTkcQARIbChdBR0VOVF9SVU5fUEhBU0VfUlVOTklORxACEiUKIUFHRU5UX1JVTl9QSEFTRV9XQUlUSU5HX0ZPUl9JTlBVVBADEh0KGUFHRU5UX1JVTl9QSEFTRV9TVUNDRUVERUQQBBIaChZBR0VOVF9SVU5fUEhBU0VfRkFJTEVEEAUSHQoZQUdFTlRfUlVOX1BIQVNFX0NBTkNFTExFRBAGKvMBChFBZ2VudFJ1bkV2ZW50VHlwZRIkCiBBR0VOVF9SVU5fRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEiYKIkFHRU5UX1JVTl9FVkVOVF9UWVBFX1BIQVNFX0NIQU5HRUQQARIcChhBR0VOVF9SVU5fRVZFTlRfVFlQRV9MT0cQAhIiCh5BR0VOVF9SVU5fRVZFTlRfVFlQRV9UT09MX0NBTEwQAxIqCiZBR0VOVF9SVU5fRVZFTlRfVFlQRV9XQUlUSU5HX0ZPUl9JTlBVVBAEEiIKHkFHRU5UX1JVTl9FVkVOVF9UWVBFX0NPTVBMRVRFRBAFMoIECgpBT1RTZXJ2aWNlElcKDkNyZWF0ZUFnZW50UnVuEiEuYW90LmFwaS52MS5DcmVhdGVBZ2VudFJ1blJlcXVlc3QaIi5hb3QuYXBpLnYxLkNyZWF0ZUFnZW50UnVuUmVzcG9uc2USQwoLR2V0QWdlbnRSdW4SHi5hb3QuYXBpLnYxLkdldEFnZW50UnVuUmVxdWVzdBoULmFvdC5hcGkudjEuQWdlbnRSdW4SVAoNTGlzdEFnZW50UnVucxIgLmFvdC5hcGkudjEuTGlzdEFnZW50UnVuc1JlcXVlc3QaIS5hb3QuYXBpLnYxLkxpc3RBZ2VudFJ1bnNSZXNwb25zZRJOCg1XYXRjaEFnZW50UnVuEiAuYW90LmFwaS52MS5XYXRjaEFnZW50UnVuUmVxdWVzdBoZLmFvdC5hcGkudjEuQWdlbnRSdW5FdmVudDABElcKDkNhbmNlbEFnZW50UnVuEiEuYW90LmFwaS52MS5DYW5jZWxBZ2VudFJ1blJlcXVlc3QaIi5hb3QuYXBpLnYxLkNhbmNlbEFnZW50UnVuUmVzcG9uc2USVwoOU2VuZEh1bWFuSW5wdXQSIS5hb3QuYXBpLnYxLlNlbmRIdW1hbklucHV0UmVxdWVzdBoiLmFvdC5hcGkudjEuU2VuZEh1bWFuSW5wdXRSZXNwb25zZUItWitnaXRodWIuY29tL3VuY3dvcmtzL2FvdC9nZW4vZ28vYXBpL3YxO2FwaXYxYgZwcm90bzM", [file_buf_validate_validate, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message aot.api.v1.AgentRun
@@ -60,6 +60,37 @@ export const AgentRunSchema: GenMessage<AgentRun> = /*@__PURE__*/
   messageDesc(file_aot_api_v1_api, 0);
 
 /**
+ * Repository specifies a git repository to clone into the agent workspace.
+ *
+ * @generated from message aot.api.v1.Repository
+ */
+export type Repository = Message<"aot.api.v1.Repository"> & {
+  /**
+   * @generated from field: string url = 1;
+   */
+  url: string;
+
+  /**
+   * @generated from field: string branch = 2;
+   */
+  branch: string;
+
+  /**
+   * Directory name under /workspace/src/. Derived from repo URL if empty.
+   *
+   * @generated from field: string path = 3;
+   */
+  path: string;
+};
+
+/**
+ * Describes the message aot.api.v1.Repository.
+ * Use `create(RepositorySchema)` to create a new message.
+ */
+export const RepositorySchema: GenMessage<Repository> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 1);
+
+/**
  * @generated from message aot.api.v1.AgentRunSpec
  */
 export type AgentRunSpec = Message<"aot.api.v1.AgentRunSpec"> & {
@@ -69,14 +100,9 @@ export type AgentRunSpec = Message<"aot.api.v1.AgentRunSpec"> & {
   backend: Backend;
 
   /**
-   * @generated from field: string repo_url = 2;
+   * @generated from field: repeated aot.api.v1.Repository repos = 2;
    */
-  repoUrl: string;
-
-  /**
-   * @generated from field: string branch = 3;
-   */
-  branch: string;
+  repos: Repository[];
 
   /**
    * @generated from field: string prompt = 4;
@@ -125,7 +151,7 @@ export type AgentRunSpec = Message<"aot.api.v1.AgentRunSpec"> & {
  * Use `create(AgentRunSpecSchema)` to create a new message.
  */
 export const AgentRunSpecSchema: GenMessage<AgentRunSpec> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 1);
+  messageDesc(file_aot_api_v1_api, 2);
 
 /**
  * @generated from message aot.api.v1.AgentRunStatus
@@ -174,7 +200,7 @@ export type AgentRunStatus = Message<"aot.api.v1.AgentRunStatus"> & {
  * Use `create(AgentRunStatusSchema)` to create a new message.
  */
 export const AgentRunStatusSchema: GenMessage<AgentRunStatus> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 2);
+  messageDesc(file_aot_api_v1_api, 3);
 
 /**
  * @generated from message aot.api.v1.CreateAgentRunRequest
@@ -191,7 +217,7 @@ export type CreateAgentRunRequest = Message<"aot.api.v1.CreateAgentRunRequest"> 
  * Use `create(CreateAgentRunRequestSchema)` to create a new message.
  */
 export const CreateAgentRunRequestSchema: GenMessage<CreateAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 3);
+  messageDesc(file_aot_api_v1_api, 4);
 
 /**
  * @generated from message aot.api.v1.CreateAgentRunResponse
@@ -208,7 +234,7 @@ export type CreateAgentRunResponse = Message<"aot.api.v1.CreateAgentRunResponse"
  * Use `create(CreateAgentRunResponseSchema)` to create a new message.
  */
 export const CreateAgentRunResponseSchema: GenMessage<CreateAgentRunResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 4);
+  messageDesc(file_aot_api_v1_api, 5);
 
 /**
  * @generated from message aot.api.v1.GetAgentRunRequest
@@ -225,7 +251,7 @@ export type GetAgentRunRequest = Message<"aot.api.v1.GetAgentRunRequest"> & {
  * Use `create(GetAgentRunRequestSchema)` to create a new message.
  */
 export const GetAgentRunRequestSchema: GenMessage<GetAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 5);
+  messageDesc(file_aot_api_v1_api, 6);
 
 /**
  * @generated from message aot.api.v1.ListAgentRunsRequest
@@ -252,7 +278,7 @@ export type ListAgentRunsRequest = Message<"aot.api.v1.ListAgentRunsRequest"> & 
  * Use `create(ListAgentRunsRequestSchema)` to create a new message.
  */
 export const ListAgentRunsRequestSchema: GenMessage<ListAgentRunsRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 6);
+  messageDesc(file_aot_api_v1_api, 7);
 
 /**
  * @generated from message aot.api.v1.ListAgentRunsResponse
@@ -274,7 +300,7 @@ export type ListAgentRunsResponse = Message<"aot.api.v1.ListAgentRunsResponse"> 
  * Use `create(ListAgentRunsResponseSchema)` to create a new message.
  */
 export const ListAgentRunsResponseSchema: GenMessage<ListAgentRunsResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 7);
+  messageDesc(file_aot_api_v1_api, 8);
 
 /**
  * @generated from message aot.api.v1.WatchAgentRunRequest
@@ -291,7 +317,7 @@ export type WatchAgentRunRequest = Message<"aot.api.v1.WatchAgentRunRequest"> & 
  * Use `create(WatchAgentRunRequestSchema)` to create a new message.
  */
 export const WatchAgentRunRequestSchema: GenMessage<WatchAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 8);
+  messageDesc(file_aot_api_v1_api, 9);
 
 /**
  * @generated from message aot.api.v1.AgentRunEvent
@@ -323,7 +349,7 @@ export type AgentRunEvent = Message<"aot.api.v1.AgentRunEvent"> & {
  * Use `create(AgentRunEventSchema)` to create a new message.
  */
 export const AgentRunEventSchema: GenMessage<AgentRunEvent> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 9);
+  messageDesc(file_aot_api_v1_api, 10);
 
 /**
  * @generated from message aot.api.v1.CancelAgentRunRequest
@@ -340,7 +366,7 @@ export type CancelAgentRunRequest = Message<"aot.api.v1.CancelAgentRunRequest"> 
  * Use `create(CancelAgentRunRequestSchema)` to create a new message.
  */
 export const CancelAgentRunRequestSchema: GenMessage<CancelAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 10);
+  messageDesc(file_aot_api_v1_api, 11);
 
 /**
  * @generated from message aot.api.v1.CancelAgentRunResponse
@@ -357,7 +383,7 @@ export type CancelAgentRunResponse = Message<"aot.api.v1.CancelAgentRunResponse"
  * Use `create(CancelAgentRunResponseSchema)` to create a new message.
  */
 export const CancelAgentRunResponseSchema: GenMessage<CancelAgentRunResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 11);
+  messageDesc(file_aot_api_v1_api, 12);
 
 /**
  * @generated from message aot.api.v1.SendHumanInputRequest
@@ -379,7 +405,7 @@ export type SendHumanInputRequest = Message<"aot.api.v1.SendHumanInputRequest"> 
  * Use `create(SendHumanInputRequestSchema)` to create a new message.
  */
 export const SendHumanInputRequestSchema: GenMessage<SendHumanInputRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 12);
+  messageDesc(file_aot_api_v1_api, 13);
 
 /**
  * @generated from message aot.api.v1.SendHumanInputResponse
@@ -396,7 +422,7 @@ export type SendHumanInputResponse = Message<"aot.api.v1.SendHumanInputResponse"
  * Use `create(SendHumanInputResponseSchema)` to create a new message.
  */
 export const SendHumanInputResponseSchema: GenMessage<SendHumanInputResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 13);
+  messageDesc(file_aot_api_v1_api, 14);
 
 /**
  * Backend specifies the execution backend for an agent run.
@@ -521,7 +547,7 @@ export const AgentRunEventTypeSchema: GenEnum<AgentRunEventType> = /*@__PURE__*/
   enumDesc(file_aot_api_v1_api, 2);
 
 /**
- * AOTService is the main API for clients (Web UI, TUI, CLI) to interact with the Control Plane.
+ * AOTService is the main API for clients (Web UI, CLI) to interact with the Control Plane.
  *
  * @generated from service aot.api.v1.AOTService
  */

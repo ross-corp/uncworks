@@ -12,11 +12,10 @@ AOT runs AI coding agents on Kubernetes. You submit a task (a prompt + a git rep
 graph TD
     subgraph Clients
         WebUI["Web UI (SolidJS)"]
-        TUI["TUI (SolidJS)"]
         CLI["CLI (aot open)"]
     end
 
-    WebUI & TUI & CLI -->|ConnectRPC| API
+    WebUI & CLI -->|ConnectRPC| API
 
     subgraph ControlPlane["Control Plane"]
         API["API Server\nConnectRPC (AOTService)\ngRPC + Connect + gRPC-Web"]
@@ -99,27 +98,10 @@ task dev:web    # starts Vite dev server
 
 ![Web Dashboard Detail](docs/screenshots/web-dashboard-detail.png)
 
-**TUI Dashboard:**
-
-```
-═══ AOT Dashboard ═══
-  ● fix-login-css [Running] - Fix the login page CSS layout issues
-▸ ◎ add-auth-tests [WaitingForInput] - Add unit tests for auth module
-  ✓ refactor-db [Succeeded] - Refactor database connection pooling
-  ✗ deploy-staging [Failed] - Deploy to staging environment
-  ○ update-deps [Pending] - Update all dependencies to latest versions
-─── Detail ───
-  Agent: add-auth-tests
-  Phase: ◎ WaitingForInput
-  Backend: Pod
-  Prompt: Add unit tests for auth module
-q: quit | ↑/↓: navigate | Enter: select
-```
-
 ### Run Tests
 
 ```bash
-task test       # all unit tests (Go + Web + Extension + TUI)
+task test       # all unit tests (Go + Web + Extension)
 task test:go    # Go tests only
 task test:e2e   # E2E tests (requires running k0s cluster)
 task test:web   # Playwright tests for web dashboard
@@ -203,7 +185,6 @@ All commands use [Task](https://taskfile.dev/) (see `Taskfile.yml`):
 | `task test:e2e`    | Run E2E tests (requires k0s)               |
 | `task test:web`    | Playwright tests for web dashboard          |
 | `task test:extension` | pi-aot-extension tests                   |
-| `task test:tui`    | TUI renderer tests                          |
 | `task test:shared` | @aot/shared package tests                  |
 | `task lint`        | Run Go vet + TypeScript type checks         |
 | `task dev:web`     | Start web dashboard dev server              |
@@ -243,7 +224,6 @@ proto/
 packages/
   shared/          -- @aot/shared TypeScript package
   pi-aot-extension/ -- agent harness extension (HITL + spawn_junior + OTel)
-  tui/             -- SolidJS TUI with ANSI renderer
 web/               -- SolidJS Web Dashboard (Vite)
 deploy/crds/       -- AgentRun CRD YAML manifest
 deploy/helm/aot/   -- Helm chart for production deployment

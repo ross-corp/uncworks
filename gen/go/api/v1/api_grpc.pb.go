@@ -33,7 +33,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// AOTService is the main API for clients (Web UI, TUI, CLI) to interact with the Control Plane.
+// AOTService is the main API for clients (Web UI, CLI) to interact with the Control Plane.
 type AOTServiceClient interface {
 	// CreateAgentRun submits a new agent run request.
 	CreateAgentRun(ctx context.Context, in *CreateAgentRunRequest, opts ...grpc.CallOption) (*CreateAgentRunResponse, error)
@@ -130,7 +130,7 @@ func (c *aOTServiceClient) SendHumanInput(ctx context.Context, in *SendHumanInpu
 // All implementations must embed UnimplementedAOTServiceServer
 // for forward compatibility.
 //
-// AOTService is the main API for clients (Web UI, TUI, CLI) to interact with the Control Plane.
+// AOTService is the main API for clients (Web UI, CLI) to interact with the Control Plane.
 type AOTServiceServer interface {
 	// CreateAgentRun submits a new agent run request.
 	CreateAgentRun(context.Context, *CreateAgentRunRequest) (*CreateAgentRunResponse, error)

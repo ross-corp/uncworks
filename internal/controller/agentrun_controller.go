@@ -113,11 +113,18 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		return r.handleNotImplemented(ctx, agentRun, "External")
 	}
 
+	var repos []aottemporal.Repository
+	for _, repo := range agentRun.Spec.Repos {
+		repos = append(repos, aottemporal.Repository{
+			URL:    repo.URL,
+			Branch: repo.Branch,
+			Path:   repo.Path,
+		})
+	}
 	workflowInput := aottemporal.WorkflowInput{
 		AgentRunName:   agentRun.Name,
 		Namespace:      agentRun.Namespace,
-		RepoURL:        agentRun.Spec.RepoURL,
-		Branch:         agentRun.Spec.Branch,
+		Repos:          repos,
 		Prompt:         agentRun.Spec.Prompt,
 		DevboxConfig:   agentRun.Spec.DevboxConfig,
 		TTLSeconds:     agentRun.Spec.TTLSeconds,

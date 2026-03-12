@@ -28,18 +28,26 @@ const (
 	AgentRunPhaseCancelled       AgentRunPhase = "Cancelled"
 )
 
+// Repository specifies a git repository to clone into the agent workspace.
+type Repository struct {
+	// URL is the git repository URL.
+	URL string `json:"url"`
+	// Branch is the git branch to check out.
+	// +optional
+	Branch string `json:"branch,omitempty"`
+	// Path is the directory name under /workspace/src/. Derived from repo URL if empty.
+	// +optional
+	Path string `json:"path,omitempty"`
+}
+
 // AgentRunSpec defines the desired state of an AgentRun.
 type AgentRunSpec struct {
 	// Backend specifies the execution backend (Pod, KubeVirt, or External).
 	// +kubebuilder:default=Pod
 	Backend BackendType `json:"backend"`
 
-	// RepoURL is the git repository URL for the agent to work on.
-	RepoURL string `json:"repoURL"`
-
-	// Branch is the git branch to check out.
-	// +optional
-	Branch string `json:"branch,omitempty"`
+	// Repos is the list of git repositories to clone into the workspace.
+	Repos []Repository `json:"repos"`
 
 	// Prompt is the task description for the agent.
 	Prompt string `json:"prompt"`

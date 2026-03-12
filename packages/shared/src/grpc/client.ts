@@ -4,6 +4,7 @@ import { create } from "@bufbuild/protobuf";
 import {
   AOTService,
   AgentRunSpecSchema,
+  RepositorySchema,
   type AgentRun as PbAgentRun,
   type AgentRunEvent as PbAgentRunEvent,
   type AgentRunSpec as PbAgentRunSpec,
@@ -42,8 +43,13 @@ export class AOTClient {
   async createAgentRun(spec: AgentRunSpec): Promise<AgentRun> {
     const pbSpec = create(AgentRunSpecSchema, {
       backend: backendToProto(spec.backend),
-      repoUrl: spec.repoURL,
-      branch: spec.branch ?? "",
+      repos: spec.repos.map((r) =>
+        create(RepositorySchema, {
+          url: r.url,
+          branch: r.branch ?? "",
+          path: r.path ?? "",
+        })
+      ),
       prompt: spec.prompt,
       devboxConfig: spec.devboxConfig ?? "",
       ttlSeconds: spec.ttlSeconds ?? 0,
@@ -175,8 +181,11 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
     name: pb.name,
     spec: {
       backend: backendFromProto(pb.spec?.backend ?? PbBackend.UNSPECIFIED),
-      repoURL: pb.spec?.repoUrl ?? "",
-      branch: pb.spec?.branch,
+      repos: (pb.spec?.repos ?? []).map((r) => ({
+        url: r.url,
+        branch: r.branch || undefined,
+        path: r.path || undefined,
+      })),
       prompt: pb.spec?.prompt ?? "",
       devboxConfig: pb.spec?.devboxConfig,
       ttlSeconds: pb.spec?.ttlSeconds,

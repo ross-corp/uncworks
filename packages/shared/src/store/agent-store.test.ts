@@ -13,7 +13,7 @@ function makeRun(overrides: Partial<AgentRun> & { id: string }): AgentRun {
     name: `run-${overrides.id}`,
     spec: {
       backend: "Pod",
-      repoURL: "https://github.com/test/repo",
+      repos: [{ url: "https://github.com/test/repo" }],
       prompt: "do stuff",
     },
     status: { phase: "Pending" },
