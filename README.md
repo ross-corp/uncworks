@@ -246,15 +246,38 @@ packages/
   tui/             -- SolidJS TUI with ANSI renderer
 web/               -- SolidJS Web Dashboard (Vite)
 deploy/crds/       -- AgentRun CRD YAML manifest
+deploy/helm/aot/   -- Helm chart for production deployment
 deploy/litellm/    -- LiteLLM proxy configuration
 deploy/ollama/     -- Ollama deployment docs
 deploy/temporal/   -- Temporal server deployment docs
-docker/            -- Dockerfiles (agent-base, hydration, sidecar)
+docker/            -- Dockerfiles (agent-base, hydration, sidecar, controlplane, web)
 hack/              -- k0s setup/teardown scripts, proto-gen
 e2e/               -- system E2E tests
 Taskfile.yml       -- 17 task targets
 devbox.json        -- Nix development environment
 ```
+
+---
+
+## Deployment
+
+### Helm Chart
+
+Install AOT on any Kubernetes cluster:
+
+```bash
+helm install aot oci://ghcr.io/uncworks/charts/aot \
+  --namespace aot --create-namespace \
+  --set temporal.host=temporal:7233
+```
+
+See [`deploy/helm/aot/README.md`](deploy/helm/aot/README.md) for full configuration reference, architecture diagram, and upgrade instructions.
+
+### Prerequisites
+
+AOT requires external services (not bundled in the chart):
+- **Temporal** — workflow orchestration engine
+- **LLM endpoint** — Ollama, LiteLLM, or any OpenAI-compatible API
 
 ---
 

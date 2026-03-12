@@ -1,0 +1,153 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agentruns.aot.uncworks.io
+spec:
+  group: aot.uncworks.io
+  names:
+    kind: AgentRun
+    listKind: AgentRunList
+    plural: agentruns
+    singular: agentrun
+    shortNames:
+      - ar
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Backend
+          type: string
+          jsonPath: .spec.backend
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - backend
+                - repoURL
+                - prompt
+              properties:
+                backend:
+                  type: string
+                  enum:
+                    - Pod
+                    - KubeVirt
+                    - External
+                  default: Pod
+                repoURL:
+                  type: string
+                branch:
+                  type: string
+                prompt:
+                  type: string
+                devboxConfig:
+                  type: string
+                ttlSeconds:
+                  type: integer
+                  format: int32
+                  default: 3600
+                image:
+                  type: string
+                envVars:
+                  type: object
+                  additionalProperties:
+                    type: string
+                externalConfig:
+                  type: object
+                  properties:
+                    host:
+                      type: string
+                    port:
+                      type: integer
+                      format: int32
+                      default: 22
+                    user:
+                      type: string
+                    sshKeySecret:
+                      type: string
+                  required:
+                    - host
+                    - user
+                    - sshKeySecret
+                modelTier:
+                  type: string
+                  enum:
+                    - default
+                    - default-cloud
+                    - premium
+                  default: default
+                kubeVirtConfig:
+                  type: object
+                  properties:
+                    cpus:
+                      type: integer
+                      format: int32
+                      default: 2
+                    memoryMB:
+                      type: integer
+                      format: int32
+                      default: 4096
+                    diskGB:
+                      type: integer
+                      format: int32
+                      default: 20
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - Running
+                    - WaitingForInput
+                    - Succeeded
+                    - Failed
+                    - Cancelled
+                message:
+                  type: string
+                podName:
+                  type: string
+                traceID:
+                  type: string
+                worktreePath:
+                  type: string
+                startedAt:
+                  type: string
+                  format: date-time
+                completedAt:
+                  type: string
+                  format: date-time
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                    required:
+                      - type
+                      - status
+                      - lastTransitionTime
+                      - reason
+                      - message

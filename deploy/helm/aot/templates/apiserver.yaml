@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aot.fullname" . }}-apiserver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+spec:
+  replicas: {{ .Values.apiserver.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: apiserver
+  template:
+    metadata:
+      labels:
+        {{- include "aot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: apiserver
+    spec:
+      containers:
+        - name: apiserver
+          image: {{ include "aot.controlplaneImage" . }}
+          imagePullPolicy: {{ .Values.images.controlplane.pullPolicy }}
+          command: ["/usr/local/bin/apiserver"]
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.apiserver.port }}
+          env:
+            - name: LISTEN_ADDR
+              value: ":{{ .Values.apiserver.port }}"
+            - name: TEMPORAL_HOST
+              value: {{ .Values.temporal.host | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ .Values.temporal.namespace | quote }}
+          {{- with .Values.apiserver.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aot.fullname" . }}-apiserver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+spec:
+  type: {{ .Values.apiserver.service.type }}
+  selector:
+    {{- include "aot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+  ports:
+    - name: grpc
+      port: {{ .Values.apiserver.port }}
+      targetPort: {{ .Values.apiserver.port }}

@@ -1,0 +1,61 @@
+name: Release Images
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: aot-controlplane
+            dockerfile: docker/Dockerfile.controlplane
+            context: .
+          - image: aot-init
+            dockerfile: docker/Dockerfile.hydration
+            context: .
+          - image: aot-sidecar
+            dockerfile: docker/Dockerfile.sidecar
+            context: .
+          - image: aot-agent
+            dockerfile: docker/Dockerfile.agent-base
+            context: .
+          - image: aot-web
+            dockerfile: docker/Dockerfile.web
+            context: web/
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/uncworks/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

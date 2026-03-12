@@ -1,0 +1,41 @@
+{{- include "aot.validateValues" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aot.fullname" . }}-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        {{- include "aot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: controller
+    spec:
+      serviceAccountName: {{ include "aot.fullname" . }}
+      containers:
+        - name: controller
+          image: {{ include "aot.controlplaneImage" . }}
+          imagePullPolicy: {{ .Values.images.controlplane.pullPolicy }}
+          command: ["/usr/local/bin/controller"]
+          env:
+            - name: TEMPORAL_HOST
+              value: {{ .Values.temporal.host | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ .Values.temporal.namespace | quote }}
+            - name: METRICS_ADDR
+              value: ":{{ .Values.controller.metricsPort }}"
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.controller.metricsPort }}
+          {{- with .Values.controller.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
