@@ -1,85 +1,207 @@
-import { createSignal, createResource, onCleanup } from "solid-js";
-import { AOTClient } from "../../packages/shared/src/grpc/client";
-import type { AgentRun } from "../../packages/shared/src/types/agent-run";
-import AgentRunList, { type AgentRunItem } from "./components/AgentRunList";
-import AgentRunDetail from "./components/AgentRunDetail";
-
-// In dev mode, vite proxies /aot.api.v1.AOTService/* to the API server (port 50055).
-// In production, set VITE_API_URL to the API server URL.
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
-
-const client = new AOTClient({ baseUrl: API_BASE_URL });
-
-function toListItem(run: AgentRun): AgentRunItem {
-  return {
-    id: run.id,
-    name: run.name,
-    backend: run.spec.backend,
-    phase: run.status.phase,
-    prompt: run.spec.prompt,
-    createdAt: run.createdAt,
-  };
-}
-
-function toDetail(run: AgentRun) {
-  return {
-    id: run.id,
-    name: run.name,
-    backend: run.spec.backend,
-    phase: run.status.phase,
-    prompt: run.spec.prompt,
-    createdAt: run.createdAt,
-    message: run.status.message,
-    podName: run.status.podName,
-    traceID: run.status.traceID,
-  };
-}
+import { useState, useEffect } from "react";
+import type { AgentRun } from "./types/agent-run";
+import { MOCK_AGENT_RUNS, MOCK_REPOS } from "./data/mock";
+import Layout from "./components/Layout";
+import Sidebar from "./components/Sidebar";
+import AgentRunTable from "./components/AgentRunTable";
+import AgentRunDetailPanel from "./components/AgentRunDetailPanel";
+import AgentRunForm from "./components/AgentRunForm";
+import ReposView from "./components/ReposView";
+import EventsView from "./components/EventsView";
+import ConfirmDialog from "./components/ConfirmDialog";
 
 export default function App() {
-  const [selectedId, setSelectedId] = createSignal<string | null>(null);
-  const [error, setError] = createSignal<string | null>(null);
+  const [runs, setRuns] = useState<AgentRun[]>(MOCK_AGENT_RUNS);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [phaseFilter, setPhaseFilter] = useState("all");
+  const [showForm, setShowForm] = useState(false);
+  const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeView, setActiveView] = useState<"runs" | "repos" | "events">("runs");
+  const [runToDelete, setRunToDelete] = useState<string | null>(null);
 
-  const [runs, { refetch }] = createResource(async () => {
-    try {
-      const result = await client.listAgentRuns();
-      setError(null);
-      return result;
-    } catch (err) {
-      setError((err as Error).message);
-      return [];
+  // Keep selectedRun in sync
+  useEffect(() => {
+    if (selectedRun) {
+      const updated = runs.find((r) => r.id === selectedRun.id);
+      if (updated) {
+        setSelectedRun(updated);
+      } else {
+        setSelectedRun(null);
+      }
     }
+  }, [runs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleCancel(id: string) {
+    setRuns((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: {
+                ...r.status,
+                phase: "cancelled" as const,
+                message: "Cancelled by user",
+                completedAt: new Date().toISOString(),
+              },
+            }
+          : r
+      )
+    );
+  }
+
+  function handleDelete(id: string) {
+    setRuns((prev) => prev.filter((r) => r.id !== id));
+    setRunToDelete(null);
+  }
+
+  function handleSendInput(id: string, input: string) {
+    setRuns((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: {
+                ...r.status,
+                phase: "running" as const,
+                message: `Received input: "${input.slice(0, 50)}..."`,
+              },
+            }
+          : r
+      )
+    );
+  }
+
+  function handleCreate(data: {
+    name: string;
+    repoURL: string;
+    branch: string;
+    prompt: string;
+    backend: AgentRun["spec"]["backend"];
+    modelTier: AgentRun["spec"]["modelTier"];
+    ttlSeconds: number;
+  }) {
+    const newRun: AgentRun = {
+      id: `ar-${String(runs.length + 1).padStart(3, "0")}`,
+      name: data.name,
+      spec: {
+        backend: data.backend,
+        repoURL: data.repoURL,
+        branch: data.branch,
+        prompt: data.prompt,
+        devboxConfig: "",
+        ttlSeconds: data.ttlSeconds,
+        envVars: {},
+        modelTier: data.modelTier,
+      },
+      status: {
+        phase: "pending",
+        message: "",
+        podName: "",
+        traceID: "",
+        startedAt: "",
+        completedAt: "",
+      },
+      createdAt: new Date().toISOString(),
+    };
+    setRuns((prev) => [newRun, ...prev]);
+    setShowForm(false);
+  }
+
+  // Filtering: repo → phase → search
+  const filtered = runs.filter((r) => {
+    if (selectedRepo && r.spec.repoURL !== selectedRepo) return false;
+    if (phaseFilter !== "all" && r.status.phase !== phaseFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const haystack = [
+        r.name,
+        r.id,
+        r.spec.prompt,
+        r.status.message,
+        r.spec.repoURL,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
   });
 
-  // Auto-refresh every 5 seconds
-  const interval = setInterval(() => void refetch(), 5000);
-  onCleanup(() => clearInterval(interval));
-
-  const listItems = () => (runs() ?? []).map(toListItem);
-  const selectedRun = () => {
-    const id = selectedId();
-    if (!id) return null;
-    const run = (runs() ?? []).find((r) => r.id === id);
-    return run ? toDetail(run) : null;
-  };
-
-  const statusText = () => {
-    if (runs.loading) return "Status: Loading...";
-    if (error()) return `Status: Error — ${error()}`;
-    return `Status: Connected (${(runs() ?? []).length} runs)`;
-  };
-
   return (
-    <main style={{ "max-width": "960px", margin: "0 auto", padding: "16px" }}>
-      <h1 data-testid="title">AOT Dashboard</h1>
-      <p data-testid="status">{statusText()}</p>
-      <div style={{ display: "grid", "grid-template-columns": "1fr 1fr", gap: "24px" }}>
-        <AgentRunList
-          runs={listItems()}
-          selectedId={selectedId()}
-          onSelect={setSelectedId}
+    <>
+      <Layout
+        onNewRun={() => setShowForm(true)}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        activeView={activeView}
+        sidebar={
+          <Sidebar
+            runs={runs}
+            repos={MOCK_REPOS}
+            selectedRepo={selectedRepo}
+            onSelectRepo={(url) => {
+              setSelectedRepo(url);
+              setActiveView("runs");
+            }}
+            phaseFilter={phaseFilter}
+            onPhaseFilter={(f) => {
+              setPhaseFilter(f);
+              setActiveView("runs");
+            }}
+            onOpenRepos={() => {
+              setActiveView("repos");
+              setSelectedRun(null);
+            }}
+            onOpenEvents={() => {
+              setActiveView("events");
+              setSelectedRun(null);
+            }}
+          />
+        }
+        detailPanel={
+          activeView === "runs" && selectedRun ? (
+            <AgentRunDetailPanel
+              run={selectedRun}
+              onClose={() => setSelectedRun(null)}
+              onCancel={handleCancel}
+              onSendInput={handleSendInput}
+            />
+          ) : undefined
+        }
+      >
+        {activeView === "repos" ? (
+          <ReposView repos={MOCK_REPOS} />
+        ) : activeView === "events" ? (
+          <EventsView runs={runs} />
+        ) : (
+          <AgentRunTable
+            runs={filtered}
+            selectedRunId={selectedRun?.id}
+            onSelect={setSelectedRun}
+            onCancel={handleCancel}
+            onDelete={setRunToDelete}
+          />
+        )}
+      </Layout>
+
+      {showForm && (
+        <AgentRunForm
+          repos={MOCK_REPOS}
+          onSubmit={handleCreate}
+          onCancel={() => setShowForm(false)}
         />
-        <AgentRunDetail run={selectedRun()} />
-      </div>
-    </main>
+      )}
+
+      {runToDelete && (
+        <ConfirmDialog
+          title="Delete Agent Run"
+          message="This will permanently remove this agent run from the dashboard. This action cannot be undone."
+          onConfirm={() => handleDelete(runToDelete)}
+          onCancel={() => setRunToDelete(null)}
+        />
+      )}
+    </>
   );
 }
