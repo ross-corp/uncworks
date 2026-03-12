@@ -87,6 +87,97 @@ func TestIntegration_WorkflowExecution(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestIntegration_HITLSignalFlow verifies the HITL flow against a real Temporal server:
+// agent reports waiting → signal human input → agent resumes → completes.
+func TestIntegration_HITLSignalFlow(t *testing.T) {
+	c := getTemporalDevClient(t)
+	defer c.Close()
+
+	ctx := context.Background()
+	taskQueue := "test-integration-" + t.Name()
+
+	mock := &hitlMockActivities{}
+
+	w := worker.New(c, taskQueue, worker.Options{})
+	w.RegisterWorkflow(aottemporal.AgentRunWorkflow)
+	w.RegisterActivity(mock)
+
+	require.NoError(t, w.Start())
+	defer w.Stop()
+
+	run, err := c.ExecuteWorkflow(ctx, temporalclient.StartWorkflowOptions{
+		TaskQueue: taskQueue,
+	}, aottemporal.AgentRunWorkflow, aottemporal.WorkflowInput{
+		AgentRunName: "hitl-integration-test",
+		Namespace:    "default",
+		RepoURL:      "https://github.com/example/repo.git",
+		Branch:       "main",
+		Prompt:       "integration HITL test",
+		TTLSeconds:   3600,
+	})
+	require.NoError(t, err)
+
+	// Wait for agent to report waiting state
+	time.Sleep(8 * time.Second)
+
+	// Query state — should be waiting for input
+	resp, err := c.QueryWorkflow(ctx, run.GetID(), run.GetRunID(), aottemporal.QueryGetState)
+	require.NoError(t, err)
+	var state aottemporal.WorkflowState
+	require.NoError(t, resp.Get(&state))
+	t.Logf("State before signal: phase=%s", state.Phase)
+
+	// Send human input signal
+	err = c.SignalWorkflow(ctx, run.GetID(), run.GetRunID(), aottemporal.SignalHumanInput, aottemporal.HumanInputSignal{
+		Input: "yes, approved",
+	})
+	require.NoError(t, err)
+	t.Log("Sent human input signal")
+
+	// Wait for workflow to complete
+	err = run.Get(ctx, nil)
+	require.NoError(t, err)
+	t.Log("Workflow completed after HITL signal")
+}
+
+// TestIntegration_TTLExpiry verifies TTL enforcement against a real Temporal server.
+func TestIntegration_TTLExpiry(t *testing.T) {
+	c := getTemporalDevClient(t)
+	defer c.Close()
+
+	ctx := context.Background()
+	taskQueue := "test-integration-" + t.Name()
+
+	mock := &ttlMockActivities{}
+
+	w := worker.New(c, taskQueue, worker.Options{})
+	w.RegisterWorkflow(aottemporal.AgentRunWorkflow)
+	w.RegisterActivity(mock)
+
+	require.NoError(t, w.Start())
+	defer w.Stop()
+
+	run, err := c.ExecuteWorkflow(ctx, temporalclient.StartWorkflowOptions{
+		TaskQueue: taskQueue,
+	}, aottemporal.AgentRunWorkflow, aottemporal.WorkflowInput{
+		AgentRunName: "ttl-integration-test",
+		Namespace:    "default",
+		RepoURL:      "https://github.com/example/repo.git",
+		Branch:       "main",
+		Prompt:       "integration TTL test",
+		TTLSeconds:   5, // Short TTL
+	})
+	require.NoError(t, err)
+
+	// Wait for TTL to fire and workflow to complete
+	err = run.Get(ctx, nil)
+	require.NoError(t, err)
+
+	require.True(t, mock.stopCalled, "StopAgent should have been called on TTL expiry")
+	require.True(t, mock.cleanupCalled, "CleanupPod should have been called after TTL")
+	t.Log("Workflow completed via TTL expiry")
+}
+
 // mockActivities provides stub implementations that return success immediately.
 type mockActivities struct{}
 
@@ -123,5 +214,81 @@ func (m *mockActivities) CleanupPod(_ context.Context, _ aottemporal.CleanupPodI
 }
 
 func (m *mockActivities) RevokeLLMKey(_ context.Context, _ aottemporal.RevokeLLMKeyInput) error {
+	return nil
+}
+
+// hitlMockActivities simulates an agent that waits for input then completes.
+type hitlMockActivities struct {
+	statusCalls    int
+	inputForwarded bool
+}
+
+func (m *hitlMockActivities) ProvisionLLMKey(_ context.Context, _ aottemporal.ProvisionLLMKeyInput) (*aottemporal.ProvisionLLMKeyOutput, error) {
+	return &aottemporal.ProvisionLLMKeyOutput{}, nil
+}
+func (m *hitlMockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateAgentPodInput) (*aottemporal.CreateAgentPodOutput, error) {
+	return &aottemporal.CreateAgentPodOutput{PodName: "mock-hitl-pod"}, nil
+}
+func (m *hitlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) error {
+	return nil
+}
+func (m *hitlMockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
+	return nil
+}
+func (m *hitlMockActivities) GetAgentStatus(_ context.Context, _ aottemporal.GetAgentStatusInput) (*aottemporal.GetAgentStatusOutput, error) {
+	m.statusCalls++
+	if m.inputForwarded {
+		return &aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil
+	}
+	return &aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_WAITING_FOR_INPUT"}, nil
+}
+func (m *hitlMockActivities) ForwardHumanInput(_ context.Context, _ aottemporal.ForwardHumanInputInput) error {
+	m.inputForwarded = true
+	return nil
+}
+func (m *hitlMockActivities) StopAgent(_ context.Context, _ aottemporal.StopAgentInput) error {
+	return nil
+}
+func (m *hitlMockActivities) CleanupPod(_ context.Context, _ aottemporal.CleanupPodInput) error {
+	return nil
+}
+func (m *hitlMockActivities) RevokeLLMKey(_ context.Context, _ aottemporal.RevokeLLMKeyInput) error {
+	return nil
+}
+
+// ttlMockActivities simulates an agent that stays running until TTL expires.
+type ttlMockActivities struct {
+	stopCalled    bool
+	cleanupCalled bool
+}
+
+func (m *ttlMockActivities) ProvisionLLMKey(_ context.Context, _ aottemporal.ProvisionLLMKeyInput) (*aottemporal.ProvisionLLMKeyOutput, error) {
+	return &aottemporal.ProvisionLLMKeyOutput{}, nil
+}
+func (m *ttlMockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateAgentPodInput) (*aottemporal.CreateAgentPodOutput, error) {
+	return &aottemporal.CreateAgentPodOutput{PodName: "mock-ttl-pod"}, nil
+}
+func (m *ttlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) error {
+	return nil
+}
+func (m *ttlMockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
+	return nil
+}
+func (m *ttlMockActivities) GetAgentStatus(_ context.Context, _ aottemporal.GetAgentStatusInput) (*aottemporal.GetAgentStatusOutput, error) {
+	// Always report running — TTL should stop it
+	return &aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_RUNNING"}, nil
+}
+func (m *ttlMockActivities) ForwardHumanInput(_ context.Context, _ aottemporal.ForwardHumanInputInput) error {
+	return nil
+}
+func (m *ttlMockActivities) StopAgent(_ context.Context, _ aottemporal.StopAgentInput) error {
+	m.stopCalled = true
+	return nil
+}
+func (m *ttlMockActivities) CleanupPod(_ context.Context, _ aottemporal.CleanupPodInput) error {
+	m.cleanupCalled = true
+	return nil
+}
+func (m *ttlMockActivities) RevokeLLMKey(_ context.Context, _ aottemporal.RevokeLLMKeyInput) error {
 	return nil
 }
