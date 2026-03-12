@@ -283,14 +283,16 @@ func (x *AgentRun) GetUpdatedAt() *timestamppb.Timestamp {
 }
 
 type AgentRunSpec struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Backend       Backend                `protobuf:"varint,1,opt,name=backend,proto3,enum=aot.api.v1.Backend" json:"backend,omitempty"`
-	RepoUrl       string                 `protobuf:"bytes,2,opt,name=repo_url,json=repoUrl,proto3" json:"repo_url,omitempty"`
-	Branch        string                 `protobuf:"bytes,3,opt,name=branch,proto3" json:"branch,omitempty"`
-	Prompt        string                 `protobuf:"bytes,4,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	DevboxConfig  string                 `protobuf:"bytes,5,opt,name=devbox_config,json=devboxConfig,proto3" json:"devbox_config,omitempty"`
-	TtlSeconds    int32                  `protobuf:"varint,6,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
-	EnvVars       map[string]string      `protobuf:"bytes,7,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Backend      Backend                `protobuf:"varint,1,opt,name=backend,proto3,enum=aot.api.v1.Backend" json:"backend,omitempty"`
+	RepoUrl      string                 `protobuf:"bytes,2,opt,name=repo_url,json=repoUrl,proto3" json:"repo_url,omitempty"`
+	Branch       string                 `protobuf:"bytes,3,opt,name=branch,proto3" json:"branch,omitempty"`
+	Prompt       string                 `protobuf:"bytes,4,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	DevboxConfig string                 `protobuf:"bytes,5,opt,name=devbox_config,json=devboxConfig,proto3" json:"devbox_config,omitempty"`
+	TtlSeconds   int32                  `protobuf:"varint,6,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
+	EnvVars      map[string]string      `protobuf:"bytes,7,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Model tier for LLM routing: "default", "default-cloud", or "premium".
+	ModelTier     string `protobuf:"bytes,8,opt,name=model_tier,json=modelTier,proto3" json:"model_tier,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -372,6 +374,13 @@ func (x *AgentRunSpec) GetEnvVars() map[string]string {
 		return x.EnvVars
 	}
 	return nil
+}
+
+func (x *AgentRunSpec) GetModelTier() string {
+	if x != nil {
+		return x.ModelTier
+	}
+	return ""
 }
 
 type AgentRunStatus struct {
@@ -1012,7 +1021,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xf2\x02\n" +
+	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x91\x03\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x12#\n" +
 	"\brepo_url\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\arepoUrl\x12\x16\n" +
@@ -1021,7 +1030,9 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\rdevbox_config\x18\x05 \x01(\tR\fdevboxConfig\x12(\n" +
 	"\vttl_seconds\x18\x06 \x01(\x05B\a\xbaH\x04\x1a\x02(\x00R\n" +
 	"ttlSeconds\x12@\n" +
-	"\benv_vars\x18\a \x03(\v2%.aot.api.v1.AgentRunSpec.EnvVarsEntryR\aenvVars\x1a:\n" +
+	"\benv_vars\x18\a \x03(\v2%.aot.api.v1.AgentRunSpec.EnvVarsEntryR\aenvVars\x12\x1d\n" +
+	"\n" +
+	"model_tier\x18\b \x01(\tR\tmodelTier\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8b\x02\n" +

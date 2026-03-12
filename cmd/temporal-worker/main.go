@@ -18,6 +18,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	"github.com/uncworks/aot/internal/litellm"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
@@ -59,9 +60,19 @@ func run() error {
 	}
 	defer c.Close()
 
+	// Create LiteLLM client (optional — if not configured, activities are no-ops)
+	var litellmClient *litellm.Client
+	litellmBaseURL := os.Getenv("LITELLM_BASE_URL")
+	litellmMasterKey := os.Getenv("LITELLM_MASTER_KEY")
+	if litellmBaseURL != "" && litellmMasterKey != "" {
+		litellmClient = litellm.NewClient(litellmBaseURL, litellmMasterKey)
+		log.Printf("LiteLLM client configured: %s", litellmBaseURL)
+	}
+
 	// Create activities with dependencies
 	activities := &aottemporal.Activities{
-		K8sClient: k8sClient,
+		K8sClient:     k8sClient,
+		LiteLLMClient: litellmClient,
 	}
 
 	// Create worker

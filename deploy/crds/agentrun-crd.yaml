@@ -81,6 +81,13 @@ spec:
                     - host
                     - user
                     - sshKeySecret
+                modelTier:
+                  type: string
+                  enum:
+                    - default
+                    - default-cloud
+                    - premium
+                  default: default
                 kubeVirtConfig:
                   type: object
                   properties:

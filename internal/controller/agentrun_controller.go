@@ -43,6 +43,7 @@ type AgentRunReconciler struct {
 	Scheme         *runtime.Scheme
 	TemporalClient temporalclient.Client
 	TaskQueue      string
+	LiteLLMBaseURL string
 }
 
 // +kubebuilder:rbac:groups=aot.uncworks.io,resources=agentruns,verbs=get;list;watch;create;update;patch;delete
@@ -109,15 +110,17 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 	}
 
 	workflowInput := aottemporal.WorkflowInput{
-		AgentRunName: agentRun.Name,
-		Namespace:    agentRun.Namespace,
-		RepoURL:      agentRun.Spec.RepoURL,
-		Branch:       agentRun.Spec.Branch,
-		Prompt:       agentRun.Spec.Prompt,
-		DevboxConfig: agentRun.Spec.DevboxConfig,
-		TTLSeconds:   agentRun.Spec.TTLSeconds,
-		Image:        agentRun.Spec.Image,
-		EnvVars:      agentRun.Spec.EnvVars,
+		AgentRunName:   agentRun.Name,
+		Namespace:      agentRun.Namespace,
+		RepoURL:        agentRun.Spec.RepoURL,
+		Branch:         agentRun.Spec.Branch,
+		Prompt:         agentRun.Spec.Prompt,
+		DevboxConfig:   agentRun.Spec.DevboxConfig,
+		TTLSeconds:     agentRun.Spec.TTLSeconds,
+		Image:          agentRun.Spec.Image,
+		EnvVars:        agentRun.Spec.EnvVars,
+		ModelTier:      agentRun.Spec.ModelTier,
+		LiteLLMBaseURL: r.LiteLLMBaseURL,
 	}
 
 	taskQueue := r.TaskQueue

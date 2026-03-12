@@ -65,6 +65,8 @@ message AgentRunSpec {
   string devbox_config = 5;
   int32 ttl_seconds = 6 [(buf.validate.field).int32.gte = 0];
   map<string, string> env_vars = 7;
+  // Model tier for LLM routing: "default", "default-cloud", or "premium".
+  string model_tier = 8;
 }
 
 message AgentRunStatus {

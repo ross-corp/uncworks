@@ -31,15 +31,18 @@ const (
 
 // WorkflowInput contains the parameters for starting an AgentRunWorkflow.
 type WorkflowInput struct {
-	AgentRunName string
-	Namespace    string
-	RepoURL      string
-	Branch       string
-	Prompt       string
-	DevboxConfig string
-	TTLSeconds   int32
-	Image        string
-	EnvVars      map[string]string
+	AgentRunName   string
+	Namespace      string
+	RepoURL        string
+	Branch         string
+	Prompt         string
+	DevboxConfig   string
+	TTLSeconds     int32
+	Image          string
+	EnvVars        map[string]string
+	ModelTier      string
+	MaxBudget      float64
+	LiteLLMBaseURL string
 }
 
 // WorkflowState represents the current state of the workflow, returned by queries.
@@ -100,14 +103,20 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	// Activity references — using the struct method names for proper registration
 	var a *Activities
 
-	// Compensation: ensure pod cleanup on any failure
+	// Compensation: ensure pod cleanup and LLM key revocation on any exit
 	var podName string
+	var llmKey string
 	defer func() {
+		cleanupCtx, _ := workflow.NewDisconnectedContext(ctx)
+		cleanupCtx = workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
+			StartToCloseTimeout: 30 * time.Second,
+		})
+		if llmKey != "" {
+			_ = workflow.ExecuteActivity(cleanupCtx, a.RevokeLLMKey, RevokeLLMKeyInput{
+				Key: llmKey,
+			}).Get(cleanupCtx, nil)
+		}
 		if podName != "" {
-			cleanupCtx, _ := workflow.NewDisconnectedContext(ctx)
-			cleanupCtx = workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
-				StartToCloseTimeout: 30 * time.Second,
-			})
 			_ = workflow.ExecuteActivity(cleanupCtx, a.CleanupPod, CleanupPodInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
@@ -115,20 +124,43 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		}
 	}()
 
-	// --- Step 1: Create agent pod ---
+	// --- Step 1: Provision LLM key ---
 	state.Phase = "Creating"
+	state.Message = "Provisioning LLM key"
+
+	var keyOutput ProvisionLLMKeyOutput
+	if err := workflow.ExecuteActivity(actCtx, a.ProvisionLLMKey, ProvisionLLMKeyInput{
+		AgentRunName: input.AgentRunName,
+		Namespace:    input.Namespace,
+		ModelTier:    input.ModelTier,
+		MaxBudget:    input.MaxBudget,
+	}).Get(ctx, &keyOutput); err != nil {
+		if temporal.IsCanceledError(err) {
+			state.Phase = "Cancelled"
+			state.Message = "Cancelled during LLM key provisioning"
+			return err
+		}
+		state.Phase = "Failed"
+		state.Message = fmt.Sprintf("Failed to provision LLM key: %v", err)
+		return err
+	}
+	llmKey = keyOutput.Key
+
+	// --- Step 2: Create agent pod ---
 	state.Message = "Creating agent pod"
 
 	podInput := CreateAgentPodInput{
-		Name:         fmt.Sprintf("agentrun-%s", input.AgentRunName),
-		Namespace:    input.Namespace,
-		AgentRunName: input.AgentRunName,
-		RepoURL:      input.RepoURL,
-		Branch:       input.Branch,
-		Prompt:       input.Prompt,
-		DevboxConfig: input.DevboxConfig,
-		Image:        input.Image,
-		EnvVars:      input.EnvVars,
+		Name:           fmt.Sprintf("agentrun-%s", input.AgentRunName),
+		Namespace:      input.Namespace,
+		AgentRunName:   input.AgentRunName,
+		RepoURL:        input.RepoURL,
+		Branch:         input.Branch,
+		Prompt:         input.Prompt,
+		DevboxConfig:   input.DevboxConfig,
+		Image:          input.Image,
+		EnvVars:        input.EnvVars,
+		LLMKey:         llmKey,
+		LiteLLMBaseURL: input.LiteLLMBaseURL,
 	}
 
 	var createOutput CreateAgentPodOutput
@@ -145,7 +177,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	podName = createOutput.PodName
 	state.PodName = podName
 
-	// --- Step 2: Wait for hydration ---
+	// --- Step 3: Wait for hydration ---
 	state.Phase = "Hydrating"
 	state.Message = "Waiting for workspace hydration"
 
@@ -169,7 +201,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		return err
 	}
 
-	// --- Step 3: Start agent ---
+	// --- Step 4: Start agent ---
 	state.Phase = "Running"
 	state.Message = "Starting agent"
 
@@ -190,7 +222,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 	state.Message = "Agent running"
 
-	// --- Step 4: Set up signal handlers and TTL timer, poll for completion ---
+	// --- Step 5: Set up signal handlers and TTL timer, poll for completion ---
 	cancelCh := workflow.GetSignalChannel(ctx, SignalCancel)
 	humanInputCh := workflow.GetSignalChannel(ctx, SignalHumanInput)
 

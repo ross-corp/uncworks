@@ -68,6 +68,12 @@ type AgentRunSpec struct {
 	// KubeVirtConfig is the configuration for KubeVirt backend.
 	// +optional
 	KubeVirtConfig *KubeVirtBackendConfig `json:"kubeVirtConfig,omitempty"`
+
+	// ModelTier controls LLM model routing through LiteLLM.
+	// Options: "default" (Ollama local), "default-cloud" (OpenRouter free), "premium" (Anthropic/OpenAI).
+	// +kubebuilder:default=default
+	// +optional
+	ModelTier string `json:"modelTier,omitempty"`
 }
 
 // ExternalBackendConfig holds configuration for the External (SSH/Lima) backend.

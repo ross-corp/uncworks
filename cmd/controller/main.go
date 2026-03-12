@@ -38,6 +38,7 @@ func run() error {
 	temporalHost := envOrDefault("TEMPORAL_HOST", "localhost:7233")
 	temporalNamespace := envOrDefault("TEMPORAL_NAMESPACE", "default")
 	taskQueue := envOrDefault("TEMPORAL_TASK_QUEUE", aottemporal.TaskQueue)
+	litellmBaseURL := envOrDefault("LITELLM_BASE_URL", "http://litellm:4000")
 
 	// Create Temporal client for workflow management
 	tc, err := temporalclient.Dial(temporalclient.Options{
@@ -65,6 +66,7 @@ func run() error {
 		Scheme:         mgr.GetScheme(),
 		TemporalClient: tc,
 		TaskQueue:      taskQueue,
+		LiteLLMBaseURL: litellmBaseURL,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("create controller: %w", err)
 	}

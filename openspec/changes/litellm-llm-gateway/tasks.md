@@ -15,22 +15,22 @@
 
 ## 3. Virtual Key Lifecycle Activities
 
-- [ ] 3.1 Create `internal/litellm/` package directory
-- [ ] 3.2 Implement `Client` in `internal/litellm/client.go`: HTTP client for LiteLLM Admin API (key/generate, key/delete, spend tracking)
-- [ ] 3.3 Implement `ProvisionLLMKey` Temporal activity in `internal/temporal/activities.go`: calls LiteLLM `/key/generate` with budget cap and model restrictions based on model tier
-- [ ] 3.4 Implement `RevokeLLMKey` Temporal activity: calls LiteLLM `/key/delete` to revoke the virtual key
-- [ ] 3.5 Update `AgentRunWorkflow`: call `ProvisionLLMKey` after pod creation, inject key into pod env
-- [ ] 3.6 Update `AgentRunWorkflow`: call `RevokeLLMKey` in cleanup (success, failure, cancel, TTL expiry)
-- [ ] 3.7 Add retry policy with exponential backoff to `ProvisionLLMKey` activity (handle LiteLLM unavailability)
+- [x] 3.1 Create `internal/litellm/` package directory
+- [x] 3.2 Implement `Client` in `internal/litellm/client.go`: HTTP client for LiteLLM Admin API (key/generate, key/delete, spend tracking)
+- [x] 3.3 Implement `ProvisionLLMKey` Temporal activity in `internal/temporal/activities.go`: calls LiteLLM `/key/generate` with budget cap and model restrictions based on model tier
+- [x] 3.4 Implement `RevokeLLMKey` Temporal activity: calls LiteLLM `/key/delete` to revoke the virtual key
+- [x] 3.5 Update `AgentRunWorkflow`: call `ProvisionLLMKey` after pod creation, inject key into pod env
+- [x] 3.6 Update `AgentRunWorkflow`: call `RevokeLLMKey` in cleanup (success, failure, cancel, TTL expiry)
+- [x] 3.7 Add retry policy with exponential backoff to `ProvisionLLMKey` activity (handle LiteLLM unavailability)
 
 ## 4. Agent Pod Environment Injection
 
-- [ ] 4.1 Add `LITELLM_BASE_URL` to controller/worker configuration (env var, default `http://litellm:4000`)
-- [ ] 4.2 Update pod spec construction: add `OPENAI_BASE_URL` env var (value: `$LITELLM_BASE_URL/v1`) to agent container
-- [ ] 4.3 Update pod spec construction: add `OPENAI_API_KEY` env var (value: provisioned virtual key) to agent container
-- [ ] 4.4 Add optional `model_tier` field to `AgentRunSpec` proto message (default: `"default"`)
-- [ ] 4.5 Regenerate proto code after adding `model_tier` field
-- [ ] 4.6 Update CRD types in `api/v1alpha1/types.go` to include `ModelTier` field
+- [x] 4.1 Add `LITELLM_BASE_URL` to controller/worker configuration (env var, default `http://litellm:4000`)
+- [x] 4.2 Update pod spec construction: add `OPENAI_BASE_URL` env var (value: `$LITELLM_BASE_URL/v1`) to agent container
+- [x] 4.3 Update pod spec construction: add `OPENAI_API_KEY` env var (value: provisioned virtual key) to agent container
+- [x] 4.4 Add optional `model_tier` field to `AgentRunSpec` proto message (default: `"default"`)
+- [x] 4.5 Regenerate proto code after adding `model_tier` field
+- [x] 4.6 Update CRD types in `api/v1alpha1/types.go` to include `ModelTier` field
 
 ## 5. k0s Deployment Tasks
 

@@ -16,6 +16,7 @@ import (
 
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
+	"github.com/uncworks/aot/internal/litellm"
 )
 
 const (
@@ -27,20 +28,23 @@ const (
 
 // Activities holds the dependencies needed by Temporal activity implementations.
 type Activities struct {
-	K8sClient client.Client
+	K8sClient     client.Client
+	LiteLLMClient *litellm.Client
 }
 
 // CreateAgentPodInput contains the parameters for creating an agent pod.
 type CreateAgentPodInput struct {
-	Name         string
-	Namespace    string
-	AgentRunName string
-	RepoURL      string
-	Branch       string
-	Prompt       string
-	DevboxConfig string
-	Image        string
-	EnvVars      map[string]string
+	Name           string
+	Namespace      string
+	AgentRunName   string
+	RepoURL        string
+	Branch         string
+	Prompt         string
+	DevboxConfig   string
+	Image          string
+	EnvVars        map[string]string
+	LLMKey         string
+	LiteLLMBaseURL string
 }
 
 // CreateAgentPodOutput contains the result of creating an agent pod.
@@ -247,6 +251,22 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 		envVars = append(envVars, corev1.EnvVar{Name: k, Value: v})
 	}
 
+	// LiteLLM gateway env vars — inject into agent container only
+	var llmEnvVars []corev1.EnvVar
+	if input.LiteLLMBaseURL != "" {
+		llmEnvVars = append(llmEnvVars, corev1.EnvVar{
+			Name:  "OPENAI_BASE_URL",
+			Value: input.LiteLLMBaseURL + "/v1",
+		})
+	}
+	if input.LLMKey != "" {
+		llmEnvVars = append(llmEnvVars, corev1.EnvVar{
+			Name:  "OPENAI_API_KEY",
+			Value: input.LLMKey,
+		})
+	}
+	agentEnvVars := append(envVars, llmEnvVars...) //nolint:gocritic // intentional new slice
+
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      input.Name,
@@ -273,7 +293,7 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 				{
 					Name:  "agent",
 					Image: image,
-					Env:   envVars,
+					Env:   agentEnvVars,
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "workspace", MountPath: "/workspace"},
 					},
@@ -299,6 +319,82 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 			},
 		},
 	}
+}
+
+// ProvisionLLMKeyInput contains the parameters for provisioning a LiteLLM virtual key.
+type ProvisionLLMKeyInput struct {
+	AgentRunName string
+	Namespace    string
+	ModelTier    string
+	MaxBudget    float64
+}
+
+// ProvisionLLMKeyOutput contains the provisioned virtual key.
+type ProvisionLLMKeyOutput struct {
+	Key string
+}
+
+// modelsForTier returns the LiteLLM model names a tier is authorized to use.
+func modelsForTier(tier string) []string {
+	switch tier {
+	case "premium":
+		return []string{"default", "default-cloud", "premium"}
+	case "default-cloud":
+		return []string{"default", "default-cloud"}
+	default: // "default" or empty
+		return []string{"default", "default-cloud"}
+	}
+}
+
+// ProvisionLLMKey provisions a LiteLLM virtual key for an agent run.
+func (a *Activities) ProvisionLLMKey(ctx context.Context, input ProvisionLLMKeyInput) (*ProvisionLLMKeyOutput, error) {
+	if a.LiteLLMClient == nil {
+		return &ProvisionLLMKeyOutput{}, nil
+	}
+
+	tier := input.ModelTier
+	if tier == "" {
+		tier = "default"
+	}
+
+	budget := input.MaxBudget
+	if budget <= 0 {
+		budget = 1.0 // Default $1 budget
+	}
+
+	resp, err := a.LiteLLMClient.GenerateKey(ctx, litellm.GenerateKeyRequest{
+		KeyAlias:  fmt.Sprintf("aot-%s-%s", input.Namespace, input.AgentRunName),
+		MaxBudget: &budget,
+		Models:    modelsForTier(tier),
+		Metadata: map[string]string{
+			"agent_run": input.AgentRunName,
+			"namespace": input.Namespace,
+			"tier":      tier,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("provision LLM key: %w", err)
+	}
+
+	return &ProvisionLLMKeyOutput{Key: resp.Key}, nil
+}
+
+// RevokeLLMKeyInput contains the parameters for revoking a LiteLLM virtual key.
+type RevokeLLMKeyInput struct {
+	Key string
+}
+
+// RevokeLLMKey revokes a LiteLLM virtual key.
+func (a *Activities) RevokeLLMKey(ctx context.Context, input RevokeLLMKeyInput) error {
+	if a.LiteLLMClient == nil || input.Key == "" {
+		return nil
+	}
+
+	_, err := a.LiteLLMClient.DeleteKey(ctx, []string{input.Key})
+	if err != nil {
+		return fmt.Errorf("revoke LLM key: %w", err)
+	}
+	return nil
 }
 
 // sidecarClient creates a ConnectRPC client for the sidecar running in the given pod.
