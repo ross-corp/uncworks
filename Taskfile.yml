@@ -46,6 +46,15 @@ tasks:
     cmds:
       - go test -tags e2e ./e2e/... -v -count=1 -timeout 30m
 
+  test:e2e:api:
+    desc: Run E2E tests against in-cluster API server
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
+      AOT_API_URL: '{{.AOT_API_URL | default "http://localhost:50055"}}'
+      AOT_NAMESPACE: '{{.AOT_NAMESPACE | default "aot"}}'
+    cmds:
+      - go test ./e2e/... -run TestE2E_API -v -count=1 -timeout 10m
+
   test:e2e:infra:
     desc: Build images, import into k0s, and run LLM E2E tests
     env:
