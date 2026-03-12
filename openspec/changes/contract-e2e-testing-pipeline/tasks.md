@@ -62,10 +62,10 @@
 
 ## 6. Playwright E2E Updates
 
-- [ ] 6.1 Update Playwright tests to use ConnectRPC streaming assertions — requires web dashboard wired to live gRPC
-- [ ] 6.2 Write Playwright test: navigate to dashboard → verify agent run list loads via Connect — requires live gRPC wiring
-- [ ] 6.3 Write Playwright test: select agent run → verify detail view streams events via Connect — requires live gRPC wiring
-- [ ] 6.4 Verify Playwright tests work against the ConnectRPC server (no WebSocket) — requires live gRPC wiring
+- [x] 6.1 Update Playwright tests to use ConnectRPC streaming assertions — wired web dashboard to live gRPC via AOTClient + vite proxy
+- [x] 6.2 Write Playwright test: navigate to dashboard → verify agent run list loads via Connect — 6 tests pass against live API
+- [x] 6.3 Write Playwright test: select agent run → verify detail view streams events via Connect — detail panel tests pass
+- [x] 6.4 Verify Playwright tests work against the ConnectRPC server (no WebSocket) — all 6 tests pass via Connect protocol
 
 ## 7. Taskfile and CI Integration
 
