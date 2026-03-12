@@ -33,8 +33,14 @@ tasks:
     cmds:
       - go test ./api/... ./internal/... -count=1
 
+  test:e2e:setup:
+    desc: Deploy E2E prerequisites (CRD, build binaries)
+    cmds:
+      - task: k0s:crd
+      - task: build
+      - echo "E2E setup complete. Start apiserver, controller, and temporal-worker manually."
+
   test:e2e:
-    desc: Run Go E2E tests (requires running k0s cluster)
     env:
       KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
     cmds:

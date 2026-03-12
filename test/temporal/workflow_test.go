@@ -163,6 +163,38 @@ func TestWorkflow_CompensationOnFailure(t *testing.T) {
 	require.Error(t, env.GetWorkflowError())
 }
 
+// TestWorkflow_SpawnJunior verifies child workflow is started with correct input.
+func TestWorkflow_SpawnJunior(t *testing.T) {
+	env := setupEnv(t)
+	env.RegisterWorkflow(aottemporal.AgentRunWorkflow)
+
+	// Mock the child workflow's activities (it runs as AgentRunWorkflow)
+	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-junior"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	input := aottemporal.SpawnJuniorInput{
+		ParentRunName: "parent-run",
+		Namespace:     "default",
+		Task:          "write unit tests for auth",
+		RepoURL:       "https://github.com/example/repo.git",
+		Branch:        "main",
+		TTLSeconds:    1800,
+		Blocking:      true,
+	}
+
+	env.ExecuteWorkflow(aottemporal.SpawnJuniorWorkflow, input)
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+}
+
 // TestWorkflow_GetStateQuery verifies the get-state query returns current phase.
 func TestWorkflow_GetStateQuery(t *testing.T) {
 	env := setupEnv(t)

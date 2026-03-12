@@ -26,34 +26,34 @@
 
 - [x] 3.1 Create `test/temporal/` directory
 - [x] 3.2 Add `go.temporal.io/sdk` to `go.mod`
-- [ ] 3.3 Write workflow unit test: happy path — BLOCKED on temporal-workflow-engine
-- [ ] 3.4 Write workflow unit test: TTL expiry — BLOCKED on temporal-workflow-engine
-- [ ] 3.5 Write workflow unit test: HITL signal — BLOCKED on temporal-workflow-engine
-- [ ] 3.6 Write workflow unit test: cancel signal — BLOCKED on temporal-workflow-engine
-- [ ] 3.7 Write workflow unit test: spawn_junior — BLOCKED on temporal-workflow-engine
-- [ ] 3.8 Write workflow unit test: compensation — BLOCKED on temporal-workflow-engine
-- [ ] 3.9 Write workflow unit test: get-state query — BLOCKED on temporal-workflow-engine
-- [ ] 3.10 Write integration test with temporal-cli dev server — BLOCKED on temporal-workflow-engine
+- [x] 3.3 Write workflow unit test: happy path
+- [x] 3.4 Write workflow unit test: TTL expiry
+- [x] 3.5 Write workflow unit test: HITL signal
+- [x] 3.6 Write workflow unit test: cancel signal
+- [x] 3.7 Write workflow unit test: spawn_junior
+- [x] 3.8 Write workflow unit test: compensation
+- [x] 3.9 Write workflow unit test: get-state query
+- [x] 3.10 Write integration test with temporal-cli dev server
 - [x] 3.11 Add `task test:temporal` target to `Taskfile.yml`
 
 ## 4. Integration Tests Enhancement (Stage 4)
 
 - [x] 4.1 Add `github.com/testcontainers/testcontainers-go` to `go.mod`
 - [x] 4.2 Rewrite `internal/brain/store_test.go` to use testcontainers PostgreSQL (8 tests pass with real PG)
-- [ ] 4.3 Write controller integration test with envtest: verify CRD → Temporal workflow bridge — BLOCKED on temporal-workflow-engine
-- [ ] 4.4 Write controller integration test: verify workflow state → CRD status sync — BLOCKED on temporal-workflow-engine
+- [x] 4.3 Write controller integration test with envtest: verify CRD → Temporal workflow bridge
+- [x] 4.4 Write controller integration test: verify workflow state → CRD status sync
 - [x] 4.5 Add Go build tag `integration` to integration tests — directory-based separation used instead
 - [x] 4.6 Add `task test:integration` target to `Taskfile.yml`
 - [x] 4.7 Update `task test:unit` to run `go test -short` (excludes integration)
 
 ## 5. E2E Tests with LLM (Stage 5)
 
-- [ ] 5.1 Create `task test:e2e:setup` target — BLOCKED on litellm-llm-gateway and temporal-workflow-engine
-- [ ] 5.2 Write E2E lifecycle test — BLOCKED on infrastructure
-- [ ] 5.3 Design deterministic E2E prompt — BLOCKED on infrastructure
-- [ ] 5.4 Write E2E HITL test — BLOCKED on infrastructure
-- [ ] 5.5 Design deterministic E2E prompt for HITL — BLOCKED on infrastructure
-- [ ] 5.6 Write E2E multi-agent test — BLOCKED on infrastructure
+- [x] 5.1 Create `task test:e2e:setup` target
+- [ ] 5.2 Write E2E lifecycle test — requires agent image + LLM infrastructure
+- [ ] 5.3 Design deterministic E2E prompt — requires agent image + LLM infrastructure
+- [ ] 5.4 Write E2E HITL test — requires agent image + LLM infrastructure
+- [ ] 5.5 Design deterministic E2E prompt for HITL — requires agent image + LLM infrastructure
+- [ ] 5.6 Write E2E multi-agent test — requires agent image + LLM infrastructure
 - [x] 5.7 Write E2E cancel test — existing system_test.go covers CRD lifecycle
 - [x] 5.8 Write E2E pod cleanup verification — existing test deletes AgentRun after creation
 - [x] 5.9 Set 5-minute timeout per E2E test case — test:e2e uses -timeout 30m
@@ -62,10 +62,10 @@
 
 ## 6. Playwright E2E Updates
 
-- [ ] 6.1 Update Playwright tests to use ConnectRPC streaming assertions (replace WebSocket assertions) — BLOCKED: requires running ConnectRPC server; current tests use mock data
-- [ ] 6.2 Write Playwright test: navigate to dashboard → verify agent run list loads via Connect — BLOCKED: requires running ConnectRPC server
-- [ ] 6.3 Write Playwright test: select agent run → verify detail view streams events via Connect — BLOCKED: requires running ConnectRPC server
-- [ ] 6.4 Verify Playwright tests work against the ConnectRPC server (no WebSocket) — BLOCKED: requires running ConnectRPC server
+- [ ] 6.1 Update Playwright tests to use ConnectRPC streaming assertions — requires web dashboard wired to live gRPC
+- [ ] 6.2 Write Playwright test: navigate to dashboard → verify agent run list loads via Connect — requires live gRPC wiring
+- [ ] 6.3 Write Playwright test: select agent run → verify detail view streams events via Connect — requires live gRPC wiring
+- [ ] 6.4 Verify Playwright tests work against the ConnectRPC server (no WebSocket) — requires live gRPC wiring
 
 ## 7. Taskfile and CI Integration
 
