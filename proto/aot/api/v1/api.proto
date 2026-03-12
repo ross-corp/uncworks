@@ -67,6 +67,10 @@ message AgentRunSpec {
   map<string, string> env_vars = 7;
   // Model tier for LLM routing: "default", "default-cloud", or "premium".
   string model_tier = 8;
+  // Image overrides the default agent container image.
+  string image = 9;
+  // MaxBudget is the maximum LLM spend budget in USD.
+  double max_budget = 10;
 }
 
 message AgentRunStatus {
@@ -76,6 +80,8 @@ message AgentRunStatus {
   string trace_id = 4;
   google.protobuf.Timestamp started_at = 5;
   google.protobuf.Timestamp completed_at = 6;
+  // WorktreePath is the path to the git worktree on the agent.
+  string worktree_path = 7;
 }
 
 message CreateAgentRunRequest {

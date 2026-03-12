@@ -15,18 +15,41 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	temporalclient "go.temporal.io/sdk/client"
 
+	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
 	"github.com/uncworks/aot/internal/eventbus"
 	"github.com/uncworks/aot/internal/server"
 )
 
+var scheme = runtime.NewScheme()
+
+func init() {
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(aotv1alpha1.AddToScheme(scheme))
+}
+
 func main() {
 	addr := envOrDefault("LISTEN_ADDR", ":50055")
+	namespace := envOrDefault("NAMESPACE", "default")
+
+	// Initialize K8s client
+	restConfig := ctrl.GetConfigOrDie()
+	k8sClient, err := runtimeclient.New(restConfig, runtimeclient.Options{Scheme: scheme})
+	if err != nil {
+		log.Fatalf("Failed to create K8s client: %v", err)
+	}
+	log.Printf("K8s client initialized (namespace: %s)", namespace)
 
 	bus := eventbus.NewChannelBus()
-	svc := server.NewAOTServiceHandler(bus)
+	svc := server.NewAOTServiceHandler(k8sClient, bus, namespace)
 
 	// Connect to Temporal if configured
 	temporalHost := os.Getenv("TEMPORAL_HOST")
@@ -66,8 +89,7 @@ func main() {
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
 
 	httpServer := &http.Server{
-		Addr: addr,
-		// h2c enables HTTP/2 without TLS for gRPC clients
+		Addr:    addr,
 		Handler: h2c.NewHandler(mux, &http2.Server{}),
 	}
 
