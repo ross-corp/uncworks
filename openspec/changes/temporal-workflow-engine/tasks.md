@@ -76,10 +76,10 @@
 
 ## 9. Verification
 
-- [ ] 9.1 Run `temporal server start-dev` and verify worker connects
-- [ ] 9.2 Create an AgentRun CRD and verify Temporal workflow starts
-- [ ] 9.3 Verify HITL flow: agent calls ask_human → workflow pauses → SendHumanInput signal → workflow resumes
-- [ ] 9.4 Verify cancel flow: CancelAgentRun → workflow cancelled → pod cleaned up
-- [ ] 9.5 Verify TTL: create AgentRun with short TTL → workflow times out → pod cleaned up
-- [ ] 9.6 Run `task test:go` -- all Go tests pass
-- [ ] 9.7 Verify controller correctly syncs Temporal workflow state to CRD status
+- [x] 9.1 Run `temporal server start-dev` and verify worker connects
+- [x] 9.2 Create an AgentRun CRD and verify Temporal workflow starts
+- [ ] 9.3 Verify HITL flow: agent calls ask_human → workflow pauses → SendHumanInput signal → workflow resumes — requires real agent container image; unit test covers mocked flow
+- [x] 9.4 Verify cancel flow: CancelAgentRun → workflow cancelled → pod cleaned up
+- [ ] 9.5 Verify TTL: create AgentRun with short TTL → workflow times out → pod cleaned up — TTL fires after agent start; unit test covers mocked flow
+- [x] 9.6 Run `task test:go` -- all Go tests pass
+- [x] 9.7 Verify controller correctly syncs Temporal workflow state to CRD status
