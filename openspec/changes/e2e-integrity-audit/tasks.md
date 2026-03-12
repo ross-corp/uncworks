@@ -21,45 +21,45 @@
 
 ## 3. Wire API Server to K8s
 
-- [ ] 3.1 Add K8s client (`client.Client` from controller-runtime) to `AOTServiceHandler` struct
-- [ ] 3.2 Rewrite `CreateAgentRun` to create an AgentRun CRD in K8s (generate name `ar-<random>`)
-- [ ] 3.3 Rewrite `GetAgentRun` to read AgentRun CRD from K8s, enrich with Temporal state
-- [ ] 3.4 Rewrite `ListAgentRuns` to list AgentRun CRDs from K8s, sorted by creation time
-- [ ] 3.5 Rewrite `CancelAgentRun` to signal Temporal workflow cancellation (remove in-memory state flip)
-- [ ] 3.6 Fix `SendHumanInput` to return error if Temporal signal fails (don't swallow)
-- [ ] 3.7 Fix `WatchAgentRun` to return error (not nil) when EventBus is not configured
-- [ ] 3.8 Complete `mapWorkflowStateToProto` to map all fields (TraceId, StartedAt, CompletedAt)
-- [ ] 3.9 Remove in-memory `map[string]*AgentRun` and `sync.RWMutex`
-- [ ] 3.10 Update `cmd/apiserver/main.go` to initialize K8s client and pass to handler
-- [ ] 3.11 Update API server tests for K8s-backed handler (use envtest)
+- [x] 3.1 Add K8s client (`client.Client` from controller-runtime) to `AOTServiceHandler` struct
+- [x] 3.2 Rewrite `CreateAgentRun` to create an AgentRun CRD in K8s (generate name `ar-<random>`)
+- [x] 3.3 Rewrite `GetAgentRun` to read AgentRun CRD from K8s, enrich with Temporal state
+- [x] 3.4 Rewrite `ListAgentRuns` to list AgentRun CRDs from K8s, sorted by creation time
+- [x] 3.5 Rewrite `CancelAgentRun` to signal Temporal workflow cancellation (remove in-memory state flip)
+- [x] 3.6 Fix `SendHumanInput` to return error if Temporal signal fails (don't swallow)
+- [x] 3.7 Fix `WatchAgentRun` to return error (not nil) when EventBus is not configured
+- [x] 3.8 Complete `mapWorkflowStateToProto` to map all fields (TraceId, StartedAt, CompletedAt)
+- [x] 3.9 Remove in-memory `map[string]*AgentRun` and `sync.RWMutex`
+- [x] 3.10 Update `cmd/apiserver/main.go` to initialize K8s client and pass to handler
+- [x] 3.11 Update API server tests for K8s-backed handler (use envtest)
 
 ## 4. Proto and Type Alignment
 
-- [ ] 4.1 Add `string image = 9` to proto `AgentRunSpec` message
-- [ ] 4.2 Add `double max_budget = 10` to proto `AgentRunSpec` message
-- [ ] 4.3 Add `string worktree_path = 6` to proto `AgentRunStatus` message
-- [ ] 4.4 Regenerate Go proto types (`buf generate --template buf.gen.go.yaml`)
-- [ ] 4.5 Regenerate TypeScript proto types (`buf generate --template buf.gen.ts.yaml --include-imports`)
-- [ ] 4.6 Update `mapWorkflowStateToProto` and CRD-to-proto conversion to include new fields
+- [x] 4.1 Add `string image = 9` to proto `AgentRunSpec` message
+- [x] 4.2 Add `double max_budget = 10` to proto `AgentRunSpec` message
+- [x] 4.3 Add `string worktree_path = 6` to proto `AgentRunStatus` message
+- [x] 4.4 Regenerate Go proto types (`buf generate --template buf.gen.go.yaml`)
+- [x] 4.5 Regenerate TypeScript proto types (`buf generate --template buf.gen.ts.yaml --include-imports`)
+- [x] 4.6 Update `mapWorkflowStateToProto` and CRD-to-proto conversion to include new fields
 
 ## 5. Helm Chart RBAC Update
 
-- [ ] 5.1 Add `serviceAccountName` to apiserver Deployment template (reference shared ServiceAccount)
-- [ ] 5.2 Verify `helm template` renders apiserver with correct ServiceAccount
+- [x] 5.1 Add `serviceAccountName` to apiserver Deployment template (reference shared ServiceAccount)
+- [x] 5.2 Verify `helm template` renders apiserver with correct ServiceAccount
 - [ ] 5.3 Rebuild and reimport controlplane image with API server K8s client changes
 
 ## 6. Web Dashboard Fixes
 
-- [ ] 6.1 Preserve previous run list on API error instead of returning empty array
-- [ ] 6.2 Add loading state indicator while fetching
-- [ ] 6.3 Add error state indicator with retry button
+- [x] 6.1 Preserve previous run list on API error instead of returning empty array
+- [x] 6.2 Add loading state indicator while fetching
+- [x] 6.3 Add error state indicator with retry button
 
 ## 7. Controller Hardening
 
-- [ ] 7.1 Fix workflow start race — write annotation before status update (or use single update with both)
-- [ ] 7.2 Update status with error message when Temporal is unreachable (instead of silent requeue)
-- [ ] 7.3 Use Temporal `CloseTime` for `CompletedAt` instead of reconciliation timestamp
-- [ ] 7.4 Log when EventBus is nil at startup (warn once, not per-event)
+- [x] 7.1 Fix workflow start race — write annotation before status update (or use single update with both)
+- [x] 7.2 Update status with error message when Temporal is unreachable (instead of silent requeue)
+- [x] 7.3 Use Temporal `CloseTime` for `CompletedAt` instead of reconciliation timestamp
+- [x] 7.4 Log when EventBus is nil at startup (warn once, not per-event)
 
 ## 8. E2E Tests via API
 

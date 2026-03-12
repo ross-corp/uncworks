@@ -9,15 +9,29 @@ import (
 
 	"connectrpc.com/connect"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
 	"github.com/uncworks/aot/internal/eventbus"
 )
 
+var testScheme = runtime.NewScheme()
+
+func init() {
+	utilruntime.Must(clientgoscheme.AddToScheme(testScheme))
+	utilruntime.Must(aotv1alpha1.AddToScheme(testScheme))
+}
+
 func startTestServer(t *testing.T) (apiv1connect.AOTServiceClient, func()) {
 	t.Helper()
 
-	svc := NewAOTServiceHandler(&eventbus.NoOpEventBus{})
+	k8sClient := fake.NewClientBuilder().WithScheme(testScheme).WithStatusSubresource(&aotv1alpha1.AgentRun{}).Build()
+	svc := NewAOTServiceHandler(k8sClient, &eventbus.NoOpEventBus{}, "default")
 	mux := http.NewServeMux()
 	path, handler := apiv1connect.NewAOTServiceHandler(svc)
 	mux.Handle(path, handler)
@@ -170,12 +184,15 @@ func TestCancelAgentRun(t *testing.T) {
 		t.Fatalf("CreateAgentRun: %v", err)
 	}
 
+	// Cancel without Temporal client — should still return the CRD state (Pending, not Cancelled)
 	cancelResp, err := client.CancelAgentRun(context.Background(), connect.NewRequest(&apiv1.CancelAgentRunRequest{Id: resp.Msg.AgentRun.Id}))
 	if err != nil {
 		t.Fatalf("CancelAgentRun: %v", err)
 	}
-	if cancelResp.Msg.AgentRun.Status.Phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED {
-		t.Errorf("expected CANCELLED, got %v", cancelResp.Msg.AgentRun.Status.Phase)
+	// Without Temporal, the CRD phase won't change — it's still Pending
+	// The cancel signal is sent to Temporal which updates the CRD via the controller
+	if cancelResp.Msg.AgentRun.Id != resp.Msg.AgentRun.Id {
+		t.Errorf("expected same ID, got %s", cancelResp.Msg.AgentRun.Id)
 	}
 }
 
@@ -235,12 +252,13 @@ func TestSendHumanInput_NotFound(t *testing.T) {
 	}
 }
 
-// startTestServerWithBus returns a client, the event bus, and a cleanup function.
+// startTestServerWithBus returns a client, the event bus, the handler, and a cleanup function.
 func startTestServerWithBus(t *testing.T) (apiv1connect.AOTServiceClient, *eventbus.ChannelBus, *AOTServiceHandler, func()) {
 	t.Helper()
 
 	bus := eventbus.NewChannelBus()
-	svc := NewAOTServiceHandler(bus)
+	k8sClient := fake.NewClientBuilder().WithScheme(testScheme).WithStatusSubresource(&aotv1alpha1.AgentRun{}).Build()
+	svc := NewAOTServiceHandler(k8sClient, bus, "default")
 	mux := http.NewServeMux()
 	path, handler := apiv1connect.NewAOTServiceHandler(svc)
 	mux.Handle(path, handler)

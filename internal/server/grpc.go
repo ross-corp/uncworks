@@ -3,14 +3,18 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"sync"
+	"math/big"
+	"sort"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	temporalclient "go.temporal.io/sdk/client"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
 	"github.com/uncworks/aot/internal/eventbus"
@@ -21,64 +25,66 @@ import (
 type AOTServiceHandler struct {
 	apiv1connect.UnimplementedAOTServiceHandler
 
-	mu             sync.RWMutex
-	runs           map[string]*apiv1.AgentRun
+	K8sClient      client.Client
 	TemporalClient temporalclient.Client
 	EventBus       eventbus.EventBus
+	Namespace      string
 }
 
 // NewAOTServiceHandler creates a new AOTService handler.
-func NewAOTServiceHandler(bus eventbus.EventBus) *AOTServiceHandler {
+func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namespace string) *AOTServiceHandler {
 	return &AOTServiceHandler{
-		runs:     make(map[string]*apiv1.AgentRun),
-		EventBus: bus,
+		K8sClient: k8sClient,
+		EventBus:  bus,
+		Namespace: namespace,
 	}
 }
 
-func (s *AOTServiceHandler) CreateAgentRun(_ context.Context, req *connect.Request[apiv1.CreateAgentRunRequest]) (*connect.Response[apiv1.CreateAgentRunResponse], error) {
+func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Request[apiv1.CreateAgentRunRequest]) (*connect.Response[apiv1.CreateAgentRunResponse], error) {
 	if req.Msg.Spec == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
 	}
 
-	id := fmt.Sprintf("ar-%d", len(s.runs)+1)
-	now := timestamppb.Now()
-
-	run := &apiv1.AgentRun{
-		Id:   id,
-		Name: id,
-		Spec: req.Msg.Spec,
-		Status: &apiv1.AgentRunStatus{
-			Phase:   apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
-			Message: "Queued",
-		},
-		CreatedAt: now,
-		UpdatedAt: now,
+	name, err := generateRunName()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("generate name: %w", err))
 	}
 
-	s.mu.Lock()
-	s.runs[id] = run
-	s.mu.Unlock()
+	crd := &aotv1alpha1.AgentRun{}
+	crd.Name = name
+	crd.Namespace = s.Namespace
+	crd.Spec = specProtoToCRD(req.Msg.Spec)
+	crd.Status.Phase = aotv1alpha1.AgentRunPhasePending
+	crd.Status.Message = "Queued"
 
-	return connect.NewResponse(&apiv1.CreateAgentRunResponse{AgentRun: run}), nil
+	if err := s.K8sClient.Create(ctx, crd); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create agentrun CRD: %w", err))
+	}
+
+	return connect.NewResponse(&apiv1.CreateAgentRunResponse{
+		AgentRun: crdToProto(crd),
+	}), nil
 }
 
 func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Request[apiv1.GetAgentRunRequest]) (*connect.Response[apiv1.AgentRun], error) {
-	s.mu.RLock()
-	run, ok := s.runs[req.Msg.Id]
-	s.mu.RUnlock()
-
-	if !ok {
+	crd := &aotv1alpha1.AgentRun{}
+	if err := s.K8sClient.Get(ctx, client.ObjectKey{
+		Namespace: s.Namespace,
+		Name:      req.Msg.Id,
+	}, crd); err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
 	}
 
-	// Optionally enrich with real-time Temporal state
+	run := crdToProto(crd)
+
+	// Enrich with real-time Temporal state
 	if s.TemporalClient != nil {
 		workflowID := fmt.Sprintf("agentrun-%s", req.Msg.Id)
 		resp, err := s.TemporalClient.QueryWorkflow(ctx, workflowID, "", aottemporal.QueryGetState)
 		if err == nil {
 			var state aottemporal.WorkflowState
 			if resp.Get(&state) == nil {
-				run = cloneRunWithStatus(run, mapWorkflowStateToProto(state))
+				run.Status = mapWorkflowStateToProto(state)
 			}
 		}
 	}
@@ -86,16 +92,28 @@ func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Reques
 	return connect.NewResponse(run), nil
 }
 
-func (s *AOTServiceHandler) ListAgentRuns(_ context.Context, req *connect.Request[apiv1.ListAgentRunsRequest]) (*connect.Response[apiv1.ListAgentRunsResponse], error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Request[apiv1.ListAgentRunsRequest]) (*connect.Response[apiv1.ListAgentRunsResponse], error) {
+	var list aotv1alpha1.AgentRunList
+	if err := s.K8sClient.List(ctx, &list, client.InNamespace(s.Namespace)); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list agentruns: %w", err))
+	}
+
+	// Sort by creation time (newest first)
+	sort.Slice(list.Items, func(i, j int) bool {
+		return list.Items[j].CreationTimestamp.Before(&list.Items[i].CreationTimestamp)
+	})
 
 	var runs []*apiv1.AgentRun
-	for _, run := range s.runs {
+	for i := range list.Items {
+		crd := &list.Items[i]
+		run := crdToProto(crd)
+
+		// Apply phase filter
 		if req.Msg.PhaseFilter != apiv1.AgentRunPhase_AGENT_RUN_PHASE_UNSPECIFIED &&
 			run.Status.Phase != req.Msg.PhaseFilter {
 			continue
 		}
+
 		runs = append(runs, run)
 	}
 
@@ -108,12 +126,15 @@ func (s *AOTServiceHandler) ListAgentRuns(_ context.Context, req *connect.Reques
 }
 
 func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Request[apiv1.WatchAgentRunRequest], stream *connect.ServerStream[apiv1.AgentRunEvent]) error {
-	s.mu.RLock()
-	run, ok := s.runs[req.Msg.Id]
-	s.mu.RUnlock()
-	if !ok {
+	crd := &aotv1alpha1.AgentRun{}
+	if err := s.K8sClient.Get(ctx, client.ObjectKey{
+		Namespace: s.Namespace,
+		Name:      req.Msg.Id,
+	}, crd); err != nil {
 		return connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
 	}
+
+	run := crdToProto(crd)
 
 	// Send current state as initial event
 	initialEvent := &apiv1.AgentRunEvent{
@@ -132,7 +153,7 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 
 	// Subscribe to event bus
 	if s.EventBus == nil {
-		return nil
+		return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("event streaming not configured"))
 	}
 	ch, subID := s.EventBus.Subscribe(req.Msg.Id)
 	defer s.EventBus.Unsubscribe(req.Msg.Id, subID)
@@ -148,7 +169,6 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 			if err := stream.Send(event); err != nil {
 				return err
 			}
-			// Close stream on terminal events
 			if event.Type == apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED {
 				return nil
 			}
@@ -157,48 +177,54 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 }
 
 func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Request[apiv1.CancelAgentRunRequest]) (*connect.Response[apiv1.CancelAgentRunResponse], error) {
-	s.mu.Lock()
-	run, ok := s.runs[req.Msg.Id]
-	s.mu.Unlock()
-
-	if !ok {
+	crd := &aotv1alpha1.AgentRun{}
+	if err := s.K8sClient.Get(ctx, client.ObjectKey{
+		Namespace: s.Namespace,
+		Name:      req.Msg.Id,
+	}, crd); err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
 	}
 
-	// Cancel via Temporal workflow if client is configured (best-effort)
+	// Cancel via Temporal workflow
 	if s.TemporalClient != nil {
 		workflowID := fmt.Sprintf("agentrun-%s", req.Msg.Id)
-		_ = s.TemporalClient.CancelWorkflow(ctx, workflowID, "")
+		if err := s.TemporalClient.CancelWorkflow(ctx, workflowID, ""); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cancel workflow: %w", err))
+		}
 	}
 
-	s.mu.Lock()
-	run.Status.Phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
-	run.Status.Message = "Cancelled by user"
-	run.UpdatedAt = timestamppb.Now()
-	s.mu.Unlock()
+	// Re-read to get latest state after cancellation signal
+	if err := s.K8sClient.Get(ctx, client.ObjectKey{
+		Namespace: s.Namespace,
+		Name:      req.Msg.Id,
+	}, crd); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("re-read agentrun: %w", err))
+	}
 
-	return connect.NewResponse(&apiv1.CancelAgentRunResponse{AgentRun: run}), nil
+	return connect.NewResponse(&apiv1.CancelAgentRunResponse{AgentRun: crdToProto(crd)}), nil
 }
 
 func (s *AOTServiceHandler) SendHumanInput(ctx context.Context, req *connect.Request[apiv1.SendHumanInputRequest]) (*connect.Response[apiv1.SendHumanInputResponse], error) {
-	s.mu.RLock()
-	run, ok := s.runs[req.Msg.AgentRunId]
-	s.mu.RUnlock()
-	if !ok {
+	crd := &aotv1alpha1.AgentRun{}
+	if err := s.K8sClient.Get(ctx, client.ObjectKey{
+		Namespace: s.Namespace,
+		Name:      req.Msg.AgentRunId,
+	}, crd); err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.AgentRunId))
 	}
 
-	if run.Status.Phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+	if crd.Status.Phase != aotv1alpha1.AgentRunPhaseWaitingForInput {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("agent is not waiting for input"))
 	}
 
-	// Send via Temporal signal if client is configured
-	if s.TemporalClient != nil {
-		workflowID := fmt.Sprintf("agentrun-%s", req.Msg.AgentRunId)
-		signal := aottemporal.HumanInputSignal{Input: req.Msg.Input}
-		if err := s.TemporalClient.SignalWorkflow(ctx, workflowID, "", aottemporal.SignalHumanInput, signal); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("signal workflow: %w", err))
-		}
+	if s.TemporalClient == nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("temporal not configured"))
+	}
+
+	workflowID := fmt.Sprintf("agentrun-%s", req.Msg.AgentRunId)
+	signal := aottemporal.HumanInputSignal{Input: req.Msg.Input}
+	if err := s.TemporalClient.SignalWorkflow(ctx, workflowID, "", aottemporal.SignalHumanInput, signal); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("signal workflow: %w", err))
 	}
 
 	return connect.NewResponse(&apiv1.SendHumanInputResponse{Accepted: true}), nil
@@ -215,15 +241,88 @@ func isTerminalPhase(phase apiv1.AgentRunPhase) bool {
 	return false
 }
 
-// cloneRunWithStatus creates a copy of an AgentRun with a new status to avoid mutating the stored version.
-func cloneRunWithStatus(run *apiv1.AgentRun, status *apiv1.AgentRunStatus) *apiv1.AgentRun {
-	return &apiv1.AgentRun{
-		Id:        run.Id,
-		Name:      run.Name,
-		Spec:      run.Spec,
-		Status:    status,
-		CreatedAt: run.CreatedAt,
-		UpdatedAt: run.UpdatedAt,
+// generateRunName creates a random name like "ar-a1b2c3".
+func generateRunName() (string, error) {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	suffix := make([]byte, 6)
+	for i := range suffix {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		if err != nil {
+			return "", err
+		}
+		suffix[i] = chars[n.Int64()]
+	}
+	return fmt.Sprintf("ar-%s", string(suffix)), nil
+}
+
+// specProtoToCRD converts a proto AgentRunSpec to a CRD AgentRunSpec.
+func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
+	crdSpec := aotv1alpha1.AgentRunSpec{
+		Backend:      aotv1alpha1.BackendPod,
+		RepoURL:      spec.RepoUrl,
+		Branch:       spec.Branch,
+		Prompt:       spec.Prompt,
+		DevboxConfig: spec.DevboxConfig,
+		TTLSeconds:   spec.TtlSeconds,
+		EnvVars:      spec.EnvVars,
+		ModelTier:    spec.ModelTier,
+		Image:        spec.Image,
+	}
+	return crdSpec
+}
+
+// crdToProto converts a CRD AgentRun to a proto AgentRun.
+func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
+	run := &apiv1.AgentRun{
+		Id:   crd.Name,
+		Name: crd.Name,
+		Spec: &apiv1.AgentRunSpec{
+			RepoUrl:      crd.Spec.RepoURL,
+			Branch:       crd.Spec.Branch,
+			Prompt:       crd.Spec.Prompt,
+			DevboxConfig: crd.Spec.DevboxConfig,
+			TtlSeconds:   crd.Spec.TTLSeconds,
+			EnvVars:      crd.Spec.EnvVars,
+			ModelTier:    crd.Spec.ModelTier,
+			Image:        crd.Spec.Image,
+		},
+		Status: &apiv1.AgentRunStatus{
+			Phase:        crdPhaseToProto(crd.Status.Phase),
+			Message:      crd.Status.Message,
+			PodName:      crd.Status.PodName,
+			TraceId:      crd.Status.TraceID,
+			WorktreePath: crd.Status.WorktreePath,
+		},
+		CreatedAt: timestamppb.New(crd.CreationTimestamp.Time),
+	}
+
+	if crd.Status.StartedAt != nil {
+		run.Status.StartedAt = timestamppb.New(crd.Status.StartedAt.Time)
+	}
+	if crd.Status.CompletedAt != nil {
+		run.Status.CompletedAt = timestamppb.New(crd.Status.CompletedAt.Time)
+	}
+
+	return run
+}
+
+// crdPhaseToProto maps CRD phase strings to proto enum values.
+func crdPhaseToProto(phase aotv1alpha1.AgentRunPhase) apiv1.AgentRunPhase {
+	switch phase {
+	case aotv1alpha1.AgentRunPhasePending:
+		return apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+	case aotv1alpha1.AgentRunPhaseRunning:
+		return apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+	case aotv1alpha1.AgentRunPhaseWaitingForInput:
+		return apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+	case aotv1alpha1.AgentRunPhaseSucceeded:
+		return apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+	case aotv1alpha1.AgentRunPhaseFailed:
+		return apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+	case aotv1alpha1.AgentRunPhaseCancelled:
+		return apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+	default:
+		return apiv1.AgentRunPhase_AGENT_RUN_PHASE_UNSPECIFIED
 	}
 }
 
@@ -231,6 +330,10 @@ func cloneRunWithStatus(run *apiv1.AgentRun, status *apiv1.AgentRunStatus) *apiv
 func mapWorkflowStateToProto(state aottemporal.WorkflowState) *apiv1.AgentRunStatus {
 	phase := apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
 	switch state.Phase {
+	case "Creating":
+		phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+	case "Hydrating":
+		phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
 	case "Running":
 		phase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
 	case "WaitingForInput":

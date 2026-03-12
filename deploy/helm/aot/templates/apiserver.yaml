@@ -18,6 +18,7 @@ spec:
         {{- include "aot.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: apiserver
     spec:
+      serviceAccountName: {{ include "aot.fullname" . }}
       containers:
         - name: apiserver
           image: {{ include "aot.controlplaneImage" . }}
@@ -29,6 +30,10 @@ spec:
           env:
             - name: LISTEN_ADDR
               value: ":{{ .Values.apiserver.port }}"
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: TEMPORAL_HOST
               value: {{ .Values.temporal.host | quote }}
             - name: TEMPORAL_NAMESPACE

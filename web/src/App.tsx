@@ -1,4 +1,4 @@
-import { createSignal, createResource, onCleanup } from "solid-js";
+import { createSignal, createResource, onCleanup, Show } from "solid-js";
 import { AOTClient } from "../../packages/shared/src/grpc/client";
 import type { AgentRun } from "../../packages/shared/src/types/agent-run";
 import AgentRunList, { type AgentRunItem } from "./components/AgentRunList";
@@ -38,15 +38,17 @@ function toDetail(run: AgentRun) {
 export default function App() {
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
+  const [previousRuns, setPreviousRuns] = createSignal<AgentRun[]>([]);
 
   const [runs, { refetch }] = createResource(async () => {
     try {
       const result = await client.listAgentRuns();
       setError(null);
+      setPreviousRuns(result);
       return result;
     } catch (err) {
       setError((err as Error).message);
-      return [];
+      return previousRuns();
     }
   });
 
@@ -63,15 +65,42 @@ export default function App() {
   };
 
   const statusText = () => {
-    if (runs.loading) return "Status: Loading...";
-    if (error()) return `Status: Error — ${error()}`;
-    return `Status: Connected (${(runs() ?? []).length} runs)`;
+    if (runs.loading && (runs() ?? []).length === 0) return "Loading...";
+    if (error()) return `Error: ${error()}`;
+    return `Connected (${(runs() ?? []).length} runs)`;
   };
 
   return (
     <main style={{ "max-width": "960px", margin: "0 auto", padding: "16px" }}>
       <h1 data-testid="title">AOT Dashboard</h1>
-      <p data-testid="status">{statusText()}</p>
+      <div data-testid="status" style={{ display: "flex", "align-items": "center", gap: "8px", "margin-bottom": "16px" }}>
+        <Show when={runs.loading && (runs() ?? []).length === 0}>
+          <span style={{ color: "#888" }}>Loading...</span>
+        </Show>
+        <Show when={error()}>
+          <span style={{ color: "#d32f2f" }}>{statusText()}</span>
+          <button
+            data-testid="retry-button"
+            onClick={() => void refetch()}
+            style={{
+              padding: "4px 12px",
+              border: "1px solid #d32f2f",
+              "border-radius": "4px",
+              background: "transparent",
+              color: "#d32f2f",
+              cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
+        </Show>
+        <Show when={!error() && !(runs.loading && (runs() ?? []).length === 0)}>
+          <span style={{ color: "#388e3c" }}>{statusText()}</span>
+          <Show when={runs.loading}>
+            <span style={{ color: "#888", "font-size": "0.85em" }}>(refreshing...)</span>
+          </Show>
+        </Show>
+      </div>
       <div style={{ display: "grid", "grid-template-columns": "1fr 1fr", gap: "24px" }}>
         <AgentRunList
           runs={listItems()}

@@ -292,7 +292,11 @@ type AgentRunSpec struct {
 	TtlSeconds   int32                  `protobuf:"varint,6,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
 	EnvVars      map[string]string      `protobuf:"bytes,7,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Model tier for LLM routing: "default", "default-cloud", or "premium".
-	ModelTier     string `protobuf:"bytes,8,opt,name=model_tier,json=modelTier,proto3" json:"model_tier,omitempty"`
+	ModelTier string `protobuf:"bytes,8,opt,name=model_tier,json=modelTier,proto3" json:"model_tier,omitempty"`
+	// Image overrides the default agent container image.
+	Image string `protobuf:"bytes,9,opt,name=image,proto3" json:"image,omitempty"`
+	// MaxBudget is the maximum LLM spend budget in USD.
+	MaxBudget     float64 `protobuf:"fixed64,10,opt,name=max_budget,json=maxBudget,proto3" json:"max_budget,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -383,14 +387,30 @@ func (x *AgentRunSpec) GetModelTier() string {
 	return ""
 }
 
+func (x *AgentRunSpec) GetImage() string {
+	if x != nil {
+		return x.Image
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetMaxBudget() float64 {
+	if x != nil {
+		return x.MaxBudget
+	}
+	return 0
+}
+
 type AgentRunStatus struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Phase         AgentRunPhase          `protobuf:"varint,1,opt,name=phase,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	PodName       string                 `protobuf:"bytes,3,opt,name=pod_name,json=podName,proto3" json:"pod_name,omitempty"`
-	TraceId       string                 `protobuf:"bytes,4,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
-	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	CompletedAt   *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Phase       AgentRunPhase          `protobuf:"varint,1,opt,name=phase,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase,omitempty"`
+	Message     string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	PodName     string                 `protobuf:"bytes,3,opt,name=pod_name,json=podName,proto3" json:"pod_name,omitempty"`
+	TraceId     string                 `protobuf:"bytes,4,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	StartedAt   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	CompletedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	// WorktreePath is the path to the git worktree on the agent.
+	WorktreePath  string `protobuf:"bytes,7,opt,name=worktree_path,json=worktreePath,proto3" json:"worktree_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -465,6 +485,13 @@ func (x *AgentRunStatus) GetCompletedAt() *timestamppb.Timestamp {
 		return x.CompletedAt
 	}
 	return nil
+}
+
+func (x *AgentRunStatus) GetWorktreePath() string {
+	if x != nil {
+		return x.WorktreePath
+	}
+	return ""
 }
 
 type CreateAgentRunRequest struct {
@@ -1021,7 +1048,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x91\x03\n" +
+	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xc6\x03\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x12#\n" +
 	"\brepo_url\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\arepoUrl\x12\x16\n" +
@@ -1032,10 +1059,14 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"ttlSeconds\x12@\n" +
 	"\benv_vars\x18\a \x03(\v2%.aot.api.v1.AgentRunSpec.EnvVarsEntryR\aenvVars\x12\x1d\n" +
 	"\n" +
-	"model_tier\x18\b \x01(\tR\tmodelTier\x1a:\n" +
+	"model_tier\x18\b \x01(\tR\tmodelTier\x12\x14\n" +
+	"\x05image\x18\t \x01(\tR\x05image\x12\x1d\n" +
+	"\n" +
+	"max_budget\x18\n" +
+	" \x01(\x01R\tmaxBudget\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8b\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb0\x02\n" +
 	"\x0eAgentRunStatus\x12/\n" +
 	"\x05phase\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\x05phase\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
@@ -1043,7 +1074,8 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\btrace_id\x18\x04 \x01(\tR\atraceId\x129\n" +
 	"\n" +
 	"started_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12=\n" +
-	"\fcompleted_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\"E\n" +
+	"\fcompleted_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\x12#\n" +
+	"\rworktree_path\x18\a \x01(\tR\fworktreePath\"E\n" +
 	"\x15CreateAgentRunRequest\x12,\n" +
 	"\x04spec\x18\x01 \x01(\v2\x18.aot.api.v1.AgentRunSpecR\x04spec\"K\n" +
 	"\x16CreateAgentRunResponse\x121\n" +

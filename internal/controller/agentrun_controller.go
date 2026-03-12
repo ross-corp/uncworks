@@ -47,6 +47,7 @@ type AgentRunReconciler struct {
 	TaskQueue      string
 	LiteLLMBaseURL string
 	EventBus       eventbus.EventBus
+	eventBusWarned bool
 }
 
 // +kubebuilder:rbac:groups=aot.uncworks.io,resources=agentruns,verbs=get;list;watch;create;update;patch;delete
@@ -183,6 +184,10 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 		// Workflow may have completed and been archived — check execution
 		desc, descErr := r.TemporalClient.DescribeWorkflowExecution(ctx, workflowID, "")
 		if descErr != nil {
+			agentRun.Status.Message = fmt.Sprintf("Temporal unreachable: %v", descErr)
+			if updateErr := r.Status().Update(ctx, agentRun); updateErr != nil {
+				logger.Error(updateErr, "Failed to update status with Temporal error")
+			}
 			return ctrl.Result{RequeueAfter: reconcileInterval}, nil
 		}
 		// Map Temporal execution status to CRD phase
@@ -262,8 +267,14 @@ func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *
 	}
 
 	if agentRun.Status.CompletedAt == nil {
-		now := metav1.Now()
-		agentRun.Status.CompletedAt = &now
+		// Use Temporal's CloseTime if available, otherwise fall back to now
+		if closeTime := desc.GetWorkflowExecutionInfo().GetCloseTime(); closeTime != nil && closeTime.IsValid() {
+			t := metav1.NewTime(closeTime.AsTime())
+			agentRun.Status.CompletedAt = &t
+		} else {
+			now := metav1.Now()
+			agentRun.Status.CompletedAt = &now
+		}
 	}
 
 	if err := r.Status().Update(ctx, agentRun); err != nil {
@@ -328,6 +339,10 @@ func isTerminal(phase aotv1alpha1.AgentRunPhase) bool {
 // emitPhaseEvent publishes a phase-change event to the event bus.
 func (r *AgentRunReconciler) emitPhaseEvent(agentRun *aotv1alpha1.AgentRun, eventType apiv1.AgentRunEventType) {
 	if r.EventBus == nil {
+		if !r.eventBusWarned {
+			r.eventBusWarned = true
+			ctrl.Log.Info("WARNING: EventBus is nil, phase events will not be emitted to WatchAgentRun subscribers")
+		}
 		return
 	}
 	r.EventBus.Publish(agentRun.Name, &apiv1.AgentRunEvent{
