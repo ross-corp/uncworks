@@ -24,10 +24,10 @@
 
 ## 5. TypeScript WebSocket Reconnection
 
-- [ ] 5.1 Add `ReconnectingWebSocket` class to `packages/shared/src/ws/reconnecting-ws.ts` with exponential backoff, jitter, max retries
-- [ ] 5.2 Track active subscriptions and re-send on reconnect
-- [ ] 5.3 Emit `connection_failed` event after max retries exceeded
-- [ ] 5.4 Write tests for reconnection backoff timing, subscription restoration, and max retry cutoff
+- [x] 5.1 Add `ReconnectingStream` class to `packages/shared/src/ws/reconnecting-stream.ts` with exponential backoff, jitter, max retries
+- [x] 5.2 Track active subscriptions and re-send on reconnect
+- [x] 5.3 Emit `connection_failed` event after max retries exceeded
+- [x] 5.4 Write tests for reconnection backoff timing, subscription restoration, and max retry cutoff
 
 ## 6. Integration Verification
 
