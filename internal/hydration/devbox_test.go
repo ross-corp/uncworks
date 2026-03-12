@@ -12,8 +12,8 @@ func TestHydrator_DevboxSetup(t *testing.T) {
 	runner := NewMockRunner()
 	tmpDir := t.TempDir()
 
-	// Create a fake workspace with devbox.json
-	srcDir := filepath.Join(tmpDir, "src")
+	// Create a fake workspace with devbox.json (multi-repo: src/<repo-name>/)
+	srcDir := filepath.Join(tmpDir, "src", "repo")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -22,13 +22,12 @@ func TestHydrator_DevboxSetup(t *testing.T) {
 	}
 
 	// Pre-create the bare dir so clone is skipped
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare", "repo"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
 	config := &Config{
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		WorkspaceDir: tmpDir,
 		DevboxConfig: "devbox.json",
 	}
@@ -56,18 +55,17 @@ func TestHydrator_DevboxConfigNotFound(t *testing.T) {
 	runner := NewMockRunner()
 	tmpDir := t.TempDir()
 
-	// Create workspace but no devbox.json in src
-	srcDir := filepath.Join(tmpDir, "src")
+	// Create workspace but no devbox.json in src/repo
+	srcDir := filepath.Join(tmpDir, "src", "repo")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare", "repo"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
 	config := &Config{
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		WorkspaceDir: tmpDir,
 		DevboxConfig: "devbox.json",
 	}
@@ -85,13 +83,12 @@ func TestHydrator_DevboxConfigNotFound(t *testing.T) {
 func TestHydrator_NoDevboxSkipped(t *testing.T) {
 	runner := NewMockRunner()
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare", "repo"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
 	config := &Config{
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		WorkspaceDir: tmpDir,
 		DevboxConfig: "", // No devbox config
 	}
@@ -115,20 +112,19 @@ func TestHydrator_DevboxInstallFailure(t *testing.T) {
 	runner.On("devbox", MockResult{Err: os.ErrPermission})
 	tmpDir := t.TempDir()
 
-	srcDir := filepath.Join(tmpDir, "src")
+	srcDir := filepath.Join(tmpDir, "src", "repo")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(srcDir, "devbox.json"), []byte(`{}`), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".bare", "repo"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
 	config := &Config{
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		WorkspaceDir: tmpDir,
 		DevboxConfig: "devbox.json",
 	}

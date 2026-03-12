@@ -3,6 +3,7 @@ package temporal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -59,8 +60,7 @@ type CreateAgentPodInput struct {
 	Name           string
 	Namespace      string
 	AgentRunName   string
-	RepoURL        string
-	Branch         string
+	Repos          []Repository
 	Prompt         string
 	DevboxConfig   string
 	Image          string
@@ -93,7 +93,8 @@ type WaitForHydrationInput struct {
 
 // WaitForHydrationOutput contains the result of waiting for hydration.
 type WaitForHydrationOutput struct {
-	PodIP string
+	PodIP         string
+	WorkspacePath string
 }
 
 // WaitForHydration polls the pod's init container status until hydration completes.
@@ -152,6 +153,7 @@ type StartAgentInput struct {
 	Namespace string
 	PodIP     string
 	Prompt    string
+	RepoPath  string
 }
 
 // StartAgent calls the sidecar StartAgent RPC, retrying until the sidecar is ready.
@@ -164,7 +166,8 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for sidecar readiness: attempt %d", attempt+1))
 
 		resp, err := sc.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
-			Prompt: input.Prompt,
+			Prompt:   input.Prompt,
+			RepoPath: input.RepoPath,
 		}))
 		if err == nil {
 			if !resp.Msg.Started {
@@ -286,10 +289,10 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 		image = agentImage
 	}
 
+	reposJSON, _ := json.Marshal(input.Repos)
 	envVars := []corev1.EnvVar{
 		{Name: "AOT_AGENT_RUN_ID", Value: input.AgentRunName},
-		{Name: "AOT_REPO_URL", Value: input.RepoURL},
-		{Name: "AOT_BRANCH", Value: input.Branch},
+		{Name: "AOT_REPOS", Value: string(reposJSON)},
 		{Name: "AOT_PROMPT", Value: input.Prompt},
 	}
 	if input.DevboxConfig != "" {

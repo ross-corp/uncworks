@@ -63,8 +63,7 @@ func (m *MockRunner) LastCommand() RecordedCommand {
 func TestHydrator_CloneAndWorktree(t *testing.T) {
 	runner := NewMockRunner()
 	config := &Config{
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		WorkspaceDir: t.TempDir(),
 	}
 
@@ -101,8 +100,7 @@ func TestHydrator_CloneAndWorktree(t *testing.T) {
 func TestHydrator_DefaultBranch(t *testing.T) {
 	runner := NewMockRunner()
 	config := &Config{
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "", // Empty branch should detect from HEAD or fall back to "main"
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git"}}, // Empty branch should detect from HEAD or fall back to "main"
 		WorkspaceDir: t.TempDir(),
 	}
 
@@ -128,8 +126,7 @@ func TestHydrator_DefaultBranchFromHEAD(t *testing.T) {
 	// Mock git symbolic-ref to return "master"
 	runner.On("git symbolic-ref --short HEAD", MockResult{Output: "master"})
 	config := &Config{
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "",
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git"}},
 		WorkspaceDir: t.TempDir(),
 	}
 
@@ -152,8 +149,7 @@ func TestHydrator_CloneFailure(t *testing.T) {
 	runner.On("git", MockResult{Err: fmt.Errorf("clone failed")})
 
 	config := &Config{
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		WorkspaceDir: t.TempDir(),
 	}
 
@@ -168,10 +164,30 @@ func TestHydrator_CloneFailure(t *testing.T) {
 }
 
 func TestHydrator_WorktreePath(t *testing.T) {
-	config := &Config{WorkspaceDir: "/workspace"}
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/org/myrepo.git"}},
+		WorkspaceDir: "/workspace",
+	}
 	h := NewHydrator(config, NewMockRunner())
-	if h.WorktreePath() != "/workspace/src" {
-		t.Errorf("expected /workspace/src, got %s", h.WorktreePath())
+	if h.WorktreePath() != "/workspace/src/myrepo" {
+		t.Errorf("expected /workspace/src/myrepo, got %s", h.WorktreePath())
+	}
+
+	// With explicit path
+	config2 := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/org/myrepo.git", Path: "custom"}},
+		WorkspaceDir: "/workspace",
+	}
+	h2 := NewHydrator(config2, NewMockRunner())
+	if h2.WorktreePath() != "/workspace/src/custom" {
+		t.Errorf("expected /workspace/src/custom, got %s", h2.WorktreePath())
+	}
+
+	// With no repos — fallback
+	config3 := &Config{WorkspaceDir: "/workspace"}
+	h3 := NewHydrator(config3, NewMockRunner())
+	if h3.WorktreePath() != "/workspace/src" {
+		t.Errorf("expected /workspace/src, got %s", h3.WorktreePath())
 	}
 }
 
@@ -182,11 +198,11 @@ func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("AOT_DEVBOX_CONFIG", "devbox.json")
 
 	config := ConfigFromEnv()
-	if config.RepoURL != "https://github.com/test/repo.git" {
-		t.Errorf("got RepoURL %q", config.RepoURL)
+	if len(config.Repos) != 1 || config.Repos[0].URL != "https://github.com/test/repo.git" {
+		t.Errorf("got Repos %+v", config.Repos)
 	}
-	if config.Branch != "develop" {
-		t.Errorf("got Branch %q", config.Branch)
+	if config.Repos[0].Branch != "develop" {
+		t.Errorf("got Branch %q", config.Repos[0].Branch)
 	}
 	if config.WorkspaceDir != "/custom/workspace" {
 		t.Errorf("got WorkspaceDir %q", config.WorkspaceDir)

@@ -64,7 +64,7 @@ func TestContract_CreateAgentRun_ValidInput(t *testing.T) {
 	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "Fix the tests",
 		},
 	}))
@@ -116,7 +116,7 @@ func TestContract_GetAgentRun_Exists(t *testing.T) {
 	created, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "Test get",
 		},
 	}))
@@ -176,7 +176,7 @@ func TestContract_ListAgentRuns_WithRuns(t *testing.T) {
 		if _, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 			Spec: &apiv1.AgentRunSpec{
 				Backend: apiv1.Backend_BACKEND_POD,
-				RepoUrl: "https://github.com/example/repo.git",
+				Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 				Prompt:  "task",
 			},
 		})); err != nil {
@@ -201,7 +201,7 @@ func TestContract_ListAgentRuns_WithLimit(t *testing.T) {
 		if _, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 			Spec: &apiv1.AgentRunSpec{
 				Backend: apiv1.Backend_BACKEND_POD,
-				RepoUrl: "https://github.com/example/repo.git",
+				Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 				Prompt:  "task",
 			},
 		})); err != nil {
@@ -229,7 +229,7 @@ func TestContract_ListAgentRuns_PhaseFilter(t *testing.T) {
 		if _, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 			Spec: &apiv1.AgentRunSpec{
 				Backend: apiv1.Backend_BACKEND_POD,
-				RepoUrl: "https://github.com/example/repo.git",
+				Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 				Prompt:  "task",
 			},
 		})); err != nil {
@@ -269,7 +269,7 @@ func TestContract_CancelAgentRun_Exists(t *testing.T) {
 	created, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "cancel me",
 		},
 	}))
@@ -329,7 +329,7 @@ func TestContract_SendHumanInput_NotWaiting(t *testing.T) {
 	created, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "not waiting",
 		},
 	}))

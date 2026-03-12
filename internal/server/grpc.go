@@ -257,10 +257,17 @@ func generateRunName() (string, error) {
 
 // specProtoToCRD converts a proto AgentRunSpec to a CRD AgentRunSpec.
 func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
+	var repos []aotv1alpha1.Repository
+	for _, r := range spec.Repos {
+		repos = append(repos, aotv1alpha1.Repository{
+			URL:    r.Url,
+			Branch: r.Branch,
+			Path:   r.Path,
+		})
+	}
 	crdSpec := aotv1alpha1.AgentRunSpec{
 		Backend:      aotv1alpha1.BackendPod,
-		RepoURL:      spec.RepoUrl,
-		Branch:       spec.Branch,
+		Repos:        repos,
 		Prompt:       spec.Prompt,
 		DevboxConfig: spec.DevboxConfig,
 		TTLSeconds:   spec.TtlSeconds,
@@ -273,12 +280,19 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 
 // crdToProto converts a CRD AgentRun to a proto AgentRun.
 func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
+	var protoRepos []*apiv1.Repository
+	for _, r := range crd.Spec.Repos {
+		protoRepos = append(protoRepos, &apiv1.Repository{
+			Url:    r.URL,
+			Branch: r.Branch,
+			Path:   r.Path,
+		})
+	}
 	run := &apiv1.AgentRun{
 		Id:   crd.Name,
 		Name: crd.Name,
 		Spec: &apiv1.AgentRunSpec{
-			RepoUrl:      crd.Spec.RepoURL,
-			Branch:       crd.Spec.Branch,
+			Repos:        protoRepos,
 			Prompt:       crd.Spec.Prompt,
 			DevboxConfig: crd.Spec.DevboxConfig,
 			TtlSeconds:   crd.Spec.TTLSeconds,

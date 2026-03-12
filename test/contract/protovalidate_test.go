@@ -19,7 +19,7 @@ func TestProtovalidate_CreateAgentRun_EmptyPrompt(t *testing.T) {
 	_, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "", // violates min_len = 1
 		},
 	}))
@@ -38,7 +38,7 @@ func TestProtovalidate_CreateAgentRun_InvalidRepoURL(t *testing.T) {
 	_, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "not-a-url", // violates uri = true
+			Repos:   []*apiv1.Repository{{Url: "not-a-url"}}, // violates uri = true
 			Prompt:  "do something",
 		},
 	}))
@@ -57,7 +57,7 @@ func TestProtovalidate_CreateAgentRun_UnspecifiedBackend(t *testing.T) {
 	_, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_UNSPECIFIED, // violates not_in: [0]
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "do something",
 		},
 	}))
@@ -76,7 +76,7 @@ func TestProtovalidate_CreateAgentRun_NegativeTTL(t *testing.T) {
 	_, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend:    apiv1.Backend_BACKEND_POD,
-			RepoUrl:    "https://github.com/example/repo.git",
+			Repos:      []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:     "do something",
 			TtlSeconds: -1, // violates gte = 0
 		},
@@ -96,7 +96,7 @@ func TestProtovalidate_CreateAgentRun_ValidInput(t *testing.T) {
 	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend:    apiv1.Backend_BACKEND_POD,
-			RepoUrl:    "https://github.com/example/repo.git",
+			Repos:      []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:     "valid prompt",
 			TtlSeconds: 3600,
 		},

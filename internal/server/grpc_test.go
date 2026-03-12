@@ -51,7 +51,7 @@ func TestCreateAgentRun(t *testing.T) {
 	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "Fix the tests",
 		},
 	}))
@@ -87,7 +87,7 @@ func TestGetAgentRun(t *testing.T) {
 	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "Test get",
 		},
 	}))
@@ -127,7 +127,7 @@ func TestListAgentRuns(t *testing.T) {
 		if _, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 			Spec: &apiv1.AgentRunSpec{
 				Backend: apiv1.Backend_BACKEND_POD,
-				RepoUrl: "https://github.com/example/repo.git",
+				Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 				Prompt:  prompt,
 			},
 		})); err != nil {
@@ -152,7 +152,7 @@ func TestListAgentRuns_WithLimit(t *testing.T) {
 		if _, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 			Spec: &apiv1.AgentRunSpec{
 				Backend: apiv1.Backend_BACKEND_POD,
-				RepoUrl: "https://github.com/example/repo.git",
+				Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 				Prompt:  "task",
 			},
 		})); err != nil {
@@ -176,7 +176,7 @@ func TestCancelAgentRun(t *testing.T) {
 	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "cancel me",
 		},
 	}))
@@ -216,7 +216,7 @@ func TestSendHumanInput_NotWaiting(t *testing.T) {
 	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "not waiting",
 		},
 	}))
@@ -279,7 +279,7 @@ func TestWatchAgentRun_InitialState(t *testing.T) {
 	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "watch me",
 		},
 	}))
@@ -318,7 +318,7 @@ func TestWatchAgentRun_EventStreaming(t *testing.T) {
 	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend: apiv1.Backend_BACKEND_POD,
-			RepoUrl: "https://github.com/example/repo.git",
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
 			Prompt:  "stream events",
 		},
 	}))

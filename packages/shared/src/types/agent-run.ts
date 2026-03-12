@@ -10,11 +10,17 @@ export type AgentRunPhase =
   | "Failed"
   | "Cancelled";
 
+/** Repository to clone into the agent workspace. */
+export interface Repository {
+  url: string;
+  branch?: string;
+  path?: string;
+}
+
 /** Spec for creating an AgentRun. */
 export interface AgentRunSpec {
   backend: Backend;
-  repoURL: string;
-  branch?: string;
+  repos: Repository[];
   prompt: string;
   devboxConfig?: string;
   ttlSeconds?: number;

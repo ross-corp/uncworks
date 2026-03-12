@@ -21,8 +21,7 @@ func defaultInput() aottemporal.WorkflowInput {
 	return aottemporal.WorkflowInput{
 		AgentRunName: "test-run",
 		Namespace:    "default",
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "fix the tests",
 		TTLSeconds:   3600,
 	}
@@ -46,7 +45,7 @@ func TestWorkflow_HappyPath(t *testing.T) {
 		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5"}, nil,
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
@@ -71,7 +70,7 @@ func TestWorkflow_TTLExpiry(t *testing.T) {
 		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5"}, nil,
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
@@ -94,7 +93,7 @@ func TestWorkflow_HITLSignal(t *testing.T) {
 		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5"}, nil,
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -132,7 +131,7 @@ func TestWorkflow_CancelSignal(t *testing.T) {
 		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5"}, nil,
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
@@ -160,7 +159,7 @@ func TestWorkflow_CompensationOnFailure(t *testing.T) {
 		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5"}, nil,
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(
 		fmt.Errorf("agent process failed to start"),
@@ -184,7 +183,7 @@ func TestWorkflow_SpawnJunior(t *testing.T) {
 		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-junior"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5"}, nil,
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
@@ -196,8 +195,7 @@ func TestWorkflow_SpawnJunior(t *testing.T) {
 		ParentRunName: "parent-run",
 		Namespace:     "default",
 		Task:          "write unit tests for auth",
-		RepoURL:       "https://github.com/example/repo.git",
-		Branch:        "main",
+		Repos:         []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		TTLSeconds:    1800,
 		Blocking:      true,
 	}
@@ -216,7 +214,7 @@ func TestWorkflow_GetStateQuery(t *testing.T) {
 		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5"}, nil,
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(

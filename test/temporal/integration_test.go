@@ -67,8 +67,7 @@ func TestIntegration_WorkflowExecution(t *testing.T) {
 	}, aottemporal.AgentRunWorkflow, aottemporal.WorkflowInput{
 		AgentRunName: "integration-test-run",
 		Namespace:    "default",
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "integration test",
 		TTLSeconds:   3600,
 	})
@@ -110,8 +109,7 @@ func TestIntegration_HITLSignalFlow(t *testing.T) {
 	}, aottemporal.AgentRunWorkflow, aottemporal.WorkflowInput{
 		AgentRunName: "hitl-integration-test",
 		Namespace:    "default",
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "integration HITL test",
 		TTLSeconds:   3600,
 	})
@@ -162,8 +160,7 @@ func TestIntegration_TTLExpiry(t *testing.T) {
 	}, aottemporal.AgentRunWorkflow, aottemporal.WorkflowInput{
 		AgentRunName: "ttl-integration-test",
 		Namespace:    "default",
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "integration TTL test",
 		TTLSeconds:   5, // Short TTL
 	})
@@ -190,7 +187,7 @@ func (m *mockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateA
 }
 
 func (m *mockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
-	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.10"}, nil
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.10", WorkspacePath: "/workspace/src/repo"}, nil
 }
 
 func (m *mockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
@@ -230,7 +227,7 @@ func (m *hitlMockActivities) CreateAgentPod(_ context.Context, _ aottemporal.Cre
 	return &aottemporal.CreateAgentPodOutput{PodName: "mock-hitl-pod"}, nil
 }
 func (m *hitlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
-	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.11"}, nil
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.11", WorkspacePath: "/workspace/src/repo"}, nil
 }
 func (m *hitlMockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
 	return nil
@@ -269,7 +266,7 @@ func (m *ttlMockActivities) CreateAgentPod(_ context.Context, _ aottemporal.Crea
 	return &aottemporal.CreateAgentPodOutput{PodName: "mock-ttl-pod"}, nil
 }
 func (m *ttlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
-	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.12"}, nil
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.12", WorkspacePath: "/workspace/src/repo"}, nil
 }
 func (m *ttlMockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
 	return nil

@@ -36,7 +36,7 @@ func TestE2E_API_CreateAgentRun(t *testing.T) {
 	resp, err := client.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend:    apiv1.Backend_BACKEND_POD,
-			RepoUrl:    "https://github.com/example/test.git",
+			Repos:      []*apiv1.Repository{{Url: "https://github.com/example/test.git"}},
 			Prompt:     "E2E API test: create run",
 			TtlSeconds: 120,
 		},
@@ -88,7 +88,7 @@ func TestE2E_API_Lifecycle(t *testing.T) {
 	resp, err := client.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend:    apiv1.Backend_BACKEND_POD,
-			RepoUrl:    "https://github.com/example/test.git",
+			Repos:      []*apiv1.Repository{{Url: "https://github.com/example/test.git"}},
 			Prompt:     "E2E API lifecycle test",
 			TtlSeconds: 120,
 		},
@@ -155,7 +155,7 @@ func TestE2E_API_CancelAgentRun(t *testing.T) {
 	resp, err := client.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend:    apiv1.Backend_BACKEND_POD,
-			RepoUrl:    "https://github.com/example/test.git",
+			Repos:      []*apiv1.Repository{{Url: "https://github.com/example/test.git"}},
 			Prompt:     fmt.Sprintf("E2E cancel test %d", time.Now().UnixMilli()),
 			TtlSeconds: 120,
 		},
@@ -207,7 +207,7 @@ func TestE2E_API_SendHumanInput(t *testing.T) {
 	resp, err := apiClient.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend:    apiv1.Backend_BACKEND_POD,
-			RepoUrl:    "https://github.com/example/test.git",
+			Repos:      []*apiv1.Repository{{Url: "https://github.com/example/test.git"}},
 			Prompt:     fmt.Sprintf("E2E human input test %d", time.Now().UnixMilli()),
 			TtlSeconds: 120,
 		},

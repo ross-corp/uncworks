@@ -13,7 +13,7 @@ tasks:
   # --- Testing ---
   test:
     desc: Run all tests (parallel)
-    deps: [test:go, test:web, test:extension, test:tui]
+    deps: [test:go, test:web, test:extension]
 
   test:all:
     desc: Run full test pipeline sequentially (schema → unit → contract → temporal → integration → e2e)
@@ -77,12 +77,6 @@ tasks:
     dir: packages/pi-aot-extension
     cmds:
       - npx tsx --test src/**/*.test.ts
-
-  test:tui:
-    desc: Run TUI tests
-    dir: packages/tui
-    cmds:
-      - npm test
 
   test:shared:
     desc: Run @aot/shared tests
@@ -228,12 +222,6 @@ tasks:
       - echo "All dependencies deployed. Run 'task k0s:ollama:pull' to pull models."
 
   # --- Development ---
-  dev:tui:
-    desc: Start interactive TUI dashboard
-    dir: packages/tui
-    cmds:
-      - node --import tsx src/main.ts {{.CLI_ARGS}}
-
   dev:web:
     desc: Start web dashboard dev server
     dir: web
@@ -247,7 +235,6 @@ tasks:
       - cd web && npm install
       - cd packages/shared && npm install
       - cd packages/pi-aot-extension && npm install
-      - cd packages/tui && npm install
 
   lint:
     desc: Run linters

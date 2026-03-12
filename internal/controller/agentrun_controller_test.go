@@ -63,8 +63,7 @@ func newAgentRun(name string, opts ...func(*aotv1alpha1.AgentRun)) *aotv1alpha1.
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			RepoURL:    "https://github.com/example/repo.git",
-			Branch:     "main",
+			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 			Prompt:     "do the thing",
 			TTLSeconds: 3600,
 		},
@@ -84,8 +83,7 @@ func TestBuildAgentPod_DefaultImage(t *testing.T) {
 		Name:         "agentrun-test-build",
 		Namespace:    "default",
 		AgentRunName: "test-build",
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "do the thing",
 	}
 	pod := aottemporal.BuildAgentPod(input)
@@ -133,8 +131,7 @@ func TestBuildAgentPod_CustomImage(t *testing.T) {
 		Name:         "agentrun-custom",
 		Namespace:    "default",
 		AgentRunName: "custom",
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "do the thing",
 		Image:        "my-registry.io/agent:v2",
 	}
@@ -150,8 +147,7 @@ func TestBuildAgentPod_EnvVars(t *testing.T) {
 		Name:         "agentrun-env",
 		Namespace:    "default",
 		AgentRunName: "env-test",
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "do the thing",
 		EnvVars:      map[string]string{"CUSTOM_KEY": "CUSTOM_VAL"},
 	}
@@ -163,7 +159,7 @@ func TestBuildAgentPod_EnvVars(t *testing.T) {
 		envMap[e.Name] = e.Value
 	}
 
-	for _, key := range []string{"AOT_AGENT_RUN_ID", "AOT_REPO_URL", "AOT_BRANCH", "AOT_PROMPT"} {
+	for _, key := range []string{"AOT_AGENT_RUN_ID", "AOT_REPOS", "AOT_PROMPT"} {
 		if _, ok := envMap[key]; !ok {
 			t.Errorf("missing expected env var %s", key)
 		}
@@ -186,8 +182,7 @@ func TestBuildAgentPod_LLMEnvVars(t *testing.T) {
 		Name:           "agentrun-llm",
 		Namespace:      "default",
 		AgentRunName:   "llm-test",
-		RepoURL:        "https://github.com/example/repo.git",
-		Branch:         "main",
+		Repos:          []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:         "do the thing",
 		LLMKey:         "sk-test-key-123",
 		LiteLLMBaseURL: "http://litellm:4000",
@@ -230,8 +225,7 @@ func TestBuildAgentPod_NoLLMEnvVars(t *testing.T) {
 		Name:         "agentrun-nollm",
 		Namespace:    "default",
 		AgentRunName: "nollm-test",
-		RepoURL:      "https://github.com/example/repo.git",
-		Branch:       "main",
+		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "do the thing",
 	}
 	pod := aottemporal.BuildAgentPod(input)

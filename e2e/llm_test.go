@@ -48,8 +48,7 @@ func TestE2E_LLM_Lifecycle(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			RepoURL:    "https://github.com/example/repo.git",
-			Branch:     "main",
+			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 			Prompt:     lifecyclePrompt,
 			TTLSeconds: 300,
 		},
@@ -98,8 +97,7 @@ func TestE2E_LLM_HITL(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			RepoURL:    "https://github.com/example/repo.git",
-			Branch:     "main",
+			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 			Prompt:     hitlPrompt,
 			TTLSeconds: 300,
 		},
@@ -158,8 +156,7 @@ func TestE2E_LLM_MultiAgent(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			RepoURL:    "https://github.com/example/repo.git",
-			Branch:     "main",
+			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 			Prompt:     "Delegate the following task to a junior agent: " + lifecyclePrompt,
 			TTLSeconds: 600,
 		},

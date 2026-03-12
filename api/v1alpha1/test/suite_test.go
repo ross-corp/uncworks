@@ -72,8 +72,7 @@ var _ = Describe("AgentRun CRD", func() {
 				},
 				Spec: aotv1alpha1.AgentRunSpec{
 					Backend: aotv1alpha1.BackendPod,
-					RepoURL: "https://github.com/example/repo.git",
-					Branch:  "main",
+					Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 					Prompt:  "Fix the failing tests",
 				},
 			}
@@ -89,7 +88,7 @@ var _ = Describe("AgentRun CRD", func() {
 			}, 10*time.Second, 250*time.Millisecond).Should(Succeed())
 
 			Expect(fetched.Spec.Backend).To(Equal(aotv1alpha1.BackendPod))
-			Expect(fetched.Spec.RepoURL).To(Equal("https://github.com/example/repo.git"))
+			Expect(fetched.Spec.Repos[0].URL).To(Equal("https://github.com/example/repo.git"))
 			Expect(fetched.Spec.Prompt).To(Equal("Fix the failing tests"))
 		})
 	})
@@ -103,7 +102,7 @@ var _ = Describe("AgentRun CRD", func() {
 				},
 				Spec: aotv1alpha1.AgentRunSpec{
 					Backend: aotv1alpha1.BackendKubeVirt,
-					RepoURL: "https://github.com/example/repo.git",
+					Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git"}},
 					Prompt:  "Refactor the API",
 					KubeVirtConfig: &aotv1alpha1.KubeVirtBackendConfig{
 						CPUs:     4,
@@ -139,7 +138,7 @@ var _ = Describe("AgentRun CRD", func() {
 				},
 				Spec: aotv1alpha1.AgentRunSpec{
 					Backend: aotv1alpha1.BackendExternal,
-					RepoURL: "https://github.com/example/repo.git",
+					Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git"}},
 					Prompt:  "Deploy the service",
 					ExternalConfig: &aotv1alpha1.ExternalBackendConfig{
 						Host:         "192.168.1.100",
@@ -176,7 +175,7 @@ var _ = Describe("AgentRun CRD", func() {
 				},
 				Spec: aotv1alpha1.AgentRunSpec{
 					Backend: aotv1alpha1.BackendPod,
-					RepoURL: "https://github.com/example/repo.git",
+					Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git"}},
 					Prompt:  "Run tests",
 				},
 			}
@@ -220,7 +219,7 @@ var _ = Describe("AgentRun CRD", func() {
 				},
 				Spec: aotv1alpha1.AgentRunSpec{
 					Backend: aotv1alpha1.BackendPod,
-					RepoURL: "https://github.com/example/repo.git",
+					Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git"}},
 					Prompt:  "Delete me",
 				},
 			}

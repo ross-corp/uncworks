@@ -30,8 +30,7 @@ func SpawnJunior(ctx context.Context, k8sClient client.Client, parentRun *aotv1a
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:      parentRun.Spec.Backend,
-			RepoURL:      parentRun.Spec.RepoURL,
-			Branch:       parentRun.Spec.Branch,
+			Repos:        parentRun.Spec.Repos,
 			Prompt:       task,
 			DevboxConfig: parentRun.Spec.DevboxConfig,
 			TTLSeconds:   parentRun.Spec.TTLSeconds,

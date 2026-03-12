@@ -48,7 +48,7 @@ This installs and activates:
 task install
 ```
 
-This runs `go mod tidy` and `npm install` in the web dashboard, shared package, pi-aot-extension, and TUI.
+This runs `go mod tidy` and `npm install` in the web dashboard, shared package, and pi-aot-extension.
 
 ### 4. Set Up the Local Cluster
 
@@ -84,7 +84,7 @@ You should see the AgentRun CRD registered.
 
 ```mermaid
 sequenceDiagram
-    participant Client as Client (Web/TUI/CLI)
+    participant Client as Client (Web/CLI)
     participant API as API Server
     participant Ctrl as Controller
     participant Pod as Agent Pod
@@ -240,31 +240,6 @@ task dev:web
 - **AgentRunDetail**: shows full details for a selected run, including live-streamed logs and events.
 - **WebSocket**: the dashboard connects to the API server's WebSocket endpoint for real-time updates without polling.
 
-### TUI
-
-The terminal UI is a SolidJS application that renders to ANSI terminal output.
-
-```
-═══ AOT Dashboard ═══
-  ● fix-login-css [Running] - Fix the login page CSS layout issues
-▸ ◎ add-auth-tests [WaitingForInput] - Add unit tests for auth module
-  ✓ refactor-db [Succeeded] - Refactor database connection pooling
-  ✗ deploy-staging [Failed] - Deploy to staging environment
-  ○ update-deps [Pending] - Update all dependencies to latest versions
-─── Detail ───
-  Agent: add-auth-tests
-  Phase: ◎ WaitingForInput
-  Backend: Pod
-  Prompt: Add unit tests for auth module
-q: quit | ↑/↓: navigate | Enter: select
-```
-
-Phase indicators: ○ Pending, ● Running, ◎ WaitingForInput, ✓ Succeeded, ✗ Failed, ⊘ Cancelled
-
-The TUI package is at `packages/tui/` and provides:
-- A reactive renderer (`renderer.ts`) that outputs ANSI escape sequences.
-- Views (`views.ts`) for displaying agent run status in the terminal.
-
 ### gRPC Streaming
 
 For programmatic monitoring, use the `WatchAgentRun` RPC:
@@ -377,7 +352,7 @@ sequenceDiagram
     participant Agent
     participant Sidecar as RPC Gateway
     participant CP as Control Plane
-    participant Client as User (Web/TUI/CLI)
+    participant Client as User (Web/CLI)
 
     Agent->>Sidecar: ask_human("Which DB?")
     Sidecar->>CP: NotifyEvent(WAITING_FOR_INPUT)
@@ -394,7 +369,7 @@ sequenceDiagram
 2. When the agent calls `ask_human` with a question, the agent's process state transitions to `WAITING_FOR_INPUT`.
 3. The sidecar notifies the control plane via the `AgentNotificationService.NotifyEvent` RPC.
 4. The `AgentRun` phase changes to `WaitingForInput`.
-5. Clients (Web Dashboard, TUI, or gRPC client) see the phase change and the question.
+5. Clients (Web Dashboard or gRPC client) see the phase change and the question.
 6. A human sends a response via `SendHumanInput`:
 
 ```bash

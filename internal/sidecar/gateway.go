@@ -100,6 +100,9 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	cmd := exec.Command("devbox", "run", "--", "agent", "--prompt", req.Prompt)
 	cmd.Dir = req.RepoPath
+	if cmd.Dir == "" {
+		cmd.Dir = "/workspace/src"
+	}
 
 	for k, v := range req.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
