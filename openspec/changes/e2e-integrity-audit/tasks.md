@@ -67,7 +67,7 @@
 - [x] 8.2 Test: `CreateAgentRun` via API → verify CRD exists in K8s
 - [x] 8.3 Test: Full lifecycle via API → Pending → Running → Succeeded
 - [x] 8.4 Test: `CancelAgentRun` via API → verify Cancelled phase
-- [ ] 8.5 Test: `SendHumanInput` via API → verify run completes after input
+- [x] 8.5 Test: `SendHumanInput` via API → verify run completes after input
 - [x] 8.6 Add `test:e2e:api` Taskfile target
 
 ## 9. Verification
