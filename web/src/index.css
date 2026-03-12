@@ -1,0 +1,66 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface-0: #09090b;
+  --surface-1: #18181b;
+  --surface-2: #27272a;
+  --surface-3: #3f3f46;
+
+  --border: #27272a;
+  --border-strong: #3f3f46;
+
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+  --info: #3b82f6;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  .input-field {
+    @apply w-full rounded border border-edge bg-surface-2 px-3 py-2 text-sm text-txt-primary placeholder-txt-tertiary outline-none transition-colors focus:border-edge-strong;
+  }
+
+  .btn {
+    @apply inline-flex items-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-surface-0 hover:bg-accent-hover;
+  }
+
+  .btn-ghost {
+    @apply btn text-txt-secondary hover:bg-surface-2 hover:text-txt-primary;
+  }
+
+  .btn-danger {
+    @apply btn text-danger hover:bg-danger/10;
+  }
+
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}
