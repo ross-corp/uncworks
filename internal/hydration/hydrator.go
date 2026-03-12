@@ -101,7 +101,13 @@ func (h *Hydrator) createWorktree(ctx context.Context) error {
 
 	branch := h.config.Branch
 	if branch == "" {
-		branch = "main"
+		// Detect default branch from the bare repo's HEAD
+		out, err := h.runner.Run(ctx, bareDir, "git", "symbolic-ref", "--short", "HEAD")
+		if err == nil && out != "" {
+			branch = out
+		} else {
+			branch = "main"
+		}
 	}
 
 	// Create a new worktree branch for the agent
