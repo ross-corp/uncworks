@@ -1,23 +1,23 @@
 ## 1. Fix Temporal Workflow (Critical — nothing works without this)
 
-- [ ] 1.1 Fix nil `*Activities` pointer in `AgentRunWorkflow` — use proper Temporal activity invocation pattern (function references or string names)
-- [ ] 1.2 Fix defer cleanup block to use correct activity invocation (currently calls methods on nil pointer)
-- [ ] 1.3 Move signal channel registration (`workflow.GetSignalChannel`) to workflow start, before provisioning/pod creation
-- [ ] 1.4 Add `activity.RecordHeartbeat()` in `WaitForHydration` and `GetAgentStatus` polling loops
-- [ ] 1.5 Fix `SpawnJuniorWorkflow` to pass `ModelTier`, `MaxBudget`, and `LiteLLMBaseURL` to child workflow input
-- [ ] 1.6 Reuse `http.Client` in Activities struct for sidecar RPC instead of creating per-call
-- [ ] 1.7 Add sidecar readiness check (retry loop) in `StartAgent` before calling sidecar RPC
-- [ ] 1.8 Handle errors from `StopAgent` and `ForwardHumanInput` activities instead of discarding with `_`
-- [ ] 1.9 Remove unused activity function pointer variables (`CreateAgentPodActivity`, etc.)
-- [ ] 1.10 Verify workflow tests pass with fixed activity invocation pattern
+- [x] 1.1 Fix nil `*Activities` pointer in `AgentRunWorkflow` — use proper Temporal activity invocation pattern (function references or string names)
+- [x] 1.2 Fix defer cleanup block to use correct activity invocation (currently calls methods on nil pointer)
+- [x] 1.3 Move signal channel registration (`workflow.GetSignalChannel`) to workflow start, before provisioning/pod creation
+- [x] 1.4 Add `activity.RecordHeartbeat()` in `WaitForHydration` and `GetAgentStatus` polling loops
+- [x] 1.5 Fix `SpawnJuniorWorkflow` to pass `ModelTier`, `MaxBudget`, and `LiteLLMBaseURL` to child workflow input
+- [x] 1.6 Reuse `http.Client` in Activities struct for sidecar RPC instead of creating per-call
+- [x] 1.7 Add sidecar readiness check (retry loop) in `StartAgent` before calling sidecar RPC
+- [x] 1.8 Handle errors from `StopAgent` and `ForwardHumanInput` activities instead of discarding with `_`
+- [x] 1.9 Remove unused activity function pointer variables (`CreateAgentPodActivity`, etc.)
+- [x] 1.10 Verify workflow tests pass with fixed activity invocation pattern
 
 ## 2. Fix Sidecar
 
-- [ ] 2.1 Add stderr streaming — second goroutine in `monitorProcess` that reads stderr pipe and emits `OUTPUT_TYPE_STDERR` events
-- [ ] 2.2 Log dropped messages when output channel buffer is full instead of silent discard
-- [ ] 2.3 Explicitly close stdin/stdout/stderr pipes on process exit
-- [ ] 2.4 Add timeout to `cmd.Wait()` — force-kill process after configurable duration
-- [ ] 2.5 Add tests for process lifecycle (start, stdout/stderr streaming, termination)
+- [x] 2.1 Add stderr streaming — second goroutine in `monitorProcess` that reads stderr pipe and emits `OUTPUT_TYPE_STDERR` events
+- [x] 2.2 Log dropped messages when output channel buffer is full instead of silent discard
+- [x] 2.3 Explicitly close stdin/stdout/stderr pipes on process exit
+- [x] 2.4 Add timeout to `cmd.Wait()` — force-kill process after configurable duration
+- [x] 2.5 Add tests for process lifecycle (start, stdout/stderr streaming, termination)
 
 ## 3. Wire API Server to K8s
 

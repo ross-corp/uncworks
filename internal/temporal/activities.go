@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"go.temporal.io/sdk/activity"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,6 +51,7 @@ func imagePullPolicy(image string) corev1.PullPolicy {
 type Activities struct {
 	K8sClient     client.Client
 	LiteLLMClient *litellm.Client
+	HTTPClient    *http.Client
 }
 
 // CreateAgentPodInput contains the parameters for creating an agent pod.
@@ -120,6 +123,8 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			return fmt.Errorf("pod failed before hydration completed")
 		}
 
+		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for hydration: pod %s", input.PodName))
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -141,20 +146,33 @@ type StartAgentInput struct {
 	Prompt    string
 }
 
-// StartAgent calls the sidecar StartAgent RPC.
+// StartAgent calls the sidecar StartAgent RPC, retrying until the sidecar is ready.
 func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) error {
-	sidecarClient := a.sidecarClient(input.PodName, input.Namespace)
+	sc := a.sidecarClient(input.PodName, input.Namespace)
 
-	resp, err := sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
-		Prompt: input.Prompt,
-	}))
-	if err != nil {
-		return fmt.Errorf("start agent RPC: %w", err)
+	// Retry until sidecar is ready (it may still be starting)
+	var lastErr error
+	for attempt := 0; attempt < 30; attempt++ {
+		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for sidecar readiness: attempt %d", attempt+1))
+
+		resp, err := sc.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
+			Prompt: input.Prompt,
+		}))
+		if err == nil {
+			if !resp.Msg.Started {
+				return fmt.Errorf("agent did not start")
+			}
+			return nil
+		}
+		lastErr = err
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
 	}
-	if !resp.Msg.Started {
-		return fmt.Errorf("agent did not start")
-	}
-	return nil
+	return fmt.Errorf("start agent RPC (sidecar not ready after 60s): %w", lastErr)
 }
 
 // GetAgentStatusInput contains the parameters for getting agent status.
@@ -424,8 +442,12 @@ func (a *Activities) RevokeLLMKey(ctx context.Context, input RevokeLLMKeyInput) 
 // DNS name within the cluster: <pod-name>.<namespace>.svc.cluster.local.
 func (a *Activities) sidecarClient(podName, namespace string) agentv1connect.AgentSidecarServiceClient {
 	addr := fmt.Sprintf("http://%s.%s:%d", podName, namespace, sidecarPort)
+	httpClient := a.HTTPClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
 	return agentv1connect.NewAgentSidecarServiceClient(
-		&http.Client{},
+		httpClient,
 		addr,
 	)
 }

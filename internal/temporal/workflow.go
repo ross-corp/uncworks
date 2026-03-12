@@ -57,17 +57,18 @@ type HumanInputSignal struct {
 	Input string
 }
 
-// Activity function references used by the workflow.
-// These are set by the worker at startup and used for activity dispatch.
-// Using variable references allows the test suite to mock them.
-var (
-	CreateAgentPodActivity    func(Activities) func(interface{}, CreateAgentPodInput) (*CreateAgentPodOutput, error)
-	WaitForHydrationActivity  func(Activities) func(interface{}, WaitForHydrationInput) error
-	StartAgentActivity        func(Activities) func(interface{}, StartAgentInput) error
-	GetAgentStatusActivity    func(Activities) func(interface{}, GetAgentStatusInput) (*GetAgentStatusOutput, error)
-	ForwardHumanInputActivity func(Activities) func(interface{}, ForwardHumanInputInput) error
-	StopAgentActivity         func(Activities) func(interface{}, StopAgentInput) error
-	CleanupPodActivity        func(Activities) func(interface{}, CleanupPodInput) error
+// Activity name constants — must match the method names registered on the Activities struct.
+// The Temporal SDK resolves these by name against the struct registered on the worker.
+const (
+	ActivityProvisionLLMKey   = "ProvisionLLMKey"
+	ActivityRevokeLLMKey      = "RevokeLLMKey"
+	ActivityCreateAgentPod    = "CreateAgentPod"
+	ActivityWaitForHydration  = "WaitForHydration"
+	ActivityStartAgent        = "StartAgent"
+	ActivityGetAgentStatus    = "GetAgentStatus"
+	ActivityForwardHumanInput = "ForwardHumanInput"
+	ActivityStopAgent         = "StopAgent"
+	ActivityCleanupPod        = "CleanupPod"
 )
 
 // AgentRunWorkflow orchestrates the full lifecycle of an agent run.
@@ -81,12 +82,15 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		Message: "Workflow started",
 	}
 
-	// Register query handler for get-state
+	// Register query handler and signal channels immediately at workflow start
 	if err := workflow.SetQueryHandler(ctx, QueryGetState, func() (*WorkflowState, error) {
 		return state, nil
 	}); err != nil {
 		return fmt.Errorf("set query handler: %w", err)
 	}
+
+	cancelCh := workflow.GetSignalChannel(ctx, SignalCancel)
+	humanInputCh := workflow.GetSignalChannel(ctx, SignalHumanInput)
 
 	activityOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: activityTimeout,
@@ -100,9 +104,6 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	actCtx := workflow.WithActivityOptions(ctx, activityOpts)
 
-	// Activity references — using the struct method names for proper registration
-	var a *Activities
-
 	// Compensation: ensure pod cleanup and LLM key revocation on any exit
 	var podName string
 	var llmKey string
@@ -112,12 +113,12 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			StartToCloseTimeout: 30 * time.Second,
 		})
 		if llmKey != "" {
-			_ = workflow.ExecuteActivity(cleanupCtx, a.RevokeLLMKey, RevokeLLMKeyInput{
+			_ = workflow.ExecuteActivity(cleanupCtx, ActivityRevokeLLMKey, RevokeLLMKeyInput{
 				Key: llmKey,
 			}).Get(cleanupCtx, nil)
 		}
 		if podName != "" {
-			_ = workflow.ExecuteActivity(cleanupCtx, a.CleanupPod, CleanupPodInput{
+			_ = workflow.ExecuteActivity(cleanupCtx, ActivityCleanupPod, CleanupPodInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
 			}).Get(cleanupCtx, nil)
@@ -129,7 +130,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	state.Message = "Provisioning LLM key"
 
 	var keyOutput ProvisionLLMKeyOutput
-	if err := workflow.ExecuteActivity(actCtx, a.ProvisionLLMKey, ProvisionLLMKeyInput{
+	if err := workflow.ExecuteActivity(actCtx, ActivityProvisionLLMKey, ProvisionLLMKeyInput{
 		AgentRunName: input.AgentRunName,
 		Namespace:    input.Namespace,
 		ModelTier:    input.ModelTier,
@@ -164,7 +165,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 
 	var createOutput CreateAgentPodOutput
-	if err := workflow.ExecuteActivity(actCtx, a.CreateAgentPod, podInput).Get(ctx, &createOutput); err != nil {
+	if err := workflow.ExecuteActivity(actCtx, ActivityCreateAgentPod, podInput).Get(ctx, &createOutput); err != nil {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during pod creation"
@@ -187,7 +188,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	hydrationCtx := workflow.WithActivityOptions(ctx, hydrationOpts)
 
-	if err := workflow.ExecuteActivity(hydrationCtx, a.WaitForHydration, WaitForHydrationInput{
+	if err := workflow.ExecuteActivity(hydrationCtx, ActivityWaitForHydration, WaitForHydrationInput{
 		PodName:   podName,
 		Namespace: input.Namespace,
 	}).Get(ctx, nil); err != nil {
@@ -205,7 +206,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	state.Phase = "Running"
 	state.Message = "Starting agent"
 
-	if err := workflow.ExecuteActivity(actCtx, a.StartAgent, StartAgentInput{
+	if err := workflow.ExecuteActivity(actCtx, ActivityStartAgent, StartAgentInput{
 		PodName:   podName,
 		Namespace: input.Namespace,
 		Prompt:    input.Prompt,
@@ -222,10 +223,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 	state.Message = "Agent running"
 
-	// --- Step 5: Set up signal handlers and TTL timer, poll for completion ---
-	cancelCh := workflow.GetSignalChannel(ctx, SignalCancel)
-	humanInputCh := workflow.GetSignalChannel(ctx, SignalHumanInput)
-
+	// --- Step 5: Set up TTL timer and poll for completion ---
 	// TTL timer
 	var ttlDuration time.Duration
 	if input.TTLSeconds > 0 {
@@ -247,10 +245,12 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			state.Phase = "Cancelling"
 			state.Message = "Cancel signal received"
 
-			_ = workflow.ExecuteActivity(actCtx, a.StopAgent, StopAgentInput{
+			if err := workflow.ExecuteActivity(actCtx, ActivityStopAgent, StopAgentInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
-			}).Get(ctx, nil)
+			}).Get(ctx, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Failed to stop agent during cancel", "error", err)
+			}
 
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled by user"
@@ -261,11 +261,13 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			var signal HumanInputSignal
 			ch.Receive(ctx, &signal)
 
-			_ = workflow.ExecuteActivity(actCtx, a.ForwardHumanInput, ForwardHumanInputInput{
+			if err := workflow.ExecuteActivity(actCtx, ActivityForwardHumanInput, ForwardHumanInputInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
 				Input:     signal.Input,
-			}).Get(ctx, nil)
+			}).Get(ctx, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Failed to forward human input", "error", err)
+			}
 
 			state.Phase = "Running"
 			state.Message = "Human input forwarded"
@@ -276,16 +278,18 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			state.Phase = "Failed"
 			state.Message = "Exceeded TTL"
 
-			_ = workflow.ExecuteActivity(actCtx, a.StopAgent, StopAgentInput{
+			if err := workflow.ExecuteActivity(actCtx, ActivityStopAgent, StopAgentInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
-			}).Get(ctx, nil)
+			}).Get(ctx, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Failed to stop agent after TTL", "error", err)
+			}
 		})
 
 		// Poll agent status
 		selector.AddFuture(pollTimer, func(f workflow.Future) {
 			var statusOutput GetAgentStatusOutput
-			err := workflow.ExecuteActivity(actCtx, a.GetAgentStatus, GetAgentStatusInput{
+			err := workflow.ExecuteActivity(actCtx, ActivityGetAgentStatus, GetAgentStatusInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
 			}).Get(ctx, &statusOutput)
@@ -321,16 +325,19 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 // SpawnJuniorInput contains parameters for spawning a child workflow.
 type SpawnJuniorInput struct {
-	ParentRunName string
-	Namespace     string
-	Task          string
-	RepoURL       string
-	Branch        string
-	DevboxConfig  string
-	TTLSeconds    int32
-	Image         string
-	EnvVars       map[string]string
-	Blocking      bool
+	ParentRunName  string
+	Namespace      string
+	Task           string
+	RepoURL        string
+	Branch         string
+	DevboxConfig   string
+	TTLSeconds     int32
+	Image          string
+	EnvVars        map[string]string
+	Blocking       bool
+	ModelTier      string
+	MaxBudget      float64
+	LiteLLMBaseURL string
 }
 
 // SpawnJuniorWorkflow starts a child AgentRunWorkflow for a junior agent.
@@ -346,15 +353,18 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 	childCtx := workflow.WithChildOptions(ctx, childOpts)
 
 	childInput := WorkflowInput{
-		AgentRunName: juniorName,
-		Namespace:    input.Namespace,
-		RepoURL:      input.RepoURL,
-		Branch:       input.Branch,
-		Prompt:       input.Task,
-		DevboxConfig: input.DevboxConfig,
-		TTLSeconds:   input.TTLSeconds,
-		Image:        input.Image,
-		EnvVars:      input.EnvVars,
+		AgentRunName:   juniorName,
+		Namespace:      input.Namespace,
+		RepoURL:        input.RepoURL,
+		Branch:         input.Branch,
+		Prompt:         input.Task,
+		DevboxConfig:   input.DevboxConfig,
+		TTLSeconds:     input.TTLSeconds,
+		Image:          input.Image,
+		EnvVars:        input.EnvVars,
+		ModelTier:      input.ModelTier,
+		MaxBudget:      input.MaxBudget,
+		LiteLLMBaseURL: input.LiteLLMBaseURL,
 	}
 
 	future := workflow.ExecuteChildWorkflow(childCtx, AgentRunWorkflow, childInput)

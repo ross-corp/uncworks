@@ -142,13 +142,18 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 	}
 
 	// Stream stdout to watchers
-	go func() {
-		scanner := bufio.NewScanner(proc.stdout)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	streamPipe := func(reader io.ReadCloser, outputType agentv1.OutputType) {
+		defer wg.Done()
+		defer func() { _ = reader.Close() }()
+		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			line := make([]byte, len(scanner.Bytes()))
 			copy(line, scanner.Bytes())
 			output := &agentv1.AgentOutput{
-				Type:      agentv1.OutputType_OUTPUT_TYPE_STDOUT,
+				Type:      outputType,
 				Data:      line,
 				Timestamp: timestamppb.Now(),
 			}
@@ -157,14 +162,34 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 				select {
 				case ch <- output:
 				default:
+					log.Printf("WARNING: dropped %s output (subscriber buffer full)", outputType)
 				}
 			}
 			proc.mu.Unlock()
 		}
+	}
+
+	go streamPipe(proc.stdout, agentv1.OutputType_OUTPUT_TYPE_STDOUT)
+	go streamPipe(proc.stderr, agentv1.OutputType_OUTPUT_TYPE_STDERR)
+
+	// Wait for readers to drain before waiting on process
+	done := make(chan error, 1)
+	go func() {
+		done <- proc.cmd.Wait()
 	}()
 
-	// Wait for process to finish
-	err := proc.cmd.Wait()
+	// Wait for process with timeout
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(24 * time.Hour):
+		log.Printf("Agent process timed out after 24h, killing: %s", agentRunID)
+		_ = proc.cmd.Process.Kill()
+		err = <-done
+	}
+
+	wg.Wait()
+	_ = proc.stdin.Close()
 
 	g.mu.Lock()
 	if err != nil {
