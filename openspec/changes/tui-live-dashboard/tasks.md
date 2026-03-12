@@ -31,4 +31,4 @@
 - [x] 5.1 Add `dashboard` subcommand to `cmd/aot/main.go` that execs `npx tsx packages/tui/src/main.ts`
 - [x] 5.2 Create `packages/tui/src/main.ts` entry point that initializes runtime + data binding
 - [x] 5.3 Add `dev:tui` task to `Taskfile.yml`
-- [ ] 5.4 Smoke test: run `task dev:tui` against live cluster, navigate runs, verify live updates
+- [x] 5.4 Smoke test: run `task dev:tui` against live cluster, navigate runs, verify live updates — fixed module resolution (gen/ts package.json, connect-node transport, node --import tsx)

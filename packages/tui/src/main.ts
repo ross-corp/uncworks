@@ -6,6 +6,7 @@
  */
 
 import { createRoot } from "solid-js";
+import { createConnectTransport } from "@connectrpc/connect-node";
 import { Runtime } from "./runtime.js";
 import { parseInput } from "./input.js";
 import { createAppState, handleAction } from "./state.js";
@@ -23,7 +24,11 @@ function getServerUrl(): string {
 
 createRoot(() => {
   const serverUrl = getServerUrl();
-  const client = new AOTClient({ baseUrl: serverUrl });
+  const transport = createConnectTransport({
+    baseUrl: serverUrl,
+    httpVersion: "1.1",
+  });
+  const client = new AOTClient({ baseUrl: serverUrl, transport });
   const state = createAppState();
   const runtime = new Runtime();
   const data = new DataBinding(client, state);
