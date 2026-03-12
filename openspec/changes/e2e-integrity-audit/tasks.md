@@ -46,7 +46,7 @@
 
 - [x] 5.1 Add `serviceAccountName` to apiserver Deployment template (reference shared ServiceAccount)
 - [x] 5.2 Verify `helm template` renders apiserver with correct ServiceAccount
-- [ ] 5.3 Rebuild and reimport controlplane image with API server K8s client changes
+- [x] 5.3 Rebuild and reimport controlplane image with API server K8s client changes
 
 ## 6. Web Dashboard Fixes
 
@@ -63,17 +63,17 @@
 
 ## 8. E2E Tests via API
 
-- [ ] 8.1 Create `e2e/api_test.go` with ConnectRPC client setup targeting in-cluster API server
-- [ ] 8.2 Test: `CreateAgentRun` via API → verify CRD exists in K8s
-- [ ] 8.3 Test: Full lifecycle via API → Pending → Running → Succeeded
-- [ ] 8.4 Test: `CancelAgentRun` via API → verify Cancelled phase
+- [x] 8.1 Create `e2e/api_test.go` with ConnectRPC client setup targeting in-cluster API server
+- [x] 8.2 Test: `CreateAgentRun` via API → verify CRD exists in K8s
+- [x] 8.3 Test: Full lifecycle via API → Pending → Running → Succeeded
+- [x] 8.4 Test: `CancelAgentRun` via API → verify Cancelled phase
 - [ ] 8.5 Test: `SendHumanInput` via API → verify run completes after input
-- [ ] 8.6 Add `test:e2e:api` Taskfile target
+- [x] 8.6 Add `test:e2e:api` Taskfile target
 
 ## 9. Verification
 
-- [ ] 9.1 Run `task test:go` — all unit tests pass
-- [ ] 9.2 Run `task test:contract` — contract tests pass with K8s-backed server
-- [ ] 9.3 Run `task test:temporal` — workflow tests pass with fixed activity pattern
-- [ ] 9.4 Run `helm template` — chart renders correctly with apiserver ServiceAccount
-- [ ] 9.5 Deploy to dev cluster and create runs via web dashboard — verify they execute
+- [x] 9.1 Run `task test:go` — all unit tests pass
+- [x] 9.2 Run `task test:contract` — contract tests pass with K8s-backed server
+- [x] 9.3 Run `task test:temporal` — workflow tests pass with fixed activity pattern
+- [x] 9.4 Run `helm template` — chart renders correctly with apiserver ServiceAccount
+- [x] 9.5 Deploy to dev cluster and create runs via web dashboard — verify they execute
