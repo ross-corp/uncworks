@@ -103,6 +103,22 @@ tasks:
       - go build -o ./bin/aot ./cmd/aot
       - go build -o ./bin/temporal-worker ./cmd/temporal-worker
 
+  docker:build:
+    desc: Build all agent pod Docker images locally
+    cmds:
+      - docker build -f docker/Dockerfile.hydration -t aot-init:local .
+      - docker build -f docker/Dockerfile.sidecar -t aot-sidecar:local .
+      - docker build -f docker/Dockerfile.agent-base -t aot-agent:local .
+
+  k0s:images:
+    desc: Import locally-built Docker images into k0s (requires sudo)
+    deps: [docker:build]
+    cmds:
+      - docker save aot-init:local aot-sidecar:local aot-agent:local -o /tmp/aot-images.tar
+      - sudo k0s ctr images import /tmp/aot-images.tar
+      - rm /tmp/aot-images.tar
+      - echo "Images imported into k0s. Set AOT_*_IMAGE env vars to use local images."
+
   build:web:
     desc: Build web dashboard
     dir: web

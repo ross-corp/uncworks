@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -19,12 +21,29 @@ import (
 	"github.com/uncworks/aot/internal/litellm"
 )
 
-const (
-	defaultAgentImage = "ghcr.io/uncworks/aot-agent:latest"
-	sidecarImage      = "ghcr.io/uncworks/aot-sidecar:latest"
-	initImage         = "ghcr.io/uncworks/aot-init:latest"
-	sidecarPort       = 50052
+const sidecarPort = 50052
+
+// Image names — configurable via environment variables for local development.
+var (
+	agentImage   = envOrDefault("AOT_AGENT_IMAGE", "ghcr.io/uncworks/aot-agent:latest")
+	sidecarImage = envOrDefault("AOT_SIDECAR_IMAGE", "ghcr.io/uncworks/aot-sidecar:latest")
+	initImage    = envOrDefault("AOT_INIT_IMAGE", "ghcr.io/uncworks/aot-init:latest")
 )
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// imagePullPolicy returns Never for local images (no registry prefix), Always otherwise.
+func imagePullPolicy(image string) corev1.PullPolicy {
+	if !strings.Contains(image, "/") {
+		return corev1.PullNever
+	}
+	return corev1.PullAlways
+}
 
 // Activities holds the dependencies needed by Temporal activity implementations.
 type Activities struct {
@@ -235,7 +254,7 @@ func (a *Activities) CleanupPod(ctx context.Context, input CleanupPodInput) erro
 func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 	image := input.Image
 	if image == "" {
-		image = defaultAgentImage
+		image = agentImage
 	}
 
 	envVars := []corev1.EnvVar{
@@ -281,9 +300,10 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 			RestartPolicy: corev1.RestartPolicyNever,
 			InitContainers: []corev1.Container{
 				{
-					Name:  "hydration",
-					Image: initImage,
-					Env:   envVars,
+					Name:            "hydration",
+					Image:           initImage,
+					ImagePullPolicy: imagePullPolicy(initImage),
+					Env:             envVars,
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "workspace", MountPath: "/workspace"},
 					},
@@ -291,16 +311,18 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "agent",
-					Image: image,
-					Env:   agentEnvVars,
+					Name:            "agent",
+					Image:           image,
+					ImagePullPolicy: imagePullPolicy(image),
+					Env:             agentEnvVars,
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "workspace", MountPath: "/workspace"},
 					},
 				},
 				{
-					Name:  "rpc-gateway",
-					Image: sidecarImage,
+					Name:            "rpc-gateway",
+					Image:           sidecarImage,
+					ImagePullPolicy: imagePullPolicy(sidecarImage),
 					Ports: []corev1.ContainerPort{
 						{Name: "grpc", ContainerPort: sidecarPort, Protocol: corev1.ProtocolTCP},
 					},

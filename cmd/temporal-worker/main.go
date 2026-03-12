@@ -69,6 +69,12 @@ func run() error {
 		log.Printf("LiteLLM client configured: %s", litellmBaseURL)
 	}
 
+	// Log configured images
+	log.Printf("Agent images: agent=%s sidecar=%s init=%s",
+		envOrDefault("AOT_AGENT_IMAGE", "ghcr.io/uncworks/aot-agent:latest"),
+		envOrDefault("AOT_SIDECAR_IMAGE", "ghcr.io/uncworks/aot-sidecar:latest"),
+		envOrDefault("AOT_INIT_IMAGE", "ghcr.io/uncworks/aot-init:latest"))
+
 	// Create activities with dependencies
 	activities := &aottemporal.Activities{
 		K8sClient:     k8sClient,
