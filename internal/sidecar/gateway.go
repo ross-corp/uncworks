@@ -36,7 +36,6 @@ type Gateway struct {
 // AgentProcess wraps the agent harness process.
 type AgentProcess struct {
 	cmd       *exec.Cmd
-	stdin     io.WriteCloser
 	stdout    io.ReadCloser
 	stderr    io.ReadCloser
 	state     agentv1.AgentProcessState
@@ -116,10 +115,14 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	stdin, err := cmd.StdinPipe()
+	// Redirect stdin from /dev/null so pi-coding-agent's readPipedStdin()
+	// gets immediate EOF instead of blocking forever on an open pipe.
+	devNull, err := os.Open(os.DevNull)
 	if err != nil {
-		return nil, fmt.Errorf("stdin pipe: %w", err)
+		return nil, fmt.Errorf("open /dev/null: %w", err)
 	}
+	cmd.Stdin = devNull
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("stdout pipe: %w", err)
@@ -132,10 +135,10 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start agent: %w", err)
 	}
+	devNull.Close()
 
 	return &AgentProcess{
 		cmd:       cmd,
-		stdin:     stdin,
 		stdout:    stdout,
 		stderr:    stderr,
 		state:     agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
@@ -200,7 +203,6 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 	}
 
 	wg.Wait()
-	_ = proc.stdin.Close()
 
 	g.mu.Lock()
 	if err != nil {
@@ -252,19 +254,9 @@ func (g *Gateway) SendInput(_ context.Context, req *connect.Request[agentv1.Send
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
 	}
 
-	if proc.state != agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING &&
-		proc.state != agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("agent not accepting input"))
-	}
-
-	data := make([]byte, len(req.Msg.Data)+1)
-	copy(data, req.Msg.Data)
-	data[len(req.Msg.Data)] = '\n'
-	if _, err := proc.stdin.Write(data); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("write to stdin: %v", err))
-	}
-
-	return connect.NewResponse(&agentv1.SendInputResponse{Accepted: true}), nil
+	// pi-coding-agent in -p (print) mode doesn't accept stdin after startup.
+	// HITL will need a different mechanism (e.g., RPC mode or session continuation).
+	return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("stdin-based input not supported in print mode"))
 }
 
 func (g *Gateway) GetStatus(_ context.Context, _ *connect.Request[agentv1.GetStatusRequest]) (*connect.Response[agentv1.AgentStatus], error) {
