@@ -7,7 +7,7 @@ export default function AgentRunForm({
   onSubmit,
   onCancel,
 }: {
-  repos: { name: string; url: string }[];
+  repos: string[];
   onSubmit: (data: {
     name: string;
     repoURL: string;
@@ -20,7 +20,7 @@ export default function AgentRunForm({
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
-  const [repoURL, setRepoURL] = useState(repos[0]?.url ?? "");
+  const [repoURL, setRepoURL] = useState(repos[0] ?? "");
   const [branch, setBranch] = useState("main");
   const [prompt, setPrompt] = useState("");
   const [backend, setBackend] = useState<Backend>("pod");
@@ -86,9 +86,9 @@ export default function AgentRunForm({
               value={repoURL}
               onChange={(e) => setRepoURL(e.target.value)}
             >
-              {repos.map((r) => (
-                <option key={r.url} value={r.url}>
-                  {r.name}
+              {repos.map((url) => (
+                <option key={url} value={url}>
+                  {url.replace(/\.git$/, "").split("/").pop()}
                 </option>
               ))}
             </select>

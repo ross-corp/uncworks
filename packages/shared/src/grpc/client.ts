@@ -53,6 +53,7 @@ export class AOTClient {
       devboxConfig: spec.devboxConfig ?? "",
       ttlSeconds: spec.ttlSeconds ?? 0,
       envVars: spec.envVars ?? {},
+      modelTier: spec.modelTier ?? "",
     });
     const resp = await this.client.createAgentRun({ spec: pbSpec });
     return toAgentRun(resp.agentRun!);
@@ -189,6 +190,7 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       devboxConfig: pb.spec?.devboxConfig,
       ttlSeconds: pb.spec?.ttlSeconds,
       envVars: pb.spec?.envVars ?? {},
+      modelTier: pb.spec?.modelTier || undefined,
     },
     status: {
       phase: phaseFromProto(pb.status?.phase ?? PbAgentRunPhase.UNSPECIFIED),
