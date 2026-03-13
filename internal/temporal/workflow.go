@@ -40,6 +40,9 @@ const (
 
 	// Heartbeat interval for long-running activities.
 	heartbeatInterval = 10 * time.Second
+
+	// Maximum consecutive GetAgentStatus failures before failing the workflow.
+	maxConsecutiveStatusErrors = 5
 )
 
 // Repository describes a single git repository for an agent run.
@@ -132,15 +135,19 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			StartToCloseTimeout: 30 * time.Second,
 		})
 		if llmKey != "" {
-			_ = workflow.ExecuteActivity(cleanupCtx, ActivityRevokeLLMKey, RevokeLLMKeyInput{
+			if err := workflow.ExecuteActivity(cleanupCtx, ActivityRevokeLLMKey, RevokeLLMKeyInput{
 				Key: llmKey,
-			}).Get(cleanupCtx, nil)
+			}).Get(cleanupCtx, nil); err != nil {
+				workflow.GetLogger(ctx).Error("Failed to revoke LLM key during cleanup", "key", llmKey, "error", err)
+			}
 		}
 		if podName != "" {
-			_ = workflow.ExecuteActivity(cleanupCtx, ActivityCleanupPod, CleanupPodInput{
+			if err := workflow.ExecuteActivity(cleanupCtx, ActivityCleanupPod, CleanupPodInput{
 				PodName:   podName,
 				Namespace: input.Namespace,
-			}).Get(cleanupCtx, nil)
+			}).Get(cleanupCtx, nil); err != nil {
+				workflow.GetLogger(ctx).Error("Failed to cleanup pod", "podName", podName, "error", err)
+			}
 		}
 	}()
 
@@ -267,6 +274,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 	// Status polling ticker
 	pollTimer := workflow.NewTimer(ctx, statusPollInterval)
+	consecutiveErrors := 0
 
 	for {
 		selector := workflow.NewSelector(ctx)
@@ -330,7 +338,19 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 				PodIP:     podIP,
 			}).Get(ctx, &statusOutput)
 
-			if err == nil {
+			if err != nil {
+				consecutiveErrors++
+				workflow.GetLogger(ctx).Warn("GetAgentStatus failed",
+					"error", err,
+					"consecutiveErrors", consecutiveErrors,
+					"maxConsecutiveErrors", maxConsecutiveStatusErrors,
+				)
+				if consecutiveErrors >= maxConsecutiveStatusErrors {
+					state.Phase = "Failed"
+					state.Message = fmt.Sprintf("Sidecar unreachable after %d consecutive errors: %v", consecutiveErrors, err)
+				}
+			} else {
+				consecutiveErrors = 0
 				switch statusOutput.State {
 				case "AGENT_PROCESS_STATE_COMPLETED":
 					state.Phase = "Succeeded"
