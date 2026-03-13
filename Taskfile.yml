@@ -130,7 +130,7 @@ tasks:
     desc: Import locally-built Docker images into k0s (requires sudo)
     deps: [docker:build]
     cmds:
-      - docker save aot-init:local aot-sidecar:local aot-agent:local -o /tmp/aot-images.tar
+      - docker save aot-init:local aot-sidecar:local aot-agent:local aot-controlplane:local aot-web:local -o /tmp/aot-images.tar
       - sudo k0s ctr images import /tmp/aot-images.tar
       - rm /tmp/aot-images.tar
       - echo "Images imported into k0s. Set AOT_*_IMAGE env vars to use local images."

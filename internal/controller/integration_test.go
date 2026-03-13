@@ -72,19 +72,22 @@ func TestIntegration_ReconcileStartsWorkflow(t *testing.T) {
 		t.Fatalf("reconcile (finalizer): %v", err)
 	}
 
-	// Second reconcile: starts workflow
-	result, err := reconciler.Reconcile(ctx, req)
-	if err != nil {
-		t.Fatalf("reconcile (start workflow): %v", err)
-	}
-	if result.RequeueAfter == 0 {
-		t.Error("expected RequeueAfter > 0")
-	}
-
-	// Re-fetch to get latest state (annotation update + status update are separate writes)
+	// Reconcile until workflow starts (retry on transient Temporal errors)
 	var updated aotv1alpha1.AgentRun
-	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ar), &updated); err != nil {
-		t.Fatalf("get: %v", err)
+	for attempt := 0; attempt < 5; attempt++ {
+		if _, err := reconciler.Reconcile(ctx, req); err != nil {
+			t.Fatalf("reconcile (start workflow): %v", err)
+		}
+
+		// Check if the annotation was set (workflow actually started)
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ar), &updated); err != nil {
+			t.Fatalf("get after reconcile: %v", err)
+		}
+		if updated.Annotations[annotationWorkflowID] != "" {
+			break
+		}
+		t.Logf("attempt %d: workflow not started yet (message: %s), retrying", attempt+1, updated.Status.Message)
+		time.Sleep(2 * time.Second)
 	}
 	workflowID := updated.Annotations["aot.uncworks.io/workflow-id"]
 	if workflowID == "" {
@@ -183,8 +186,8 @@ func (m *mockActivities) CreateAgentPod(_ context.Context, input aottemporal.Cre
 	return &aottemporal.CreateAgentPodOutput{PodName: input.Name}, nil
 }
 
-func (m *mockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) error {
-	return nil
+func (m *mockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.0.0.1"}, nil
 }
 
 func (m *mockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {

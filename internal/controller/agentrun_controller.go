@@ -145,10 +145,12 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		TaskQueue: taskQueue,
 	}, aottemporal.AgentRunWorkflow, workflowInput)
 	if err != nil {
-		logger.Error(err, "Failed to start Temporal workflow")
-		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
-		agentRun.Status.Message = fmt.Sprintf("Failed to start workflow: %v", err)
-		return ctrl.Result{}, r.Status().Update(ctx, agentRun)
+		logger.Error(err, "Failed to start Temporal workflow, will retry")
+		agentRun.Status.Message = fmt.Sprintf("Retrying workflow start: %v", err)
+		if updateErr := r.Status().Update(ctx, agentRun); updateErr != nil {
+			logger.Error(updateErr, "Failed to update status after workflow start failure")
+		}
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
 	logger.Info("Started Temporal workflow", "workflowID", run.GetID(), "runID", run.GetRunID())
