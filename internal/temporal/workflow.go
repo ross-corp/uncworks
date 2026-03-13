@@ -437,7 +437,7 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 // LiteLLM exposes models as OpenAI-compatible, so we use the openai/ prefix.
 func modelIDFromTier(tier string) string {
 	if tier == "" {
-		return "openai/default"
+		return "litellm/default"
 	}
-	return "openai/" + tier
+	return "litellm/" + tier
 }
