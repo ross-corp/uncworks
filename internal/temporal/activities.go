@@ -67,6 +67,7 @@ type CreateAgentPodInput struct {
 	EnvVars        map[string]string
 	LLMKey         string
 	LiteLLMBaseURL string
+	ModelID        string
 }
 
 // CreateAgentPodOutput contains the result of creating an agent pod.
@@ -171,7 +172,7 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 		}))
 		if err == nil {
 			if !resp.Msg.Started {
-				return fmt.Errorf("agent did not start")
+				return fmt.Errorf("agent did not start: %s", resp.Msg.Error)
 			}
 			return nil
 		}
@@ -317,6 +318,12 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 			Name:  "OPENAI_API_KEY",
 			Value: input.LLMKey,
 		})
+	} else if input.LiteLLMBaseURL != "" {
+		// Set a placeholder key for endpoints that don't require auth (e.g., Ollama)
+		llmEnvVars = append(llmEnvVars, corev1.EnvVar{
+			Name:  "OPENAI_API_KEY",
+			Value: "not-required",
+		})
 	}
 	agentEnvVars := append(envVars, llmEnvVars...) //nolint:gocritic // intentional new slice
 
@@ -360,8 +367,14 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 					Ports: []corev1.ContainerPort{
 						{Name: "grpc", ContainerPort: sidecarPort, Protocol: corev1.ProtocolTCP},
 					},
-					Env: []corev1.EnvVar{
+					Env: append(append([]corev1.EnvVar{
 						{Name: "AOT_AGENT_RUN_ID", Value: input.AgentRunName},
+						{Name: "PI_MODEL", Value: input.ModelID},
+					}, llmEnvVars...), corev1.EnvVar{
+						Name: "PI_ACCEPT_TOS", Value: "1",
+					}),
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "workspace", MountPath: "/workspace"},
 					},
 				},
 			},
@@ -429,7 +442,10 @@ func (a *Activities) ProvisionLLMKey(ctx context.Context, input ProvisionLLMKeyI
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("provision LLM key: %w", err)
+		// Fall back to master key when virtual key generation fails
+		// (e.g., no database configured in local dev)
+		activity.GetLogger(ctx).Warn("Virtual key generation failed, falling back to master key", "error", err)
+		return &ProvisionLLMKeyOutput{Key: a.LiteLLMClient.MasterKey()}, nil
 	}
 
 	return &ProvisionLLMKeyOutput{Key: resp.Key}, nil

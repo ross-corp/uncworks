@@ -27,6 +27,11 @@ func NewClient(baseURL, masterKey string) *Client {
 	}
 }
 
+// MasterKey returns the master API key.
+func (c *Client) MasterKey() string {
+	return c.masterKey
+}
+
 // GenerateKeyRequest is the request body for POST /key/generate.
 type GenerateKeyRequest struct {
 	// KeyAlias is a human-readable alias for the key.

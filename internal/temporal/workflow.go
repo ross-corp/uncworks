@@ -187,6 +187,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		EnvVars:        input.EnvVars,
 		LLMKey:         llmKey,
 		LiteLLMBaseURL: input.LiteLLMBaseURL,
+		ModelID:        modelIDFromTier(input.ModelTier),
 	}
 
 	var createOutput CreateAgentPodOutput
@@ -430,4 +431,13 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 
 	// Fire-and-forget: just wait for the child to start
 	return future.GetChildWorkflowExecution().Get(ctx, nil)
+}
+
+// modelIDFromTier maps a model tier name to a pi-coding-agent model identifier.
+// LiteLLM exposes models as OpenAI-compatible, so we use the openai/ prefix.
+func modelIDFromTier(tier string) string {
+	if tier == "" {
+		return "openai/default"
+	}
+	return "openai/" + tier
 }

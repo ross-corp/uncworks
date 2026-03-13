@@ -172,8 +172,12 @@ func TestBuildAgentPod_EnvVars(t *testing.T) {
 	}
 
 	sidecarEnv := pod.Spec.Containers[1].Env
-	if len(sidecarEnv) != 1 || sidecarEnv[0].Name != "AOT_AGENT_RUN_ID" {
-		t.Error("sidecar should only have AOT_AGENT_RUN_ID env var")
+	sidecarEnvMap := make(map[string]string, len(sidecarEnv))
+	for _, e := range sidecarEnv {
+		sidecarEnvMap[e.Name] = e.Value
+	}
+	if sidecarEnvMap["AOT_AGENT_RUN_ID"] != "env-test" {
+		t.Errorf("sidecar should have AOT_AGENT_RUN_ID=env-test, got %s", sidecarEnvMap["AOT_AGENT_RUN_ID"])
 	}
 }
 
@@ -211,12 +215,17 @@ func TestBuildAgentPod_LLMEnvVars(t *testing.T) {
 		}
 	}
 
-	// Sidecar should NOT have LLM env vars
+	// Sidecar SHOULD have LLM env vars (pi-coding-agent runs in the sidecar)
 	sidecarEnv := pod.Spec.Containers[1].Env
+	sidecarEnvMap := make(map[string]string, len(sidecarEnv))
 	for _, e := range sidecarEnv {
-		if e.Name == "OPENAI_BASE_URL" || e.Name == "OPENAI_API_KEY" {
-			t.Errorf("sidecar should not have %s", e.Name)
-		}
+		sidecarEnvMap[e.Name] = e.Value
+	}
+	if sidecarEnvMap["OPENAI_BASE_URL"] != "http://litellm:4000/v1" {
+		t.Errorf("sidecar should have OPENAI_BASE_URL, got %s", sidecarEnvMap["OPENAI_BASE_URL"])
+	}
+	if sidecarEnvMap["OPENAI_API_KEY"] != "sk-test-key-123" {
+		t.Errorf("sidecar should have OPENAI_API_KEY, got %s", sidecarEnvMap["OPENAI_API_KEY"])
 	}
 }
 
