@@ -40,6 +40,7 @@ type AgentProcess struct {
 	stdout    io.ReadCloser
 	stderr    io.ReadCloser
 	state     agentv1.AgentProcessState
+	exitError string
 	startedAt time.Time
 	outputs   []chan *agentv1.AgentOutput
 	mu        sync.Mutex
@@ -98,12 +99,19 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 }
 
 func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
-	cmd := exec.Command("devbox", "run", "--", "agent", "--prompt", req.Prompt)
+	args := []string{"-p", req.Prompt}
+	// Use model from env if configured
+	if model := os.Getenv("PI_MODEL"); model != "" {
+		args = append(args, "--model", model)
+	}
+	cmd := exec.Command("pi", args...)
 	cmd.Dir = req.RepoPath
 	if cmd.Dir == "" {
-		cmd.Dir = "/workspace/src"
+		cmd.Dir = "/workspace"
 	}
 
+	// Inherit current environment and add request-specific vars on top
+	cmd.Env = os.Environ()
 	for k, v := range req.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -197,6 +205,7 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 	g.mu.Lock()
 	if err != nil {
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_FAILED
+		proc.exitError = err.Error()
 	} else {
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_COMPLETED
 	}
@@ -272,6 +281,7 @@ func (g *Gateway) GetStatus(_ context.Context, _ *connect.Request[agentv1.GetSta
 	s := &agentv1.AgentStatus{
 		State:     proc.state,
 		StartedAt: timestamppb.New(proc.startedAt),
+		Error:     proc.exitError,
 	}
 	if proc.cmd.Process != nil {
 		s.Pid = int32(proc.cmd.Process.Pid)
