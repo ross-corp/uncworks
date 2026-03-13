@@ -303,10 +303,11 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			ch.Receive(ctx, &signal)
 
 			if err := workflow.ExecuteActivity(actCtx, ActivityForwardHumanInput, ForwardHumanInputInput{
-				PodName:   podName,
-				Namespace: input.Namespace,
-				PodIP:     podIP,
-				Input:     signal.Input,
+				AgentRunID: input.AgentRunName,
+				PodName:    podName,
+				Namespace:  input.Namespace,
+				PodIP:      podIP,
+				Input:      signal.Input,
 			}).Get(ctx, nil); err != nil {
 				workflow.GetLogger(ctx).Warn("Failed to forward human input", "error", err)
 			}

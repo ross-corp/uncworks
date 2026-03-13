@@ -1,10 +1,24 @@
+import { createInterface } from "node:readline";
 import { trace, SpanStatusCode, type Tracer } from "@opentelemetry/api";
+import { createClient, type Client } from "@connectrpc/connect";
+import { createConnectTransport } from "@connectrpc/connect-node";
+import { create } from "@bufbuild/protobuf";
+import {
+  AgentNotificationService,
+  NotifyEventRequestSchema,
+  EventType,
+} from "../../../gen/ts/aot/agent/v1/agent_pb";
 
 /** Configuration for the AOT extension. */
 export interface AOTExtensionConfig {
   agentRunId: string;
   controlPlaneAddress: string;
+  sidecarAddress?: string;
   enableTracing: boolean;
+  /** Override the stdin stream (for testing). Defaults to process.stdin. */
+  stdin?: NodeJS.ReadableStream;
+  /** Disable the sidecar notification client (for testing). */
+  disableNotifications?: boolean;
 }
 
 /** Definition for a tool available to the agent. */
@@ -33,9 +47,72 @@ export class AOTExtension {
   private paused = false;
   private waitingForInput = false;
   private inputResolve: ((input: string) => void) | null = null;
+  private stdinBuffer: string[] = [];
+  private notifClient: Client<typeof AgentNotificationService> | null = null;
 
   constructor(private config: AOTExtensionConfig) {
     this.tracer = trace.getTracer("aot-extension", "0.1.0");
+    this.initStdinReader();
+    if (!config.disableNotifications) {
+      this.initNotifClient();
+    }
+  }
+
+  private initStdinReader(): void {
+    const input = this.config.stdin ?? process.stdin;
+    if (!input.readable) return;
+
+    const rl = createInterface({ input });
+    rl.on("line", (line: string) => {
+      if (this.inputResolve) {
+        const resolve = this.inputResolve;
+        this.inputResolve = null;
+        this.paused = false;
+        this.waitingForInput = false;
+        this.notifyStarted();
+        resolve(line);
+      } else {
+        this.stdinBuffer.push(line);
+      }
+    });
+  }
+
+  private initNotifClient(): void {
+    const address = this.config.sidecarAddress || "http://localhost:50052";
+    const transport = createConnectTransport({
+      baseUrl: address,
+      httpVersion: "2",
+    });
+    this.notifClient = createClient(AgentNotificationService, transport);
+  }
+
+  private async notifyWaitingForInput(question: string): Promise<void> {
+    if (!this.notifClient) return;
+    try {
+      await this.notifClient.notifyEvent(
+        create(NotifyEventRequestSchema, {
+          agentRunId: this.config.agentRunId,
+          eventType: EventType.WAITING_FOR_INPUT,
+          payload: question,
+        })
+      );
+    } catch (err) {
+      console.warn("Failed to send WAITING_FOR_INPUT notification:", err);
+    }
+  }
+
+  private async notifyStarted(): Promise<void> {
+    if (!this.notifClient) return;
+    try {
+      await this.notifClient.notifyEvent(
+        create(NotifyEventRequestSchema, {
+          agentRunId: this.config.agentRunId,
+          eventType: EventType.STARTED,
+        })
+      );
+    } catch (err) {
+      console.warn("Failed to send STARTED notification:", err);
+    }
   }
 
   /** Register a tool with the extension. */
@@ -85,8 +162,17 @@ export class AOTExtension {
 
   /** Pause the execution loop and wait for human input. */
   async waitForHumanInput(question: string): Promise<string> {
+    // Check buffer first — if input arrived before we started waiting, resolve immediately
+    if (this.stdinBuffer.length > 0) {
+      const buffered = this.stdinBuffer.shift()!;
+      return buffered;
+    }
+
     this.paused = true;
     this.waitingForInput = true;
+
+    // Notify sidecar we're waiting (fire-and-forget, don't block on it)
+    this.notifyWaitingForInput(question);
 
     return new Promise<string>((resolve) => {
       this.inputResolve = resolve;
@@ -100,6 +186,7 @@ export class AOTExtension {
       this.inputResolve = null;
       this.paused = false;
       this.waitingForInput = false;
+      this.notifyStarted();
     }
   }
 

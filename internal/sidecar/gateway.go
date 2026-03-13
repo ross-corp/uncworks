@@ -279,6 +279,29 @@ func (g *Gateway) GetStatus(_ context.Context, _ *connect.Request[agentv1.GetSta
 	return connect.NewResponse(s), nil
 }
 
+func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.NotifyEventRequest]) (*connect.Response[agentv1.NotifyEventResponse], error) {
+	g.mu.RLock()
+	proc := g.process
+	g.mu.RUnlock()
+
+	if proc == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
+	}
+
+	switch req.Msg.EventType {
+	case agentv1.EventType_EVENT_TYPE_WAITING_FOR_INPUT:
+		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT
+		log.Printf("Agent entered WAITING_FOR_INPUT: %s", req.Msg.Payload)
+	case agentv1.EventType_EVENT_TYPE_STARTED:
+		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING
+		log.Printf("Agent resumed RUNNING")
+	default:
+		log.Printf("NotifyEvent: %s payload=%s", req.Msg.EventType, req.Msg.Payload)
+	}
+
+	return connect.NewResponse(&agentv1.NotifyEventResponse{Acknowledged: true}), nil
+}
+
 func (g *Gateway) StopAgent(_ context.Context, req *connect.Request[agentv1.StopAgentRequest]) (*connect.Response[agentv1.StopAgentResponse], error) {
 	g.mu.Lock()
 	proc := g.process

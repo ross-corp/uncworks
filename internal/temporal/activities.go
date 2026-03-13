@@ -217,10 +217,11 @@ func (a *Activities) GetAgentStatus(ctx context.Context, input GetAgentStatusInp
 
 // ForwardHumanInputInput contains the parameters for forwarding human input.
 type ForwardHumanInputInput struct {
-	PodName   string
-	Namespace string
-	PodIP     string
-	Input     string
+	AgentRunID string
+	PodName    string
+	Namespace  string
+	PodIP      string
+	Input      string
 }
 
 // ForwardHumanInput calls the sidecar SendInput RPC.
@@ -228,7 +229,8 @@ func (a *Activities) ForwardHumanInput(ctx context.Context, input ForwardHumanIn
 	sidecarClient := a.sidecarClient(input.PodIP)
 
 	_, err := sidecarClient.SendInput(ctx, connect.NewRequest(&agentv1.SendInputRequest{
-		Data: []byte(input.Input),
+		AgentRunId: input.AgentRunID,
+		Data:       []byte(input.Input),
 	}))
 	if err != nil {
 		return fmt.Errorf("send input RPC: %w", err)

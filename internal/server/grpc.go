@@ -255,6 +255,30 @@ func generateRunName() (string, error) {
 	return fmt.Sprintf("ar-%s", string(suffix)), nil
 }
 
+// protoBackendToCRD maps the proto Backend enum to the CRD BackendType.
+func protoBackendToCRD(b apiv1.Backend) aotv1alpha1.BackendType {
+	switch b {
+	case apiv1.Backend_BACKEND_KUBEVIRT:
+		return aotv1alpha1.BackendKubeVirt
+	case apiv1.Backend_BACKEND_EXTERNAL:
+		return aotv1alpha1.BackendExternal
+	default:
+		return aotv1alpha1.BackendPod
+	}
+}
+
+// crdBackendToProto maps the CRD BackendType to the proto Backend enum.
+func crdBackendToProto(b aotv1alpha1.BackendType) apiv1.Backend {
+	switch b {
+	case aotv1alpha1.BackendKubeVirt:
+		return apiv1.Backend_BACKEND_KUBEVIRT
+	case aotv1alpha1.BackendExternal:
+		return apiv1.Backend_BACKEND_EXTERNAL
+	default:
+		return apiv1.Backend_BACKEND_POD
+	}
+}
+
 // specProtoToCRD converts a proto AgentRunSpec to a CRD AgentRunSpec.
 func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 	var repos []aotv1alpha1.Repository
@@ -266,7 +290,7 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 		})
 	}
 	crdSpec := aotv1alpha1.AgentRunSpec{
-		Backend:      aotv1alpha1.BackendPod,
+		Backend:      protoBackendToCRD(spec.Backend),
 		Repos:        repos,
 		Prompt:       spec.Prompt,
 		DevboxConfig: spec.DevboxConfig,
@@ -292,6 +316,7 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		Id:   crd.Name,
 		Name: crd.Name,
 		Spec: &apiv1.AgentRunSpec{
+			Backend:      crdBackendToProto(crd.Spec.Backend),
 			Repos:        protoRepos,
 			Prompt:       crd.Spec.Prompt,
 			DevboxConfig: crd.Spec.DevboxConfig,
