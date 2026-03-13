@@ -7,7 +7,6 @@ import {
   RepositorySchema,
   type AgentRun as PbAgentRun,
   type AgentRunEvent as PbAgentRunEvent,
-  type AgentRunSpec as PbAgentRunSpec,
   Backend as PbBackend,
   AgentRunPhase as PbAgentRunPhase,
   AgentRunEventType as PbAgentRunEventType,
