@@ -206,6 +206,69 @@ func TestWorkflow_SpawnJunior(t *testing.T) {
 	require.NoError(t, env.GetWorkflowError())
 }
 
+// TestWorkflow_ConsecutiveStatusErrors verifies workflow fails after sustained sidecar errors.
+func TestWorkflow_ConsecutiveStatusErrors(t *testing.T) {
+	env := setupEnv(t)
+
+	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// GetAgentStatus always fails (all retries exhausted)
+	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
+		nil, fmt.Errorf("connection refused"),
+	)
+	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, defaultInput())
+
+	require.True(t, env.IsWorkflowCompleted())
+	// Workflow returns nil (not error) — it transitions to Failed phase and returns cleanly
+	require.NoError(t, env.GetWorkflowError())
+
+	// Query final state
+	result, err := env.QueryWorkflow(aottemporal.QueryGetState)
+	require.NoError(t, err)
+	var state aottemporal.WorkflowState
+	require.NoError(t, result.Get(&state))
+	require.Equal(t, "Failed", state.Phase)
+	require.Contains(t, state.Message, "unreachable")
+}
+
+// TestWorkflow_TransientStatusError verifies workflow recovers from transient errors.
+func TestWorkflow_TransientStatusError(t *testing.T) {
+	env := setupEnv(t)
+
+	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace/src/repo"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	callCount := 0
+	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
+		func(_ *aottemporal.Activities, _ context.Context, _ aottemporal.GetAgentStatusInput) (*aottemporal.GetAgentStatusOutput, error) {
+			callCount++
+			// Fail first 3 polls, then succeed with completed
+			if callCount <= 3 {
+				return nil, fmt.Errorf("transient network error")
+			}
+			return &aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil
+		},
+	)
+	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, defaultInput())
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+}
+
 // TestWorkflow_GetStateQuery verifies the get-state query returns current phase.
 func TestWorkflow_GetStateQuery(t *testing.T) {
 	env := setupEnv(t)
