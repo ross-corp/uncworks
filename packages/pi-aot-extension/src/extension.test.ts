@@ -1,5 +1,6 @@
 import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
+import { PassThrough } from "node:stream";
 import { AOTExtension } from "./extension";
 import { AskHumanTool } from "./tools/ask-human";
 import { SpawnJuniorTool } from "./tools/spawn-junior";
@@ -8,10 +9,14 @@ describe("AOTExtension", () => {
   let ext: AOTExtension;
 
   before(() => {
+    const stdin = new PassThrough();
+    stdin.end();
     ext = new AOTExtension({
       agentRunId: "test-run-1",
       controlPlaneAddress: "localhost:50051",
       enableTracing: false,
+      stdin,
+      disableNotifications: true,
     });
   });
 

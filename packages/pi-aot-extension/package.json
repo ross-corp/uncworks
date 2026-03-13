@@ -5,10 +5,13 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
-    "test": "node --test --import tsx src/**/*.test.ts",
+    "test": "node --test --test-force-exit --import tsx 'src/**/*.test.ts'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.0.0",
+    "@connectrpc/connect": "^2.0.0",
+    "@connectrpc/connect-node": "^2.0.0",
     "@grpc/grpc-js": "^1.12.0",
     "@grpc/proto-loader": "^0.7.0",
     "@opentelemetry/api": "^1.9.0",

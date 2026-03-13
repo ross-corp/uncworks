@@ -72,5 +72,5 @@
 - [x] 9.3 Run `go test ./test/contract/...` — all contract tests pass
 - [x] 9.4 Run `go test ./test/temporal/...` — all workflow tests pass
 - [x] 9.5 Run `npx tsc --noEmit` in web/ and packages/shared/ — TS type checks pass
-- [ ] 9.6 Rebuild Docker images, import into k0s, create agent run — verify full lifecycle
+- [x] 9.6 Rebuild Docker images, import into k0s, create agent run — verify full lifecycle
 - [ ] 9.7 Commit and push; verify CI passes

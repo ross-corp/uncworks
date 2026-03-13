@@ -128,21 +128,19 @@ func TestContract_StreamOutput_NoProcess(t *testing.T) {
 
 // --- NotifyEvent contract ---
 
-func TestContract_NotifyEvent_Unimplemented(t *testing.T) {
+func TestContract_NotifyEvent_NoProcess(t *testing.T) {
 	_, notifClient, cleanup := startSidecarServer(t)
 	defer cleanup()
 
-	// Gateway embeds UnimplementedAgentNotificationServiceHandler
-	// so NotifyEvent returns Unimplemented
 	_, err := notifClient.NotifyEvent(context.Background(), connect.NewRequest(&agentv1.NotifyEventRequest{
 		AgentRunId: "test",
-		EventType:  agentv1.EventType_EVENT_TYPE_STARTED,
-		Payload:    "test payload",
+		EventType:  agentv1.EventType_EVENT_TYPE_WAITING_FOR_INPUT,
+		Payload:    "What should I do?",
 	}))
 	if err == nil {
-		t.Fatal("expected error for unimplemented NotifyEvent")
+		t.Fatal("expected error when no process running")
 	}
-	if connect.CodeOf(err) != connect.CodeUnimplemented {
-		t.Errorf("expected Unimplemented, got %v", connect.CodeOf(err))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("expected FailedPrecondition, got %v", connect.CodeOf(err))
 	}
 }
