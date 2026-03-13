@@ -25,6 +25,7 @@ export interface AgentRunSpec {
   devboxConfig?: string;
   ttlSeconds?: number;
   envVars?: Record<string, string>;
+  modelTier?: string;
   image?: string;
 }
 

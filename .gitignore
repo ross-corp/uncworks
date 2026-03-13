@@ -101,3 +101,6 @@ Thumbs.db
 
 # Project-specific non-ignores
 !openspec/
+
+*storybook.log
+storybook-static

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { AgentRun } from "./types/agent-run";
-import { MOCK_AGENT_RUNS, MOCK_REPOS } from "./data/mock";
+import { useClient, mapRun } from "./hooks/useClient";
+import { useToast } from "./components/Toast";
 import Layout from "./components/Layout";
 import Sidebar from "./components/Sidebar";
 import AgentRunTable from "./components/AgentRunTable";
@@ -11,7 +12,10 @@ import EventsView from "./components/EventsView";
 import ConfirmDialog from "./components/ConfirmDialog";
 
 export default function App() {
-  const [runs, setRuns] = useState<AgentRun[]>(MOCK_AGENT_RUNS);
+  const client = useClient();
+  const { toast } = useToast();
+  const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
@@ -20,107 +24,100 @@ export default function App() {
   const [activeView, setActiveView] = useState<"runs" | "repos" | "events">("runs");
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
 
-  // Keep selectedRun in sync
+  // Fetch runs from API
+  const fetchRuns = useCallback(async () => {
+    try {
+      const result = await client.listAgentRuns();
+      setRuns(result.map(mapRun));
+    } catch (err) {
+      console.error("Failed to fetch runs:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [client]);
+
+  // Poll every 5s
+  useEffect(() => {
+    fetchRuns();
+    const interval = setInterval(fetchRuns, 5000);
+    return () => clearInterval(interval);
+  }, [fetchRuns]);
+
+  // Keep selectedRun in sync with fetched data
   useEffect(() => {
     if (selectedRun) {
       const updated = runs.find((r) => r.id === selectedRun.id);
       if (updated) {
         setSelectedRun(updated);
-      } else {
-        setSelectedRun(null);
       }
     }
   }, [runs]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleCancel(id: string) {
-    setRuns((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: {
-                ...r.status,
-                phase: "cancelled" as const,
-                message: "Cancelled by user",
-                completedAt: new Date().toISOString(),
-              },
-            }
-          : r
-      )
-    );
+
+  async function handleCancel(id: string) {
+    try {
+      await client.cancelAgentRun(id);
+      toast("Agent run cancelled", "success");
+      fetchRuns();
+    } catch (err) {
+      console.error("Cancel failed:", err);
+      toast("Failed to cancel agent run", "error");
+    }
   }
 
   function handleDelete(id: string) {
+    // Local-only for now (no delete API)
     setRuns((prev) => prev.filter((r) => r.id !== id));
     setRunToDelete(null);
   }
 
-  function handleSendInput(id: string, input: string) {
-    setRuns((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: {
-                ...r.status,
-                phase: "running" as const,
-                message: `Received input: "${input.slice(0, 50)}..."`,
-              },
-            }
-          : r
-      )
-    );
+  async function handleSendInput(id: string, input: string) {
+    try {
+      await client.sendHumanInput(id, input);
+      toast("Input sent to agent", "success");
+      fetchRuns();
+    } catch (err) {
+      console.error("Send input failed:", err);
+      toast("Failed to send input", "error");
+    }
   }
 
-  function handleCreate(data: {
+  async function handleCreate(data: {
     name: string;
     repoURL: string;
     branch: string;
     prompt: string;
     backend: AgentRun["spec"]["backend"];
-    modelTier: AgentRun["spec"]["modelTier"];
+    modelTier: string;
     ttlSeconds: number;
   }) {
-    const newRun: AgentRun = {
-      id: `ar-${String(runs.length + 1).padStart(3, "0")}`,
-      name: data.name,
-      spec: {
-        backend: data.backend,
-        repoURL: data.repoURL,
-        branch: data.branch,
+    try {
+      await client.createAgentRun({
+        backend: ({ pod: "Pod", kubevirt: "KubeVirt", external: "External" } as const)[data.backend],
+        repos: [{ url: data.repoURL, branch: data.branch }],
         prompt: data.prompt,
-        devboxConfig: "",
         ttlSeconds: data.ttlSeconds,
-        envVars: {},
         modelTier: data.modelTier,
-      },
-      status: {
-        phase: "pending",
-        message: "",
-        podName: "",
-        traceID: "",
-        startedAt: "",
-        completedAt: "",
-      },
-      createdAt: new Date().toISOString(),
-    };
-    setRuns((prev) => [newRun, ...prev]);
-    setShowForm(false);
+      });
+      setShowForm(false);
+      toast("Agent run created", "success");
+      fetchRuns();
+    } catch (err) {
+      console.error("Create failed:", err);
+      toast("Failed to create agent run", "error");
+    }
   }
 
-  // Filtering: repo → phase → search
+  // Derive unique repos from runs
+  const repos = [...new Set(runs.map((r) => r.spec.repoURL).filter(Boolean))];
+
+  // Filtering
   const filtered = runs.filter((r) => {
     if (selectedRepo && r.spec.repoURL !== selectedRepo) return false;
     if (phaseFilter !== "all" && r.status.phase !== phaseFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      const haystack = [
-        r.name,
-        r.id,
-        r.spec.prompt,
-        r.status.message,
-        r.spec.repoURL,
-      ]
+      const haystack = [r.name, r.id, r.spec.prompt, r.status.message, r.spec.repoURL]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -139,7 +136,7 @@ export default function App() {
         sidebar={
           <Sidebar
             runs={runs}
-            repos={MOCK_REPOS}
+            repos={repos}
             selectedRepo={selectedRepo}
             onSelectRepo={(url) => {
               setSelectedRepo(url);
@@ -172,7 +169,7 @@ export default function App() {
         }
       >
         {activeView === "repos" ? (
-          <ReposView repos={MOCK_REPOS} />
+          <ReposView repos={repos} />
         ) : activeView === "events" ? (
           <EventsView runs={runs} />
         ) : (
@@ -182,13 +179,15 @@ export default function App() {
             onSelect={setSelectedRun}
             onCancel={handleCancel}
             onDelete={setRunToDelete}
+            loading={loading}
+            onNewRun={() => setShowForm(true)}
           />
         )}
       </Layout>
 
       {showForm && (
         <AgentRunForm
-          repos={MOCK_REPOS}
+          repos={repos}
           onSubmit={handleCreate}
           onCancel={() => setShowForm(false)}
         />

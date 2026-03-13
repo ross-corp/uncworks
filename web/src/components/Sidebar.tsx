@@ -56,7 +56,7 @@ export default function Sidebar({
   onOpenEvents,
 }: {
   runs: AgentRun[];
-  repos: { name: string; url: string }[];
+  repos: string[];
   selectedRepo: string | null;
   onSelectRepo: (url: string | null) => void;
   phaseFilter: string;
@@ -123,19 +123,19 @@ export default function Sidebar({
             <span>All repos</span>
             <span className="text-xs text-txt-tertiary">{runs.length}</span>
           </button>
-          {repos.map((repo) => (
+          {repos.map((url) => (
             <button
-              key={repo.url}
-              onClick={() => onSelectRepo(repo.url)}
+              key={url}
+              onClick={() => onSelectRepo(url)}
               className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
-                selectedRepo === repo.url
+                selectedRepo === url
                   ? "bg-surface-2 text-txt-primary"
                   : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
               }`}
             >
-              <span className="truncate">{repo.name}</span>
+              <span className="truncate">{url.replace(/\.git$/, "").split("/").pop()}</span>
               <span className="text-xs text-txt-tertiary">
-                {countForRepo(repo.url)}
+                {countForRepo(url)}
               </span>
             </button>
           ))}

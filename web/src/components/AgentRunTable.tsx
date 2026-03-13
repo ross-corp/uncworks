@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { AgentRun } from "../types/agent-run";
 import { PhaseBadge, BackendBadge, ModelTierBadge } from "./StatusBadge";
+import { SkeletonRow } from "./Skeleton";
 
 function ActionMenu({
   run,
@@ -103,13 +104,18 @@ export default function AgentRunTable({
   onSelect,
   onCancel,
   onDelete,
+  loading,
+  onNewRun,
 }: {
   runs: AgentRun[];
   selectedRunId?: string | null;
   onSelect?: (run: AgentRun) => void;
   onCancel: (id: string) => void;
   onDelete: (id: string) => void;
+  loading?: boolean;
+  onNewRun?: () => void;
 }) {
+  // (loading used for skeleton rendering below)
   const [colWidths, setColWidths] = useState<Record<string, number>>(() =>
     Object.fromEntries(COLUMNS.map((c) => [c.key, c.defaultWidth]))
   );
@@ -171,10 +177,43 @@ export default function AgentRunTable({
     return `${Math.floor(hours / 24)}d ago`;
   }
 
+  if (loading && runs.length === 0) {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
+          <colgroup>
+            {COLUMNS.map((c) => (
+              <col key={c.key} style={{ width: colWidths[c.key] }} />
+            ))}
+            <col />
+          </colgroup>
+          <thead>
+            <tr className="border-b border-edge text-left text-xs font-medium text-txt-tertiary">
+              {COLUMNS.map((c) => (
+                <th key={c.key} className="relative px-4 py-2">{c.label}</th>
+              ))}
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonRow key={i} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   if (runs.length === 0) {
     return (
-      <div className="px-6 py-12 text-center text-sm text-txt-tertiary">
-        No agent runs match the current filters.
+      <div className="px-6 py-12 text-center">
+        <p className="text-sm text-txt-tertiary">No agent runs match the current filters.</p>
+        {onNewRun && (
+          <button onClick={onNewRun} className="btn-primary mt-3 text-sm">
+            + Create Agent Run
+          </button>
+        )}
       </div>
     );
   }
