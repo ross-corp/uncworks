@@ -6,8 +6,7 @@ export const MOCK_AGENT_RUNS: AgentRun[] = [
     name: "fix-auth-middleware",
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/api-gateway",
-      branch: "main",
+      repos: [{ url: "https://github.com/acme/api-gateway", branch: "main" }],
       prompt: "Fix the JWT validation in the auth middleware. The token expiry check is off by one hour due to timezone handling. See issue #234.",
       devboxConfig: "devbox.json",
       ttlSeconds: 3600,
@@ -29,8 +28,7 @@ export const MOCK_AGENT_RUNS: AgentRun[] = [
     name: "add-pagination-endpoint",
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/api-gateway",
-      branch: "feat/pagination",
+      repos: [{ url: "https://github.com/acme/api-gateway", branch: "feat/pagination" }],
       prompt: "Add cursor-based pagination to the /api/v1/users endpoint. Follow the existing pattern in /api/v1/orders.",
       devboxConfig: "devbox.json",
       ttlSeconds: 7200,
@@ -52,8 +50,7 @@ export const MOCK_AGENT_RUNS: AgentRun[] = [
     name: "migrate-to-temporal",
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/workflow-engine",
-      branch: "main",
+      repos: [{ url: "https://github.com/acme/workflow-engine", branch: "main" }],
       prompt: "Migrate the legacy cron-based scheduler to Temporal workflows. Start with the email notification workflow.",
       devboxConfig: "",
       ttlSeconds: 3600,
@@ -75,8 +72,7 @@ export const MOCK_AGENT_RUNS: AgentRun[] = [
     name: "update-k8s-manifests",
     spec: {
       backend: "external",
-      repoURL: "https://github.com/acme/infra",
-      branch: "main",
+      repos: [{ url: "https://github.com/acme/infra", branch: "main" }],
       prompt: "Update all Kubernetes manifests to use the new container registry at registry.acme.io. Replace all occurrences of the old gcr.io/acme-prod registry.",
       devboxConfig: "",
       ttlSeconds: 1800,
@@ -98,8 +94,7 @@ export const MOCK_AGENT_RUNS: AgentRun[] = [
     name: "scaffold-react-dashboard",
     spec: {
       backend: "kubevirt",
-      repoURL: "https://github.com/acme/frontend",
-      branch: "feat/dashboard",
+      repos: [{ url: "https://github.com/acme/frontend", branch: "feat/dashboard" }],
       prompt: "Scaffold a new React dashboard with Tailwind CSS. Include: sidebar navigation, data table component, and a detail panel. Use the existing design tokens from the shared package.",
       devboxConfig: "devbox.json",
       ttlSeconds: 3600,
@@ -121,8 +116,7 @@ export const MOCK_AGENT_RUNS: AgentRun[] = [
     name: "write-integration-tests",
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/api-gateway",
-      branch: "test/integration",
+      repos: [{ url: "https://github.com/acme/api-gateway", branch: "test/integration" }],
       prompt: "Write integration tests for the payment processing module. Use testcontainers for PostgreSQL and Redis. Cover the happy path and the three failure modes documented in docs/payment-errors.md.",
       devboxConfig: "devbox.json",
       ttlSeconds: 5400,
@@ -144,8 +138,7 @@ export const MOCK_AGENT_RUNS: AgentRun[] = [
     name: "refactor-db-layer",
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/workflow-engine",
-      branch: "refactor/db",
+      repos: [{ url: "https://github.com/acme/workflow-engine", branch: "refactor/db" }],
       prompt: "Refactor the database layer to use pgx connection pooling instead of raw connections. Update all repository implementations.",
       devboxConfig: "devbox.json",
       ttlSeconds: 3600,
@@ -167,8 +160,7 @@ export const MOCK_AGENT_RUNS: AgentRun[] = [
     name: "add-otel-tracing",
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/api-gateway",
-      branch: "feat/observability",
+      repos: [{ url: "https://github.com/acme/api-gateway", branch: "feat/observability" }],
       prompt: "Add OpenTelemetry tracing to all HTTP handlers and gRPC interceptors. Export traces to the Jaeger collector at jaeger:4317.",
       devboxConfig: "",
       ttlSeconds: 3600,

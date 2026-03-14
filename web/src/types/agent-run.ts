@@ -10,6 +10,12 @@ export type Backend = "pod" | "kubevirt" | "external";
 
 export type ModelTier = "default" | "default-cloud" | "premium";
 
+export interface Repository {
+  url: string;
+  branch: string;
+  path?: string;
+}
+
 export interface AgentRun {
   id: string;
   name: string;
@@ -20,13 +26,15 @@ export interface AgentRun {
 
 export interface AgentRunSpec {
   backend: Backend;
-  repoURL: string;
-  branch: string;
+  repos: Repository[];
+  workspaceName?: string;
   prompt: string;
   devboxConfig: string;
   ttlSeconds: number;
   envVars: Record<string, string>;
   modelTier: ModelTier;
+  specContent?: string;
+  specSource?: string;
 }
 
 export interface AgentRunStatus {

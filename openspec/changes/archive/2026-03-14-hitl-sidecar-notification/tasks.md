@@ -32,4 +32,4 @@
 
 - [x] 5.1 Run `go test ./internal/sidecar/... ./test/contract/...` — sidecar and contract tests pass
 - [x] 5.2 Run `npx tsc --noEmit` for all TS packages — type checks pass
-- [ ] 5.3 Commit and push
+- [x] 5.3 Commit and push

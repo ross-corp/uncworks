@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AgentRun, AgentRunPhase } from "../types/agent-run";
+import type { Workspace } from "../hooks/useWorkspaces";
 
 function CollapsibleSection({
   label,
@@ -52,6 +53,11 @@ export default function Sidebar({
   onSelectRepo,
   phaseFilter,
   onPhaseFilter,
+  workspaces,
+  selectedWorkspace,
+  onSelectWorkspace,
+  onNewWorkspace,
+  onEditWorkspace,
   onOpenRepos,
   onOpenEvents,
 }: {
@@ -61,20 +67,32 @@ export default function Sidebar({
   onSelectRepo: (url: string | null) => void;
   phaseFilter: string;
   onPhaseFilter: (f: string) => void;
+  workspaces: Workspace[];
+  selectedWorkspace: string | null;
+  onSelectWorkspace: (name: string | null) => void;
+  onNewWorkspace: () => void;
+  onEditWorkspace: (ws: Workspace) => void;
   onOpenRepos: () => void;
   onOpenEvents: () => void;
 }) {
   function countForPhase(phase: string) {
     let filtered = runs;
     if (selectedRepo) {
-      filtered = filtered.filter((r) => r.spec.repoURL === selectedRepo);
+      filtered = filtered.filter((r) => r.spec.repos.some((repo) => repo.url === selectedRepo));
+    }
+    if (selectedWorkspace) {
+      filtered = filtered.filter((r) => r.spec.workspaceName === selectedWorkspace);
     }
     if (phase === "all") return filtered.length;
     return filtered.filter((r) => r.status.phase === phase).length;
   }
 
   function countForRepo(url: string) {
-    return runs.filter((r) => r.spec.repoURL === url).length;
+    return runs.filter((r) => r.spec.repos.some((repo) => repo.url === url)).length;
+  }
+
+  function countForWorkspace(name: string) {
+    return runs.filter((r) => r.spec.workspaceName === name).length;
   }
 
   return (
@@ -87,7 +105,7 @@ export default function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
-        {/* AGENT RUNS — phase filters */}
+        {/* AGENT RUNS -- phase filters */}
         <CollapsibleSection label="Agent Runs">
           {PHASE_FILTERS.map((s) => {
             const count = countForPhase(s.value);
@@ -108,6 +126,46 @@ export default function Sidebar({
               </button>
             );
           })}
+        </CollapsibleSection>
+
+        {/* WORKSPACES */}
+        <CollapsibleSection label="Workspaces">
+          <button
+            onClick={() => onSelectWorkspace(null)}
+            className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
+              selectedWorkspace === null
+                ? "bg-surface-2 text-txt-primary"
+                : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
+            }`}
+          >
+            <span>All workspaces</span>
+          </button>
+          {workspaces.map((ws) => (
+            <button
+              key={ws.id}
+              onClick={() => onSelectWorkspace(ws.name)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onEditWorkspace(ws);
+              }}
+              className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
+                selectedWorkspace === ws.name
+                  ? "bg-surface-2 text-txt-primary"
+                  : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
+              }`}
+            >
+              <span className="truncate">{ws.name}</span>
+              <span className="text-xs text-txt-tertiary">
+                {countForWorkspace(ws.name)}
+              </span>
+            </button>
+          ))}
+          <button
+            onClick={onNewWorkspace}
+            className="flex w-full items-center rounded px-2 py-1.5 pl-6 text-left text-sm text-txt-tertiary hover:bg-surface-1 hover:text-txt-secondary transition-colors"
+          >
+            + New workspace...
+          </button>
         </CollapsibleSection>
 
         {/* REPOS */}

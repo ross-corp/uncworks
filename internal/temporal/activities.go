@@ -68,6 +68,7 @@ type CreateAgentPodInput struct {
 	LLMKey         string
 	LiteLLMBaseURL string
 	ModelID        string
+	SpecContent    string
 }
 
 // CreateAgentPodOutput contains the result of creating an agent pod.
@@ -300,6 +301,9 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 	}
 	if input.DevboxConfig != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: "AOT_DEVBOX_CONFIG", Value: input.DevboxConfig})
+	}
+	if input.SpecContent != "" {
+		envVars = append(envVars, corev1.EnvVar{Name: "AOT_SPEC_CONTENT", Value: input.SpecContent})
 	}
 	for k, v := range input.EnvVars {
 		envVars = append(envVars, corev1.EnvVar{Name: k, Value: v})

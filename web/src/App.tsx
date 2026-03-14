@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import type { AgentRun } from "./types/agent-run";
+import type { AgentRun, Repository } from "./types/agent-run";
 import { useClient, mapRun } from "./hooks/useClient";
+import { useWorkspaces } from "./hooks/useWorkspaces";
+import type { Workspace } from "./hooks/useWorkspaces";
+import { useRepoRegistry } from "./hooks/useRepoRegistry";
 import { useToast } from "./components/Toast";
 import Layout from "./components/Layout";
 import Sidebar from "./components/Sidebar";
@@ -10,6 +13,7 @@ import AgentRunForm from "./components/AgentRunForm";
 import ReposView from "./components/ReposView";
 import EventsView from "./components/EventsView";
 import ConfirmDialog from "./components/ConfirmDialog";
+import WorkspaceEditor from "./components/WorkspaceEditor";
 
 export default function App() {
   const client = useClient();
@@ -17,12 +21,20 @@ export default function App() {
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeView, setActiveView] = useState<"runs" | "repos" | "events">("runs");
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
+  const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null | "new">(null);
+
+  const { workspaces, addWorkspace, updateWorkspace, deleteWorkspace } = useWorkspaces();
+
+  // Derive unique repos from runs (across all repos in each run)
+  const runDerivedRepos = [...new Set(runs.flatMap((r) => r.spec.repos.map((repo) => repo.url)).filter(Boolean))];
+  const { repos, addRepo, removeRepo } = useRepoRegistry(runDerivedRepos);
 
   // Fetch runs from API
   const fetchRuns = useCallback(async () => {
@@ -84,20 +96,25 @@ export default function App() {
 
   async function handleCreate(data: {
     name: string;
-    repoURL: string;
-    branch: string;
+    repos: Repository[];
+    workspaceName?: string;
     prompt: string;
     backend: AgentRun["spec"]["backend"];
     modelTier: string;
     ttlSeconds: number;
+    specContent?: string;
+    specSource?: string;
   }) {
     try {
       await client.createAgentRun({
         backend: ({ pod: "Pod", kubevirt: "KubeVirt", external: "External" } as const)[data.backend],
-        repos: [{ url: data.repoURL, branch: data.branch }],
+        repos: data.repos.map((r) => ({ url: r.url, branch: r.branch })),
         prompt: data.prompt,
         ttlSeconds: data.ttlSeconds,
         modelTier: data.modelTier,
+        specContent: data.specContent,
+        specSource: data.specSource,
+        workspaceName: data.workspaceName,
       });
       setShowForm(false);
       toast("Agent run created", "success");
@@ -108,16 +125,15 @@ export default function App() {
     }
   }
 
-  // Derive unique repos from runs
-  const repos = [...new Set(runs.map((r) => r.spec.repoURL).filter(Boolean))];
-
-  // Filtering
+  // Filtering: workspace -> repo -> phase -> search
   const filtered = runs.filter((r) => {
-    if (selectedRepo && r.spec.repoURL !== selectedRepo) return false;
+    if (selectedWorkspace && r.spec.workspaceName !== selectedWorkspace) return false;
+    if (selectedRepo && !r.spec.repos.some((repo) => repo.url === selectedRepo)) return false;
     if (phaseFilter !== "all" && r.status.phase !== phaseFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      const haystack = [r.name, r.id, r.spec.prompt, r.status.message, r.spec.repoURL]
+      const repoUrls = r.spec.repos.map((repo) => repo.url).join(" ");
+      const haystack = [r.name, r.id, r.spec.prompt, r.status.message, repoUrls, r.spec.workspaceName ?? ""]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -125,6 +141,20 @@ export default function App() {
     }
     return true;
   });
+
+  function handleSaveWorkspace(data: { name: string; description: string; repos: Repository[] }) {
+    if (editingWorkspace && editingWorkspace !== "new") {
+      updateWorkspace(editingWorkspace.id, data);
+    } else {
+      addWorkspace(data);
+    }
+    setEditingWorkspace(null);
+  }
+
+  function handleDeleteWorkspace(id: string) {
+    deleteWorkspace(id);
+    setEditingWorkspace(null);
+  }
 
   return (
     <>
@@ -147,6 +177,14 @@ export default function App() {
               setPhaseFilter(f);
               setActiveView("runs");
             }}
+            workspaces={workspaces}
+            selectedWorkspace={selectedWorkspace}
+            onSelectWorkspace={(name) => {
+              setSelectedWorkspace(name);
+              setActiveView("runs");
+            }}
+            onNewWorkspace={() => setEditingWorkspace("new")}
+            onEditWorkspace={(ws) => setEditingWorkspace(ws)}
             onOpenRepos={() => {
               setActiveView("repos");
               setSelectedRun(null);
@@ -169,7 +207,7 @@ export default function App() {
         }
       >
         {activeView === "repos" ? (
-          <ReposView repos={repos} />
+          <ReposView repos={repos} onAddRepo={addRepo} onRemoveRepo={removeRepo} />
         ) : activeView === "events" ? (
           <EventsView runs={runs} />
         ) : (
@@ -188,8 +226,19 @@ export default function App() {
       {showForm && (
         <AgentRunForm
           repos={repos}
+          workspaces={workspaces}
           onSubmit={handleCreate}
           onCancel={() => setShowForm(false)}
+        />
+      )}
+
+      {editingWorkspace !== null && (
+        <WorkspaceEditor
+          workspace={editingWorkspace === "new" ? undefined : editingWorkspace}
+          knownRepos={repos}
+          onSave={handleSaveWorkspace}
+          onDelete={editingWorkspace !== "new" ? handleDeleteWorkspace : undefined}
+          onClose={() => setEditingWorkspace(null)}
         />
       )}
 

@@ -132,6 +132,8 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		EnvVars:        agentRun.Spec.EnvVars,
 		ModelTier:      agentRun.Spec.ModelTier,
 		LiteLLMBaseURL: r.LiteLLMBaseURL,
+		SpecContent:    agentRun.Spec.SpecContent,
+		WorkspaceName:  agentRun.Spec.WorkspaceName,
 	}
 
 	taskQueue := r.TaskQueue

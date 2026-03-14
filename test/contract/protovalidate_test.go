@@ -12,22 +12,25 @@ import (
 // TestProtovalidate_* tests verify that the protovalidate interceptor
 // correctly rejects invalid requests with INVALID_ARGUMENT error codes.
 
-func TestProtovalidate_CreateAgentRun_EmptyPrompt(t *testing.T) {
+func TestProtovalidate_CreateAgentRun_EmptyPromptWithSpec(t *testing.T) {
 	client, cleanup := startAOTServer(t, true)
 	defer cleanup()
 
-	_, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+	// Empty prompt is allowed when spec_content is provided (spec-driven runs).
+	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "", // violates min_len = 1
+			Backend:     apiv1.Backend_BACKEND_POD,
+			Repos:       []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:      "",
+			SpecContent: "# MySpec\nSome spec content.",
+			SpecSource:  "editor",
 		},
 	}))
-	if err == nil {
-		t.Fatal("expected error for empty prompt")
+	if err != nil {
+		t.Fatalf("expected spec-driven run with empty prompt to succeed: %v", err)
 	}
-	if connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Errorf("expected InvalidArgument, got %v", connect.CodeOf(err))
+	if resp.Msg.AgentRun.Id == "" {
+		t.Error("expected non-empty ID")
 	}
 }
 

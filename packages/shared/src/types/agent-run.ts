@@ -27,6 +27,9 @@ export interface AgentRunSpec {
   envVars?: Record<string, string>;
   modelTier?: string;
   image?: string;
+  specContent?: string;
+  specSource?: string;
+  workspaceName?: string;
 }
 
 /** Status of an AgentRun. */

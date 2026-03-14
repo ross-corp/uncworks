@@ -357,7 +357,13 @@ type AgentRunSpec struct {
 	// Image overrides the default agent container image.
 	Image string `protobuf:"bytes,9,opt,name=image,proto3" json:"image,omitempty"`
 	// MaxBudget is the maximum LLM spend budget in USD.
-	MaxBudget     float64 `protobuf:"fixed64,10,opt,name=max_budget,json=maxBudget,proto3" json:"max_budget,omitempty"`
+	MaxBudget float64 `protobuf:"fixed64,10,opt,name=max_budget,json=maxBudget,proto3" json:"max_budget,omitempty"`
+	// SpecContent is the CodeSpeak .cs.md spec body (markdown).
+	SpecContent string `protobuf:"bytes,11,opt,name=spec_content,json=specContent,proto3" json:"spec_content,omitempty"`
+	// SpecSource tracks where the spec came from: "editor", "github:<owner/repo/path>", "webhook:github:<owner/repo/path>".
+	SpecSource string `protobuf:"bytes,12,opt,name=spec_source,json=specSource,proto3" json:"spec_source,omitempty"`
+	// WorkspaceName is the name of the workspace preset used for this run.
+	WorkspaceName string `protobuf:"bytes,13,opt,name=workspace_name,json=workspaceName,proto3" json:"workspace_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -453,6 +459,27 @@ func (x *AgentRunSpec) GetMaxBudget() float64 {
 		return x.MaxBudget
 	}
 	return 0
+}
+
+func (x *AgentRunSpec) GetSpecContent() string {
+	if x != nil {
+		return x.SpecContent
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetSpecSource() string {
+	if x != nil {
+		return x.SpecSource
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetWorkspaceName() string {
+	if x != nil {
+		return x.WorkspaceName
+	}
+	return ""
 }
 
 type AgentRunStatus struct {
@@ -1107,11 +1134,11 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"Repository\x12\x1a\n" +
 	"\x03url\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\x03url\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\"\xc1\x03\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"\xa3\x04\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x126\n" +
-	"\x05repos\x18\x02 \x03(\v2\x16.aot.api.v1.RepositoryB\b\xbaH\x05\x92\x01\x02\b\x01R\x05repos\x12\x1f\n" +
-	"\x06prompt\x18\x04 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06prompt\x12#\n" +
+	"\x05repos\x18\x02 \x03(\v2\x16.aot.api.v1.RepositoryB\b\xbaH\x05\x92\x01\x02\b\x01R\x05repos\x12\x16\n" +
+	"\x06prompt\x18\x04 \x01(\tR\x06prompt\x12#\n" +
 	"\rdevbox_config\x18\x05 \x01(\tR\fdevboxConfig\x12(\n" +
 	"\vttl_seconds\x18\x06 \x01(\x05B\a\xbaH\x04\x1a\x02(\x00R\n" +
 	"ttlSeconds\x12@\n" +
@@ -1121,7 +1148,11 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x05image\x18\t \x01(\tR\x05image\x12\x1d\n" +
 	"\n" +
 	"max_budget\x18\n" +
-	" \x01(\x01R\tmaxBudget\x1a:\n" +
+	" \x01(\x01R\tmaxBudget\x12!\n" +
+	"\fspec_content\x18\v \x01(\tR\vspecContent\x12\x1f\n" +
+	"\vspec_source\x18\f \x01(\tR\n" +
+	"specSource\x12%\n" +
+	"\x0eworkspace_name\x18\r \x01(\tR\rworkspaceName\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb0\x02\n" +

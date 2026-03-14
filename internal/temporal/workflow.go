@@ -65,6 +65,8 @@ type WorkflowInput struct {
 	ModelTier      string
 	MaxBudget      float64
 	LiteLLMBaseURL string
+	SpecContent    string
+	WorkspaceName  string
 }
 
 // WorkflowState represents the current state of the workflow, returned by queries.
@@ -99,6 +101,11 @@ const (
 // Signals: human-input (forwards HITL input), cancel (graceful termination)
 // Queries: get-state (returns current phase, message, pod name)
 func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
+	// Auto-generate prompt for spec-driven runs
+	if input.SpecContent != "" && input.Prompt == "" {
+		input.Prompt = "Run `codespeak build` in the workspace directory. The spec file has been placed at spec/main.cs.md with a codespeak.json config. Execute the build and verify the output compiles/passes tests."
+	}
+
 	state := &WorkflowState{
 		Phase:   "Pending",
 		Message: "Workflow started",
@@ -188,6 +195,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		LLMKey:         llmKey,
 		LiteLLMBaseURL: input.LiteLLMBaseURL,
 		ModelID:        modelIDFromTier(input.ModelTier),
+		SpecContent:    input.SpecContent,
 	}
 
 	var createOutput CreateAgentPodOutput
@@ -230,15 +238,8 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	podIP := hydrationOutput.PodIP
 
-	// Compute the primary workspace path from the first repo
-	workspacePath := "/workspace/src"
-	if len(input.Repos) > 0 {
-		repoPath := input.Repos[0].Path
-		if repoPath == "" {
-			repoPath = repoNameFromURL(input.Repos[0].URL)
-		}
-		workspacePath = "/workspace/src/" + repoPath
-	}
+	// Use the workspace root as the working directory for multi-repo support.
+	workspacePath := "/workspace"
 
 	// --- Step 4: Start agent ---
 	state.Phase = "Running"

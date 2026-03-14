@@ -12,8 +12,8 @@ import (
 func main() {
 	config := hydration.ConfigFromEnv()
 
-	if len(config.Repos) == 0 {
-		log.Fatal("AOT_REPOS or AOT_REPO_URL is required")
+	if len(config.Repos) == 0 && config.SpecContent == "" {
+		log.Fatal("AOT_REPOS or AOT_REPO_URL is required (unless AOT_SPEC_CONTENT is set)")
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

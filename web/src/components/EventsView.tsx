@@ -10,7 +10,7 @@ export default function EventsView({ runs }: { runs: AgentRun[] }) {
         runName: run.name,
         runId: run.id,
         type: "created",
-        detail: `Agent run created for ${run.spec.repoURL.split("/").pop()}`,
+        detail: `Agent run created for ${run.spec.repos.map((repo) => repo.url.split("/").pop()).join(", ") || "unknown repo"}`,
         phase: run.status.phase,
       });
       if (run.status.startedAt) {

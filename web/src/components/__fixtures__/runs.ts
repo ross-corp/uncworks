@@ -11,8 +11,7 @@ export const mockRuns: AgentRun[] = [
     createdAt: fiveMinAgo,
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/backend.git",
-      branch: "fix/auth",
+      repos: [{ url: "https://github.com/acme/backend.git", branch: "fix/auth" }],
       prompt: "Fix the JWT validation in the auth middleware. The token expiry check is off by one hour.",
       devboxConfig: "",
       ttlSeconds: 3600,
@@ -34,8 +33,7 @@ export const mockRuns: AgentRun[] = [
     createdAt: oneHourAgo,
     spec: {
       backend: "kubevirt",
-      repoURL: "https://github.com/acme/frontend.git",
-      branch: "feat/search",
+      repos: [{ url: "https://github.com/acme/frontend.git", branch: "feat/search" }],
       prompt: "Add a user search component with autocomplete.",
       devboxConfig: "",
       ttlSeconds: 7200,
@@ -57,8 +55,7 @@ export const mockRuns: AgentRun[] = [
     createdAt: oneHourAgo,
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/backend.git",
-      branch: "main",
+      repos: [{ url: "https://github.com/acme/backend.git", branch: "main" }],
       prompt: "Refactor the database layer to use connection pooling.",
       devboxConfig: "",
       ttlSeconds: 3600,
@@ -80,8 +77,7 @@ export const mockRuns: AgentRun[] = [
     createdAt: now,
     spec: {
       backend: "external",
-      repoURL: "https://github.com/acme/infra.git",
-      branch: "main",
+      repos: [{ url: "https://github.com/acme/infra.git", branch: "main" }],
       prompt: "Update the CI pipeline to use Node 20.",
       devboxConfig: "",
       ttlSeconds: 1800,
@@ -103,8 +99,7 @@ export const mockRuns: AgentRun[] = [
     createdAt: oneHourAgo,
     spec: {
       backend: "pod",
-      repoURL: "https://github.com/acme/backend.git",
-      branch: "fix/memory",
+      repos: [{ url: "https://github.com/acme/backend.git", branch: "fix/memory" }],
       prompt: "Investigate and fix the memory leak in the WebSocket handler.",
       devboxConfig: "",
       ttlSeconds: 3600,

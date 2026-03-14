@@ -68,7 +68,7 @@ message Repository {
 message AgentRunSpec {
   Backend backend = 1 [(buf.validate.field).enum = {not_in: [0]}];
   repeated Repository repos = 2 [(buf.validate.field).repeated.min_items = 1];
-  string prompt = 4 [(buf.validate.field).string.min_len = 1];
+  string prompt = 4;
   string devbox_config = 5;
   int32 ttl_seconds = 6 [(buf.validate.field).int32.gte = 0];
   map<string, string> env_vars = 7;
@@ -78,6 +78,12 @@ message AgentRunSpec {
   string image = 9;
   // MaxBudget is the maximum LLM spend budget in USD.
   double max_budget = 10;
+  // SpecContent is the CodeSpeak .cs.md spec body (markdown).
+  string spec_content = 11;
+  // SpecSource tracks where the spec came from: "editor", "github:<owner/repo/path>", "webhook:github:<owner/repo/path>".
+  string spec_source = 12;
+  // WorkspaceName is the name of the workspace preset used for this run.
+  string workspace_name = 13;
 }
 
 message AgentRunStatus {

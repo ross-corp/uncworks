@@ -89,7 +89,7 @@ const COLUMNS = [
   { key: "phase",   label: "Phase",   defaultWidth: 160, minWidth: 100 },
   { key: "backend", label: "Backend", defaultWidth: 100, minWidth: 70 },
   { key: "model",   label: "Model",   defaultWidth: 90,  minWidth: 70 },
-  { key: "repo",    label: "Repo",    defaultWidth: 180, minWidth: 80 },
+  { key: "repo",    label: "Repos",   defaultWidth: 180, minWidth: 80 },
   { key: "message", label: "Message", defaultWidth: 280, minWidth: 100 },
   { key: "actions", label: "",        defaultWidth: 140, minWidth: 80 },
 ];
@@ -164,6 +164,15 @@ export default function AgentRunTable({
   function repoName(url: string): string {
     const parts = url.split("/");
     return parts[parts.length - 1] || url;
+  }
+
+  function reposSummary(run: AgentRun): { text: string; title: string } {
+    const repos = run.spec.repos;
+    if (!repos || repos.length === 0) return { text: "\u2014", title: "" };
+    const names = repos.map((r) => repoName(r.url));
+    const title = repos.map((r) => `${r.url}:${r.branch}`).join("\n");
+    if (names.length <= 2) return { text: names.join(", "), title };
+    return { text: `${names[0]}, ${names[1]} +${names.length - 2}`, title };
   }
 
   function timeAgo(iso: string): string {
@@ -252,9 +261,14 @@ export default function AgentRunTable({
                 }`}
               >
                 <td className="px-4 py-2.5 overflow-hidden text-ellipsis whitespace-nowrap">
-                  <div>
+                  <div className="flex items-center gap-1.5">
                     <span className="font-medium">{run.name}</span>
-                    <span className="ml-2 text-xs text-txt-tertiary">{timeAgo(run.createdAt)}</span>
+                    {run.spec.specContent && (
+                      <span className="inline-flex items-center rounded bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-medium text-purple-400">
+                        spec
+                      </span>
+                    )}
+                    <span className="text-xs text-txt-tertiary">{timeAgo(run.createdAt)}</span>
                   </div>
                 </td>
                 <td className="px-4 py-2.5 overflow-hidden whitespace-nowrap">
@@ -266,11 +280,11 @@ export default function AgentRunTable({
                 <td className="px-4 py-2.5 overflow-hidden whitespace-nowrap">
                   <ModelTierBadge tier={run.spec.modelTier} />
                 </td>
-                <td className="px-4 py-2.5 font-mono text-xs text-txt-secondary overflow-hidden text-ellipsis whitespace-nowrap">
-                  {repoName(run.spec.repoURL)}
-                  {run.spec.branch !== "main" && (
-                    <span className="ml-1 text-txt-tertiary">:{run.spec.branch}</span>
-                  )}
+                <td
+                  className="px-4 py-2.5 font-mono text-xs text-txt-secondary overflow-hidden text-ellipsis whitespace-nowrap"
+                  title={reposSummary(run).title}
+                >
+                  {reposSummary(run).text}
                 </td>
                 <td className="px-4 py-2.5 text-xs text-txt-secondary overflow-hidden text-ellipsis whitespace-nowrap">
                   {run.status.message || <span className="text-txt-tertiary">&mdash;</span>}

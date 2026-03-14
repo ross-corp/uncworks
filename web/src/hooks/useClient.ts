@@ -4,7 +4,7 @@ import type {
   AgentRun as SharedAgentRun,
   AgentRunEvent as SharedEvent,
 } from "../../../packages/shared/src/types/agent-run";
-import type { AgentRun, AgentRunEvent, AgentRunPhase, Backend, ModelTier } from "../types/agent-run";
+import type { AgentRun, AgentRunEvent, AgentRunPhase, Backend, ModelTier, Repository } from "../types/agent-run";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -38,13 +38,19 @@ export function mapRun(r: SharedAgentRun): AgentRun {
     name: r.name,
     spec: {
       backend: backendMap[r.spec.backend] ?? "pod",
-      repoURL: r.spec.repos?.[0]?.url ?? "",
-      branch: r.spec.repos?.[0]?.branch ?? "main",
+      repos: (r.spec.repos ?? []).map((repo): Repository => ({
+        url: repo.url,
+        branch: repo.branch ?? "main",
+        path: repo.path,
+      })),
+      workspaceName: r.spec.workspaceName,
       prompt: r.spec.prompt,
       devboxConfig: r.spec.devboxConfig ?? "",
       ttlSeconds: r.spec.ttlSeconds ?? 3600,
       envVars: r.spec.envVars ?? {},
       modelTier: (r.spec.modelTier as ModelTier) ?? "default",
+      specContent: r.spec.specContent,
+      specSource: r.spec.specSource,
     },
     status: {
       phase: phaseMap[r.status.phase] ?? "pending",
