@@ -56,7 +56,7 @@ export default function AgentRunDetailPanel({
       {/* Header */}
       <div className="flex items-center justify-between border-b border-edge px-5 py-3">
         <span className="font-mono text-sm text-txt-tertiary truncate">{run.id}</span>
-        <button onClick={onClose} className="btn-ghost px-2 text-lg">
+        <button onClick={onClose} className="btn-ghost px-2 text-lg" aria-label="Close">
           &times;
         </button>
       </div>

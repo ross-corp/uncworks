@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Backend, ModelTier, Repository } from "../types/agent-run";
 import { BACKEND_OPTIONS, MODEL_TIER_OPTIONS } from "../types/agent-run";
 import type { Workspace } from "../hooks/useWorkspaces";
@@ -29,8 +29,17 @@ export default function AgentRunForm({
   }) => void;
   onCancel: () => void;
 }) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel]);
+
   const { pullSpec, pushSpec } = useGitHub();
   const [gitHubModal, setGitHubModal] = useState<"load" | "push" | null>(null);
+  const [githubError, setGithubError] = useState<string | null>(null);
   const [specSource, setSpecSource] = useState<string>("editor");
   const [name, setName] = useState("");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
@@ -106,6 +115,7 @@ export default function AgentRunForm({
             type="button"
             onClick={onCancel}
             className="btn-ghost px-2"
+            aria-label="Close"
           >
             &times;
           </button>
@@ -330,6 +340,9 @@ export default function AgentRunForm({
                     Push to GitHub
                   </button>
                 </div>
+                {githubError && (
+                  <p className="mt-1 text-xs text-danger">{githubError}</p>
+                )}
               </>
             )}
           </div>
@@ -353,9 +366,11 @@ export default function AgentRunForm({
               const { content } = await pullSpec(repo, path);
               setSpecContent(content);
               setSpecSource(`github:${repo}/${path}`);
+              setGithubError(null);
               setGitHubModal(null);
             } catch (err) {
               console.error("Failed to load spec from GitHub:", err);
+              setGithubError(`Failed to load spec: ${err instanceof Error ? err.message : String(err)}`);
             }
           }}
           onClose={() => setGitHubModal(null)}
@@ -369,9 +384,11 @@ export default function AgentRunForm({
             try {
               await pushSpec(repo, path, specContent, message);
               setSpecSource(`github:${repo}/${path}`);
+              setGithubError(null);
               setGitHubModal(null);
             } catch (err) {
               console.error("Failed to push spec to GitHub:", err);
+              setGithubError(`Failed to push spec: ${err instanceof Error ? err.message : String(err)}`);
             }
           }}
           onClose={() => setGitHubModal(null)}

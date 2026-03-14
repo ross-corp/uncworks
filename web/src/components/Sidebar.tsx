@@ -195,7 +195,7 @@ export default function Sidebar({
                   : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
               }`}
             >
-              <span className="truncate">{url.replace(/\.git$/, "").split("/").pop()}</span>
+              <span className="truncate">{url.replace(/\.git$/, "").split("/").pop() ?? url}</span>
               <span className="text-xs text-txt-tertiary">
                 {countForRepo(url)}
               </span>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Repository } from "../types/agent-run";
 import type { Workspace } from "../hooks/useWorkspaces";
 
@@ -15,6 +15,14 @@ export default function WorkspaceEditor({
   onDelete?: (id: string) => void;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const [name, setName] = useState(workspace?.name ?? "");
   const [description, setDescription] = useState(workspace?.description ?? "");
   const [repos, setRepos] = useState<Repository[]>(
@@ -61,7 +69,7 @@ export default function WorkspaceEditor({
           <h2 className="text-sm font-semibold">
             {workspace ? "Edit Workspace" : "New Workspace"}
           </h2>
-          <button type="button" onClick={onClose} className="btn-ghost px-2">
+          <button type="button" onClick={onClose} className="btn-ghost px-2" aria-label="Close">
             &times;
           </button>
         </div>

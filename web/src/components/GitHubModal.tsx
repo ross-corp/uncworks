@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type GitHubModalProps = {
   mode: "load" | "push";
@@ -13,6 +13,14 @@ export default function GitHubModal({
   onPush,
   onClose,
 }: GitHubModalProps) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const [repo, setRepo] = useState("");
   const [path, setPath] = useState("");
   const [message, setMessage] = useState("");
@@ -48,6 +56,7 @@ export default function GitHubModal({
             type="button"
             onClick={onClose}
             className="btn-ghost px-2"
+            aria-label="Close"
           >
             &times;
           </button>
