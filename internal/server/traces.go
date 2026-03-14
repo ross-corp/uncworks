@@ -57,7 +57,7 @@ func NewTraceHandler(k8sClient runtimeclient.Client, restConfig *rest.Config, na
 // RegisterTraceHandlers registers the trace REST endpoints on the given mux.
 func (t *TraceHandler) RegisterTraceHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/runs/{id}/traces", t.handleListTraces)
-	mux.HandleFunc("GET /api/v1/runs/{id}/traces/{span-id}/diff", t.handleSpanDiff)
+	mux.HandleFunc("GET /api/v1/runs/{id}/traces/{spanId}/diff", t.handleSpanDiff)
 }
 
 // handleListTraces returns all trace spans for an agent run as a JSON array.
@@ -94,7 +94,7 @@ func (t *TraceHandler) handleListTraces(w http.ResponseWriter, r *http.Request) 
 // handleSpanDiff returns the diff data for a specific trace span.
 func (t *TraceHandler) handleSpanDiff(w http.ResponseWriter, r *http.Request) {
 	runID := r.PathValue("id")
-	spanID := r.PathValue("span-id")
+	spanID := r.PathValue("spanId")
 
 	hostPath, err := t.getPVCHostPath(r.Context(), runID)
 	if err != nil {
