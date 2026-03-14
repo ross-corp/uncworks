@@ -1,5 +1,6 @@
 # Serves the pre-built AOT web dashboard via nginx.
-# Usage: docker build -f Dockerfile.web -t aot-web:local ../uncworks/web
+# Proxies API requests to aot-apiserver in-cluster.
 FROM nginx:alpine
 COPY dist/ /usr/share/nginx/html/
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 3000
