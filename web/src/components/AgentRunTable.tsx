@@ -43,6 +43,7 @@ function ActionMenu({
         <button
           onClick={() => setMenuOpen(!menuOpen)}
           className="btn-ghost px-2 py-1 text-xs opacity-0 group-hover:opacity-100"
+          aria-label="More options"
         >
           &middot;&middot;&middot;
         </button>

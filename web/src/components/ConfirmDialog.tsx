@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 export default function ConfirmDialog({
   title,
   message,
@@ -11,6 +13,14 @@ export default function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[10vh]"

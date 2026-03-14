@@ -2,6 +2,22 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import Sidebar from "./Sidebar";
 import { mockRuns } from "./__fixtures__/runs";
 import { fn } from "storybook/test";
+import type { Workspace } from "../hooks/useWorkspaces";
+
+const mockWorkspaces: Workspace[] = [
+  {
+    id: "ws-1",
+    name: "backend",
+    description: "Backend services",
+    repos: [{ url: "https://github.com/acme/backend.git", branch: "main" }],
+  },
+  {
+    id: "ws-2",
+    name: "frontend",
+    description: "Frontend apps",
+    repos: [{ url: "https://github.com/acme/frontend.git", branch: "main" }],
+  },
+];
 
 const meta: Meta<typeof Sidebar> = {
   title: "Components/Sidebar",
@@ -11,6 +27,11 @@ const meta: Meta<typeof Sidebar> = {
     onPhaseFilter: fn(),
     onOpenRepos: fn(),
     onOpenEvents: fn(),
+    onSelectWorkspace: fn(),
+    onNewWorkspace: fn(),
+    onEditWorkspace: fn(),
+    workspaces: mockWorkspaces,
+    selectedWorkspace: null,
   },
   parameters: {
     layout: "fullscreen",
@@ -57,5 +78,15 @@ export const PhaseFiltered: Story = {
     repos: ["https://github.com/acme/backend.git"],
     selectedRepo: null,
     phaseFilter: "running",
+  },
+};
+
+export const WorkspaceSelected: Story = {
+  args: {
+    runs: mockRuns,
+    repos: ["https://github.com/acme/backend.git"],
+    selectedRepo: null,
+    phaseFilter: "all",
+    selectedWorkspace: "backend",
   },
 };
