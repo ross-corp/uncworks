@@ -54,19 +54,20 @@ type Repository struct {
 
 // WorkflowInput contains the parameters for starting an AgentRunWorkflow.
 type WorkflowInput struct {
-	AgentRunName   string
-	Namespace      string
-	Repos          []Repository
-	Prompt         string
-	DevboxConfig   string
-	TTLSeconds     int32
-	Image          string
-	EnvVars        map[string]string
-	ModelTier      string
-	MaxBudget      float64
-	LiteLLMBaseURL string
-	SpecContent    string
-	WorkspaceName  string
+	AgentRunName     string
+	Namespace        string
+	Repos            []Repository
+	Prompt           string
+	DevboxConfig     string
+	TTLSeconds       int32
+	Image            string
+	EnvVars          map[string]string
+	ModelTier        string
+	MaxBudget        float64
+	LiteLLMBaseURL   string
+	SpecContent      string
+	WorkspaceName    string
+	RetainPodMinutes int32
 }
 
 // WorkflowState represents the current state of the workflow, returned by queries.
@@ -93,6 +94,7 @@ const (
 	ActivityForwardHumanInput = "ForwardHumanInput"
 	ActivityStopAgent         = "StopAgent"
 	ActivityCleanupPod        = "CleanupPod"
+	ActivityCollectLogs       = "CollectLogs"
 )
 
 // AgentRunWorkflow orchestrates the full lifecycle of an agent run.
@@ -149,6 +151,31 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			}
 		}
 		if podName != "" {
+			// Collect logs before pod deletion
+			logCleanupCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
+				StartToCloseTimeout: 60 * time.Second,
+			})
+			var logOutput CollectLogsOutput
+			if err := workflow.ExecuteActivity(logCleanupCtx, ActivityCollectLogs, CollectLogsInput{
+				PodName:   podName,
+				Namespace: input.Namespace,
+			}).Get(logCleanupCtx, &logOutput); err != nil {
+				workflow.GetLogger(ctx).Warn("Failed to collect logs", "error", err)
+			}
+
+			// Pod retention: wait before deleting
+			retainMinutes := input.RetainPodMinutes
+			if retainMinutes < 0 {
+				retainMinutes = 0
+			}
+			if retainMinutes == 0 && input.RetainPodMinutes == 0 {
+				retainMinutes = 30 // Default 30 minutes
+			}
+			if retainMinutes > 0 {
+				workflow.GetLogger(ctx).Info("Retaining pod", "minutes", retainMinutes)
+				_ = workflow.Sleep(cleanupCtx, time.Duration(retainMinutes)*time.Minute)
+			}
+
 			if err := workflow.ExecuteActivity(cleanupCtx, ActivityCleanupPod, CleanupPodInput{
 				PodName:   podName,
 				Namespace: input.Namespace,

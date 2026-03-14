@@ -35,6 +35,7 @@ export interface AgentRunSpec {
   modelTier: ModelTier;
   specContent?: string;
   specSource?: string;
+  retainPodMinutes?: number;
 }
 
 export interface AgentRunStatus {
@@ -44,6 +45,8 @@ export interface AgentRunStatus {
   traceID: string;
   startedAt: string;
   completedAt: string;
+  logOutput?: string;
+  retainUntil?: string;
 }
 
 export interface AgentRunEvent {

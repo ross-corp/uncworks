@@ -122,18 +122,19 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		})
 	}
 	workflowInput := aottemporal.WorkflowInput{
-		AgentRunName:   agentRun.Name,
-		Namespace:      agentRun.Namespace,
-		Repos:          repos,
-		Prompt:         agentRun.Spec.Prompt,
-		DevboxConfig:   agentRun.Spec.DevboxConfig,
-		TTLSeconds:     agentRun.Spec.TTLSeconds,
-		Image:          agentRun.Spec.Image,
-		EnvVars:        agentRun.Spec.EnvVars,
-		ModelTier:      agentRun.Spec.ModelTier,
-		LiteLLMBaseURL: r.LiteLLMBaseURL,
-		SpecContent:    agentRun.Spec.SpecContent,
-		WorkspaceName:  agentRun.Spec.WorkspaceName,
+		AgentRunName:     agentRun.Name,
+		Namespace:        agentRun.Namespace,
+		Repos:            repos,
+		Prompt:           agentRun.Spec.Prompt,
+		DevboxConfig:     agentRun.Spec.DevboxConfig,
+		TTLSeconds:       agentRun.Spec.TTLSeconds,
+		Image:            agentRun.Spec.Image,
+		EnvVars:          agentRun.Spec.EnvVars,
+		ModelTier:        agentRun.Spec.ModelTier,
+		LiteLLMBaseURL:   r.LiteLLMBaseURL,
+		SpecContent:      agentRun.Spec.SpecContent,
+		WorkspaceName:    agentRun.Spec.WorkspaceName,
+		RetainPodMinutes: agentRun.Spec.RetainPodMinutes,
 	}
 
 	taskQueue := r.TaskQueue

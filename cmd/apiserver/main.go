@@ -77,6 +77,14 @@ func main() {
 	ghClient := server.NewGitHubClient()
 	ghClient.RegisterHandlers(mux)
 
+	// Register file explorer REST endpoints
+	fileHandler := server.NewFileHandler(k8sClient, restConfig, namespace)
+	fileHandler.RegisterFileHandlers(mux)
+
+	// Register interactive shell WebSocket endpoint
+	execHandler := server.NewExecHandler(k8sClient, restConfig, namespace)
+	execHandler.RegisterExecHandlers(mux)
+
 	// Register GitHub webhook receiver
 	webhookHandler := server.NewWebhookHandler(k8sClient, namespace)
 	mux.Handle("/api/v1/webhooks/github", webhookHandler)

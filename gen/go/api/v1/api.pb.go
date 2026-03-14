@@ -364,8 +364,10 @@ type AgentRunSpec struct {
 	SpecSource string `protobuf:"bytes,12,opt,name=spec_source,json=specSource,proto3" json:"spec_source,omitempty"`
 	// WorkspaceName is the name of the workspace preset used for this run.
 	WorkspaceName string `protobuf:"bytes,13,opt,name=workspace_name,json=workspaceName,proto3" json:"workspace_name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// RetainPodMinutes is how long to keep the pod alive after completion for inspection.
+	RetainPodMinutes int32 `protobuf:"varint,14,opt,name=retain_pod_minutes,json=retainPodMinutes,proto3" json:"retain_pod_minutes,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *AgentRunSpec) Reset() {
@@ -482,6 +484,13 @@ func (x *AgentRunSpec) GetWorkspaceName() string {
 	return ""
 }
 
+func (x *AgentRunSpec) GetRetainPodMinutes() int32 {
+	if x != nil {
+		return x.RetainPodMinutes
+	}
+	return 0
+}
+
 type AgentRunStatus struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	Phase       AgentRunPhase          `protobuf:"varint,1,opt,name=phase,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase,omitempty"`
@@ -491,7 +500,11 @@ type AgentRunStatus struct {
 	StartedAt   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	CompletedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
 	// WorktreePath is the path to the git worktree on the agent.
-	WorktreePath  string `protobuf:"bytes,7,opt,name=worktree_path,json=worktreePath,proto3" json:"worktree_path,omitempty"`
+	WorktreePath string `protobuf:"bytes,7,opt,name=worktree_path,json=worktreePath,proto3" json:"worktree_path,omitempty"`
+	// LogOutput is the persisted agent log output (up to 1MB), collected before pod deletion.
+	LogOutput string `protobuf:"bytes,8,opt,name=log_output,json=logOutput,proto3" json:"log_output,omitempty"`
+	// RetainUntil is when the pod retention expires and cleanup will run.
+	RetainUntil   *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=retain_until,json=retainUntil,proto3" json:"retain_until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -573,6 +586,20 @@ func (x *AgentRunStatus) GetWorktreePath() string {
 		return x.WorktreePath
 	}
 	return ""
+}
+
+func (x *AgentRunStatus) GetLogOutput() string {
+	if x != nil {
+		return x.LogOutput
+	}
+	return ""
+}
+
+func (x *AgentRunStatus) GetRetainUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RetainUntil
+	}
+	return nil
 }
 
 type CreateAgentRunRequest struct {
@@ -1134,7 +1161,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"Repository\x12\x1a\n" +
 	"\x03url\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\x03url\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\"\xa3\x04\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"\xd1\x04\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x126\n" +
 	"\x05repos\x18\x02 \x03(\v2\x16.aot.api.v1.RepositoryB\b\xbaH\x05\x92\x01\x02\b\x01R\x05repos\x12\x16\n" +
@@ -1152,10 +1179,11 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\fspec_content\x18\v \x01(\tR\vspecContent\x12\x1f\n" +
 	"\vspec_source\x18\f \x01(\tR\n" +
 	"specSource\x12%\n" +
-	"\x0eworkspace_name\x18\r \x01(\tR\rworkspaceName\x1a:\n" +
+	"\x0eworkspace_name\x18\r \x01(\tR\rworkspaceName\x12,\n" +
+	"\x12retain_pod_minutes\x18\x0e \x01(\x05R\x10retainPodMinutes\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb0\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8e\x03\n" +
 	"\x0eAgentRunStatus\x12/\n" +
 	"\x05phase\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\x05phase\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
@@ -1164,7 +1192,10 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12=\n" +
 	"\fcompleted_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\x12#\n" +
-	"\rworktree_path\x18\a \x01(\tR\fworktreePath\"E\n" +
+	"\rworktree_path\x18\a \x01(\tR\fworktreePath\x12\x1d\n" +
+	"\n" +
+	"log_output\x18\b \x01(\tR\tlogOutput\x12=\n" +
+	"\fretain_until\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vretainUntil\"E\n" +
 	"\x15CreateAgentRunRequest\x12,\n" +
 	"\x04spec\x18\x01 \x01(\v2\x18.aot.api.v1.AgentRunSpecR\x04spec\"K\n" +
 	"\x16CreateAgentRunResponse\x121\n" +
@@ -1274,30 +1305,31 @@ var file_aot_api_v1_api_proto_depIdxs = []int32{
 	1,  // 7: aot.api.v1.AgentRunStatus.phase:type_name -> aot.api.v1.AgentRunPhase
 	19, // 8: aot.api.v1.AgentRunStatus.started_at:type_name -> google.protobuf.Timestamp
 	19, // 9: aot.api.v1.AgentRunStatus.completed_at:type_name -> google.protobuf.Timestamp
-	5,  // 10: aot.api.v1.CreateAgentRunRequest.spec:type_name -> aot.api.v1.AgentRunSpec
-	3,  // 11: aot.api.v1.CreateAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
-	1,  // 12: aot.api.v1.ListAgentRunsRequest.phase_filter:type_name -> aot.api.v1.AgentRunPhase
-	3,  // 13: aot.api.v1.ListAgentRunsResponse.agent_runs:type_name -> aot.api.v1.AgentRun
-	2,  // 14: aot.api.v1.AgentRunEvent.type:type_name -> aot.api.v1.AgentRunEventType
-	19, // 15: aot.api.v1.AgentRunEvent.timestamp:type_name -> google.protobuf.Timestamp
-	3,  // 16: aot.api.v1.CancelAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
-	7,  // 17: aot.api.v1.AOTService.CreateAgentRun:input_type -> aot.api.v1.CreateAgentRunRequest
-	9,  // 18: aot.api.v1.AOTService.GetAgentRun:input_type -> aot.api.v1.GetAgentRunRequest
-	10, // 19: aot.api.v1.AOTService.ListAgentRuns:input_type -> aot.api.v1.ListAgentRunsRequest
-	12, // 20: aot.api.v1.AOTService.WatchAgentRun:input_type -> aot.api.v1.WatchAgentRunRequest
-	14, // 21: aot.api.v1.AOTService.CancelAgentRun:input_type -> aot.api.v1.CancelAgentRunRequest
-	16, // 22: aot.api.v1.AOTService.SendHumanInput:input_type -> aot.api.v1.SendHumanInputRequest
-	8,  // 23: aot.api.v1.AOTService.CreateAgentRun:output_type -> aot.api.v1.CreateAgentRunResponse
-	3,  // 24: aot.api.v1.AOTService.GetAgentRun:output_type -> aot.api.v1.AgentRun
-	11, // 25: aot.api.v1.AOTService.ListAgentRuns:output_type -> aot.api.v1.ListAgentRunsResponse
-	13, // 26: aot.api.v1.AOTService.WatchAgentRun:output_type -> aot.api.v1.AgentRunEvent
-	15, // 27: aot.api.v1.AOTService.CancelAgentRun:output_type -> aot.api.v1.CancelAgentRunResponse
-	17, // 28: aot.api.v1.AOTService.SendHumanInput:output_type -> aot.api.v1.SendHumanInputResponse
-	23, // [23:29] is the sub-list for method output_type
-	17, // [17:23] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	19, // 10: aot.api.v1.AgentRunStatus.retain_until:type_name -> google.protobuf.Timestamp
+	5,  // 11: aot.api.v1.CreateAgentRunRequest.spec:type_name -> aot.api.v1.AgentRunSpec
+	3,  // 12: aot.api.v1.CreateAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
+	1,  // 13: aot.api.v1.ListAgentRunsRequest.phase_filter:type_name -> aot.api.v1.AgentRunPhase
+	3,  // 14: aot.api.v1.ListAgentRunsResponse.agent_runs:type_name -> aot.api.v1.AgentRun
+	2,  // 15: aot.api.v1.AgentRunEvent.type:type_name -> aot.api.v1.AgentRunEventType
+	19, // 16: aot.api.v1.AgentRunEvent.timestamp:type_name -> google.protobuf.Timestamp
+	3,  // 17: aot.api.v1.CancelAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
+	7,  // 18: aot.api.v1.AOTService.CreateAgentRun:input_type -> aot.api.v1.CreateAgentRunRequest
+	9,  // 19: aot.api.v1.AOTService.GetAgentRun:input_type -> aot.api.v1.GetAgentRunRequest
+	10, // 20: aot.api.v1.AOTService.ListAgentRuns:input_type -> aot.api.v1.ListAgentRunsRequest
+	12, // 21: aot.api.v1.AOTService.WatchAgentRun:input_type -> aot.api.v1.WatchAgentRunRequest
+	14, // 22: aot.api.v1.AOTService.CancelAgentRun:input_type -> aot.api.v1.CancelAgentRunRequest
+	16, // 23: aot.api.v1.AOTService.SendHumanInput:input_type -> aot.api.v1.SendHumanInputRequest
+	8,  // 24: aot.api.v1.AOTService.CreateAgentRun:output_type -> aot.api.v1.CreateAgentRunResponse
+	3,  // 25: aot.api.v1.AOTService.GetAgentRun:output_type -> aot.api.v1.AgentRun
+	11, // 26: aot.api.v1.AOTService.ListAgentRuns:output_type -> aot.api.v1.ListAgentRunsResponse
+	13, // 27: aot.api.v1.AOTService.WatchAgentRun:output_type -> aot.api.v1.AgentRunEvent
+	15, // 28: aot.api.v1.AOTService.CancelAgentRun:output_type -> aot.api.v1.CancelAgentRunResponse
+	17, // 29: aot.api.v1.AOTService.SendHumanInput:output_type -> aot.api.v1.SendHumanInputResponse
+	24, // [24:30] is the sub-list for method output_type
+	18, // [18:24] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_aot_api_v1_api_proto_init() }

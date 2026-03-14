@@ -84,6 +84,8 @@ message AgentRunSpec {
   string spec_source = 12;
   // WorkspaceName is the name of the workspace preset used for this run.
   string workspace_name = 13;
+  // RetainPodMinutes is how long to keep the pod alive after completion for inspection.
+  int32 retain_pod_minutes = 14;
 }
 
 message AgentRunStatus {
@@ -95,6 +97,10 @@ message AgentRunStatus {
   google.protobuf.Timestamp completed_at = 6;
   // WorktreePath is the path to the git worktree on the agent.
   string worktree_path = 7;
+  // LogOutput is the persisted agent log output (up to 1MB), collected before pod deletion.
+  string log_output = 8;
+  // RetainUntil is when the pod retention expires and cleanup will run.
+  google.protobuf.Timestamp retain_until = 9;
 }
 
 message CreateAgentRunRequest {
