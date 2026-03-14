@@ -22,7 +22,7 @@ interface Tab {
 const TABS: Tab[] = [
   { id: "info", label: "Info", testId: "detail-tab-info", alwaysEnabled: true },
   { id: "logs", label: "Logs", testId: "detail-tab-logs", alwaysEnabled: true },
-  { id: "files", label: "Files", testId: "detail-tab-files", alwaysEnabled: false },
+  { id: "files", label: "Files", testId: "detail-tab-files", alwaysEnabled: true },
   { id: "shell", label: "Shell", testId: "detail-tab-shell", alwaysEnabled: true },
   { id: "traces", label: "Traces", testId: "detail-tab-traces", alwaysEnabled: true },
 ];
@@ -44,8 +44,10 @@ export default function AgentRunDetailPanel({
   const [humanInput, setHumanInput] = useState("");
 
   const isActive = run.status.phase === "running" || run.status.phase === "waiting_for_input";
-  // 12.3: Use debugActive status field for hasPod logic
-  const hasPod = !!run.status.podName && (isActive || !!run.status.debugActive);
+  // With persistent workspace architecture, the pod/workspace is available whenever
+  // podName is set — the Deployment may still be running, or the PVC persists on disk.
+  // Files and logs are always accessible (exec when pod running, disk when not).
+  const hasPod = !!run.status.podName;
 
   // Watch run for live log streaming
   const streamRunId = isActive ? run.id : null;
@@ -116,11 +118,8 @@ export default function AgentRunDetailPanel({
         {activeTab === "logs" && (
           <LogsTab run={run} logLines={logLines} isStreaming={isStreaming} hasPod={hasPod} />
         )}
-        {activeTab === "files" && hasPod && (
+        {activeTab === "files" && (
           <FileExplorer runId={run.id} />
-        )}
-        {activeTab === "files" && !hasPod && (
-          <DisabledMessage message="Pod is no longer available. File browsing requires an active pod." />
         )}
         {activeTab === "shell" && (
           <ShellTab run={run} isActive={isActive} hasPod={hasPod} />
@@ -644,13 +643,6 @@ function SpanMetadataView({ span }: { span: TraceSpan }) {
 
 /* ── DisabledMessage ── */
 
-function DisabledMessage({ message }: { message: string }) {
-  return (
-    <div className="flex h-full items-center justify-center p-8 text-center text-sm text-txt-tertiary">
-      {message}
-    </div>
-  );
-}
 
 /* ── MetaRow ── */
 
