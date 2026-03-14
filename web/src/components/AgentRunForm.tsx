@@ -99,7 +99,7 @@ export default function AgentRunForm({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[10vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[5vh]"
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
@@ -107,7 +107,9 @@ export default function AgentRunForm({
       <form
         data-testid="form-modal"
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-lg border border-edge bg-surface-1 shadow-2xl"
+        className={`w-full rounded-lg border border-edge bg-surface-1 shadow-2xl ${
+          inputMode === "spec" ? "max-w-4xl" : "max-w-lg"
+        }`}
       >
         <div className="flex items-center justify-between border-b border-edge px-5 py-3">
           <h2 className="text-sm font-semibold">New Agent Run</h2>
@@ -121,7 +123,7 @@ export default function AgentRunForm({
           </button>
         </div>
 
-        <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto p-5">
+        <div className="flex flex-col gap-4 p-5 max-h-[80vh] overflow-y-auto">
           <div>
             <label className="mb-1 block text-xs font-medium text-txt-secondary">
               Name
@@ -313,7 +315,7 @@ export default function AgentRunForm({
                 placeholder="Describe what the agent should do..."
               />
             ) : (
-              <>
+              <div>
                 <SpecEditor
                   value={specContent}
                   onChange={(v) => {
@@ -322,7 +324,7 @@ export default function AgentRunForm({
                       setSpecSource("editor");
                     }
                   }}
-                  height="200px"
+                  height="400px"
                 />
                 <div className="mt-2 flex gap-2">
                   <button
@@ -343,7 +345,7 @@ export default function AgentRunForm({
                 {githubError && (
                   <p className="mt-1 text-xs text-danger">{githubError}</p>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>

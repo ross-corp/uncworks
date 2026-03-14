@@ -27,7 +27,7 @@ export default function SpecEditor({
         }
       >
         <MonacoEditor
-          height="100%"
+          height={height}
           language="markdown"
           theme="vs-dark"
           value={value}
