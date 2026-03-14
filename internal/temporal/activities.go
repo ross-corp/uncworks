@@ -359,6 +359,7 @@ func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 					Name:            "agent",
 					Image:           image,
 					ImagePullPolicy: imagePullPolicy(image),
+					Command:         []string{"sleep", "infinity"}, // Keep agent container alive while sidecar runs pi
 					Env:             agentEnvVars,
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "workspace", MountPath: "/workspace"},
