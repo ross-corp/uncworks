@@ -17,7 +17,7 @@ export default function AgentRunForm({
 }: {
   repos: string[];
   workspaces: Workspace[];
-  cloneSource?: { name: string; spec: { repos: Repository[]; prompt: string; backend: Backend; modelTier: ModelTier; ttlSeconds: number; specContent?: string; specSource?: string; workspaceName?: string } };
+  cloneSource?: { name: string; spec: { repos: Repository[]; prompt: string; backend: Backend; modelTier: ModelTier; ttlSeconds: number; retainPodMinutes?: number; specContent?: string; specSource?: string; workspaceName?: string } };
   onSubmit: (data: {
     name: string;
     repos: Repository[];
@@ -26,6 +26,7 @@ export default function AgentRunForm({
     backend: Backend;
     modelTier: ModelTier;
     ttlSeconds: number;
+    retainPodMinutes: number;
     specContent?: string;
     specSource?: string;
   }) => void;
@@ -56,6 +57,7 @@ export default function AgentRunForm({
   const [backend, setBackend] = useState<Backend>(cloneSource?.spec.backend ?? "pod");
   const [modelTier, setModelTier] = useState<ModelTier>(cloneSource?.spec.modelTier ?? "default-cloud");
   const [ttlSeconds, setTtlSeconds] = useState(cloneSource?.spec.ttlSeconds ?? 3600);
+  const [retainPodMinutes, setRetainPodMinutes] = useState(cloneSource?.spec.retainPodMinutes ?? 30);
 
   function selectWorkspace(id: string | null) {
     setSelectedWorkspaceId(id);
@@ -96,6 +98,7 @@ export default function AgentRunForm({
       backend,
       modelTier,
       ttlSeconds,
+      retainPodMinutes,
       specContent: inputMode === "spec" ? specContent : undefined,
       specSource: inputMode === "spec" ? specSource : undefined,
     });
@@ -245,6 +248,19 @@ export default function AgentRunForm({
                 onChange={(e) => setTtlSeconds(Number(e.target.value))}
                 min={300}
                 max={86400}
+              />
+            </div>
+            <div className="w-24">
+              <label className="mb-1 block text-xs font-medium text-txt-secondary">
+                Retain (min)
+              </label>
+              <input
+                type="number"
+                className="input-field text-center"
+                value={retainPodMinutes}
+                onChange={(e) => setRetainPodMinutes(Number(e.target.value))}
+                min={0}
+                max={1440}
               />
             </div>
             <div className="flex-1">

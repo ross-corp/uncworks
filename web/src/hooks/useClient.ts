@@ -59,6 +59,8 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       traceID: r.status.traceID ?? "",
       startedAt: r.status.startedAt ?? "",
       completedAt: r.status.completedAt ?? "",
+      logOutput: r.status.logOutput,
+      retainUntil: r.status.retainUntil,
     },
     createdAt: r.createdAt,
   };

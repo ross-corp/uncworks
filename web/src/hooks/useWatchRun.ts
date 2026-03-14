@@ -1,0 +1,43 @@
+import { useState, useEffect, useRef } from "react";
+import { useClient, mapEvent } from "./useClient";
+
+export function useWatchRun(runId: string | null) {
+  const client = useClient();
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!runId) {
+      setLogLines([]);
+      setIsStreaming(false);
+      return;
+    }
+
+    setLogLines([]);
+    setIsStreaming(true);
+
+    const abort = client.watchAgentRun(
+      runId,
+      (rawEvent) => {
+        const event = mapEvent(rawEvent);
+        if (event.type === "log") {
+          setLogLines((prev) => [...prev, event.payload]);
+        }
+      },
+      (_err) => {
+        setIsStreaming(false);
+      }
+    );
+
+    abortRef.current = abort;
+
+    return () => {
+      abort.abort();
+      abortRef.current = null;
+      setIsStreaming(false);
+    };
+  }, [runId, client]);
+
+  return { logLines, isStreaming };
+}

@@ -94,6 +94,11 @@ type AgentRunSpec struct {
 	// WorkspaceName is the name of the workspace preset used for this run.
 	// +optional
 	WorkspaceName string `json:"workspaceName,omitempty"`
+
+	// RetainPodMinutes is how long to keep the pod alive after completion for inspection.
+	// +kubebuilder:default=30
+	// +optional
+	RetainPodMinutes int32 `json:"retainPodMinutes,omitempty"`
 }
 
 // ExternalBackendConfig holds configuration for the External (SSH/Lima) backend.
@@ -154,6 +159,14 @@ type AgentRunStatus struct {
 	// Conditions represent the latest available observations of the AgentRun's state.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// LogOutput is the persisted agent log output (up to 1MB), collected before pod deletion.
+	// +optional
+	LogOutput string `json:"logOutput,omitempty"`
+
+	// RetainUntil is when the pod retention expires and cleanup will run.
+	// +optional
+	RetainUntil *metav1.Time `json:"retainUntil,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -290,17 +290,18 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 		})
 	}
 	crdSpec := aotv1alpha1.AgentRunSpec{
-		Backend:       protoBackendToCRD(spec.Backend),
-		Repos:         repos,
-		Prompt:        spec.Prompt,
-		DevboxConfig:  spec.DevboxConfig,
-		TTLSeconds:    spec.TtlSeconds,
-		EnvVars:       spec.EnvVars,
-		ModelTier:     spec.ModelTier,
-		Image:         spec.Image,
-		SpecContent:   spec.SpecContent,
-		SpecSource:    spec.SpecSource,
-		WorkspaceName: spec.WorkspaceName,
+		Backend:          protoBackendToCRD(spec.Backend),
+		Repos:            repos,
+		Prompt:           spec.Prompt,
+		DevboxConfig:     spec.DevboxConfig,
+		TTLSeconds:       spec.TtlSeconds,
+		EnvVars:          spec.EnvVars,
+		ModelTier:        spec.ModelTier,
+		Image:            spec.Image,
+		SpecContent:      spec.SpecContent,
+		SpecSource:       spec.SpecSource,
+		WorkspaceName:    spec.WorkspaceName,
+		RetainPodMinutes: spec.RetainPodMinutes,
 	}
 	return crdSpec
 }
@@ -319,17 +320,18 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		Id:   crd.Name,
 		Name: crd.Name,
 		Spec: &apiv1.AgentRunSpec{
-			Backend:       crdBackendToProto(crd.Spec.Backend),
-			Repos:         protoRepos,
-			Prompt:        crd.Spec.Prompt,
-			DevboxConfig:  crd.Spec.DevboxConfig,
-			TtlSeconds:    crd.Spec.TTLSeconds,
-			EnvVars:       crd.Spec.EnvVars,
-			ModelTier:     crd.Spec.ModelTier,
-			Image:         crd.Spec.Image,
-			SpecContent:   crd.Spec.SpecContent,
-			SpecSource:    crd.Spec.SpecSource,
-			WorkspaceName: crd.Spec.WorkspaceName,
+			Backend:          crdBackendToProto(crd.Spec.Backend),
+			Repos:            protoRepos,
+			Prompt:           crd.Spec.Prompt,
+			DevboxConfig:     crd.Spec.DevboxConfig,
+			TtlSeconds:       crd.Spec.TTLSeconds,
+			EnvVars:          crd.Spec.EnvVars,
+			ModelTier:        crd.Spec.ModelTier,
+			Image:            crd.Spec.Image,
+			SpecContent:      crd.Spec.SpecContent,
+			SpecSource:       crd.Spec.SpecSource,
+			WorkspaceName:    crd.Spec.WorkspaceName,
+			RetainPodMinutes: crd.Spec.RetainPodMinutes,
 		},
 		Status: &apiv1.AgentRunStatus{
 			Phase:        crdPhaseToProto(crd.Status.Phase),
@@ -337,6 +339,7 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 			PodName:      crd.Status.PodName,
 			TraceId:      crd.Status.TraceID,
 			WorktreePath: crd.Status.WorktreePath,
+			LogOutput:    crd.Status.LogOutput,
 		},
 		CreatedAt: timestamppb.New(crd.CreationTimestamp.Time),
 	}
@@ -346,6 +349,9 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 	}
 	if crd.Status.CompletedAt != nil {
 		run.Status.CompletedAt = timestamppb.New(crd.Status.CompletedAt.Time)
+	}
+	if crd.Status.RetainUntil != nil {
+		run.Status.RetainUntil = timestamppb.New(crd.Status.RetainUntil.Time)
 	}
 
 	return run
