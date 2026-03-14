@@ -53,6 +53,7 @@ export default function WorkspaceEditor({
       }}
     >
       <form
+        data-testid="workspace-editor"
         onSubmit={handleSubmit}
         className="w-full max-w-lg rounded-lg border border-edge bg-surface-1 shadow-2xl"
       >
@@ -71,6 +72,7 @@ export default function WorkspaceEditor({
               Name
             </label>
             <input
+              data-testid="workspace-editor-name"
               className="input-field"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -97,9 +99,10 @@ export default function WorkspaceEditor({
             </label>
             <div className="space-y-2">
               {repos.map((repo, i) => (
-                <div key={i} className="flex items-center gap-2">
+                <div key={i} data-testid={`workspace-editor-repo-${i}`} className="flex items-center gap-2">
                   <div className="flex-1">
                     <input
+                      data-testid={`workspace-editor-repo-${i}-url`}
                       list="ws-known-repos"
                       className="input-field"
                       value={repo.url}
@@ -109,6 +112,7 @@ export default function WorkspaceEditor({
                   </div>
                   <div className="w-24">
                     <input
+                      data-testid={`workspace-editor-repo-${i}-branch`}
                       className="input-field"
                       value={repo.branch}
                       onChange={(e) => updateRepo(i, "branch", e.target.value)}
@@ -149,6 +153,7 @@ export default function WorkspaceEditor({
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-danger">Delete this workspace?</span>
                   <button
+                    data-testid="workspace-editor-delete-confirm"
                     type="button"
                     onClick={() => onDelete(workspace.id)}
                     className="rounded bg-danger px-2 py-1 text-xs font-medium text-white hover:bg-danger/80 transition-colors"
@@ -165,6 +170,7 @@ export default function WorkspaceEditor({
                 </div>
               ) : (
                 <button
+                  data-testid="workspace-editor-delete"
                   type="button"
                   onClick={() => setConfirmDelete(true)}
                   className="btn-ghost text-xs text-danger"
@@ -178,7 +184,7 @@ export default function WorkspaceEditor({
             <button type="button" onClick={onClose} className="btn-ghost">
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
+            <button data-testid="workspace-editor-save" type="submit" className="btn-primary">
               {workspace ? "Save" : "Create"}
             </button>
           </div>

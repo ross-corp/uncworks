@@ -253,6 +253,7 @@ export default function AgentRunTable({
             return (
               <tr
                 key={run.id}
+                data-testid={`table-row-${run.id}`}
                 onClick={() => onSelect?.(run)}
                 className={`group border-b border-edge transition-colors cursor-pointer ${
                   isSelected
@@ -264,14 +265,14 @@ export default function AgentRunTable({
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium">{run.name}</span>
                     {run.spec.specContent && (
-                      <span className="inline-flex items-center rounded bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-medium text-purple-400">
+                      <span data-testid={`table-row-${run.id}-spec`} className="inline-flex items-center rounded bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-medium text-purple-400">
                         spec
                       </span>
                     )}
                     <span className="text-xs text-txt-tertiary">{timeAgo(run.createdAt)}</span>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 overflow-hidden whitespace-nowrap">
+                <td className="px-4 py-2.5 overflow-hidden whitespace-nowrap" data-testid={`table-row-${run.id}-phase`}>
                   <PhaseBadge phase={run.status.phase} />
                 </td>
                 <td className="px-4 py-2.5 overflow-hidden whitespace-nowrap">

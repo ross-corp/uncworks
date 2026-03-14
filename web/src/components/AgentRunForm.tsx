@@ -96,6 +96,7 @@ export default function AgentRunForm({
       }}
     >
       <form
+        data-testid="form-modal"
         onSubmit={handleSubmit}
         className="w-full max-w-lg rounded-lg border border-edge bg-surface-1 shadow-2xl"
       >
@@ -116,6 +117,7 @@ export default function AgentRunForm({
               Name
             </label>
             <input
+              data-testid="form-name-input"
               className="input-field"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -146,6 +148,7 @@ export default function AgentRunForm({
                   <button
                     key={ws.id}
                     type="button"
+                    data-testid={`form-workspace-${ws.name}`}
                     onClick={() => selectWorkspace(ws.id)}
                     className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
                       selectedWorkspaceId === ws.id
@@ -170,6 +173,7 @@ export default function AgentRunForm({
                 <div key={i} className="flex items-center gap-2">
                   <div className="flex-1">
                     <input
+                      data-testid={`form-repo-row-${i}-url`}
                       list="known-repos"
                       className="input-field"
                       value={repo.url}
@@ -179,6 +183,7 @@ export default function AgentRunForm({
                   </div>
                   <div className="w-24">
                     <input
+                      data-testid={`form-repo-row-${i}-branch`}
                       className="input-field"
                       value={repo.branch}
                       onChange={(e) => updateRepo(i, "branch", e.target.value)}
@@ -204,6 +209,7 @@ export default function AgentRunForm({
             </datalist>
             <button
               type="button"
+              data-testid="form-add-repo"
               onClick={addRepo}
               className="btn-ghost mt-2 text-xs"
             >
@@ -264,6 +270,7 @@ export default function AgentRunForm({
             <div className="mb-2 flex gap-1">
               <button
                 type="button"
+                data-testid="form-tab-prompt"
                 onClick={() => setInputMode("prompt")}
                 className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
                   inputMode === "prompt"
@@ -275,6 +282,7 @@ export default function AgentRunForm({
               </button>
               <button
                 type="button"
+                data-testid="form-tab-spec"
                 onClick={() => setInputMode("spec")}
                 className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
                   inputMode === "spec"
@@ -288,6 +296,7 @@ export default function AgentRunForm({
 
             {inputMode === "prompt" ? (
               <textarea
+                data-testid="form-prompt-input"
                 className="input-field min-h-[120px] resize-y"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -330,7 +339,7 @@ export default function AgentRunForm({
           <button type="button" onClick={onCancel} className="btn-ghost">
             Cancel
           </button>
-          <button type="submit" className="btn-primary">
+          <button data-testid="form-submit" type="submit" className="btn-primary">
             Create Run
           </button>
         </div>

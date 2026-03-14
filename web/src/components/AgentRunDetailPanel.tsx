@@ -52,7 +52,7 @@ export default function AgentRunDetailPanel({
   const isWaiting = run.status.phase === "waiting_for_input";
 
   return (
-    <div className="flex h-full flex-col border-l border-edge bg-surface-0">
+    <div data-testid="detail-panel" className="flex h-full flex-col border-l border-edge bg-surface-0">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-edge px-5 py-3">
         <span className="font-mono text-sm text-txt-tertiary truncate">{run.id}</span>
@@ -64,9 +64,9 @@ export default function AgentRunDetailPanel({
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-5">
         {/* Name & badges */}
-        <h2 className="mb-2 text-base font-semibold">{run.name}</h2>
+        <h2 data-testid="detail-name" className="mb-2 text-base font-semibold">{run.name}</h2>
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <PhaseBadge phase={run.status.phase} />
+          <span data-testid="detail-phase"><PhaseBadge phase={run.status.phase} /></span>
           <BackendBadge backend={run.spec.backend} />
           <ModelTierBadge tier={run.spec.modelTier} />
         </div>
@@ -79,7 +79,7 @@ export default function AgentRunDetailPanel({
         )}
 
         {/* Repositories */}
-        <div className="mb-4">
+        <div className="mb-4" data-testid="detail-repos">
           <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
             Repositories
           </h3>
@@ -185,6 +185,7 @@ export default function AgentRunDetailPanel({
               Human Input
             </h3>
             <textarea
+              data-testid="detail-hitl-input"
               className="input-field min-h-[80px] resize-y"
               value={humanInput}
               onChange={(e) => setHumanInput(e.target.value)}
@@ -200,6 +201,7 @@ export default function AgentRunDetailPanel({
               placeholder="Type your response to the agent..."
             />
             <button
+              data-testid="detail-hitl-send"
               onClick={() => {
                 if (humanInput.trim()) {
                   onSendInput(run.id, humanInput.trim());
@@ -229,6 +231,7 @@ export default function AgentRunDetailPanel({
         </div>
         {isActive && (
           <button
+            data-testid="detail-cancel"
             onClick={() => onCancel(run.id)}
             className="rounded bg-danger px-3 py-1.5 text-sm font-medium text-white hover:bg-danger/80 transition-colors"
           >

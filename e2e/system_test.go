@@ -1,3 +1,5 @@
+//go:build e2e
+
 // Package e2e contains full system E2E tests for AOT.
 // These tests require a running k0s cluster and are intended
 // to be run against a local development environment.
@@ -75,7 +77,7 @@ func TestE2E_AgentRunLifecycle(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/test-repo.git", Branch: "main"}},
+			Repos:      []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
 			Prompt:     "E2E test: fix the failing integration tests",
 			TTLSeconds: 300,
 		},
@@ -119,7 +121,7 @@ func TestE2E_KubeVirtBackendRejection(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend: aotv1alpha1.BackendKubeVirt,
-			Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git"}},
+			Repos:   []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo")}},
 			Prompt:  "E2E test: KubeVirt should be stubbed",
 			KubeVirtConfig: &aotv1alpha1.KubeVirtBackendConfig{
 				CPUs:     2,

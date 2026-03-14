@@ -28,6 +28,7 @@ export default function ReposView({
       {/* Add Repository */}
       <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
         <input
+          data-testid="repos-add-input"
           className="input-field flex-1"
           value={newUrl}
           onChange={(e) => setNewUrl(e.target.value)}
@@ -40,6 +41,7 @@ export default function ReposView({
           placeholder="https://github.com/org/repo"
         />
         <button
+          data-testid="repos-add-button"
           onClick={handleAdd}
           disabled={!newUrl.trim()}
           className="btn-primary text-sm disabled:opacity-40"
@@ -62,9 +64,10 @@ export default function ReposView({
           </tr>
         </thead>
         <tbody>
-          {repos.map((url) => (
+          {repos.map((url, index) => (
             <tr
               key={url}
+              data-testid={`repos-row-${index}`}
               className="group border-b border-edge transition-colors hover:bg-surface-1"
             >
               <td className="px-4 py-2.5 font-medium text-txt-primary">
@@ -75,6 +78,7 @@ export default function ReposView({
               </td>
               <td className="px-4 py-2.5 text-right">
                 <button
+                  data-testid={`repos-remove-${index}`}
                   onClick={() => onRemoveRepo(url)}
                   className="btn-ghost px-2 py-1 text-xs text-danger opacity-0 group-hover:opacity-100"
                 >

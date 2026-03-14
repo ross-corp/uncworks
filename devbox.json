@@ -1,5 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/main/.schema/devbox.schema.json",
+  "_comment_soft_serve": "Also install soft-serve: go install github.com/charmbracelet/soft-serve/cmd/soft@latest",
   "packages": [
     "go@latest",
     "nodejs@22",

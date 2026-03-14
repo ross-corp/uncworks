@@ -36,6 +36,7 @@ export default function GitHubModal({
       }}
     >
       <form
+        data-testid="github-modal"
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-lg border border-edge bg-surface-1 shadow-2xl"
       >
@@ -58,6 +59,7 @@ export default function GitHubModal({
               Repository
             </label>
             <input
+              data-testid="github-modal-repo"
               className="input-field"
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
@@ -71,6 +73,7 @@ export default function GitHubModal({
               File Path
             </label>
             <input
+              data-testid="github-modal-path"
               className="input-field"
               value={path}
               onChange={(e) => setPath(e.target.value)}
@@ -97,7 +100,7 @@ export default function GitHubModal({
           <button type="button" onClick={onClose} className="btn-ghost">
             Cancel
           </button>
-          <button type="submit" className="btn-primary">
+          <button data-testid="github-modal-submit" type="submit" className="btn-primary">
             {mode === "load" ? "Load" : "Push"}
           </button>
         </div>

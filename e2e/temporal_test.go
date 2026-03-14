@@ -108,7 +108,7 @@ func TestE2E_Temporal_WorkflowStarts(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
+			Repos:      []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
 			Prompt:     "E2E: verify workflow starts",
 			TTLSeconds: 600,
 		},
@@ -171,7 +171,7 @@ func TestE2E_Temporal_CancelViaWorkflow(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
+			Repos:      []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
 			Prompt:     "E2E: cancel via workflow",
 			TTLSeconds: 600,
 		},
@@ -217,7 +217,7 @@ func TestE2E_Temporal_DeleteCRDCancelsWorkflow(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
+			Repos:      []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
 			Prompt:     "E2E: delete CRD cancels workflow",
 			TTLSeconds: 600,
 		},
@@ -270,7 +270,7 @@ func TestE2E_Temporal_KubeVirtRejection(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend: aotv1alpha1.BackendKubeVirt,
-			Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git"}},
+			Repos:   []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo")}},
 			Prompt:  "E2E: KubeVirt should fail with message",
 			KubeVirtConfig: &aotv1alpha1.KubeVirtBackendConfig{
 				CPUs:     2,
@@ -316,7 +316,7 @@ func TestE2E_Temporal_StateSync(t *testing.T) {
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
 			Backend:    aotv1alpha1.BackendPod,
-			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
+			Repos:      []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
 			Prompt:     "E2E: verify state sync",
 			TTLSeconds: 600,
 		},
