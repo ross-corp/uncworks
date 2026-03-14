@@ -41,6 +41,28 @@ graph TD
     Agent --> PG[("PostgreSQL (brain)\nshared state store + queue")]
 ```
 
+### Persistent Workspace Architecture
+
+Agent runs use Deployments (scale 0/1) with PersistentVolumeClaims for workspace storage.
+
+- **Running**: Deployment replicas=1, workspace at `/workspace` on PVC
+- **Completed**: Deployment replicas=0, workspace persists on PVC
+- **Debug**: Scale Deployment back to 1 for shell access via `POST /api/v1/runs/{id}/debug`
+- **Archived**: Deployment + PVC deleted after 7-day retention
+
+Logs, files, and traces remain accessible after completion because the PVC persists on disk. The API server serves file/log/trace requests directly from the PVC host path when no pod is running.
+
+### VS Code Attachment
+
+You can attach VS Code to a running or debug agent workspace:
+
+1. Start a debug session: `POST /api/v1/runs/{id}/debug` (or click "Debug Run" in the web UI)
+2. Port-forward to the debug pod: `kubectl port-forward deploy/agentrun-{id} 2222:22`
+3. Use VS Code Remote — SSH or the Dev Containers extension to connect
+4. The workspace includes a `.devcontainer/devcontainer.json` for automatic environment setup
+
+Alternatively, use `GET /api/v1/runs/{id}/connect` to retrieve connection details.
+
 ### Data flow
 
 1. Client calls `CreateAgentRun` via gRPC (or applies a CRD with kubectl).

@@ -147,6 +147,26 @@ func (h *Hydrator) Run(ctx context.Context) error {
 		return fmt.Errorf("generate manifest: %w", err)
 	}
 
+	// Generate devcontainer.json for VS Code Remote Containers (6.1)
+	if err := h.writeDevcontainer(); err != nil {
+		return fmt.Errorf("write devcontainer: %w", err)
+	}
+
+	// Create .aot directory structure for traces and logs (6.2, 6.3)
+	for _, dir := range []string{
+		filepath.Join(h.config.WorkspaceDir, ".aot", "traces"),
+		filepath.Join(h.config.WorkspaceDir, ".aot", "logs"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("create dir %s: %w", dir, err)
+		}
+	}
+
+	// Write run metadata (6.4)
+	if err := h.writeMetadata(); err != nil {
+		return fmt.Errorf("write metadata: %w", err)
+	}
+
 	// Devbox setup: use explicit config if set, otherwise auto-compose
 	if h.config.DevboxConfig != "" {
 		if err := h.setupDevbox(ctx); err != nil {
@@ -272,6 +292,70 @@ func (h *Hydrator) writeSpec() error {
 	}
 
 	return nil
+}
+
+// DevcontainerConfig represents a .devcontainer/devcontainer.json file.
+type DevcontainerConfig struct {
+	Name             string `json:"name"`
+	Image            string `json:"image"`
+	WorkspaceFolder  string `json:"workspaceFolder"`
+	PostStartCommand string `json:"postStartCommand"`
+	RemoteUser       string `json:"remoteUser"`
+}
+
+// writeDevcontainer generates /workspace/.devcontainer/devcontainer.json (6.1).
+func (h *Hydrator) writeDevcontainer() error {
+	dir := filepath.Join(h.config.WorkspaceDir, ".devcontainer")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create .devcontainer dir: %w", err)
+	}
+
+	config := DevcontainerConfig{
+		Name:             "aot-run",
+		Image:            "aot-agent:local",
+		WorkspaceFolder:  "/workspace",
+		PostStartCommand: "devbox install || true",
+		RemoteUser:       "root",
+	}
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal devcontainer.json: %w", err)
+	}
+	data = append(data, '\n')
+
+	return os.WriteFile(filepath.Join(dir, "devcontainer.json"), data, 0o644)
+}
+
+// RunMetadata captures run configuration for debugging and audit (6.4).
+type RunMetadata struct {
+	AgentRunID string `json:"agentRunId,omitempty"`
+	Repos      string `json:"repos,omitempty"`
+	Prompt     string `json:"prompt,omitempty"`
+	ModelTier  string `json:"modelTier,omitempty"`
+}
+
+// writeMetadata writes /workspace/.aot/metadata.json from environment variables (6.4).
+func (h *Hydrator) writeMetadata() error {
+	meta := RunMetadata{
+		AgentRunID: os.Getenv("AOT_AGENT_RUN_ID"),
+		Repos:      os.Getenv("AOT_REPOS"),
+		Prompt:     os.Getenv("AOT_PROMPT"),
+		ModelTier:  os.Getenv("AOT_MODEL_TIER"),
+	}
+
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal metadata: %w", err)
+	}
+	data = append(data, '\n')
+
+	metaDir := filepath.Join(h.config.WorkspaceDir, ".aot")
+	if err := os.MkdirAll(metaDir, 0o755); err != nil {
+		return fmt.Errorf("create .aot dir: %w", err)
+	}
+
+	return os.WriteFile(filepath.Join(metaDir, "metadata.json"), data, 0o644)
 }
 
 func (h *Hydrator) cloneRepo(ctx context.Context, repoURL, bareDir string) error {

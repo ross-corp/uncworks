@@ -243,10 +243,17 @@ tasks:
       - kubectl exec -it deploy/ollama -- ollama pull qwen2.5:0.5b
       - kubectl exec -it deploy/ollama -- ollama pull llama3.1:8b
 
+  k0s:storage:
+    desc: Install local-path-provisioner for PVC support
+    cmds:
+      - kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+      - kubectl patch storageclass local-path -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+
   k0s:deps:
     desc: Deploy all infrastructure dependencies to k0s
     cmds:
       - task: k0s:crd
+      - task: k0s:storage
       - task: k0s:ollama
       - task: k0s:litellm
       - echo "All dependencies deployed. Run 'task k0s:ollama:pull' to pull models."

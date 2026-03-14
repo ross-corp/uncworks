@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
-import type { AgentRun } from "../types/agent-run";
+import type { AgentRun, TraceSpan } from "../types/agent-run";
 import { PhaseBadge, BackendBadge, ModelTierBadge } from "./StatusBadge";
 import SpecEditor from "./SpecEditor";
 import LogViewer from "./LogViewer";
 import FileExplorer from "./FileExplorer";
 import ShellTerminal from "./ShellTerminal";
+import TraceTimeline from "./TraceTimeline";
+import DiffViewer from "./DiffViewer";
 import { useWatchRun } from "../hooks/useWatchRun";
+import { useTraces } from "../hooks/useTraces";
 
-type TabId = "info" | "logs" | "files" | "shell";
+type TabId = "info" | "logs" | "files" | "shell" | "traces";
 
 interface Tab {
   id: TabId;
@@ -20,7 +23,8 @@ const TABS: Tab[] = [
   { id: "info", label: "Info", testId: "detail-tab-info", alwaysEnabled: true },
   { id: "logs", label: "Logs", testId: "detail-tab-logs", alwaysEnabled: true },
   { id: "files", label: "Files", testId: "detail-tab-files", alwaysEnabled: false },
-  { id: "shell", label: "Shell", testId: "detail-tab-shell", alwaysEnabled: false },
+  { id: "shell", label: "Shell", testId: "detail-tab-shell", alwaysEnabled: true },
+  { id: "traces", label: "Traces", testId: "detail-tab-traces", alwaysEnabled: true },
 ];
 
 export default function AgentRunDetailPanel({
@@ -40,8 +44,8 @@ export default function AgentRunDetailPanel({
   const [humanInput, setHumanInput] = useState("");
 
   const isActive = run.status.phase === "running" || run.status.phase === "waiting_for_input";
-  const isRetained = !!run.status.podName && !!run.status.retainUntil && new Date(run.status.retainUntil).getTime() > Date.now();
-  const hasPod = !!run.status.podName && (isActive || isRetained);
+  // 12.3: Use debugActive status field for hasPod logic
+  const hasPod = !!run.status.podName && (isActive || !!run.status.debugActive);
 
   // Watch run for live log streaming
   const streamRunId = isActive ? run.id : null;
@@ -54,9 +58,6 @@ export default function AgentRunDetailPanel({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
-
-  // Pod expiry countdown
-  const podExpiresIn = getPodExpiresIn(run);
 
   function isTabEnabled(tab: Tab): boolean {
     if (tab.alwaysEnabled) return true;
@@ -100,13 +101,6 @@ export default function AgentRunDetailPanel({
             </button>
           );
         })}
-
-        {/* Pod expiry indicator */}
-        {podExpiresIn !== null && (
-          <span className="ml-auto text-xs text-yellow-400 px-2">
-            Pod expires in {podExpiresIn}
-          </span>
-        )}
       </div>
 
       {/* Tab content */}
@@ -128,11 +122,11 @@ export default function AgentRunDetailPanel({
         {activeTab === "files" && !hasPod && (
           <DisabledMessage message="Pod is no longer available. File browsing requires an active pod." />
         )}
-        {activeTab === "shell" && hasPod && (
-          <ShellTerminal runId={run.id} />
+        {activeTab === "shell" && (
+          <ShellTab run={run} isActive={isActive} hasPod={hasPod} />
         )}
-        {activeTab === "shell" && !hasPod && (
-          <DisabledMessage message="Pod is no longer available. Shell access requires an active pod." />
+        {activeTab === "traces" && (
+          <TracesTab runId={run.id} />
         )}
       </div>
 
@@ -254,6 +248,9 @@ function InfoTab({
         <MetaRow label="Duration" value={duration()} />
         {run.status.podName && (
           <MetaRow label="Pod" value={run.status.podName} mono />
+        )}
+        {run.status.deploymentName && (
+          <MetaRow label="Deployment" value={run.status.deploymentName} mono />
         )}
         {run.status.traceID && (
           <MetaRow label="Trace ID" value={run.status.traceID} mono />
@@ -427,6 +424,224 @@ function LogsTab({
   );
 }
 
+/* ── ShellTab (12.1 + 12.2) ── */
+
+function ShellTab({
+  run,
+  isActive,
+  hasPod,
+}: {
+  run: AgentRun;
+  isActive: boolean;
+  hasPod: boolean;
+}) {
+  const [debugLoading, setDebugLoading] = useState(false);
+
+  const debugActive = !!run.status.debugActive;
+
+  async function handleDebugStart() {
+    setDebugLoading(true);
+    try {
+      await fetch(`/api/v1/runs/${run.id}/debug`, { method: "POST" });
+    } catch (err) {
+      console.error("Failed to start debug:", err);
+    } finally {
+      setDebugLoading(false);
+    }
+  }
+
+  async function handleDebugStop() {
+    setDebugLoading(true);
+    try {
+      await fetch(`/api/v1/runs/${run.id}/debug`, { method: "DELETE" });
+    } catch (err) {
+      console.error("Failed to stop debug:", err);
+    } finally {
+      setDebugLoading(false);
+    }
+  }
+
+  // 12.1: When Deployment replicas=0 (not active and not debugging), show Debug Run button
+  if (!isActive && !debugActive) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
+        <p className="text-sm text-txt-tertiary text-center">
+          The agent run has completed. Start a debug session to get shell access to the workspace.
+        </p>
+        <button
+          data-testid="debug-run-btn"
+          onClick={handleDebugStart}
+          disabled={debugLoading}
+          className="btn-primary text-sm disabled:opacity-40"
+        >
+          {debugLoading ? "Starting..." : "Debug Run"}
+        </button>
+
+        {/* 12.2: VS Code connection info */}
+        <VSCodeConnectInfo podName={run.status.podName} />
+      </div>
+    );
+  }
+
+  // When debug is active or run is active, show terminal with optional stop button
+  return (
+    <div className="flex h-full flex-col">
+      {debugActive && !isActive && (
+        <div className="flex items-center justify-between border-b border-edge px-3 py-2">
+          <span className="text-xs text-green-400 font-medium">Debug session active</span>
+          <button
+            data-testid="stop-debug-btn"
+            onClick={handleDebugStop}
+            disabled={debugLoading}
+            className="rounded bg-danger/80 px-2 py-1 text-xs font-medium text-white hover:bg-danger transition-colors disabled:opacity-40"
+          >
+            {debugLoading ? "Stopping..." : "Stop Debug"}
+          </button>
+        </div>
+      )}
+      {hasPod ? (
+        <div className="flex-1 overflow-hidden">
+          <ShellTerminal runId={run.id} />
+        </div>
+      ) : (
+        <div className="flex flex-1 items-center justify-center text-sm text-txt-tertiary">
+          Waiting for pod to become ready...
+        </div>
+      )}
+
+      {/* 12.2: VS Code connection info */}
+      <VSCodeConnectInfo podName={run.status.podName} />
+    </div>
+  );
+}
+
+/* ── VS Code Connection Info (12.2) ── */
+
+function VSCodeConnectInfo({ podName }: { podName: string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!podName) return null;
+
+  const portForwardCmd = `kubectl port-forward pod/${podName} 50052:50052 -n aot-local`;
+
+  return (
+    <div className="w-full max-w-md">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1 text-xs text-txt-tertiary hover:text-txt-secondary transition-colors"
+      >
+        <span className={`transition-transform ${expanded ? "rotate-90" : ""}`}>&#9654;</span>
+        VS Code Connection
+      </button>
+      {expanded && (
+        <div className="mt-2 rounded border border-edge bg-surface-2 p-3">
+          <p className="mb-2 text-xs text-txt-tertiary">
+            Connect VS Code Remote Containers to the workspace:
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded bg-surface-0 px-2 py-1 font-mono text-xs text-txt-secondary break-all">
+              {portForwardCmd}
+            </code>
+            <button
+              onClick={() => navigator.clipboard.writeText(portForwardCmd)}
+              className="btn-ghost px-2 text-xs flex-shrink-0"
+            >
+              Copy
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-txt-tertiary">
+            Then attach to the container using VS Code &quot;Attach to Running Container&quot;.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── TracesTab (11.4, 11.5, 11.7, 12.5) ── */
+
+function TracesTab({ runId }: { runId: string }) {
+  const { spans, loading } = useTraces(runId);
+  const [selectedSpan, setSelectedSpan] = useState<TraceSpan | null>(null);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+        Loading traces...
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Timeline */}
+      <div className="flex-shrink-0 border-b border-edge overflow-y-auto max-h-[40%]">
+        <TraceTimeline
+          spans={spans}
+          selectedSpanId={selectedSpan?.id}
+          onSelectSpan={setSelectedSpan}
+        />
+      </div>
+
+      {/* Detail pane */}
+      <div className="flex-1 overflow-y-auto">
+        {selectedSpan === null && (
+          <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+            Select a span to view details
+          </div>
+        )}
+
+        {/* 11.4: Tool span -> show DiffViewer */}
+        {selectedSpan !== null && selectedSpan.type === "tool" && selectedSpan.diff && (
+          <DiffViewer diff={selectedSpan.diff} />
+        )}
+
+        {/* Tool span without diff */}
+        {selectedSpan !== null && selectedSpan.type === "tool" && !selectedSpan.diff && (
+          <SpanMetadataView span={selectedSpan} />
+        )}
+
+        {/* 11.5: LLM span -> show metadata */}
+        {selectedSpan !== null && selectedSpan.type === "llm" && (
+          <SpanMetadataView span={selectedSpan} />
+        )}
+
+        {/* Other span types -> show metadata */}
+        {selectedSpan !== null && selectedSpan.type !== "tool" && selectedSpan.type !== "llm" && (
+          <SpanMetadataView span={selectedSpan} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── SpanMetadataView ── */
+
+function SpanMetadataView({ span }: { span: TraceSpan }) {
+  return (
+    <div className="p-4 space-y-3">
+      <div className="space-y-2">
+        <MetaRow label="Name" value={span.name} />
+        <MetaRow label="Type" value={span.type} />
+        <MetaRow label="Start" value={new Date(span.startTime).toLocaleString()} />
+        <MetaRow label="End" value={new Date(span.endTime).toLocaleString()} />
+        {span.parentId && <MetaRow label="Parent" value={span.parentId} mono />}
+      </div>
+
+      {span.metadata && Object.keys(span.metadata).length > 0 && (
+        <div>
+          <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+            Metadata
+          </h4>
+          <pre className="rounded border border-edge bg-surface-2 p-3 text-xs font-mono text-txt-secondary overflow-x-auto whitespace-pre-wrap">
+            {JSON.stringify(span.metadata, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── DisabledMessage ── */
 
 function DisabledMessage({ message }: { message: string }) {
@@ -450,21 +665,4 @@ function MetaRow({ label, value, mono }: { label: string; value: string; mono?: 
       </span>
     </div>
   );
-}
-
-/* ── Pod expiry helper ── */
-
-function getPodExpiresIn(run: AgentRun): string | null {
-  // Check for retainUntil on status (added by section 10)
-  const statusAny = run.status as unknown as Record<string, unknown>;
-  if (typeof statusAny.retainUntil !== "string" || !statusAny.retainUntil) return null;
-
-  const retainUntil = new Date(statusAny.retainUntil as string).getTime();
-  const now = Date.now();
-  const diffMs = retainUntil - now;
-
-  if (diffMs <= 0) return null;
-
-  const mins = Math.ceil(diffMs / 60000);
-  return `${mins} min`;
 }

@@ -77,9 +77,17 @@ func main() {
 	ghClient := server.NewGitHubClient()
 	ghClient.RegisterHandlers(mux)
 
-	// Register file explorer REST endpoints
+	// Register file explorer REST endpoints (dual-mode: exec or disk)
 	fileHandler := server.NewFileHandler(k8sClient, restConfig, namespace)
 	fileHandler.RegisterFileHandlers(mux)
+
+	// Register debug pod endpoints
+	debugHandler := server.NewDebugHandler(k8sClient, restConfig, namespace)
+	debugHandler.RegisterDebugHandlers(mux)
+
+	// Register trace endpoints
+	traceHandler := server.NewTraceHandler(k8sClient, restConfig, namespace)
+	traceHandler.RegisterTraceHandlers(mux)
 
 	// Register interactive shell WebSocket endpoint
 	execHandler := server.NewExecHandler(k8sClient, restConfig, namespace)

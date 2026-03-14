@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -21,7 +24,8 @@ import (
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 )
 
-// FileHandler serves file explorer API endpoints by exec-ing into agent pods.
+// FileHandler serves file explorer API endpoints by exec-ing into agent pods
+// or reading directly from PVC host paths when the pod is scaled to 0.
 type FileHandler struct {
 	k8sClient  runtimeclient.Client
 	restConfig *rest.Config
@@ -57,6 +61,68 @@ type FileListResponse struct {
 	Entries []FileEntry `json:"entries"`
 }
 
+// getDeploymentReplicas looks up the AgentRun CRD to get the deployment name,
+// then reads the Deployment's spec.replicas.
+func (f *FileHandler) getDeploymentReplicas(ctx context.Context, runID string) (int32, error) {
+	crd := &aotv1alpha1.AgentRun{}
+	if err := f.k8sClient.Get(ctx, runtimeclient.ObjectKey{
+		Namespace: f.namespace,
+		Name:      runID,
+	}, crd); err != nil {
+		return 0, fmt.Errorf("get AgentRun: %w", err)
+	}
+
+	deployName := crd.Status.DeploymentName
+	if deployName == "" {
+		return 0, fmt.Errorf("no deployment name on AgentRun %q status", runID)
+	}
+
+	deploy := &appsv1.Deployment{}
+	if err := f.k8sClient.Get(ctx, runtimeclient.ObjectKey{
+		Namespace: f.namespace,
+		Name:      deployName,
+	}, deploy); err != nil {
+		return 0, fmt.Errorf("get Deployment %q: %w", deployName, err)
+	}
+
+	if deploy.Spec.Replicas == nil {
+		return 1, nil // default is 1 if not set
+	}
+	return *deploy.Spec.Replicas, nil
+}
+
+// getPVCHostPath looks up the PVC aot-ws-{runID}, finds its bound PV,
+// and returns the PV's spec.hostPath.path (used by local-path-provisioner).
+func (f *FileHandler) getPVCHostPath(ctx context.Context, runID string) (string, error) {
+	pvcName := "aot-ws-" + runID
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := f.k8sClient.Get(ctx, runtimeclient.ObjectKey{
+		Namespace: f.namespace,
+		Name:      pvcName,
+	}, pvc); err != nil {
+		return "", fmt.Errorf("PVC %q not found: %w", pvcName, err)
+	}
+
+	pvName := pvc.Spec.VolumeName
+	if pvName == "" {
+		return "", fmt.Errorf("PVC %q has no bound PV", pvcName)
+	}
+
+	pv := &corev1.PersistentVolume{}
+	if err := f.k8sClient.Get(ctx, runtimeclient.ObjectKey{
+		Name: pvName,
+	}, pv); err != nil {
+		return "", fmt.Errorf("PV %q not found: %w", pvName, err)
+	}
+
+	if pv.Spec.HostPath == nil {
+		return "", fmt.Errorf("PV %q does not use hostPath", pvName)
+	}
+
+	return pv.Spec.HostPath.Path, nil
+}
+
 func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	runID := r.PathValue("id")
 	dirPath := r.URL.Query().Get("path")
@@ -64,29 +130,83 @@ func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 		dirPath = "/workspace"
 	}
 
-	podName, err := f.lookupPodName(r.Context(), runID)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("agent run %q not found: %v", runID, err)})
-		return
-	}
-	if podName == "" {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: "pod not available for this agent run"})
+	// Check if pod is running (replicas > 0).
+	replicas, replicaErr := f.getDeploymentReplicas(r.Context(), runID)
+
+	if replicaErr == nil && replicas > 0 {
+		// Pod is running — use exec (current behavior).
+		podName, err := f.lookupPodName(r.Context(), runID)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("agent run %q not found: %v", runID, err)})
+			return
+		}
+		if podName == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "pod not available for this agent run"})
+			return
+		}
+
+		stdout, stderr, err := f.execInPod(r.Context(), podName, []string{"ls", "-la", "--time-style=long-iso", dirPath})
+		if err != nil {
+			log.Printf("exec ls in pod %s failed: %v, stderr: %s", podName, err, stderr)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list files: " + err.Error()})
+			return
+		}
+
+		if strings.Contains(stderr, "No such file or directory") {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "path not found: " + dirPath})
+			return
+		}
+
+		entries := parseLsOutput(stdout)
+		writeJSON(w, http.StatusOK, FileListResponse{Entries: entries})
 		return
 	}
 
-	stdout, stderr, err := f.execInPod(r.Context(), podName, []string{"ls", "-la", "--time-style=long-iso", dirPath})
+	// Pod is scaled to 0 — read from PVC host path.
+	hostPath, err := f.getPVCHostPath(r.Context(), runID)
 	if err != nil {
-		log.Printf("exec ls in pod %s failed: %v, stderr: %s", podName, err, stderr)
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("workspace not found for run %q: %v (run may be archived or deleted)", runID, err)})
+		return
+	}
+
+	// Map the in-container path to the host path.
+	// In the container, workspace is at /workspace. On the host, it's at the PVC host path.
+	relativePath := strings.TrimPrefix(dirPath, "/workspace")
+	relativePath = strings.TrimPrefix(relativePath, "/")
+	diskPath := filepath.Join(hostPath, relativePath)
+
+	dirEntries, err := os.ReadDir(diskPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "path not found: " + dirPath})
+			return
+		}
+		log.Printf("failed to read directory %s: %v", diskPath, err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list files: " + err.Error()})
 		return
 	}
 
-	if strings.Contains(stderr, "No such file or directory") {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: "path not found: " + dirPath})
-		return
+	entries := make([]FileEntry, 0, len(dirEntries))
+	for _, de := range dirEntries {
+		info, infoErr := de.Info()
+		entry := FileEntry{
+			Name: de.Name(),
+		}
+		switch {
+		case de.IsDir():
+			entry.Type = "directory"
+		case de.Type()&fs.ModeSymlink != 0:
+			entry.Type = "symlink"
+		default:
+			entry.Type = "file"
+		}
+		if infoErr == nil {
+			entry.Size = info.Size()
+			entry.Modified = info.ModTime().Format("2006-01-02 15:04")
+		}
+		entries = append(entries, entry)
 	}
 
-	entries := parseLsOutput(stdout)
 	writeJSON(w, http.StatusOK, FileListResponse{Entries: entries})
 }
 
@@ -98,27 +218,64 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	podName, err := f.lookupPodName(r.Context(), runID)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("agent run %q not found: %v", runID, err)})
-		return
-	}
-	if podName == "" {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: "pod not available for this agent run"})
+	// Check if pod is running (replicas > 0).
+	replicas, replicaErr := f.getDeploymentReplicas(r.Context(), runID)
+
+	if replicaErr == nil && replicas > 0 {
+		// Pod is running — use exec (current behavior).
+		podName, err := f.lookupPodName(r.Context(), runID)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("agent run %q not found: %v", runID, err)})
+			return
+		}
+		if podName == "" {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "pod not available for this agent run"})
+			return
+		}
+
+		stdout, stderr, err := f.execInPod(r.Context(), podName, []string{"cat", filePath})
+		if err != nil {
+			if strings.Contains(stderr, "No such file or directory") {
+				writeJSON(w, http.StatusNotFound, errorResponse{Error: "file not found: " + filePath})
+				return
+			}
+			if strings.Contains(stderr, "Permission denied") {
+				writeJSON(w, http.StatusForbidden, errorResponse{Error: "permission denied: " + filePath})
+				return
+			}
+			log.Printf("exec cat in pod %s failed: %v, stderr: %s", podName, err, stderr)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read file: " + err.Error()})
+			return
+		}
+
+		contentType := detectContentType(filePath)
+		w.Header().Set("Content-Type", contentType)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(stdout))
 		return
 	}
 
-	stdout, stderr, err := f.execInPod(r.Context(), podName, []string{"cat", filePath})
+	// Pod is scaled to 0 — read from PVC host path.
+	hostPath, err := f.getPVCHostPath(r.Context(), runID)
 	if err != nil {
-		if strings.Contains(stderr, "No such file or directory") {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("workspace not found for run %q: %v (run may be archived or deleted)", runID, err)})
+		return
+	}
+
+	relativePath := strings.TrimPrefix(filePath, "/workspace/")
+	diskPath := filepath.Join(hostPath, relativePath)
+
+	data, err := os.ReadFile(diskPath)
+	if err != nil {
+		if os.IsNotExist(err) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "file not found: " + filePath})
 			return
 		}
-		if strings.Contains(stderr, "Permission denied") {
+		if os.IsPermission(err) {
 			writeJSON(w, http.StatusForbidden, errorResponse{Error: "permission denied: " + filePath})
 			return
 		}
-		log.Printf("exec cat in pod %s failed: %v, stderr: %s", podName, err, stderr)
+		log.Printf("failed to read file %s: %v", diskPath, err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read file: " + err.Error()})
 		return
 	}
@@ -126,7 +283,7 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 	contentType := detectContentType(filePath)
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(stdout))
+	_, _ = w.Write(data)
 }
 
 // lookupPodName retrieves the pod name from the AgentRun CRD status.
@@ -265,7 +422,8 @@ func detectContentType(path string) string {
 	return "application/octet-stream"
 }
 
-// handleLogs returns the rpc-gateway container logs for an agent run's pod.
+// handleLogs returns the rpc-gateway container logs for an agent run's pod,
+// or reads from the persisted log file on disk when the pod is scaled to 0.
 func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 	runID := r.PathValue("id")
 	if runID == "" {
@@ -273,36 +431,68 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	podName, err := f.lookupPodName(r.Context(), runID)
-	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusNotFound)
+	// Check if pod is running (replicas > 0).
+	replicas, replicaErr := f.getDeploymentReplicas(r.Context(), runID)
+
+	if replicaErr == nil && replicas > 0 {
+		// Pod is running — stream container logs (current behavior).
+		podName, err := f.lookupPodName(r.Context(), runID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusNotFound)
+			return
+		}
+
+		clientset, err := kubernetes.NewForConfig(f.restConfig)
+		if err != nil {
+			http.Error(w, `{"error":"k8s client error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		tailLines := int64(1000)
+		logReq := clientset.CoreV1().Pods(f.namespace).GetLogs(podName, &corev1.PodLogOptions{
+			Container: "rpc-gateway",
+			TailLines: &tailLines,
+		})
+
+		stream, err := logReq.Stream(r.Context())
+		if err != nil {
+			log.Printf("Failed to stream logs for pod %s: %v", podName, err)
+			http.Error(w, fmt.Sprintf(`{"error":"failed to get logs: %s"}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		defer func() { _ = stream.Close() }()
+
+		w.Header().Set("Content-Type", "text/plain")
+		var buf bytes.Buffer
+		if _, err := buf.ReadFrom(stream); err != nil {
+			log.Printf("Failed to read logs for pod %s: %v", podName, err)
+		}
+		_, _ = w.Write(buf.Bytes())
 		return
 	}
 
-	clientset, err := kubernetes.NewForConfig(f.restConfig)
+	// Pod is scaled to 0 — read log file from PVC host path.
+	hostPath, err := f.getPVCHostPath(r.Context(), runID)
 	if err != nil {
-		http.Error(w, `{"error":"k8s client error"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("workspace not found for run %q: %v (run may be archived or deleted)", runID, err)})
 		return
 	}
 
-	tailLines := int64(1000)
-	logReq := clientset.CoreV1().Pods(f.namespace).GetLogs(podName, &corev1.PodLogOptions{
-		Container: "rpc-gateway",
-		TailLines: &tailLines,
-	})
-
-	stream, err := logReq.Stream(r.Context())
+	logPath := filepath.Join(hostPath, ".aot", "logs", "agent.log")
+	data, err := os.ReadFile(logPath)
 	if err != nil {
-		log.Printf("Failed to stream logs for pod %s: %v", podName, err)
-		http.Error(w, fmt.Sprintf(`{"error":"failed to get logs: %s"}`, err.Error()), http.StatusInternalServerError)
+		if os.IsNotExist(err) {
+			// No log file yet — return empty response.
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		log.Printf("failed to read log file %s: %v", logPath, err)
+		http.Error(w, fmt.Sprintf(`{"error":"failed to read logs: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
-	defer func() { _ = stream.Close() }()
 
 	w.Header().Set("Content-Type", "text/plain")
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(stream); err != nil {
-		log.Printf("Failed to read logs for pod %s: %v", podName, err)
-	}
-	_, _ = w.Write(buf.Bytes())
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }

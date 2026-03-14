@@ -35,7 +35,6 @@ export interface AgentRunSpec {
   modelTier: ModelTier;
   specContent?: string;
   specSource?: string;
-  retainPodMinutes?: number;
 }
 
 export interface AgentRunStatus {
@@ -46,7 +45,8 @@ export interface AgentRunStatus {
   startedAt: string;
   completedAt: string;
   logOutput?: string;
-  retainUntil?: string;
+  deploymentName?: string;
+  debugActive?: boolean;
 }
 
 export interface AgentRunEvent {
@@ -76,3 +76,27 @@ export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string }[] = [
   { value: "default-cloud", label: "Default (Cloud)" },
   { value: "premium", label: "Premium" },
 ];
+
+/** A single trace span from an agent run. */
+export interface TraceSpan {
+  id: string;
+  parentId?: string;
+  name: string;
+  type: "llm" | "tool" | "thought" | "input";
+  startTime: string;
+  endTime: string;
+  metadata?: Record<string, unknown>;
+  hasDiff: boolean;
+  diff?: SpanDiff;
+}
+
+/** Git diff captured for a trace span. */
+export interface SpanDiff {
+  files: FileDiff[];
+}
+
+/** A single file's patch within a span diff. */
+export interface FileDiff {
+  path: string;
+  patch: string;
+}

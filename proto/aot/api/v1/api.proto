@@ -84,8 +84,8 @@ message AgentRunSpec {
   string spec_source = 12;
   // WorkspaceName is the name of the workspace preset used for this run.
   string workspace_name = 13;
-  // RetainPodMinutes is how long to keep the pod alive after completion for inspection.
-  int32 retain_pod_minutes = 14;
+  // Field 14 is reserved (was retain_pod_minutes, removed in persistent-workspace-architecture).
+  reserved 14;
 }
 
 message AgentRunStatus {
@@ -101,6 +101,10 @@ message AgentRunStatus {
   string log_output = 8;
   // RetainUntil is when the pod retention expires and cleanup will run.
   google.protobuf.Timestamp retain_until = 9;
+  // DeploymentName is the name of the Deployment managing the agent pod.
+  string deployment_name = 10;
+  // DebugActive indicates whether a debug session is currently active.
+  bool debug_active = 11;
 }
 
 message CreateAgentRunRequest {

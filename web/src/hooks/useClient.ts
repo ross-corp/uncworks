@@ -60,7 +60,8 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       startedAt: r.status.startedAt ?? "",
       completedAt: r.status.completedAt ?? "",
       logOutput: r.status.logOutput,
-      retainUntil: r.status.retainUntil,
+      deploymentName: r.status.deploymentName,
+      debugActive: r.status.debugActive ?? false,
     },
     createdAt: r.createdAt,
   };

@@ -364,10 +364,8 @@ type AgentRunSpec struct {
 	SpecSource string `protobuf:"bytes,12,opt,name=spec_source,json=specSource,proto3" json:"spec_source,omitempty"`
 	// WorkspaceName is the name of the workspace preset used for this run.
 	WorkspaceName string `protobuf:"bytes,13,opt,name=workspace_name,json=workspaceName,proto3" json:"workspace_name,omitempty"`
-	// RetainPodMinutes is how long to keep the pod alive after completion for inspection.
-	RetainPodMinutes int32 `protobuf:"varint,14,opt,name=retain_pod_minutes,json=retainPodMinutes,proto3" json:"retain_pod_minutes,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AgentRunSpec) Reset() {
@@ -484,13 +482,6 @@ func (x *AgentRunSpec) GetWorkspaceName() string {
 	return ""
 }
 
-func (x *AgentRunSpec) GetRetainPodMinutes() int32 {
-	if x != nil {
-		return x.RetainPodMinutes
-	}
-	return 0
-}
-
 type AgentRunStatus struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	Phase       AgentRunPhase          `protobuf:"varint,1,opt,name=phase,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase,omitempty"`
@@ -504,7 +495,11 @@ type AgentRunStatus struct {
 	// LogOutput is the persisted agent log output (up to 1MB), collected before pod deletion.
 	LogOutput string `protobuf:"bytes,8,opt,name=log_output,json=logOutput,proto3" json:"log_output,omitempty"`
 	// RetainUntil is when the pod retention expires and cleanup will run.
-	RetainUntil   *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=retain_until,json=retainUntil,proto3" json:"retain_until,omitempty"`
+	RetainUntil *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=retain_until,json=retainUntil,proto3" json:"retain_until,omitempty"`
+	// DeploymentName is the name of the Deployment managing the agent pod.
+	DeploymentName string `protobuf:"bytes,10,opt,name=deployment_name,json=deploymentName,proto3" json:"deployment_name,omitempty"`
+	// DebugActive indicates whether a debug session is currently active.
+	DebugActive   bool `protobuf:"varint,11,opt,name=debug_active,json=debugActive,proto3" json:"debug_active,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -600,6 +595,20 @@ func (x *AgentRunStatus) GetRetainUntil() *timestamppb.Timestamp {
 		return x.RetainUntil
 	}
 	return nil
+}
+
+func (x *AgentRunStatus) GetDeploymentName() string {
+	if x != nil {
+		return x.DeploymentName
+	}
+	return ""
+}
+
+func (x *AgentRunStatus) GetDebugActive() bool {
+	if x != nil {
+		return x.DebugActive
+	}
+	return false
 }
 
 type CreateAgentRunRequest struct {
@@ -1161,7 +1170,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"Repository\x12\x1a\n" +
 	"\x03url\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\x03url\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\"\xd1\x04\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"\xa9\x04\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x126\n" +
 	"\x05repos\x18\x02 \x03(\v2\x16.aot.api.v1.RepositoryB\b\xbaH\x05\x92\x01\x02\b\x01R\x05repos\x12\x16\n" +
@@ -1179,11 +1188,10 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\fspec_content\x18\v \x01(\tR\vspecContent\x12\x1f\n" +
 	"\vspec_source\x18\f \x01(\tR\n" +
 	"specSource\x12%\n" +
-	"\x0eworkspace_name\x18\r \x01(\tR\rworkspaceName\x12,\n" +
-	"\x12retain_pod_minutes\x18\x0e \x01(\x05R\x10retainPodMinutes\x1a:\n" +
+	"\x0eworkspace_name\x18\r \x01(\tR\rworkspaceName\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8e\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0e\x10\x0f\"\xda\x03\n" +
 	"\x0eAgentRunStatus\x12/\n" +
 	"\x05phase\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\x05phase\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
@@ -1195,7 +1203,10 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\rworktree_path\x18\a \x01(\tR\fworktreePath\x12\x1d\n" +
 	"\n" +
 	"log_output\x18\b \x01(\tR\tlogOutput\x12=\n" +
-	"\fretain_until\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vretainUntil\"E\n" +
+	"\fretain_until\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vretainUntil\x12'\n" +
+	"\x0fdeployment_name\x18\n" +
+	" \x01(\tR\x0edeploymentName\x12!\n" +
+	"\fdebug_active\x18\v \x01(\bR\vdebugActive\"E\n" +
 	"\x15CreateAgentRunRequest\x12,\n" +
 	"\x04spec\x18\x01 \x01(\v2\x18.aot.api.v1.AgentRunSpecR\x04spec\"K\n" +
 	"\x16CreateAgentRunResponse\x121\n" +

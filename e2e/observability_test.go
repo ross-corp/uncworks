@@ -42,7 +42,7 @@ func aotNamespace() string {
 
 // createRunViaAPI is a helper that creates an AgentRun via the ConnectRPC API and returns
 // the run ID. It registers cleanup to delete the CRD on test completion.
-func createRunViaAPI(t *testing.T, prompt string, ttl int32, retainPodMinutes int32) string {
+func createRunViaAPI(t *testing.T, prompt string, ttl int32, _ int32) string {
 	t.Helper()
 	apiClient := getAPIClient(t)
 	k8sClient := getE2EClient(t)
@@ -54,9 +54,6 @@ func createRunViaAPI(t *testing.T, prompt string, ttl int32, retainPodMinutes in
 		Repos:      []*apiv1.Repository{{Url: getSoftServeRepoURL("e2e-repo")}},
 		Prompt:     prompt,
 		TtlSeconds: ttl,
-	}
-	if retainPodMinutes > 0 {
-		spec.RetainPodMinutes = retainPodMinutes
 	}
 
 	resp, err := apiClient.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
@@ -301,11 +298,10 @@ func TestE2E_PodRetention(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
-			Backend:          aotv1alpha1.BackendPod,
-			Repos:            []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
-			Prompt:           "Create a file called DONE.txt containing PASS",
-			TTLSeconds:       300,
-			RetainPodMinutes: 2,
+			Backend:    aotv1alpha1.BackendPod,
+			Repos:      []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
+			Prompt:     "Create a file called DONE.txt containing PASS",
+			TTLSeconds: 300,
 		},
 	}
 
@@ -373,11 +369,10 @@ func TestE2E_LogPersistence(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: aotv1alpha1.AgentRunSpec{
-			Backend:          aotv1alpha1.BackendPod,
-			Repos:            []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
-			Prompt:           "Create a file called DONE.txt containing PASS",
-			TTLSeconds:       300,
-			RetainPodMinutes: 0,
+			Backend:    aotv1alpha1.BackendPod,
+			Repos:      []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo"), Branch: "main"}},
+			Prompt:     "Create a file called DONE.txt containing PASS",
+			TTLSeconds: 300,
 		},
 	}
 

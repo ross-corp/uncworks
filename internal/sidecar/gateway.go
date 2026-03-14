@@ -3,17 +3,21 @@ package sidecar
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -26,11 +30,48 @@ import (
 type Gateway struct {
 	agentv1connect.UnimplementedAgentSidecarServiceHandler
 	agentv1connect.UnimplementedAgentNotificationServiceHandler
-	port int
+	port      int
+	debugMode bool
 
 	mu      sync.RWMutex
 	process *AgentProcess
 	server  *http.Server
+}
+
+// agentLogDir is the directory for agent log files on the PVC.
+const agentLogDir = "/workspace/.aot/logs"
+
+// agentLogPath is the full path to the agent log file on the PVC.
+const agentLogPath = agentLogDir + "/agent.log"
+
+// traceDir is the directory for trace span files on the PVC.
+const traceDir = "/workspace/.aot/traces"
+
+// traceSpansPath is the JSONL file for trace spans.
+const traceSpansPath = traceDir + "/spans.jsonl"
+
+// TraceSpan represents a single trace span recorded during an agent run.
+type TraceSpan struct {
+	ID        string                 `json:"id"`
+	ParentID  string                 `json:"parentId,omitempty"`
+	Name      string                 `json:"name"`
+	Type      string                 `json:"type"`
+	StartTime time.Time              `json:"startTime"`
+	EndTime   time.Time              `json:"endTime"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	HasDiff   bool                   `json:"hasDiff"`
+	Diff      *SpanDiff              `json:"diff,omitempty"`
+}
+
+// SpanDiff holds the git diff captured for a trace span.
+type SpanDiff struct {
+	Files []FileDiff `json:"files"`
+}
+
+// FileDiff represents a single file's patch within a span diff.
+type FileDiff struct {
+	Path  string `json:"path"`
+	Patch string `json:"patch"`
 }
 
 // AgentProcess wraps the agent harness process.
@@ -38,6 +79,7 @@ type AgentProcess struct {
 	cmd       *exec.Cmd
 	stdout    io.ReadCloser
 	stderr    io.ReadCloser
+	logFile   *os.File
 	state     agentv1.AgentProcessState
 	exitError string
 	startedAt time.Time
@@ -47,7 +89,22 @@ type AgentProcess struct {
 
 // NewGateway creates a new RPC Gateway sidecar.
 func NewGateway(port int) *Gateway {
-	return &Gateway{port: port}
+	// Ensure log directory exists at sidecar startup (5.2)
+	if err := os.MkdirAll(agentLogDir, 0o755); err != nil {
+		log.Printf("WARNING: failed to create log dir %s: %v", agentLogDir, err)
+	}
+
+	// Ensure trace directory exists at sidecar startup (10.4)
+	if err := os.MkdirAll(traceDir, 0o755); err != nil {
+		log.Printf("WARNING: failed to create trace dir %s: %v", traceDir, err)
+	}
+
+	debugMode := os.Getenv("AOT_DEBUG_MODE") == "true"
+	if debugMode {
+		log.Printf("Debug mode — waiting for connections")
+	}
+
+	return &Gateway{port: port, debugMode: debugMode}
 }
 
 // Start begins listening for ConnectRPC connections from the Control Plane.
@@ -79,6 +136,12 @@ func (g *Gateway) Stop() {
 func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.StartAgentRequest]) (*connect.Response[agentv1.StartAgentResponse], error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
+	// Debug mode: don't launch the agent, just report started (5.3)
+	if g.debugMode {
+		log.Printf("Debug mode active — skipping agent launch for run %s", req.Msg.AgentRunId)
+		return connect.NewResponse(&agentv1.StartAgentResponse{Started: true}), nil
+	}
 
 	if g.process != nil && g.process.state == agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING {
 		return connect.NewResponse(&agentv1.StartAgentResponse{Started: false, Error: "agent already running"}), nil
@@ -132,7 +195,17 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 		return nil, fmt.Errorf("stderr pipe: %w", err)
 	}
 
+	// Open log file for tee-ing agent output to PVC (5.1)
+	if err := os.MkdirAll(agentLogDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create log dir: %w", err)
+	}
+	logFile, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open agent log: %w", err)
+	}
+
 	if err := cmd.Start(); err != nil {
+		_ = logFile.Close()
 		return nil, fmt.Errorf("start agent: %w", err)
 	}
 	devNull.Close()
@@ -141,6 +214,7 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 		cmd:       cmd,
 		stdout:    stdout,
 		stderr:    stderr,
+		logFile:   logFile,
 		state:     agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
 		startedAt: time.Now(),
 	}, nil
@@ -166,6 +240,14 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 		for scanner.Scan() {
 			line := make([]byte, len(scanner.Bytes()))
 			copy(line, scanner.Bytes())
+
+			// Tee output to PVC log file (5.1)
+			if proc.logFile != nil {
+				proc.mu.Lock()
+				_, _ = proc.logFile.Write(append(line, '\n'))
+				proc.mu.Unlock()
+			}
+
 			output := &agentv1.AgentOutput{
 				Type:      outputType,
 				Data:      line,
@@ -204,6 +286,11 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 
 	wg.Wait()
 
+	// Close the log file after streams are drained
+	if proc.logFile != nil {
+		_ = proc.logFile.Close()
+	}
+
 	g.mu.Lock()
 	if err != nil {
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_FAILED
@@ -223,7 +310,7 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 	log.Printf("Agent process finished: %s (state=%v)", agentRunID, proc.state)
 }
 
-func (g *Gateway) StreamOutput(_ context.Context, req *connect.Request[agentv1.StreamOutputRequest], stream *connect.ServerStream[agentv1.AgentOutput]) error {
+func (g *Gateway) StreamOutput(_ context.Context, _ *connect.Request[agentv1.StreamOutputRequest], stream *connect.ServerStream[agentv1.AgentOutput]) error {
 	g.mu.RLock()
 	proc := g.process
 	g.mu.RUnlock()
@@ -245,7 +332,7 @@ func (g *Gateway) StreamOutput(_ context.Context, req *connect.Request[agentv1.S
 	return nil
 }
 
-func (g *Gateway) SendInput(_ context.Context, req *connect.Request[agentv1.SendInputRequest]) (*connect.Response[agentv1.SendInputResponse], error) {
+func (g *Gateway) SendInput(_ context.Context, _ *connect.Request[agentv1.SendInputRequest]) (*connect.Response[agentv1.SendInputResponse], error) {
 	g.mu.RLock()
 	proc := g.process
 	g.mu.RUnlock()
@@ -290,13 +377,60 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
 	}
 
+	now := time.Now()
+
 	switch req.Msg.EventType {
 	case agentv1.EventType_EVENT_TYPE_WAITING_FOR_INPUT:
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT
 		log.Printf("Agent entered WAITING_FOR_INPUT: %s", req.Msg.Payload)
+
 	case agentv1.EventType_EVENT_TYPE_STARTED:
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING
 		log.Printf("Agent resumed RUNNING")
+
+	case agentv1.EventType_EVENT_TYPE_TOOL_CALL:
+		// 10.1 + 10.2: Record tool call span with git diff
+		log.Printf("Agent tool call: %s", req.Msg.Payload)
+		metadata := parsePayloadMetadata(req.Msg.Payload)
+		spanName := "tool_call"
+		if n, ok := metadata["name"].(string); ok && n != "" {
+			spanName = n
+		}
+
+		span := TraceSpan{
+			ID:        uuid.New().String(),
+			Name:      spanName,
+			Type:      "tool",
+			StartTime: now,
+			EndTime:   now,
+			Metadata:  metadata,
+		}
+
+		// 10.6: Capture git diff HEAD in the workspace
+		if diff := captureGitDiff("/workspace"); diff != nil && len(diff.Files) > 0 {
+			span.HasDiff = true
+			span.Diff = diff
+		}
+
+		appendTraceSpan(span)
+
+	case agentv1.EventType_EVENT_TYPE_LOG:
+		// 10.3: Check for LLM response markers in log events
+		payload := req.Msg.Payload
+		if isLLMResponseLog(payload) {
+			metadata := parsePayloadMetadata(payload)
+			span := TraceSpan{
+				ID:        uuid.New().String(),
+				Name:      "llm_response",
+				Type:      "llm",
+				StartTime: now,
+				EndTime:   now,
+				Metadata:  metadata,
+			}
+			appendTraceSpan(span)
+		}
+		log.Printf("NotifyEvent LOG: %s", req.Msg.Payload)
+
 	default:
 		log.Printf("NotifyEvent: %s payload=%s", req.Msg.EventType, req.Msg.Payload)
 	}
@@ -320,4 +454,102 @@ func (g *Gateway) StopAgent(_ context.Context, req *connect.Request[agentv1.Stop
 	}
 
 	return connect.NewResponse(&agentv1.StopAgentResponse{Stopped: true}), nil
+}
+
+// --- Trace helpers (Section 10) ---
+
+// parsePayloadMetadata attempts to parse a JSON payload string into a metadata map.
+// If the payload is not valid JSON, it returns a map with the raw payload as "raw".
+func parsePayloadMetadata(payload string) map[string]interface{} {
+	var metadata map[string]interface{}
+	if err := json.Unmarshal([]byte(payload), &metadata); err != nil {
+		return map[string]interface{}{"raw": payload}
+	}
+	return metadata
+}
+
+// isLLMResponseLog checks if a log event payload contains LLM response markers.
+func isLLMResponseLog(payload string) bool {
+	markers := []string{"llm_response", "model", "completion", "tokens", "usage"}
+	lower := strings.ToLower(payload)
+	for _, m := range markers {
+		if strings.Contains(lower, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// captureGitDiff runs `git diff HEAD` in the given directory and parses the output
+// into a SpanDiff with per-file patches.
+func captureGitDiff(workDir string) *SpanDiff {
+	cmd := exec.Command("git", "diff", "HEAD")
+	cmd.Dir = workDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("WARNING: git diff failed in %s: %v (stderr: %s)", workDir, err, stderr.String())
+		return nil
+	}
+
+	output := stdout.String()
+	if strings.TrimSpace(output) == "" {
+		return nil
+	}
+
+	return parseDiffOutput(output)
+}
+
+// parseDiffOutput splits unified diff output into per-file FileDiff entries.
+func parseDiffOutput(output string) *SpanDiff {
+	var files []FileDiff
+	sections := strings.Split(output, "diff --git ")
+
+	for _, section := range sections {
+		section = strings.TrimSpace(section)
+		if section == "" {
+			continue
+		}
+
+		// Extract file path from the "a/path b/path" header
+		lines := strings.SplitN(section, "\n", 2)
+		header := lines[0]
+		parts := strings.Fields(header)
+		filePath := ""
+		if len(parts) >= 2 {
+			filePath = strings.TrimPrefix(parts[1], "b/")
+		}
+
+		files = append(files, FileDiff{
+			Path:  filePath,
+			Patch: "diff --git " + section,
+		})
+	}
+
+	if len(files) == 0 {
+		return nil
+	}
+	return &SpanDiff{Files: files}
+}
+
+// appendTraceSpan appends a TraceSpan as a JSON line to the trace spans JSONL file.
+func appendTraceSpan(span TraceSpan) {
+	data, err := json.Marshal(span)
+	if err != nil {
+		log.Printf("WARNING: failed to marshal trace span: %v", err)
+		return
+	}
+
+	f, err := os.OpenFile(traceSpansPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		log.Printf("WARNING: failed to open trace spans file: %v", err)
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		log.Printf("WARNING: failed to write trace span: %v", err)
+	}
 }

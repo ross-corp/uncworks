@@ -12,9 +12,12 @@ import (
 
 	"go.temporal.io/sdk/activity"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"connectrpc.com/connect"
@@ -76,7 +79,7 @@ type CreateAgentPodOutput struct {
 	PodName string
 }
 
-// CreateAgentPod creates the agent pod with init container, agent, and sidecar.
+// Deprecated: CreateAgentPod creates a bare pod. Use CreateAgentDeployment instead.
 func (a *Activities) CreateAgentPod(ctx context.Context, input CreateAgentPodInput) (*CreateAgentPodOutput, error) {
 	pod := BuildAgentPod(input)
 
@@ -89,8 +92,9 @@ func (a *Activities) CreateAgentPod(ctx context.Context, input CreateAgentPodInp
 
 // WaitForHydrationInput contains the parameters for waiting on hydration.
 type WaitForHydrationInput struct {
-	PodName   string
-	Namespace string
+	PodName      string
+	Namespace    string
+	AgentRunName string // Used for label-based pod discovery (Deployment-managed pods)
 }
 
 // WaitForHydrationOutput contains the result of waiting for hydration.
@@ -101,14 +105,19 @@ type WaitForHydrationOutput struct {
 
 // WaitForHydration polls the pod's init container status until hydration completes.
 // Returns the pod IP so subsequent activities can reach the sidecar directly.
+// When AgentRunName is set, discovers the pod via label selector (Deployment-managed).
 func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydrationInput) (*WaitForHydrationOutput, error) {
 	for {
-		var pod corev1.Pod
-		if err := a.K8sClient.Get(ctx, client.ObjectKey{
-			Namespace: input.Namespace,
-			Name:      input.PodName,
-		}, &pod); err != nil {
-			return nil, fmt.Errorf("get pod: %w", err)
+		pod, err := a.findPod(ctx, input.Namespace, input.AgentRunName, input.PodName)
+		if err != nil {
+			// Pod may not exist yet if Deployment is still creating it
+			activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for pod: %v", err))
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(2 * time.Second):
+			}
+			continue
 		}
 
 		for _, initStatus := range pod.Status.InitContainerStatuses {
@@ -132,7 +141,7 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			return nil, fmt.Errorf("pod failed before hydration completed")
 		}
 
-		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for hydration: pod %s", input.PodName))
+		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for hydration: pod %s", pod.Name))
 
 		select {
 		case <-ctx.Done():
@@ -298,7 +307,7 @@ func (a *Activities) CollectLogs(ctx context.Context, input CollectLogsInput) (*
 	return &CollectLogsOutput{LogOutput: fmt.Sprintf("[log collection from pod %s — container logs available via kubectl logs]", input.PodName)}, nil
 }
 
-// CleanupPod deletes the agent pod.
+// Deprecated: CleanupPod deletes a bare pod. Use ScaleDownDeployment instead.
 func (a *Activities) CleanupPod(ctx context.Context, input CleanupPodInput) error {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -316,8 +325,8 @@ func (a *Activities) CleanupPod(ctx context.Context, input CleanupPodInput) erro
 	return nil
 }
 
-// BuildAgentPod creates a pod spec for an agent run. This is a shared function
-// used by both the Temporal activity and potentially direct controller usage.
+// BuildAgentPod creates a pod spec for an agent run. Used by both the deprecated
+// CreateAgentPod activity and the new CreateAgentDeployment (as a pod template source).
 func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
 	image := input.Image
 	if image == "" {
@@ -502,6 +511,239 @@ func (a *Activities) RevokeLLMKey(ctx context.Context, input RevokeLLMKeyInput) 
 	if err != nil {
 		return fmt.Errorf("revoke LLM key: %w", err)
 	}
+	return nil
+}
+
+// findPod discovers the pod for an agent run via label selector (preferred) or pod name.
+func (a *Activities) findPod(ctx context.Context, namespace, agentRunName, podName string) (*corev1.Pod, error) {
+	if agentRunName != "" {
+		var podList corev1.PodList
+		labelSelector := labels.SelectorFromSet(map[string]string{
+			"aot.uncworks.io/agentrun": agentRunName,
+		})
+		if err := a.K8sClient.List(ctx, &podList,
+			client.InNamespace(namespace),
+			client.MatchingLabelsSelector{Selector: labelSelector},
+		); err != nil {
+			return nil, fmt.Errorf("list pods by label: %w", err)
+		}
+		// Find a running or pending pod (not terminated)
+		for i := range podList.Items {
+			p := &podList.Items[i]
+			if p.DeletionTimestamp == nil && p.Status.Phase != corev1.PodSucceeded && p.Status.Phase != corev1.PodFailed {
+				return p, nil
+			}
+		}
+		if len(podList.Items) > 0 {
+			return &podList.Items[0], nil
+		}
+		return nil, fmt.Errorf("no pod found with label aot.uncworks.io/agentrun=%s", agentRunName)
+	}
+	// Fallback: direct pod name lookup (deprecated bare-pod path)
+	var pod corev1.Pod
+	if err := a.K8sClient.Get(ctx, client.ObjectKey{
+		Namespace: namespace,
+		Name:      podName,
+	}, &pod); err != nil {
+		return nil, fmt.Errorf("get pod %s: %w", podName, err)
+	}
+	return &pod, nil
+}
+
+// --- Deployment-based activities (persistent-workspace-architecture) ---
+
+// CreateAgentDeploymentInput contains parameters for creating an agent Deployment + PVC.
+type CreateAgentDeploymentInput struct {
+	Name           string
+	Namespace      string
+	AgentRunName   string
+	Repos          []Repository
+	Prompt         string
+	DevboxConfig   string
+	Image          string
+	EnvVars        map[string]string
+	LLMKey         string
+	LiteLLMBaseURL string
+	ModelID        string
+	SpecContent    string
+}
+
+// CreateAgentDeploymentOutput contains the result of creating an agent Deployment + PVC.
+type CreateAgentDeploymentOutput struct {
+	DeploymentName string
+	PVCName        string
+}
+
+// CreateAgentDeployment creates a PVC and Deployment for an agent run.
+// The Deployment is structurally identical to BuildAgentPod but uses a PVC
+// instead of emptyDir for the workspace volume.
+func (a *Activities) CreateAgentDeployment(ctx context.Context, input CreateAgentDeploymentInput) (*CreateAgentDeploymentOutput, error) {
+	pvcName := fmt.Sprintf("aot-ws-%s", input.AgentRunName)
+	deployName := input.Name
+
+	// Create PVC
+	storageClass := "local-path"
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: input.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "aot-agent",
+				"app.kubernetes.io/managed-by": "aot-controller",
+				"aot.uncworks.io/agentrun":     input.AgentRunName,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			StorageClassName: &storageClass,
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("2Gi"),
+				},
+			},
+		},
+	}
+
+	if err := a.K8sClient.Create(ctx, pvc); err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("create PVC: %w", err)
+		}
+	}
+
+	// Build the pod template from the same logic as BuildAgentPod
+	podTemplate := BuildAgentPod(CreateAgentPodInput{
+		Name:           deployName,
+		Namespace:      input.Namespace,
+		AgentRunName:   input.AgentRunName,
+		Repos:          input.Repos,
+		Prompt:         input.Prompt,
+		DevboxConfig:   input.DevboxConfig,
+		Image:          input.Image,
+		EnvVars:        input.EnvVars,
+		LLMKey:         input.LLMKey,
+		LiteLLMBaseURL: input.LiteLLMBaseURL,
+		ModelID:        input.ModelID,
+		SpecContent:    input.SpecContent,
+	})
+
+	// Override: use PVC instead of emptyDir for workspace volume
+	podTemplate.Spec.Volumes = []corev1.Volume{
+		{
+			Name: "workspace",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvcName,
+				},
+			},
+		},
+	}
+
+	// Override: Deployment-managed pods should restart on failure
+	podTemplate.Spec.RestartPolicy = corev1.RestartPolicyAlways
+
+	selectorLabels := map[string]string{
+		"aot.uncworks.io/agentrun": input.AgentRunName,
+	}
+
+	var replicas int32 = 1
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deployName,
+			Namespace: input.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "aot-agent",
+				"app.kubernetes.io/managed-by": "aot-controller",
+				"aot.uncworks.io/agentrun":     input.AgentRunName,
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: selectorLabels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: podTemplate.Labels,
+				},
+				Spec: podTemplate.Spec,
+			},
+		},
+	}
+
+	if err := a.K8sClient.Create(ctx, deployment); err != nil {
+		return nil, fmt.Errorf("create deployment: %w", err)
+	}
+
+	return &CreateAgentDeploymentOutput{
+		DeploymentName: deployName,
+		PVCName:        pvcName,
+	}, nil
+}
+
+// ScaleDownDeploymentInput contains the parameters for scaling a Deployment to 0.
+type ScaleDownDeploymentInput struct {
+	DeploymentName string
+	Namespace      string
+}
+
+// ScaleDownDeployment patches a Deployment's replicas to 0.
+// The Deployment and PVC are NOT deleted — workspace data persists.
+func (a *Activities) ScaleDownDeployment(ctx context.Context, input ScaleDownDeploymentInput) error {
+	var deployment appsv1.Deployment
+	if err := a.K8sClient.Get(ctx, client.ObjectKey{
+		Namespace: input.Namespace,
+		Name:      input.DeploymentName,
+	}, &deployment); err != nil {
+		if errors.IsNotFound(err) {
+			return nil // Already gone
+		}
+		return fmt.Errorf("get deployment: %w", err)
+	}
+
+	var replicas int32 = 0
+	deployment.Spec.Replicas = &replicas
+	if err := a.K8sClient.Update(ctx, &deployment); err != nil {
+		return fmt.Errorf("scale down deployment: %w", err)
+	}
+	return nil
+}
+
+// ArchiveAndCleanupInput contains the parameters for archiving and cleaning up a run.
+type ArchiveAndCleanupInput struct {
+	DeploymentName string
+	PVCName        string
+	Namespace      string
+}
+
+// ArchiveAndCleanup deletes the Deployment and PVC for a completed run.
+// This is called after the archive retention period expires.
+func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndCleanupInput) error {
+	// Delete Deployment
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      input.DeploymentName,
+			Namespace: input.Namespace,
+		},
+	}
+	if err := a.K8sClient.Delete(ctx, deployment); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("delete deployment: %w", err)
+		}
+	}
+
+	// Delete PVC
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      input.PVCName,
+			Namespace: input.Namespace,
+		},
+	}
+	if err := a.K8sClient.Delete(ctx, pvc); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("delete PVC: %w", err)
+		}
+	}
+
 	return nil
 }
 

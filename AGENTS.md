@@ -83,6 +83,30 @@ Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `hac
 
 - **`@aot/shared`** — gRPC client wrapper + reactive agent state store
 - **`@aot/pi-extension`** — Agent harness extension: `ask_human` tool (HITL), `spawn_junior` tool (multi-agent), OTel tracing
+### Workspace Layout
+
+Each agent run gets a persistent workspace on a PVC mounted at `/workspace`:
+
+```
+/workspace/
+├── src/                    # Cloned repositories
+├── .aot/
+│   ├── logs/agent.log     # Agent stdout/stderr
+│   ├── traces/spans.jsonl # Execution trace spans
+│   └── metadata.json      # Run metadata snapshot
+├── .devcontainer/
+│   └── devcontainer.json  # VS Code Remote config
+├── uncspace.yaml          # Workspace manifest
+└── devbox.json            # Composed devbox config
+```
+
+- `src/` contains git clones of the specified repositories
+- `.aot/logs/agent.log` is tee'd from agent stdout/stderr by the sidecar
+- `.aot/traces/spans.jsonl` records tool calls, LLM interactions, and git diffs as JSONL
+- `.aot/metadata.json` snapshots the run spec (repos, prompt, model tier, etc.)
+- `.devcontainer/devcontainer.json` enables VS Code Remote attachment
+- After completion (Deployment replicas=0), these files remain on the PVC and are served by the API
+
 ### Web dashboard (`web/`)
 
 SolidJS + Vite. Connects to API server via WebSocket for real-time updates.
