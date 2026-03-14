@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { AgentRun } from "../types/agent-run";
 import { PhaseBadge, BackendBadge, ModelTierBadge } from "./StatusBadge";
+import SpecEditor from "./SpecEditor";
 
 export default function AgentRunDetailPanel({
   run,
@@ -70,10 +71,38 @@ export default function AgentRunDetailPanel({
           <ModelTierBadge tier={run.spec.modelTier} />
         </div>
 
+        {/* Workspace */}
+        {run.spec.workspaceName && (
+          <div className="mb-4 space-y-2">
+            <MetaRow label="Workspace" value={run.spec.workspaceName} />
+          </div>
+        )}
+
+        {/* Repositories */}
+        <div className="mb-4">
+          <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+            Repositories
+          </h3>
+          {run.spec.repos.length > 0 ? (
+            <div className="space-y-1">
+              {run.spec.repos.map((repo, i) => (
+                <div key={i} className="flex items-baseline justify-between gap-4">
+                  <span className="font-mono text-xs text-txt-secondary truncate">
+                    {repoName(repo.url)}
+                  </span>
+                  <span className="font-mono text-xs text-txt-tertiary whitespace-nowrap">
+                    :{repo.branch}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className="text-xs text-txt-tertiary">&mdash;</span>
+          )}
+        </div>
+
         {/* Metadata grid */}
         <div className="mb-4 space-y-2">
-          <MetaRow label="Repository" value={repoName(run.spec.repoURL)} mono />
-          <MetaRow label="Branch" value={run.spec.branch} mono />
           <MetaRow label="Created" value={formatTime(run.createdAt)} />
           <MetaRow label="Started" value={formatTime(run.status.startedAt)} />
           <MetaRow label="Duration" value={duration()} />
@@ -101,6 +130,21 @@ export default function AgentRunDetailPanel({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Spec */}
+        {run.spec.specContent && (
+          <div className="mb-4">
+            <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+              Spec
+            </h3>
+            <SpecEditor value={run.spec.specContent} readOnly height="200px" />
+            {run.spec.specSource && (
+              <div className="mt-1 text-xs text-txt-tertiary">
+                Source: {run.spec.specSource}
+              </div>
+            )}
           </div>
         )}
 

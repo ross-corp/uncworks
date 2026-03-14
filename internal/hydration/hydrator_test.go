@@ -2,9 +2,14 @@ package hydration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // MockRunner records and replays commands for testing.
@@ -191,6 +196,90 @@ func TestHydrator_WorktreePath(t *testing.T) {
 	}
 }
 
+func TestHydrator_WriteSpec(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
+		WorkspaceDir: tmpDir,
+		SpecContent:  "# MyConverter\n\nConverts CSV to JSON.",
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// Verify spec file was written
+	specPath := filepath.Join(tmpDir, "spec", "main.cs.md")
+	data, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatalf("read spec file: %v", err)
+	}
+	if string(data) != "# MyConverter\n\nConverts CSV to JSON." {
+		t.Errorf("unexpected spec content: %q", string(data))
+	}
+
+	// Verify codespeak.json was written
+	configPath := filepath.Join(tmpDir, "codespeak.json")
+	data, err = os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read codespeak.json: %v", err)
+	}
+	if !strings.Contains(string(data), `"specs": ["spec/main.cs.md"]`) {
+		t.Errorf("unexpected codespeak.json: %q", string(data))
+	}
+}
+
+func TestHydrator_NoSpec(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// Verify no spec files were written
+	specPath := filepath.Join(tmpDir, "spec", "main.cs.md")
+	if _, err := os.Stat(specPath); !os.IsNotExist(err) {
+		t.Error("spec file should not exist when SpecContent is empty")
+	}
+}
+
+func TestHydrator_SpecOnlyRun(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+	config := &Config{
+		WorkspaceDir: tmpDir,
+		SpecContent:  "# TestSpec",
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// No git commands should have been run
+	if runner.CommandCount() != 0 {
+		t.Errorf("expected 0 commands for spec-only run, got %d", runner.CommandCount())
+	}
+
+	// Spec file should still be written
+	specPath := filepath.Join(tmpDir, "spec", "main.cs.md")
+	data, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatalf("read spec file: %v", err)
+	}
+	if string(data) != "# TestSpec" {
+		t.Errorf("unexpected spec content: %q", string(data))
+	}
+}
+
 func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("AOT_REPO_URL", "https://github.com/test/repo.git")
 	t.Setenv("AOT_BRANCH", "develop")
@@ -206,5 +295,372 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 	if config.WorkspaceDir != "/custom/workspace" {
 		t.Errorf("got WorkspaceDir %q", config.WorkspaceDir)
+	}
+}
+
+// --- Manifest generation tests ---
+
+func TestHydrator_GenerateManifest_MultiRepo(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+	config := &Config{
+		Repos: []RepoConfig{
+			{URL: "https://github.com/org/frontend.git", Branch: "main"},
+			{URL: "https://github.com/org/backend.git", Branch: "develop", Path: "api"},
+		},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Read and parse uncspace.yaml
+	data, err := os.ReadFile(filepath.Join(tmpDir, "uncspace.yaml"))
+	if err != nil {
+		t.Fatalf("read uncspace.yaml: %v", err)
+	}
+
+	var manifest Manifest
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("parse uncspace.yaml: %v", err)
+	}
+
+	if len(manifest.Repos) != 2 {
+		t.Fatalf("expected 2 repos, got %d", len(manifest.Repos))
+	}
+
+	// First repo: path derived from URL
+	if manifest.Repos[0].Path != "src/frontend" {
+		t.Errorf("repo[0].Path = %q, want src/frontend", manifest.Repos[0].Path)
+	}
+	if manifest.Repos[0].URL != "https://github.com/org/frontend.git" {
+		t.Errorf("repo[0].URL = %q", manifest.Repos[0].URL)
+	}
+	if manifest.Repos[0].Branch != "main" {
+		t.Errorf("repo[0].Branch = %q", manifest.Repos[0].Branch)
+	}
+
+	// Second repo: explicit path
+	if manifest.Repos[1].Path != "src/api" {
+		t.Errorf("repo[1].Path = %q, want src/api", manifest.Repos[1].Path)
+	}
+}
+
+func TestHydrator_GenerateManifest_SingleRepo(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/org/mono.git", Branch: "main"}},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, "uncspace.yaml"))
+	if err != nil {
+		t.Fatalf("read uncspace.yaml: %v", err)
+	}
+
+	var manifest Manifest
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if len(manifest.Repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(manifest.Repos))
+	}
+	if manifest.Repos[0].Path != "src/mono" {
+		t.Errorf("repo.Path = %q", manifest.Repos[0].Path)
+	}
+}
+
+func TestHydrator_GenerateManifest_ZeroRepos(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+	config := &Config{
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, "uncspace.yaml"))
+	if err != nil {
+		t.Fatalf("read uncspace.yaml: %v", err)
+	}
+
+	var manifest Manifest
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if len(manifest.Repos) != 0 {
+		t.Errorf("expected 0 repos, got %d", len(manifest.Repos))
+	}
+}
+
+func TestHydrator_GenerateManifest_DevboxDetection(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+
+	// Create a fake devbox.json in the worktree path that would exist after clone
+	worktree1 := filepath.Join(tmpDir, "src", "repo1")
+	if err := os.MkdirAll(worktree1, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worktree1, "devbox.json"), []byte(`{"packages":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// repo2 has no devbox.json
+	worktree2 := filepath.Join(tmpDir, "src", "repo2")
+	if err := os.MkdirAll(worktree2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	config := &Config{
+		Repos: []RepoConfig{
+			{URL: "https://github.com/org/repo1.git", Branch: "main"},
+			{URL: "https://github.com/org/repo2.git", Branch: "main"},
+		},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	// Call generateManifest directly (Run would try to clone)
+	if err := h.generateManifest(); err != nil {
+		t.Fatalf("generateManifest: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, "uncspace.yaml"))
+	if err != nil {
+		t.Fatalf("read uncspace.yaml: %v", err)
+	}
+
+	var manifest Manifest
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if manifest.Devbox == nil {
+		t.Fatal("expected devbox section in manifest")
+	}
+	if len(manifest.Devbox.Sources) != 1 {
+		t.Fatalf("expected 1 devbox source, got %d", len(manifest.Devbox.Sources))
+	}
+	if manifest.Devbox.Sources[0].Path != "src/repo1/devbox.json" {
+		t.Errorf("devbox source path = %q", manifest.Devbox.Sources[0].Path)
+	}
+}
+
+// --- Devbox composition tests ---
+
+func TestHydrator_ComposeDevbox_MultipleConfigs(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+
+	// Create fake devbox.json files in worktree paths
+	for _, name := range []string{"repo1", "repo2"} {
+		dir := filepath.Join(tmpDir, "src", name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "devbox.json"), []byte(`{"packages":[]}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	config := &Config{
+		Repos: []RepoConfig{
+			{URL: "https://github.com/org/repo1.git", Branch: "main"},
+			{URL: "https://github.com/org/repo2.git", Branch: "main"},
+		},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.composeDevbox(context.Background()); err != nil {
+		t.Fatalf("composeDevbox: %v", err)
+	}
+
+	// Read root devbox.json
+	data, err := os.ReadFile(filepath.Join(tmpDir, "devbox.json"))
+	if err != nil {
+		t.Fatalf("read devbox.json: %v", err)
+	}
+
+	var devbox DevboxInclude
+	if err := json.Unmarshal(data, &devbox); err != nil {
+		t.Fatalf("parse devbox.json: %v", err)
+	}
+
+	if len(devbox.Include) != 2 {
+		t.Fatalf("expected 2 includes, got %d", len(devbox.Include))
+	}
+	if devbox.Include[0] != "src/repo1/devbox.json" {
+		t.Errorf("include[0] = %q", devbox.Include[0])
+	}
+	if devbox.Include[1] != "src/repo2/devbox.json" {
+		t.Errorf("include[1] = %q", devbox.Include[1])
+	}
+
+	// Verify devbox install was called from workspace root
+	found := false
+	for _, cmd := range runner.commands {
+		if cmd.Name == "devbox" && len(cmd.Args) > 0 && cmd.Args[0] == "install" {
+			if cmd.Dir != tmpDir {
+				t.Errorf("devbox install dir = %q, want %q", cmd.Dir, tmpDir)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("devbox install was not called")
+	}
+}
+
+func TestHydrator_ComposeDevbox_SingleConfig(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+
+	dir := filepath.Join(tmpDir, "src", "repo1")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "devbox.json"), []byte(`{"packages":["go"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config := &Config{
+		Repos: []RepoConfig{
+			{URL: "https://github.com/org/repo1.git", Branch: "main"},
+			{URL: "https://github.com/org/repo2.git", Branch: "main"},
+		},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.composeDevbox(context.Background()); err != nil {
+		t.Fatalf("composeDevbox: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, "devbox.json"))
+	if err != nil {
+		t.Fatalf("read devbox.json: %v", err)
+	}
+
+	var devbox DevboxInclude
+	if err := json.Unmarshal(data, &devbox); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if len(devbox.Include) != 1 {
+		t.Fatalf("expected 1 include, got %d", len(devbox.Include))
+	}
+	if devbox.Include[0] != "src/repo1/devbox.json" {
+		t.Errorf("include[0] = %q", devbox.Include[0])
+	}
+}
+
+func TestHydrator_ComposeDevbox_NoConfigs(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+
+	config := &Config{
+		Repos: []RepoConfig{
+			{URL: "https://github.com/org/repo1.git", Branch: "main"},
+		},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.composeDevbox(context.Background()); err != nil {
+		t.Fatalf("composeDevbox: %v", err)
+	}
+
+	// No root devbox.json should be created
+	if _, err := os.Stat(filepath.Join(tmpDir, "devbox.json")); !os.IsNotExist(err) {
+		t.Error("devbox.json should not exist when no repos have devbox configs")
+	}
+
+	// No devbox install should have been called
+	for _, cmd := range runner.commands {
+		if cmd.Name == "devbox" {
+			t.Error("devbox should not have been called")
+		}
+	}
+}
+
+func TestHydrator_ComposeDevbox_ExplicitOverride(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+
+	// Create devbox.json in worktree
+	dir := filepath.Join(tmpDir, "src", "repo1")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "devbox.json"), []byte(`{"packages":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config := &Config{
+		Repos: []RepoConfig{
+			{URL: "https://github.com/org/repo1.git", Branch: "main"},
+		},
+		WorkspaceDir: tmpDir,
+		DevboxConfig: "devbox.json", // Explicit config — should use setupDevbox, not composeDevbox
+	}
+
+	h := NewHydrator(config, runner)
+	// Run will use setupDevbox (which checks in worktree), not composeDevbox
+	// setupDevbox will look for devbox.json at PrimaryWorktreePath/devbox.json
+	// which exists at src/repo1/devbox.json — should succeed
+	err := h.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Should NOT have a root /workspace/devbox.json with include directives
+	rootDevbox := filepath.Join(tmpDir, "devbox.json")
+	if _, err := os.Stat(rootDevbox); err == nil {
+		t.Error("root devbox.json should not be created when DevboxConfig is explicitly set")
+	}
+}
+
+func TestHydrator_ComposeDevbox_InstallFailure(t *testing.T) {
+	runner := NewMockRunner()
+	runner.On("devbox", MockResult{Err: fmt.Errorf("devbox install failed")})
+	tmpDir := t.TempDir()
+
+	dir := filepath.Join(tmpDir, "src", "repo1")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "devbox.json"), []byte(`{"packages":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config := &Config{
+		Repos: []RepoConfig{
+			{URL: "https://github.com/org/repo1.git", Branch: "main"},
+		},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	err := h.composeDevbox(context.Background())
+	if err == nil {
+		t.Fatal("expected error from devbox install failure")
+	}
+	if !strings.Contains(err.Error(), "devbox install") {
+		t.Errorf("expected devbox install error, got: %v", err)
 	}
 }

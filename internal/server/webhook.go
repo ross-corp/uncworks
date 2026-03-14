@@ -1,0 +1,272 @@
+package server
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+)
+
+// WebhookHandler handles incoming GitHub webhook events.
+type WebhookHandler struct {
+	secret       string
+	allowedRepos []string
+	githubToken  string
+	k8sClient    client.Client
+	namespace    string
+	// httpClient is used for fetching file content from the GitHub API.
+	// Defaults to http.DefaultClient if nil.
+	httpClient *http.Client
+}
+
+// NewWebhookHandler creates a new WebhookHandler reading configuration from
+// environment variables:
+//   - GITHUB_WEBHOOK_SECRET: shared secret for HMAC-SHA256 signature validation
+//   - GITHUB_WEBHOOK_REPOS: comma-separated allowlist of "owner/repo" strings
+//   - GITHUB_TOKEN: personal access token for fetching file content
+func NewWebhookHandler(k8sClient client.Client, namespace string) *WebhookHandler {
+	var repos []string
+	if raw := os.Getenv("GITHUB_WEBHOOK_REPOS"); raw != "" {
+		for _, r := range strings.Split(raw, ",") {
+			r = strings.TrimSpace(r)
+			if r != "" {
+				repos = append(repos, r)
+			}
+		}
+	}
+	return &WebhookHandler{
+		secret:       os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		allowedRepos: repos,
+		githubToken:  os.Getenv("GITHUB_TOKEN"),
+		k8sClient:    k8sClient,
+		namespace:    namespace,
+	}
+}
+
+// httpDo is a convenience that uses the configured HTTP client or the default.
+func (wh *WebhookHandler) httpDo(req *http.Request) (*http.Response, error) {
+	c := wh.httpClient
+	if c == nil {
+		c = http.DefaultClient
+	}
+	return c.Do(req)
+}
+
+// ServeHTTP implements http.Handler for the GitHub webhook endpoint.
+func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate signature when a secret is configured.
+	if wh.secret != "" {
+		sig := r.Header.Get("X-Hub-Signature-256")
+		if !validateSignature(body, sig, wh.secret) {
+			http.Error(w, "invalid signature", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	// Only handle push events.
+	eventType := r.Header.Get("X-GitHub-Event")
+	if eventType != "push" {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true,"message":"ignored event type"}`))
+		return
+	}
+
+	var payload pushPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	repo := payload.Repository.FullName
+	if !wh.isRepoAllowed(repo) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true,"message":"repo not in allowlist"}`))
+		return
+	}
+
+	// Collect unique .cs.md file paths from all commits.
+	specFiles := wh.collectSpecFiles(payload.Commits)
+
+	ref := payload.Ref
+	// Extract branch name from "refs/heads/<branch>".
+	branch := ref
+	if strings.HasPrefix(ref, "refs/heads/") {
+		branch = strings.TrimPrefix(ref, "refs/heads/")
+	}
+
+	created := 0
+	for _, path := range specFiles {
+		content, err := wh.fetchFileContent(r.Context(), repo, path, payload.After)
+		if err != nil {
+			log.Printf("webhook: failed to fetch %s/%s@%s: %v", repo, path, payload.After, err)
+			continue
+		}
+
+		if err := wh.createAgentRun(r.Context(), repo, path, branch, content); err != nil {
+			log.Printf("webhook: failed to create AgentRun for %s/%s: %v", repo, path, err)
+			continue
+		}
+		created++
+	}
+
+	w.WriteHeader(http.StatusOK)
+	resp := map[string]interface{}{
+		"ok":      true,
+		"created": created,
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// validateSignature checks the HMAC-SHA256 signature from the X-Hub-Signature-256 header.
+func validateSignature(body []byte, signature, secret string) bool {
+	if signature == "" {
+		return false
+	}
+	// GitHub sends "sha256=<hex>".
+	if !strings.HasPrefix(signature, "sha256=") {
+		return false
+	}
+	sigHex := strings.TrimPrefix(signature, "sha256=")
+	sigBytes, err := hex.DecodeString(sigHex)
+	if err != nil {
+		return false
+	}
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	expected := mac.Sum(nil)
+
+	return hmac.Equal(sigBytes, expected)
+}
+
+// isRepoAllowed returns true if the given "owner/repo" is in the allowlist,
+// or if the allowlist is empty (all repos allowed).
+func (wh *WebhookHandler) isRepoAllowed(repo string) bool {
+	if len(wh.allowedRepos) == 0 {
+		return true
+	}
+	for _, allowed := range wh.allowedRepos {
+		if strings.EqualFold(allowed, repo) {
+			return true
+		}
+	}
+	return false
+}
+
+// collectSpecFiles extracts unique .cs.md file paths from commit added/modified lists.
+func (wh *WebhookHandler) collectSpecFiles(commits []commitInfo) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	for _, c := range commits {
+		for _, f := range append(c.Added, c.Modified...) {
+			if strings.HasSuffix(f, ".cs.md") {
+				if _, ok := seen[f]; !ok {
+					seen[f] = struct{}{}
+					result = append(result, f)
+				}
+			}
+		}
+	}
+	return result
+}
+
+// fetchFileContent retrieves a file's raw content from the GitHub API at the given SHA.
+func (wh *WebhookHandler) fetchFileContent(ctx context.Context, repo, path, sha string) (string, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/contents/%s?ref=%s", repo, path, sha)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github.v3.raw")
+	if wh.githubToken != "" {
+		req.Header.Set("Authorization", "Bearer "+wh.githubToken)
+	}
+
+	resp, err := wh.httpDo(req)
+	if err != nil {
+		return "", fmt.Errorf("github api request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("github api returned %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading response: %w", err)
+	}
+	return string(data), nil
+}
+
+// createAgentRun creates an AgentRun CRD with the given spec content.
+func (wh *WebhookHandler) createAgentRun(ctx context.Context, repo, path, branch, content string) error {
+	name, err := generateRunName()
+	if err != nil {
+		return fmt.Errorf("generate name: %w", err)
+	}
+
+	crd := &aotv1alpha1.AgentRun{}
+	crd.Name = name
+	crd.Namespace = wh.namespace
+	crd.Spec = aotv1alpha1.AgentRunSpec{
+		SpecContent: content,
+		SpecSource:  fmt.Sprintf("webhook:github:%s/%s", repo, path),
+		Prompt:      fmt.Sprintf("Execute the CodeSpeak spec from %s/%s", repo, path),
+		Repos: []aotv1alpha1.Repository{
+			{
+				URL:    fmt.Sprintf("https://github.com/%s.git", repo),
+				Branch: branch,
+			},
+		},
+	}
+	crd.Status.Phase = aotv1alpha1.AgentRunPhasePending
+	crd.Status.Message = "Queued via GitHub webhook"
+
+	if err := wh.k8sClient.Create(ctx, crd); err != nil {
+		return fmt.Errorf("create agentrun CRD: %w", err)
+	}
+	log.Printf("webhook: created AgentRun %s for %s/%s", name, repo, path)
+	return nil
+}
+
+// --- GitHub push event payload types ---
+
+type pushPayload struct {
+	Ref        string       `json:"ref"`
+	After      string       `json:"after"`
+	Repository repoInfo     `json:"repository"`
+	Commits    []commitInfo `json:"commits"`
+}
+
+type repoInfo struct {
+	FullName string `json:"full_name"`
+}
+
+type commitInfo struct {
+	Added    []string `json:"added"`
+	Modified []string `json:"modified"`
+	Removed  []string `json:"removed"`
+}

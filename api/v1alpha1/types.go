@@ -82,6 +82,18 @@ type AgentRunSpec struct {
 	// +kubebuilder:default=default
 	// +optional
 	ModelTier string `json:"modelTier,omitempty"`
+
+	// SpecContent is the CodeSpeak .cs.md spec body (markdown).
+	// +optional
+	SpecContent string `json:"specContent,omitempty"`
+
+	// SpecSource tracks where the spec came from: "editor", "github:<owner/repo/path>", etc.
+	// +optional
+	SpecSource string `json:"specSource,omitempty"`
+
+	// WorkspaceName is the name of the workspace preset used for this run.
+	// +optional
+	WorkspaceName string `json:"workspaceName,omitempty"`
 }
 
 // ExternalBackendConfig holds configuration for the External (SSH/Lima) backend.

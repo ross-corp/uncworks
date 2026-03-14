@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // RepoConfig describes a single repository to hydrate.
@@ -25,6 +27,7 @@ type Config struct {
 	Repos        []RepoConfig
 	WorkspaceDir string
 	DevboxConfig string
+	SpecContent  string
 }
 
 // ConfigFromEnv creates a Config from environment variables.
@@ -39,6 +42,7 @@ func ConfigFromEnv() *Config {
 	config := &Config{
 		WorkspaceDir: workspace,
 		DevboxConfig: os.Getenv("AOT_DEVBOX_CONFIG"),
+		SpecContent:  os.Getenv("AOT_SPEC_CONTENT"),
 	}
 
 	// Try multi-repo env var first
@@ -89,6 +93,29 @@ func NewHydrator(config *Config, runner CommandRunner) *Hydrator {
 	return &Hydrator{config: config, runner: runner}
 }
 
+// ManifestRepo describes a repo entry in uncspace.yaml.
+type ManifestRepo struct {
+	Path   string `yaml:"path"`
+	URL    string `yaml:"url"`
+	Branch string `yaml:"branch,omitempty"`
+}
+
+// DevboxSource describes a devbox.json location in uncspace.yaml.
+type DevboxSource struct {
+	Path string `yaml:"path"`
+}
+
+// Manifest represents the uncspace.yaml workspace manifest.
+type Manifest struct {
+	Repos  []ManifestRepo  `yaml:"repos,omitempty"`
+	Devbox *DevboxManifest `yaml:"devbox,omitempty"`
+}
+
+// DevboxManifest describes devbox configuration in the manifest.
+type DevboxManifest struct {
+	Sources []DevboxSource `yaml:"sources,omitempty"`
+}
+
 // Run executes the full hydration sequence for all repos.
 func (h *Hydrator) Run(ctx context.Context) error {
 	for i, repo := range h.config.Repos {
@@ -109,10 +136,139 @@ func (h *Hydrator) Run(ctx context.Context) error {
 		}
 	}
 
+	if h.config.SpecContent != "" {
+		if err := h.writeSpec(); err != nil {
+			return fmt.Errorf("write spec: %w", err)
+		}
+	}
+
+	// Generate workspace manifest after cloning, before devbox setup
+	if err := h.generateManifest(); err != nil {
+		return fmt.Errorf("generate manifest: %w", err)
+	}
+
+	// Devbox setup: use explicit config if set, otherwise auto-compose
 	if h.config.DevboxConfig != "" {
 		if err := h.setupDevbox(ctx); err != nil {
 			return fmt.Errorf("setup devbox: %w", err)
 		}
+	} else if len(h.config.Repos) > 0 {
+		if err := h.composeDevbox(ctx); err != nil {
+			return fmt.Errorf("compose devbox: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// generateManifest writes /workspace/uncspace.yaml describing the workspace layout.
+func (h *Hydrator) generateManifest() error {
+	manifest := Manifest{}
+
+	for _, repo := range h.config.Repos {
+		repoPath := repo.Path
+		if repoPath == "" {
+			repoPath = repoNameFromURL(repo.URL)
+		}
+		relPath := filepath.Join("src", repoPath)
+
+		manifest.Repos = append(manifest.Repos, ManifestRepo{
+			Path:   relPath,
+			URL:    repo.URL,
+			Branch: repo.Branch,
+		})
+
+		// Check for devbox.json in the worktree
+		worktreeDir := filepath.Join(h.config.WorkspaceDir, relPath)
+		devboxPath := filepath.Join(worktreeDir, "devbox.json")
+		if _, err := os.Stat(devboxPath); err == nil {
+			if manifest.Devbox == nil {
+				manifest.Devbox = &DevboxManifest{}
+			}
+			manifest.Devbox.Sources = append(manifest.Devbox.Sources, DevboxSource{
+				Path: filepath.Join(relPath, "devbox.json"),
+			})
+		}
+	}
+
+	data, err := yaml.Marshal(manifest)
+	if err != nil {
+		return fmt.Errorf("marshal manifest: %w", err)
+	}
+
+	manifestPath := filepath.Join(h.config.WorkspaceDir, "uncspace.yaml")
+	if err := os.WriteFile(manifestPath, data, 0o644); err != nil {
+		return fmt.Errorf("write uncspace.yaml: %w", err)
+	}
+
+	return nil
+}
+
+// DevboxInclude represents a root devbox.json with include directives.
+type DevboxInclude struct {
+	Include []string `json:"include"`
+}
+
+// composeDevbox scans repo worktrees for devbox.json files and generates a
+// root /workspace/devbox.json with include directives, then runs devbox install.
+func (h *Hydrator) composeDevbox(ctx context.Context) error {
+	var includes []string
+
+	for _, repo := range h.config.Repos {
+		repoPath := repo.Path
+		if repoPath == "" {
+			repoPath = repoNameFromURL(repo.URL)
+		}
+
+		worktreeDir := filepath.Join(h.config.WorkspaceDir, "src", repoPath)
+		devboxPath := filepath.Join(worktreeDir, "devbox.json")
+		if _, err := os.Stat(devboxPath); err == nil {
+			includes = append(includes, filepath.Join("src", repoPath, "devbox.json"))
+		}
+	}
+
+	if len(includes) == 0 {
+		return nil
+	}
+
+	// Write root devbox.json with include directives
+	devboxConfig := DevboxInclude{Include: includes}
+	data, err := json.MarshalIndent(devboxConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal devbox config: %w", err)
+	}
+	data = append(data, '\n')
+
+	rootDevbox := filepath.Join(h.config.WorkspaceDir, "devbox.json")
+	if err := os.WriteFile(rootDevbox, data, 0o644); err != nil {
+		return fmt.Errorf("write root devbox.json: %w", err)
+	}
+
+	// Run devbox install from workspace root
+	_, err = h.runner.Run(ctx, h.config.WorkspaceDir, "devbox", "install")
+	if err != nil {
+		return fmt.Errorf("devbox install: %w", err)
+	}
+
+	return nil
+}
+
+// writeSpec writes the CodeSpeak spec file and codespeak.json to the workspace.
+func (h *Hydrator) writeSpec() error {
+	specDir := filepath.Join(h.config.WorkspaceDir, "spec")
+	if err := os.MkdirAll(specDir, 0o755); err != nil {
+		return fmt.Errorf("create spec dir: %w", err)
+	}
+
+	specPath := filepath.Join(specDir, "main.cs.md")
+	if err := os.WriteFile(specPath, []byte(h.config.SpecContent), 0o644); err != nil {
+		return fmt.Errorf("write spec file: %w", err)
+	}
+
+	configJSON := `{"specs": ["spec/main.cs.md"]}` + "\n"
+	configPath := filepath.Join(h.config.WorkspaceDir, "codespeak.json")
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o644); err != nil {
+		return fmt.Errorf("write codespeak.json: %w", err)
 	}
 
 	return nil

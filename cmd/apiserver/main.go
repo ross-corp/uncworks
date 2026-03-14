@@ -73,6 +73,14 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// Register GitHub integration REST endpoints
+	ghClient := server.NewGitHubClient()
+	ghClient.RegisterHandlers(mux)
+
+	// Register GitHub webhook receiver
+	webhookHandler := server.NewWebhookHandler(k8sClient, namespace)
+	mux.Handle("/api/v1/webhooks/github", webhookHandler)
+
 	// Register AOTService handler
 	path, handler := apiv1connect.NewAOTServiceHandler(svc,
 		connect.WithInterceptors(validateInterceptor),
