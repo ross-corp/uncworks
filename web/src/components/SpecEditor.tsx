@@ -15,6 +15,7 @@ export default function SpecEditor({
 }) {
   return (
     <div
+      data-testid="spec-editor"
       className="overflow-hidden rounded border border-edge bg-surface-1"
       style={{ height }}
     >

@@ -112,6 +112,7 @@ export default function Sidebar({
             return (
               <button
                 key={s.value}
+                data-testid={`sidebar-phase-${s.value}`}
                 onClick={() => onPhaseFilter(s.value)}
                 className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
                   phaseFilter === s.value
@@ -143,6 +144,7 @@ export default function Sidebar({
           {workspaces.map((ws) => (
             <button
               key={ws.id}
+              data-testid={`sidebar-workspace-${ws.name}`}
               onClick={() => onSelectWorkspace(ws.name)}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -161,6 +163,7 @@ export default function Sidebar({
             </button>
           ))}
           <button
+            data-testid="sidebar-new-workspace"
             onClick={onNewWorkspace}
             className="flex w-full items-center rounded px-2 py-1.5 pl-6 text-left text-sm text-txt-tertiary hover:bg-surface-1 hover:text-txt-secondary transition-colors"
           >
@@ -181,9 +184,10 @@ export default function Sidebar({
             <span>All repos</span>
             <span className="text-xs text-txt-tertiary">{runs.length}</span>
           </button>
-          {repos.map((url) => (
+          {repos.map((url, index) => (
             <button
               key={url}
+              data-testid={`sidebar-repo-${index}`}
               onClick={() => onSelectRepo(url)}
               className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
                 selectedRepo === url

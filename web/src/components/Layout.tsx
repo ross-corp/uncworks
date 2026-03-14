@@ -32,13 +32,14 @@ export default function Layout({
                 {onSearchChange != null && (
                   <input
                     type="text"
+                    data-testid="search-input"
                     value={searchQuery ?? ""}
                     onChange={(e) => onSearchChange(e.target.value)}
                     placeholder="Search agent runs..."
                     className="input-field flex-1 text-sm"
                   />
                 )}
-                <button onClick={onNewRun} className="btn-primary ml-auto">
+                <button data-testid="new-run-button" onClick={onNewRun} className="btn-primary ml-auto">
                   + New Agent Run
                 </button>
               </>

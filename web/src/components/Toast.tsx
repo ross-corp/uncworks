@@ -67,6 +67,7 @@ function ToastItem({
 
   return (
     <div
+      data-testid="toast"
       className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg backdrop-blur-sm ${TYPE_STYLES[toast.type]}`}
     >
       <span className="flex-1">{toast.message}</span>

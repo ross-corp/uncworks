@@ -34,11 +34,41 @@ tasks:
       - go test ./api/... ./internal/... -count=1
 
   test:e2e:setup:
-    desc: Deploy E2E prerequisites (CRD, build binaries)
+    desc: Start Soft-Serve git server and push fixture repos
     cmds:
-      - task: k0s:crd
-      - task: build
-      - echo "E2E setup complete. Start apiserver, controller, and temporal-worker manually."
+      - mkdir -p /tmp/aot-e2e-soft-serve
+      - |
+        SOFT_SERVE_DATA_PATH=/tmp/aot-e2e-soft-serve \
+        SOFT_SERVE_GIT_LISTEN_ADDR=0.0.0.0:9418 \
+        soft serve &
+        echo $! > /tmp/aot-e2e-soft-serve.pid
+      - sleep 2
+      - SOFT_SERVE_ADDR=localhost:9418 ./test/fixtures/push-fixtures.sh
+
+  test:e2e:teardown:
+    desc: Stop Soft-Serve git server
+    cmds:
+      - kill $(cat /tmp/aot-e2e-soft-serve.pid) 2>/dev/null || true
+      - rm -rf /tmp/aot-e2e-soft-serve /tmp/aot-e2e-soft-serve.pid
+
+  test:e2e:go:
+    desc: Run Go E2E tests
+    cmds:
+      - go test ./e2e/... -tags e2e -v -timeout 15m
+
+  test:e2e:playwright:
+    desc: Run Playwright E2E tests
+    dir: web
+    cmds:
+      - npx playwright test
+
+  test:e2e:full:
+    desc: Run full E2E test suite (setup → Go → Playwright → teardown)
+    cmds:
+      - task: test:e2e:setup
+      - defer: { task: test:e2e:teardown }
+      - task: test:e2e:go
+      - task: test:e2e:playwright
 
   test:e2e:
     env:
