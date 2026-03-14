@@ -103,7 +103,6 @@ export default function App() {
     backend: AgentRun["spec"]["backend"];
     modelTier: string;
     ttlSeconds: number;
-    retainPodMinutes: number;
     specContent?: string;
     specSource?: string;
   }) {
@@ -113,7 +112,6 @@ export default function App() {
         repos: data.repos.map((r) => ({ url: r.url, branch: r.branch })),
         prompt: data.prompt,
         ttlSeconds: data.ttlSeconds,
-        retainPodMinutes: data.retainPodMinutes,
         modelTier: data.modelTier,
         specContent: data.specContent,
         specSource: data.specSource,

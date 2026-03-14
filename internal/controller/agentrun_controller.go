@@ -53,6 +53,9 @@ type AgentRunReconciler struct {
 // +kubebuilder:rbac:groups=aot.uncworks.io,resources=agentruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=aot.uncworks.io,resources=agentruns/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;delete
 
 // Reconcile handles changes to AgentRun resources.
 func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -122,19 +125,18 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		})
 	}
 	workflowInput := aottemporal.WorkflowInput{
-		AgentRunName:     agentRun.Name,
-		Namespace:        agentRun.Namespace,
-		Repos:            repos,
-		Prompt:           agentRun.Spec.Prompt,
-		DevboxConfig:     agentRun.Spec.DevboxConfig,
-		TTLSeconds:       agentRun.Spec.TTLSeconds,
-		Image:            agentRun.Spec.Image,
-		EnvVars:          agentRun.Spec.EnvVars,
-		ModelTier:        agentRun.Spec.ModelTier,
-		LiteLLMBaseURL:   r.LiteLLMBaseURL,
-		SpecContent:      agentRun.Spec.SpecContent,
-		WorkspaceName:    agentRun.Spec.WorkspaceName,
-		RetainPodMinutes: agentRun.Spec.RetainPodMinutes,
+		AgentRunName:   agentRun.Name,
+		Namespace:      agentRun.Namespace,
+		Repos:          repos,
+		Prompt:         agentRun.Spec.Prompt,
+		DevboxConfig:   agentRun.Spec.DevboxConfig,
+		TTLSeconds:     agentRun.Spec.TTLSeconds,
+		Image:          agentRun.Spec.Image,
+		EnvVars:        agentRun.Spec.EnvVars,
+		ModelTier:      agentRun.Spec.ModelTier,
+		LiteLLMBaseURL: r.LiteLLMBaseURL,
+		SpecContent:    agentRun.Spec.SpecContent,
+		WorkspaceName:  agentRun.Spec.WorkspaceName,
 	}
 
 	taskQueue := r.TaskQueue
@@ -225,6 +227,10 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 	}
 	if state.PodName != "" && agentRun.Status.PodName != state.PodName {
 		agentRun.Status.PodName = state.PodName
+		updated = true
+	}
+	if state.DeploymentName != "" && agentRun.Status.DeploymentName != state.DeploymentName {
+		agentRun.Status.DeploymentName = state.DeploymentName
 		updated = true
 	}
 
@@ -363,6 +369,13 @@ func (r *AgentRunReconciler) emitPhaseEvent(agentRun *aotv1alpha1.AgentRun, even
 		Payload:    string(agentRun.Status.Phase),
 	})
 }
+
+// TODO(persistent-workspace): Archive cleanup — delete Deployment + PVC for runs with
+// completedAt older than 7 days. This should be implemented as either:
+//   - A separate CronJob that lists AgentRuns with completedAt > 7d and calls ArchiveAndCleanup, or
+//   - An additional reconciliation pass in this controller that checks retention expiry.
+// The ArchiveAndCleanup Temporal activity already exists in internal/temporal/activities.go.
+// For now, completed runs retain their Deployment (replicas=0) and PVC indefinitely.
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AgentRunReconciler) SetupWithManager(mgr ctrl.Manager) error {

@@ -56,7 +56,6 @@ export class AOTClient {
       modelTier: spec.modelTier ?? "",
       specContent: spec.specContent ?? "",
       specSource: spec.specSource ?? "",
-      retainPodMinutes: spec.retainPodMinutes ?? 0,
     });
     const resp = await this.client.createAgentRun({ spec: pbSpec });
     return toAgentRun(resp.agentRun!);
@@ -196,7 +195,6 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       modelTier: pb.spec?.modelTier || undefined,
       specContent: pb.spec?.specContent || undefined,
       specSource: pb.spec?.specSource || undefined,
-      retainPodMinutes: pb.spec?.retainPodMinutes || undefined,
     },
     status: {
       phase: phaseFromProto(pb.status?.phase ?? PbAgentRunPhase.UNSPECIFIED),
@@ -207,6 +205,8 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       completedAt: pb.status?.completedAt ? timestampToISO(pb.status.completedAt) : undefined,
       logOutput: pb.status?.logOutput || undefined,
       retainUntil: pb.status?.retainUntil ? timestampToISO(pb.status.retainUntil) : undefined,
+      deploymentName: pb.status?.deploymentName || undefined,
+      debugActive: pb.status?.debugActive || false,
     },
     createdAt: timestampToISO(pb.createdAt),
     updatedAt: timestampToISO(pb.updatedAt),

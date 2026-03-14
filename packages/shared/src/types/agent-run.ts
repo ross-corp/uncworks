@@ -30,7 +30,6 @@ export interface AgentRunSpec {
   specContent?: string;
   specSource?: string;
   workspaceName?: string;
-  retainPodMinutes?: number;
 }
 
 /** Status of an AgentRun. */
@@ -43,6 +42,8 @@ export interface AgentRunStatus {
   completedAt?: string;
   logOutput?: string;
   retainUntil?: string;
+  deploymentName?: string;
+  debugActive?: boolean;
 }
 
 /** Full AgentRun object. */

@@ -37,12 +37,12 @@ func setupEnv(t *testing.T) *testsuite.TestWorkflowEnvironment {
 }
 
 // TestWorkflow_HappyPath verifies the complete lifecycle:
-// CreatePod → WaitForHydration → StartAgent → poll completed → cleanup
+// CreateAgentDeployment → WaitForHydration → StartAgent → poll completed → ScaleDownDeployment
 func TestWorkflow_HappyPath(t *testing.T) {
 	env := setupEnv(t)
 
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -51,7 +51,7 @@ func TestWorkflow_HappyPath(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
 	)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, defaultInput())
 
@@ -66,8 +66,8 @@ func TestWorkflow_TTLExpiry(t *testing.T) {
 	input := defaultInput()
 	input.TTLSeconds = 1 // 1 second TTL
 
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -77,7 +77,7 @@ func TestWorkflow_TTLExpiry(t *testing.T) {
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_RUNNING"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StopAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
 
@@ -89,8 +89,8 @@ func TestWorkflow_TTLExpiry(t *testing.T) {
 func TestWorkflow_HITLSignal(t *testing.T) {
 	env := setupEnv(t)
 
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -108,7 +108,7 @@ func TestWorkflow_HITLSignal(t *testing.T) {
 		},
 	)
 	env.OnActivity((*aottemporal.Activities).ForwardHumanInput, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	// Send human input signal after workflow starts
 	env.RegisterDelayedCallback(func() {
@@ -127,8 +127,8 @@ func TestWorkflow_HITLSignal(t *testing.T) {
 func TestWorkflow_CancelSignal(t *testing.T) {
 	env := setupEnv(t)
 
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -138,7 +138,7 @@ func TestWorkflow_CancelSignal(t *testing.T) {
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_RUNNING"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StopAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	// Send cancel signal
 	env.RegisterDelayedCallback(func() {
@@ -151,12 +151,12 @@ func TestWorkflow_CancelSignal(t *testing.T) {
 	require.NoError(t, env.GetWorkflowError())
 }
 
-// TestWorkflow_CompensationOnFailure verifies CleanupPod runs when StartAgent fails.
+// TestWorkflow_CompensationOnFailure verifies ScaleDownDeployment runs when StartAgent fails.
 func TestWorkflow_CompensationOnFailure(t *testing.T) {
 	env := setupEnv(t)
 
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -164,7 +164,7 @@ func TestWorkflow_CompensationOnFailure(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(
 		fmt.Errorf("agent process failed to start"),
 	)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, defaultInput())
 
@@ -179,8 +179,8 @@ func TestWorkflow_SpawnJunior(t *testing.T) {
 	env.RegisterWorkflow(aottemporal.AgentRunWorkflow)
 
 	// Mock the child workflow's activities (it runs as AgentRunWorkflow)
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-junior"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-junior", PVCName: "aot-ws-junior"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -189,7 +189,7 @@ func TestWorkflow_SpawnJunior(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
 	)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	input := aottemporal.SpawnJuniorInput{
 		ParentRunName: "parent-run",
@@ -210,8 +210,8 @@ func TestWorkflow_SpawnJunior(t *testing.T) {
 func TestWorkflow_ConsecutiveStatusErrors(t *testing.T) {
 	env := setupEnv(t)
 
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -221,7 +221,7 @@ func TestWorkflow_ConsecutiveStatusErrors(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
 		nil, fmt.Errorf("connection refused"),
 	)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, defaultInput())
 
@@ -242,8 +242,8 @@ func TestWorkflow_ConsecutiveStatusErrors(t *testing.T) {
 func TestWorkflow_TransientStatusError(t *testing.T) {
 	env := setupEnv(t)
 
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -261,7 +261,7 @@ func TestWorkflow_TransientStatusError(t *testing.T) {
 			return &aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil
 		},
 	)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, defaultInput())
 
@@ -280,8 +280,8 @@ func TestWorkflow_SpecDrivenPrompt(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).ProvisionLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.ProvisionLLMKeyOutput{}, nil,
 	)
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -290,7 +290,7 @@ func TestWorkflow_SpecDrivenPrompt(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
 	)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
 
@@ -309,8 +309,8 @@ func TestWorkflow_SpecWithExplicitPrompt(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).ProvisionLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.ProvisionLLMKeyOutput{}, nil,
 	)
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -319,7 +319,7 @@ func TestWorkflow_SpecWithExplicitPrompt(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
 	)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
 
@@ -331,8 +331,8 @@ func TestWorkflow_SpecWithExplicitPrompt(t *testing.T) {
 func TestWorkflow_GetStateQuery(t *testing.T) {
 	env := setupEnv(t)
 
-	env.OnActivity((*aottemporal.Activities).CreateAgentPod, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.CreateAgentPodOutput{PodName: "agentrun-test-run"}, nil,
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
@@ -341,7 +341,7 @@ func TestWorkflow_GetStateQuery(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
 	)
-	env.OnActivity((*aottemporal.Activities).CleanupPod, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	// Query state during workflow execution
 	env.RegisterDelayedCallback(func() {
@@ -355,4 +355,35 @@ func TestWorkflow_GetStateQuery(t *testing.T) {
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, defaultInput())
 	require.True(t, env.IsWorkflowCompleted())
+}
+
+// TestWorkflow_DeploymentNameInState verifies deploymentName is set in workflow state.
+func TestWorkflow_DeploymentNameInState(t *testing.T) {
+	env := setupEnv(t)
+
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	// Query state after deployment creation
+	env.RegisterDelayedCallback(func() {
+		result, err := env.QueryWorkflow(aottemporal.QueryGetState)
+		require.NoError(t, err)
+
+		var state aottemporal.WorkflowState
+		require.NoError(t, result.Get(&state))
+		require.Equal(t, "agentrun-test-run", state.DeploymentName)
+	}, time.Millisecond*50)
+
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, defaultInput())
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
 }

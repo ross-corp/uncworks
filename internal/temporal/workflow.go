@@ -54,27 +54,27 @@ type Repository struct {
 
 // WorkflowInput contains the parameters for starting an AgentRunWorkflow.
 type WorkflowInput struct {
-	AgentRunName     string
-	Namespace        string
-	Repos            []Repository
-	Prompt           string
-	DevboxConfig     string
-	TTLSeconds       int32
-	Image            string
-	EnvVars          map[string]string
-	ModelTier        string
-	MaxBudget        float64
-	LiteLLMBaseURL   string
-	SpecContent      string
-	WorkspaceName    string
-	RetainPodMinutes int32
+	AgentRunName   string
+	Namespace      string
+	Repos          []Repository
+	Prompt         string
+	DevboxConfig   string
+	TTLSeconds     int32
+	Image          string
+	EnvVars        map[string]string
+	ModelTier      string
+	MaxBudget      float64
+	LiteLLMBaseURL string
+	SpecContent    string
+	WorkspaceName  string
 }
 
 // WorkflowState represents the current state of the workflow, returned by queries.
 type WorkflowState struct {
-	Phase   string
-	Message string
-	PodName string
+	Phase          string
+	Message        string
+	PodName        string
+	DeploymentName string
 }
 
 // HumanInputSignal is the payload for the human-input signal.
@@ -93,8 +93,13 @@ const (
 	ActivityGetAgentStatus    = "GetAgentStatus"
 	ActivityForwardHumanInput = "ForwardHumanInput"
 	ActivityStopAgent         = "StopAgent"
-	ActivityCleanupPod        = "CleanupPod"
-	ActivityCollectLogs       = "CollectLogs"
+	ActivityCleanupPod        = "CleanupPod"  // Deprecated: use ScaleDownDeployment
+	ActivityCollectLogs       = "CollectLogs" // Deprecated: logs persist on PVC
+
+	// New deployment-based activities (persistent-workspace-architecture)
+	ActivityCreateAgentDeployment = "CreateAgentDeployment"
+	ActivityScaleDownDeployment   = "ScaleDownDeployment"
+	ActivityArchiveAndCleanup     = "ArchiveAndCleanup"
 )
 
 // AgentRunWorkflow orchestrates the full lifecycle of an agent run.
@@ -135,8 +140,9 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	actCtx := workflow.WithActivityOptions(ctx, activityOpts)
 
-	// Compensation: ensure pod cleanup and LLM key revocation on any exit
+	// Compensation: ensure deployment scale-down and LLM key revocation on any exit
 	var podName string
+	var deploymentName string
 	var llmKey string
 	defer func() {
 		cleanupCtx, _ := workflow.NewDisconnectedContext(ctx)
@@ -150,37 +156,13 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 				workflow.GetLogger(ctx).Error("Failed to revoke LLM key during cleanup", "key", llmKey, "error", err)
 			}
 		}
-		if podName != "" {
-			// Collect logs before pod deletion
-			logCleanupCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
-				StartToCloseTimeout: 60 * time.Second,
-			})
-			var logOutput CollectLogsOutput
-			if err := workflow.ExecuteActivity(logCleanupCtx, ActivityCollectLogs, CollectLogsInput{
-				PodName:   podName,
-				Namespace: input.Namespace,
-			}).Get(logCleanupCtx, &logOutput); err != nil {
-				workflow.GetLogger(ctx).Warn("Failed to collect logs", "error", err)
-			}
-
-			// Pod retention: wait before deleting
-			retainMinutes := input.RetainPodMinutes
-			if retainMinutes < 0 {
-				retainMinutes = 0
-			}
-			if retainMinutes == 0 && input.RetainPodMinutes == 0 {
-				retainMinutes = 30 // Default 30 minutes
-			}
-			if retainMinutes > 0 {
-				workflow.GetLogger(ctx).Info("Retaining pod", "minutes", retainMinutes)
-				_ = workflow.Sleep(cleanupCtx, time.Duration(retainMinutes)*time.Minute)
-			}
-
-			if err := workflow.ExecuteActivity(cleanupCtx, ActivityCleanupPod, CleanupPodInput{
-				PodName:   podName,
-				Namespace: input.Namespace,
+		if deploymentName != "" {
+			// Scale deployment to 0 — PVC persists for later access/debug
+			if err := workflow.ExecuteActivity(cleanupCtx, ActivityScaleDownDeployment, ScaleDownDeploymentInput{
+				DeploymentName: deploymentName,
+				Namespace:      input.Namespace,
 			}).Get(cleanupCtx, nil); err != nil {
-				workflow.GetLogger(ctx).Error("Failed to cleanup pod", "podName", podName, "error", err)
+				workflow.GetLogger(ctx).Error("Failed to scale down deployment", "deployment", deploymentName, "error", err)
 			}
 		}
 	}()
@@ -207,10 +189,10 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 	llmKey = keyOutput.Key
 
-	// --- Step 2: Create agent pod ---
-	state.Message = "Creating agent pod"
+	// --- Step 2: Create agent deployment + PVC ---
+	state.Message = "Creating agent deployment"
 
-	podInput := CreateAgentPodInput{
+	deployInput := CreateAgentDeploymentInput{
 		Name:           fmt.Sprintf("agentrun-%s", input.AgentRunName),
 		Namespace:      input.Namespace,
 		AgentRunName:   input.AgentRunName,
@@ -225,19 +207,21 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		SpecContent:    input.SpecContent,
 	}
 
-	var createOutput CreateAgentPodOutput
-	if err := workflow.ExecuteActivity(actCtx, ActivityCreateAgentPod, podInput).Get(ctx, &createOutput); err != nil {
+	var deployOutput CreateAgentDeploymentOutput
+	if err := workflow.ExecuteActivity(actCtx, ActivityCreateAgentDeployment, deployInput).Get(ctx, &deployOutput); err != nil {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
-			state.Message = "Cancelled during pod creation"
+			state.Message = "Cancelled during deployment creation"
 			return err
 		}
 		state.Phase = "Failed"
-		state.Message = fmt.Sprintf("Failed to create pod: %v", err)
+		state.Message = fmt.Sprintf("Failed to create deployment: %v", err)
 		return err
 	}
-	podName = createOutput.PodName
+	deploymentName = deployOutput.DeploymentName
+	podName = deployOutput.DeploymentName // used for WaitForHydration label lookup
 	state.PodName = podName
+	state.DeploymentName = deploymentName
 
 	// --- Step 3: Wait for hydration ---
 	state.Phase = "Hydrating"
@@ -251,8 +235,9 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 	var hydrationOutput WaitForHydrationOutput
 	if err := workflow.ExecuteActivity(hydrationCtx, ActivityWaitForHydration, WaitForHydrationInput{
-		PodName:   podName,
-		Namespace: input.Namespace,
+		PodName:      podName,
+		Namespace:    input.Namespace,
+		AgentRunName: input.AgentRunName,
 	}).Get(ctx, &hydrationOutput); err != nil {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
