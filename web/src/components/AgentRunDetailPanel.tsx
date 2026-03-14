@@ -7,11 +7,13 @@ export default function AgentRunDetailPanel({
   run,
   onClose,
   onCancel,
+  onClone,
   onSendInput,
 }: {
   run: AgentRun;
   onClose: () => void;
   onCancel: (id: string) => void;
+  onClone: (run: AgentRun) => void;
   onSendInput: (id: string, input: string) => void;
 }) {
   const [humanInput, setHumanInput] = useState("");
@@ -228,6 +230,12 @@ export default function AgentRunDetailPanel({
               Copy Trace
             </button>
           )}
+          <button
+            onClick={() => onClone(run)}
+            className="btn-ghost text-sm"
+          >
+            Clone Run
+          </button>
         </div>
         {isActive && (
           <button

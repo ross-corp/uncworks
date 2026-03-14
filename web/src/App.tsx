@@ -24,6 +24,7 @@ export default function App() {
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
+  const [cloneSource, setCloneSource] = useState<AgentRun | null>(null);
   const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeView, setActiveView] = useState<"runs" | "repos" | "events">("runs");
@@ -142,6 +143,11 @@ export default function App() {
     return true;
   });
 
+  function handleClone(run: AgentRun) {
+    setCloneSource(run);
+    setShowForm(true);
+  }
+
   function handleSaveWorkspace(data: { name: string; description: string; repos: Repository[] }) {
     if (editingWorkspace && editingWorkspace !== "new") {
       updateWorkspace(editingWorkspace.id, data);
@@ -201,6 +207,7 @@ export default function App() {
               run={selectedRun}
               onClose={() => setSelectedRun(null)}
               onCancel={handleCancel}
+              onClone={handleClone}
               onSendInput={handleSendInput}
             />
           ) : undefined
@@ -216,6 +223,7 @@ export default function App() {
             selectedRunId={selectedRun?.id}
             onSelect={setSelectedRun}
             onCancel={handleCancel}
+            onClone={handleClone}
             onDelete={setRunToDelete}
             loading={loading}
             onNewRun={() => setShowForm(true)}
@@ -227,8 +235,9 @@ export default function App() {
         <AgentRunForm
           repos={repos}
           workspaces={workspaces}
+          cloneSource={cloneSource ?? undefined}
           onSubmit={handleCreate}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => { setShowForm(false); setCloneSource(null); }}
         />
       )}
 

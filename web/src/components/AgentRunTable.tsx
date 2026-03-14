@@ -6,10 +6,12 @@ import { SkeletonRow } from "./Skeleton";
 function ActionMenu({
   run,
   onCancel,
+  onClone,
   onDelete,
 }: {
   run: AgentRun;
   onCancel: (id: string) => void;
+  onClone: (run: AgentRun) => void;
   onDelete: (id: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -70,6 +72,15 @@ function ActionMenu({
               </button>
             )}
             <button
+              className="w-full px-3 py-1.5 text-left text-sm text-txt-secondary hover:bg-surface-2 hover:text-txt-primary"
+              onClick={() => {
+                onClone(run);
+                setMenuOpen(false);
+              }}
+            >
+              Clone Run
+            </button>
+            <button
               className="w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-danger/10"
               onClick={() => {
                 onDelete(run.id);
@@ -104,6 +115,7 @@ export default function AgentRunTable({
   selectedRunId,
   onSelect,
   onCancel,
+  onClone,
   onDelete,
   loading,
   onNewRun,
@@ -112,6 +124,7 @@ export default function AgentRunTable({
   selectedRunId?: string | null;
   onSelect?: (run: AgentRun) => void;
   onCancel: (id: string) => void;
+  onClone: (run: AgentRun) => void;
   onDelete: (id: string) => void;
   loading?: boolean;
   onNewRun?: () => void;
@@ -295,6 +308,7 @@ export default function AgentRunTable({
                   <ActionMenu
                     run={run}
                     onCancel={onCancel}
+                    onClone={onClone}
                     onDelete={onDelete}
                   />
                 </td>

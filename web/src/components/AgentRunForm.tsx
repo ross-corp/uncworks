@@ -11,11 +11,13 @@ type InputMode = "prompt" | "spec";
 export default function AgentRunForm({
   repos,
   workspaces,
+  cloneSource,
   onSubmit,
   onCancel,
 }: {
   repos: string[];
   workspaces: Workspace[];
+  cloneSource?: { name: string; spec: { repos: Repository[]; prompt: string; backend: Backend; modelTier: ModelTier; ttlSeconds: number; specContent?: string; specSource?: string; workspaceName?: string } };
   onSubmit: (data: {
     name: string;
     repos: Repository[];
@@ -41,17 +43,19 @@ export default function AgentRunForm({
   const [gitHubModal, setGitHubModal] = useState<"load" | "push" | null>(null);
   const [githubError, setGithubError] = useState<string | null>(null);
   const [specSource, setSpecSource] = useState<string>("editor");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(cloneSource ? `${cloneSource.name}-clone` : "");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
-  const [runRepos, setRunRepos] = useState<Repository[]>([
-    { url: repos[0] ?? "", branch: "main" },
-  ]);
-  const [prompt, setPrompt] = useState("");
-  const [specContent, setSpecContent] = useState("");
-  const [inputMode, setInputMode] = useState<InputMode>("prompt");
-  const [backend, setBackend] = useState<Backend>("pod");
-  const [modelTier, setModelTier] = useState<ModelTier>("default-cloud");
-  const [ttlSeconds, setTtlSeconds] = useState(3600);
+  const [runRepos, setRunRepos] = useState<Repository[]>(
+    cloneSource?.spec.repos?.length
+      ? cloneSource.spec.repos.map((r) => ({ ...r }))
+      : [{ url: repos[0] ?? "", branch: "main" }]
+  );
+  const [prompt, setPrompt] = useState(cloneSource?.spec.prompt ?? "");
+  const [specContent, setSpecContent] = useState(cloneSource?.spec.specContent ?? "");
+  const [inputMode, setInputMode] = useState<InputMode>(cloneSource?.spec.specContent ? "spec" : "prompt");
+  const [backend, setBackend] = useState<Backend>(cloneSource?.spec.backend ?? "pod");
+  const [modelTier, setModelTier] = useState<ModelTier>(cloneSource?.spec.modelTier ?? "default-cloud");
+  const [ttlSeconds, setTtlSeconds] = useState(cloneSource?.spec.ttlSeconds ?? 3600);
 
   function selectWorkspace(id: string | null) {
     setSelectedWorkspaceId(id);
