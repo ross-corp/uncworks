@@ -1,14 +1,14 @@
 export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded bg-surface-2 ${className}`}
+      className={`animate-pulse bg-muted ${className}`}
     />
   );
 }
 
 export function SkeletonRow() {
   return (
-    <tr className="border-b border-edge">
+    <tr className="border-b border-border">
       <td className="px-4 py-2.5">
         <Skeleton className="h-4 w-28" />
       </td>
@@ -37,8 +37,8 @@ export function SkeletonRow() {
 
 export function SkeletonDetail() {
   return (
-    <div className="flex h-full flex-col border-l border-edge bg-surface-0">
-      <div className="flex items-center justify-between border-b border-edge px-5 py-3">
+    <div className="flex h-full flex-col border-l border-border bg-background">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <Skeleton className="h-4 w-48" />
       </div>
       <div className="flex-1 p-5 space-y-4">

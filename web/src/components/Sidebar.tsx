@@ -23,7 +23,7 @@ function CollapsibleSection({
           if (hasChildren) setOpen(!open);
           onHeaderClick?.();
         }}
-        className="flex w-full items-center gap-1.5 px-2 py-2 text-xs font-medium uppercase tracking-wider text-txt-tertiary hover:text-txt-secondary transition-colors"
+        className="flex w-full items-center gap-1.5 px-2 py-2 text-xs font-medium uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground transition-colors"
       >
         {hasChildren && (
           <span className="w-3 text-center select-none">
@@ -96,11 +96,11 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="flex h-screen w-56 flex-col border-r border-edge bg-surface-0">
+    <aside className="flex h-screen w-56 flex-col border-r border-border bg-background">
       <div className="px-4 py-4">
-        <h1 className="text-sm font-semibold tracking-tight">
-          <span className="text-accent">AOT</span>{" "}
-          <span className="text-txt-tertiary font-normal">Agent Orchestration</span>
+        <h1 className="text-sm font-semibold tracking-widest fx-glow">
+          <span className="text-primary">AOT</span>{" "}
+          <span className="text-muted-foreground font-normal">Agent Orchestration</span>
         </h1>
       </div>
 
@@ -114,15 +114,15 @@ export default function Sidebar({
                 key={s.value}
                 data-testid={`sidebar-phase-${s.value}`}
                 onClick={() => onPhaseFilter(s.value)}
-                className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
+                className={`flex w-full items-center justify-between px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
                   phaseFilter === s.value
-                    ? "bg-surface-2 text-txt-primary"
-                    : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
+                    ? "bg-muted text-foreground fx-glow"
+                    : "text-muted-foreground hover:bg-card hover:text-foreground"
                 }`}
               >
                 <span>{s.label}</span>
                 {count > 0 && (
-                  <span className="text-xs text-txt-tertiary">{count}</span>
+                  <span className="text-xs text-muted-foreground/60">{count}</span>
                 )}
               </button>
             );
@@ -133,10 +133,10 @@ export default function Sidebar({
         <CollapsibleSection label="Workspaces">
           <button
             onClick={() => onSelectWorkspace(null)}
-            className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
+            className={`flex w-full items-center justify-between px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
               selectedWorkspace === null
-                ? "bg-surface-2 text-txt-primary"
-                : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
+                ? "bg-muted text-foreground fx-glow"
+                : "text-muted-foreground hover:bg-card hover:text-foreground"
             }`}
           >
             <span>All workspaces</span>
@@ -150,14 +150,14 @@ export default function Sidebar({
                 e.preventDefault();
                 onEditWorkspace(ws);
               }}
-              className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
+              className={`flex w-full items-center justify-between px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
                 selectedWorkspace === ws.name
-                  ? "bg-surface-2 text-txt-primary"
-                  : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
+                  ? "bg-muted text-foreground fx-glow"
+                  : "text-muted-foreground hover:bg-card hover:text-foreground"
               }`}
             >
               <span className="truncate">{ws.name}</span>
-              <span className="text-xs text-txt-tertiary">
+              <span className="text-xs text-muted-foreground/60">
                 {countForWorkspace(ws.name)}
               </span>
             </button>
@@ -165,7 +165,7 @@ export default function Sidebar({
           <button
             data-testid="sidebar-new-workspace"
             onClick={onNewWorkspace}
-            className="flex w-full items-center rounded px-2 py-1.5 pl-6 text-left text-sm text-txt-tertiary hover:bg-surface-1 hover:text-txt-secondary transition-colors"
+            className="flex w-full items-center px-2 py-1.5 pl-6 text-left text-sm text-muted-foreground/60 hover:bg-card hover:text-muted-foreground transition-colors"
           >
             + New workspace...
           </button>
@@ -175,28 +175,28 @@ export default function Sidebar({
         <CollapsibleSection label="Repositories">
           <button
             onClick={() => onSelectRepo(null)}
-            className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
+            className={`flex w-full items-center justify-between px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
               selectedRepo === null
-                ? "bg-surface-2 text-txt-primary"
-                : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
+                ? "bg-muted text-foreground fx-glow"
+                : "text-muted-foreground hover:bg-card hover:text-foreground"
             }`}
           >
             <span>All repos</span>
-            <span className="text-xs text-txt-tertiary">{runs.length}</span>
+            <span className="text-xs text-muted-foreground/60">{runs.length}</span>
           </button>
           {repos.map((url, index) => (
             <button
               key={url}
               data-testid={`sidebar-repo-${index}`}
               onClick={() => onSelectRepo(url)}
-              className={`flex w-full items-center justify-between rounded px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
+              className={`flex w-full items-center justify-between px-2 py-1.5 pl-6 text-left text-sm transition-colors ${
                 selectedRepo === url
-                  ? "bg-surface-2 text-txt-primary"
-                  : "text-txt-secondary hover:bg-surface-1 hover:text-txt-primary"
+                  ? "bg-muted text-foreground fx-glow"
+                  : "text-muted-foreground hover:bg-card hover:text-foreground"
               }`}
             >
               <span className="truncate">{url.replace(/\.git$/, "").split("/").pop() ?? url}</span>
-              <span className="text-xs text-txt-tertiary">
+              <span className="text-xs text-muted-foreground/60">
                 {countForRepo(url)}
               </span>
             </button>

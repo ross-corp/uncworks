@@ -12,12 +12,12 @@ export default function LogViewer({
   return (
     <div
       data-testid="log-viewer"
-      className="overflow-hidden rounded border border-edge bg-surface-1"
+      className="overflow-hidden border border-border bg-background fx-scanlines fx-noise"
       style={{ height: "100%" }}
     >
       <Suspense
         fallback={
-          <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
             Loading terminal...
           </div>
         }

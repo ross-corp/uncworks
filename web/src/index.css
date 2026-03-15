@@ -1,66 +1,294 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   IoskeleyMono — Self-hosted web font
+   ============================================================ */
+
+@font-face {
+  font-family: 'IoskeleyMono';
+  src: url('/fonts/IoskeleyMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IoskeleyMono';
+  src: url('/fonts/IoskeleyMono-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IoskeleyMono';
+  src: url('/fonts/IoskeleyMono-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IoskeleyMono';
+  src: url('/fonts/IoskeleyMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ============================================================
+   MU-TH-UR 6000 — Design Tokens
+   ============================================================ */
 
 :root {
-  --surface-0: #09090b;
-  --surface-1: #18181b;
-  --surface-2: #27272a;
-  --surface-3: #3f3f46;
+  /* MU-TH-UR 6000 Terminal Base */
+  --background: oklch(0 0 0); /* Pure Black */
+  --foreground: oklch(0.85 0.15 75); /* Amber Phosphor */
+  --card: oklch(0.05 0 0);
+  --card-foreground: oklch(0.85 0.15 75);
+  --popover: oklch(0.05 0 0);
+  --popover-foreground: oklch(0.85 0.15 75);
+  --primary: oklch(0.85 0.15 75); /* Amber */
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.80 0.18 145); /* Nostromo Green */
+  --secondary-foreground: oklch(0 0 0);
+  --muted: oklch(0.15 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --accent: oklch(0.80 0.18 145); /* Green Accent */
+  --accent-foreground: oklch(0 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.3 0 0);
+  --input: oklch(0.1 0 0);
+  --ring: oklch(0.85 0.15 75);
+  --radius: 0px;
 
-  --border: #27272a;
-  --border-strong: #3f3f46;
-
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
-
-  --accent: #facc15;
-  --accent-hover: #fde047;
-
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --success: #22c55e;
-  --info: #3b82f6;
+  /* Effect tokens */
+  --glow-primary: oklch(0.85 0.15 75 / 0.5);
+  --glow-secondary: oklch(0.80 0.18 145 / 0.5);
 }
 
-body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-  background: var(--surface-0);
-  color: var(--text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ============================================================
+   Tailwind v4 Theme Mapping
+   ============================================================ */
+
+@theme inline {
+  --font-sans: 'IoskeleyMono', monospace;
+  --font-mono: 'IoskeleyMono', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
 }
 
-@layer components {
-  .input-field {
-    @apply w-full rounded border border-edge bg-surface-2 px-3 py-2 text-sm text-txt-primary placeholder-txt-tertiary outline-none transition-colors focus:border-edge-strong;
+/* ============================================================
+   Base Layer
+   ============================================================ */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50 rounded-none!;
+  }
+  body {
+    @apply bg-background text-foreground uppercase tracking-widest font-mono;
+  }
+}
+
+/* ============================================================
+   MUTHUR/9000 — Effects Layer
+   CRT scanlines, phosphor bloom, flicker (Nostromo/NERV)
+   ============================================================ */
+@layer utilities {
+  /* CRT scanline overlay — apply to panels/cards for terminal feel */
+  .fx-scanlines {
+    position: relative;
+  }
+  .fx-scanlines::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      oklch(0 0 0 / 0.00) 0px,
+      oklch(0 0 0 / 0.00) 2px,
+      oklch(0 0 0 / 0.06) 3px
+    );
+    mix-blend-mode: multiply;
+    opacity: 0.5;
+    z-index: 10;
+    border-radius: inherit;
   }
 
-  .btn {
-    @apply inline-flex items-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer;
+  /* Phosphor noise texture */
+  .fx-noise {
+    position: relative;
+  }
+  .fx-noise::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(oklch(1 0 0 / 0.03) 1px, transparent 1px);
+    background-size: 3px 3px;
+    opacity: 0.2;
+    mix-blend-mode: overlay;
+    z-index: 10;
+    border-radius: inherit;
   }
 
-  .btn-primary {
-    @apply btn bg-accent text-surface-0 hover:bg-accent-hover;
+  /* Phosphor bloom glow on text */
+  .fx-glow {
+    text-shadow:
+      0 0 4px var(--glow-primary),
+      0 0 12px var(--glow-primary);
   }
 
-  .btn-ghost {
-    @apply btn text-txt-secondary hover:bg-surface-2 hover:text-txt-primary;
+  /* Amber phosphor glow */
+  .fx-glow-amber {
+    text-shadow:
+      0 0 4px var(--glow-primary),
+      0 0 12px var(--glow-primary);
   }
 
-  .btn-danger {
-    @apply btn text-danger hover:bg-danger/10;
+  /* Danger glow */
+  .fx-glow-danger {
+    text-shadow:
+      0 0 4px oklch(0.55 0.22 25 / 0.5),
+      0 0 12px oklch(0.55 0.22 25 / 0.5);
   }
 
-  .scrollbar-hidden {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  /* Box glow effects */
+  .fx-box-glow {
+    box-shadow:
+      0 0 0 1px oklch(0.5 0 0 / 0.10),
+      0 0 16px var(--glow-primary);
   }
-  .scrollbar-hidden::-webkit-scrollbar {
-    display: none;
+
+  .fx-box-glow-warning {
+    box-shadow:
+      0 0 0 1px oklch(0.5 0 0 / 0.10),
+      0 0 16px var(--glow-primary);
   }
+
+  .fx-box-glow-danger {
+    box-shadow:
+      0 0 0 1px oklch(0.5 0 0 / 0.10),
+      0 0 16px oklch(0.55 0.22 25 / 0.5);
+  }
+
+  /* Linear-style subtle panel depth */
+  .fx-panel {
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 0.05),
+      0 0 0 1px oklch(0.5 0 0 / 0.10);
+  }
+}
+
+/* ============================================================
+   CRT Animations (respect reduced motion)
+   ============================================================ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fx-flicker {
+    0%, 88%, 100% { opacity: 1; }
+    89% { opacity: 0.96; }
+    90% { opacity: 1; }
+    92% { opacity: 0.93; }
+    93% { opacity: 0.98; }
+    95% { opacity: 0.96; }
+    96% { opacity: 1; }
+  }
+
+  .fx-flicker {
+    animation: fx-flicker 6s infinite;
+  }
+
+  /* NERV glitch effect for critical states */
+  @keyframes fx-glitch {
+    0%, 90%, 100% { transform: translate(0, 0) skew(0deg); }
+    92% { transform: translate(2px, 0) skew(0deg); }
+    93% { transform: translate(-2px, 0) skew(0.5deg); }
+    94% { transform: translate(1px, 0) skew(0deg); }
+    96% { transform: translate(-1px, 0) skew(-0.3deg); }
+  }
+
+  .fx-glitch {
+    animation: fx-glitch 4s infinite;
+  }
+
+  /* Pulse glow for active/operational status */
+  @keyframes fx-pulse-glow {
+    0%, 100% { box-shadow: 0 0 8px var(--glow-primary); }
+    50% { box-shadow: 0 0 20px var(--glow-primary), 0 0 40px var(--glow-primary); }
+  }
+
+  .fx-pulse {
+    animation: fx-pulse-glow 3s ease-in-out infinite;
+  }
+
+  /* Border flash (emergency/warning) */
+  @keyframes fx-border-flash {
+    0%, 100% { border-color: var(--border); }
+    50% { border-color: var(--destructive); box-shadow: 0 0 12px oklch(0.55 0.22 25 / 0.5); }
+  }
+
+  .fx-border-flash {
+    animation: fx-border-flash 1s steps(2) infinite;
+  }
+
+  /* Text flicker (vintage terminal) */
+  @keyframes fx-text-flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+    75% { opacity: 0.9; }
+    25% { opacity: 0.95; }
+  }
+
+  .fx-text-flicker {
+    animation: fx-text-flicker 0.1s infinite;
+  }
+}
+
+/* ============================================================
+   Custom Scrollbars — MU-TH-UR 6000 style
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+  border-left: 1px solid var(--border);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 0px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
 }

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Button } from "./ui/button";
 
 export default function ConfirmDialog({
   title,
@@ -28,21 +29,21 @@ export default function ConfirmDialog({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-sm rounded-lg border border-edge bg-surface-1 shadow-2xl">
-        <div className="border-b border-edge px-5 py-3">
-          <h2 className="text-sm font-semibold">{title}</h2>
+      <div className="w-full max-w-sm border border-border bg-card shadow-2xl fx-glitch">
+        <div className="border-b border-border px-5 py-3">
+          <h2 className="text-sm font-semibold fx-glow">{title}</h2>
         </div>
-        <div className="px-5 py-4 text-sm text-txt-secondary">{message}</div>
-        <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
-          <button onClick={onCancel} className="btn-ghost">
+        <div className="px-5 py-4 text-sm text-muted-foreground">{message}</div>
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+          <Button variant="ghost" onClick={onCancel}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="destructive"
             onClick={onConfirm}
-            className="rounded bg-danger px-3 py-1.5 text-sm font-medium text-white hover:bg-danger/80 transition-colors"
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

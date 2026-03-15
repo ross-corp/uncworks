@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 type GitHubModalProps = {
   mode: "load" | "push";
@@ -46,30 +48,30 @@ export default function GitHubModal({
       <form
         data-testid="github-modal"
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-lg border border-edge bg-surface-1 shadow-2xl"
+        className="w-full max-w-sm border border-border bg-card shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-edge px-5 py-3">
-          <h2 className="text-sm font-semibold">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h2 className="text-sm font-semibold fx-glow">
             {mode === "load" ? "Load Spec from GitHub" : "Push Spec to GitHub"}
           </h2>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onClose}
-            className="btn-ghost px-2"
             aria-label="Close"
           >
             &times;
-          </button>
+          </Button>
         </div>
 
         <div className="flex flex-col gap-4 p-5">
           <div>
-            <label className="mb-1 block text-xs font-medium text-txt-secondary">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Repository
             </label>
-            <input
+            <Input
               data-testid="github-modal-repo"
-              className="input-field"
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
               placeholder="owner/repo"
@@ -78,12 +80,11 @@ export default function GitHubModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-txt-secondary">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
               File Path
             </label>
-            <input
+            <Input
               data-testid="github-modal-path"
-              className="input-field"
               value={path}
               onChange={(e) => setPath(e.target.value)}
               placeholder="specs/my-spec.md"
@@ -92,11 +93,10 @@ export default function GitHubModal({
 
           {mode === "push" && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-txt-secondary">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 Commit Message
               </label>
-              <input
-                className="input-field"
+              <Input
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Update spec"
@@ -105,13 +105,13 @@ export default function GitHubModal({
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
-          <button type="button" onClick={onClose} className="btn-ghost">
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button data-testid="github-modal-submit" type="submit" className="btn-primary">
+          </Button>
+          <Button data-testid="github-modal-submit" type="submit">
             {mode === "load" ? "Load" : "Push"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

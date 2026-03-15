@@ -25,12 +25,12 @@ export default function LogViewerInner({
       cursorBlink: false,
       disableStdin: true,
       convertEol: true,
-      fontFamily: "'JetBrains Mono', monospace",
+      fontFamily: "'IoskeleyMono', monospace",
       fontSize: 13,
       theme: {
-        background: "#1a1a2e",
-        foreground: "#e0e0e0",
-        cursor: "#e0e0e0",
+        background: "#000000",
+        foreground: "#FFB000",
+        cursor: "#FFB000",
       },
       scrollback: 10000,
     });

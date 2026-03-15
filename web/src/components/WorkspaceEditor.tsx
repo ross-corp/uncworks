@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import type { Repository } from "../types/agent-run";
 import type { Workspace } from "../hooks/useWorkspaces";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 export default function WorkspaceEditor({
   workspace,
@@ -63,25 +65,24 @@ export default function WorkspaceEditor({
       <form
         data-testid="workspace-editor"
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-lg border border-edge bg-surface-1 shadow-2xl"
+        className="w-full max-w-lg border border-border bg-card shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-edge px-5 py-3">
-          <h2 className="text-sm font-semibold">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h2 className="text-sm font-semibold fx-glow">
             {workspace ? "Edit Workspace" : "New Workspace"}
           </h2>
-          <button type="button" onClick={onClose} className="btn-ghost px-2" aria-label="Close">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
             &times;
-          </button>
+          </Button>
         </div>
 
         <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto p-5">
           <div>
-            <label className="mb-1 block text-xs font-medium text-txt-secondary">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Name
             </label>
-            <input
+            <Input
               data-testid="workspace-editor-name"
-              className="input-field"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="my-workspace"
@@ -90,11 +91,10 @@ export default function WorkspaceEditor({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-txt-secondary">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Description
             </label>
-            <input
-              className="input-field"
+            <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
@@ -102,39 +102,39 @@ export default function WorkspaceEditor({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-txt-secondary">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Repositories
             </label>
             <div className="space-y-2">
               {repos.map((repo, i) => (
                 <div key={i} data-testid={`workspace-editor-repo-${i}`} className="flex items-center gap-2">
                   <div className="flex-1">
-                    <input
+                    <Input
                       data-testid={`workspace-editor-repo-${i}-url`}
                       list="ws-known-repos"
-                      className="input-field"
                       value={repo.url}
                       onChange={(e) => updateRepo(i, "url", e.target.value)}
                       placeholder="https://github.com/org/repo"
                     />
                   </div>
                   <div className="w-24">
-                    <input
+                    <Input
                       data-testid={`workspace-editor-repo-${i}-branch`}
-                      className="input-field"
                       value={repo.branch}
                       onChange={(e) => updateRepo(i, "branch", e.target.value)}
                       placeholder="main"
                     />
                   </div>
                   {repos.length > 1 && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => removeRepo(i)}
-                      className="btn-ghost px-2 text-xs text-danger"
+                      className="text-xs text-destructive"
                     >
                       &times;
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
@@ -144,57 +144,63 @@ export default function WorkspaceEditor({
                 <option key={url} value={url} />
               ))}
             </datalist>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={addRepo}
-              className="btn-ghost mt-2 text-xs"
+              className="mt-2 text-xs"
             >
               + Add repo
-            </button>
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-edge px-5 py-3">
+        <div className="flex items-center justify-between border-t border-border px-5 py-3">
           <div>
             {workspace && onDelete && (
               confirmDelete ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-danger">Delete this workspace?</span>
-                  <button
+                  <span className="text-xs text-destructive">Delete this workspace?</span>
+                  <Button
                     data-testid="workspace-editor-delete-confirm"
                     type="button"
+                    variant="destructive"
+                    size="sm"
                     onClick={() => onDelete(workspace.id)}
-                    className="rounded bg-danger px-2 py-1 text-xs font-medium text-white hover:bg-danger/80 transition-colors"
                   >
                     Confirm
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setConfirmDelete(false)}
-                    className="btn-ghost text-xs"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <button
+                <Button
                   data-testid="workspace-editor-delete"
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setConfirmDelete(true)}
-                  className="btn-ghost text-xs text-danger"
+                  className="text-xs text-destructive"
                 >
                   Delete
-                </button>
+                </Button>
               )
             )}
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="btn-ghost">
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancel
-            </button>
-            <button data-testid="workspace-editor-save" type="submit" className="btn-primary">
+            </Button>
+            <Button data-testid="workspace-editor-save" type="submit">
               {workspace ? "Save" : "Create"}
-            </button>
+            </Button>
           </div>
         </div>
       </form>

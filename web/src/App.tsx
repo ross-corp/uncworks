@@ -163,7 +163,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <div className="fx-flicker">
       <Layout
         onNewRun={() => setShowForm(true)}
         searchQuery={searchQuery}
@@ -259,6 +259,6 @@ export default function App() {
           onCancel={() => setRunToDelete(null)}
         />
       )}
-    </>
+    </div>
   );
 }

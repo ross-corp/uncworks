@@ -19,12 +19,12 @@ export default function ShellTerminalInner({ runId }: { runId: string }) {
     const term = new Terminal({
       cursorBlink: true,
       convertEol: true,
-      fontFamily: "'JetBrains Mono', monospace",
+      fontFamily: "'IoskeleyMono', monospace",
       fontSize: 13,
       theme: {
-        background: "#1a1a2e",
-        foreground: "#e0e0e0",
-        cursor: "#e0e0e0",
+        background: "#000000",
+        foreground: "#FFB000",
+        cursor: "#FFB000",
       },
       scrollback: 5000,
     });
@@ -99,16 +99,16 @@ export default function ShellTerminalInner({ runId }: { runId: string }) {
   };
 
   const statusColor: Record<ConnectionStatus, string> = {
-    connecting: "text-yellow-400",
-    connected: "text-green-400",
-    disconnected: "text-red-400",
+    connecting: "text-primary",
+    connected: "text-secondary",
+    disconnected: "text-destructive",
   };
 
   return (
     <div className="flex h-full flex-col">
       {/* Status bar */}
-      <div className="flex items-center justify-between border-b border-edge bg-surface-2 px-3 py-1">
-        <span className="text-xs text-txt-tertiary">Shell</span>
+      <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-1">
+        <span className="text-xs text-muted-foreground/60">Shell</span>
         <span className={`text-xs ${statusColor[status]}`}>
           {statusLabel[status]}
         </span>

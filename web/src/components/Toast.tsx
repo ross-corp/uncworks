@@ -48,9 +48,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 const TYPE_STYLES: Record<ToastType, string> = {
-  success: "border-green-500/30 bg-green-500/10 text-green-400",
-  error: "border-red-500/30 bg-red-500/10 text-red-400",
-  info: "border-blue-500/30 bg-blue-500/10 text-blue-400",
+  success: "border-secondary/30 bg-secondary/10 text-secondary",
+  error: "border-destructive/30 bg-destructive/10 text-destructive",
+  info: "border-primary/30 bg-primary/10 text-primary",
 };
 
 function ToastItem({
@@ -68,7 +68,7 @@ function ToastItem({
   return (
     <div
       data-testid="toast"
-      className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg backdrop-blur-sm ${TYPE_STYLES[toast.type]}`}
+      className={`flex items-center gap-3 border px-4 py-3 text-sm shadow-lg backdrop-blur-sm ${TYPE_STYLES[toast.type]}`}
     >
       <span className="flex-1">{toast.message}</span>
       <button

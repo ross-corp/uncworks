@@ -9,6 +9,7 @@ import TraceTimeline from "./TraceTimeline";
 import DiffViewer from "./DiffViewer";
 import { useWatchRun } from "../hooks/useWatchRun";
 import { useTraces } from "../hooks/useTraces";
+import { Button } from "./ui/button";
 
 type TabId = "info" | "logs" | "files" | "shell" | "traces";
 
@@ -67,17 +68,17 @@ export default function AgentRunDetailPanel({
   }
 
   return (
-    <div data-testid="detail-panel" className="flex h-full flex-col border-l border-edge bg-surface-0">
+    <div data-testid="detail-panel" className="flex h-full flex-col border-l border-border bg-background fx-scanlines">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-edge px-5 py-3">
-        <span className="font-mono text-sm text-txt-tertiary truncate">{run.id}</span>
-        <button onClick={onClose} className="btn-ghost px-2 text-lg" aria-label="Close">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <span className="font-mono text-sm text-muted-foreground/60 truncate">{run.id}</span>
+        <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">
           &times;
-        </button>
+        </Button>
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-0 border-b border-edge bg-surface-0 px-2">
+      <div className="flex items-center gap-0 border-b border-border bg-background px-2">
         {TABS.map((tab) => {
           const enabled = isTabEnabled(tab);
           const active = activeTab === tab.id;
@@ -89,16 +90,16 @@ export default function AgentRunDetailPanel({
               onClick={() => enabled && setActiveTab(tab.id)}
               className={`relative px-4 py-2 text-sm font-medium transition-colors ${
                 active
-                  ? "text-txt-primary"
+                  ? "text-foreground"
                   : enabled
-                  ? "text-txt-tertiary hover:text-txt-secondary"
-                  : "text-txt-tertiary/40 cursor-not-allowed"
+                  ? "text-muted-foreground/60 hover:text-muted-foreground"
+                  : "text-muted-foreground/20 cursor-not-allowed"
               }`}
               title={!enabled ? "Pod is not available" : undefined}
             >
               {tab.label}
               {active && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
               )}
             </button>
           );
@@ -130,38 +131,41 @@ export default function AgentRunDetailPanel({
       </div>
 
       {/* Footer */}
-      <div className="flex justify-between border-t border-edge px-5 py-3">
+      <div className="flex justify-between border-t border-border px-5 py-3">
         <div className="flex items-center gap-2">
           {run.status.traceID && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => navigator.clipboard.writeText(run.status.traceID)}
-              className="btn-ghost text-sm"
             >
               Copy Trace
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => onClone(run)}
-            className="btn-ghost text-sm"
           >
             Clone Run
-          </button>
+          </Button>
         </div>
         {isActive && (
-          <button
+          <Button
             data-testid="detail-cancel"
+            variant="destructive"
+            size="sm"
             onClick={() => onCancel(run.id)}
-            className="rounded bg-danger px-3 py-1.5 text-sm font-medium text-white hover:bg-danger/80 transition-colors"
           >
             Cancel Run
-          </button>
+          </Button>
         )}
       </div>
     </div>
   );
 }
 
-/* ── InfoTab: extracted from original detail panel (zero behavior change) ── */
+/* -- InfoTab: extracted from original detail panel (zero behavior change) -- */
 
 function InfoTab({
   run,
@@ -203,7 +207,7 @@ function InfoTab({
   return (
     <div className="flex-1 overflow-y-auto p-5">
       {/* Name & badges */}
-      <h2 data-testid="detail-name" className="mb-2 text-base font-semibold">{run.name}</h2>
+      <h2 data-testid="detail-name" className="mb-2 text-base font-semibold fx-glow">{run.name}</h2>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <span data-testid="detail-phase"><PhaseBadge phase={run.status.phase} /></span>
         <BackendBadge backend={run.spec.backend} />
@@ -219,24 +223,24 @@ function InfoTab({
 
       {/* Repositories */}
       <div className="mb-4" data-testid="detail-repos">
-        <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+        <h3 className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
           Repositories
         </h3>
         {run.spec.repos.length > 0 ? (
           <div className="space-y-1">
             {run.spec.repos.map((repo, i) => (
               <div key={i} className="flex items-baseline justify-between gap-4">
-                <span className="font-mono text-xs text-txt-secondary truncate">
+                <span className="font-mono text-xs text-muted-foreground truncate">
                   {repoName(repo.url)}
                 </span>
-                <span className="font-mono text-xs text-txt-tertiary whitespace-nowrap">
+                <span className="font-mono text-xs text-muted-foreground/60 whitespace-nowrap">
                   :{repo.branch}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <span className="text-xs text-txt-tertiary">&mdash;</span>
+          <span className="text-xs text-muted-foreground/60">&mdash;</span>
         )}
       </div>
 
@@ -260,15 +264,15 @@ function InfoTab({
       {/* Env vars */}
       {Object.keys(run.spec.envVars).length > 0 && (
         <div className="mb-4">
-          <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+          <h3 className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
             Environment
           </h3>
           <div className="space-y-1">
             {Object.entries(run.spec.envVars).map(([k, v]) => (
               <div key={k} className="font-mono text-xs">
-                <span className="text-txt-tertiary">{k}</span>
-                <span className="text-txt-secondary">=</span>
-                <span className="text-txt-primary">{v}</span>
+                <span className="text-muted-foreground/60">{k}</span>
+                <span className="text-muted-foreground">=</span>
+                <span className="text-foreground">{v}</span>
               </div>
             ))}
           </div>
@@ -278,12 +282,12 @@ function InfoTab({
       {/* Spec */}
       {run.spec.specContent && (
         <div className="mb-4">
-          <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+          <h3 className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
             Spec
           </h3>
           <SpecEditor value={run.spec.specContent} readOnly height="200px" />
           {run.spec.specSource && (
-            <div className="mt-1 text-xs text-txt-tertiary">
+            <div className="mt-1 text-xs text-muted-foreground/60">
               Source: {run.spec.specSource}
             </div>
           )}
@@ -292,10 +296,10 @@ function InfoTab({
 
       {/* Prompt */}
       <div className="mb-4">
-        <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+        <h3 className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
           Prompt
         </h3>
-        <div className="rounded border border-edge bg-surface-2 p-3 text-sm text-txt-secondary whitespace-pre-wrap">
+        <div className="border border-border bg-muted p-3 text-sm text-muted-foreground whitespace-pre-wrap">
           {run.spec.prompt}
         </div>
       </div>
@@ -303,16 +307,16 @@ function InfoTab({
       {/* Status message */}
       {run.status.message && (
         <div className="mb-4">
-          <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+          <h3 className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
             Status Message
           </h3>
           <div
-            className={`rounded border p-3 text-sm whitespace-pre-wrap ${
+            className={`border p-3 text-sm whitespace-pre-wrap ${
               run.status.phase === "failed"
-                ? "border-red-500/30 bg-red-500/5 text-red-400"
+                ? "border-destructive/30 bg-destructive/5 text-destructive"
                 : run.status.phase === "waiting_for_input"
-                ? "border-purple-500/30 bg-purple-500/5 text-purple-400"
-                : "border-edge bg-surface-2 text-txt-secondary"
+                ? "border-secondary/30 bg-secondary/5 text-secondary"
+                : "border-border bg-muted text-muted-foreground"
             }`}
           >
             {run.status.message}
@@ -323,12 +327,12 @@ function InfoTab({
       {/* HITL Input */}
       {isWaiting && (
         <div className="mb-4">
-          <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+          <h3 className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
             Human Input
           </h3>
           <textarea
             data-testid="detail-hitl-input"
-            className="input-field min-h-[80px] resize-y"
+            className="w-full border border-input bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 outline-none transition-colors focus:border-primary min-h-[80px] resize-y"
             value={humanInput}
             onChange={(e) => setHumanInput(e.target.value)}
             onKeyDown={(e) => {
@@ -342,7 +346,7 @@ function InfoTab({
             }}
             placeholder="Type your response to the agent..."
           />
-          <button
+          <Button
             data-testid="detail-hitl-send"
             onClick={() => {
               if (humanInput.trim()) {
@@ -351,17 +355,17 @@ function InfoTab({
               }
             }}
             disabled={!humanInput.trim()}
-            className="btn-primary mt-2 text-sm disabled:opacity-40"
+            className="mt-2 text-sm disabled:opacity-40"
           >
             Send Input
-          </button>
+          </Button>
         </div>
       )}
     </div>
   );
 }
 
-/* ── LogsTab ── */
+/* -- LogsTab -- */
 
 function LogsTab({
   run,
@@ -402,7 +406,7 @@ function LogsTab({
 
   if (lines.length === 0 && !isStreaming && !fetching) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
         No logs available
       </div>
     );
@@ -410,7 +414,7 @@ function LogsTab({
 
   if (fetching && lines.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
         Loading logs...
       </div>
     );
@@ -423,7 +427,7 @@ function LogsTab({
   );
 }
 
-/* ── ShellTab (12.1 + 12.2) ── */
+/* -- ShellTab (12.1 + 12.2) -- */
 
 function ShellTab({
   run,
@@ -464,17 +468,17 @@ function ShellTab({
   if (!isActive && !debugActive) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
-        <p className="text-sm text-txt-tertiary text-center">
+        <p className="text-sm text-muted-foreground/60 text-center">
           The agent run has completed. Start a debug session to get shell access to the workspace.
         </p>
-        <button
+        <Button
           data-testid="debug-run-btn"
           onClick={handleDebugStart}
           disabled={debugLoading}
-          className="btn-primary text-sm disabled:opacity-40"
+          className="text-sm disabled:opacity-40"
         >
           {debugLoading ? "Starting..." : "Debug Run"}
-        </button>
+        </Button>
 
         {/* 12.2: VS Code connection info */}
         <VSCodeConnectInfo podName={run.status.podName} />
@@ -486,16 +490,17 @@ function ShellTab({
   return (
     <div className="flex h-full flex-col">
       {debugActive && !isActive && (
-        <div className="flex items-center justify-between border-b border-edge px-3 py-2">
-          <span className="text-xs text-green-400 font-medium">Debug session active</span>
-          <button
+        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <span className="text-xs text-secondary font-medium">Debug session active</span>
+          <Button
             data-testid="stop-debug-btn"
+            variant="destructive"
+            size="sm"
             onClick={handleDebugStop}
             disabled={debugLoading}
-            className="rounded bg-danger/80 px-2 py-1 text-xs font-medium text-white hover:bg-danger transition-colors disabled:opacity-40"
           >
             {debugLoading ? "Stopping..." : "Stop Debug"}
-          </button>
+          </Button>
         </div>
       )}
       {hasPod ? (
@@ -503,7 +508,7 @@ function ShellTab({
           <ShellTerminal runId={run.id} />
         </div>
       ) : (
-        <div className="flex flex-1 items-center justify-center text-sm text-txt-tertiary">
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground/60">
           Waiting for pod to become ready...
         </div>
       )}
@@ -514,7 +519,7 @@ function ShellTab({
   );
 }
 
-/* ── VS Code Connection Info (12.2) ── */
+/* -- VS Code Connection Info (12.2) -- */
 
 function VSCodeConnectInfo({ podName }: { podName: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -527,28 +532,30 @@ function VSCodeConnectInfo({ podName }: { podName: string }) {
     <div className="w-full max-w-md">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-xs text-txt-tertiary hover:text-txt-secondary transition-colors"
+        className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
       >
         <span className={`transition-transform ${expanded ? "rotate-90" : ""}`}>&#9654;</span>
         VS Code Connection
       </button>
       {expanded && (
-        <div className="mt-2 rounded border border-edge bg-surface-2 p-3">
-          <p className="mb-2 text-xs text-txt-tertiary">
+        <div className="mt-2 border border-border bg-muted p-3">
+          <p className="mb-2 text-xs text-muted-foreground/60">
             Connect VS Code Remote Containers to the workspace:
           </p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 rounded bg-surface-0 px-2 py-1 font-mono text-xs text-txt-secondary break-all">
+            <code className="flex-1 bg-background px-2 py-1 font-mono text-xs text-muted-foreground break-all">
               {portForwardCmd}
             </code>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => navigator.clipboard.writeText(portForwardCmd)}
-              className="btn-ghost px-2 text-xs flex-shrink-0"
+              className="text-xs flex-shrink-0"
             >
               Copy
-            </button>
+            </Button>
           </div>
-          <p className="mt-2 text-xs text-txt-tertiary">
+          <p className="mt-2 text-xs text-muted-foreground/60">
             Then attach to the container using VS Code &quot;Attach to Running Container&quot;.
           </p>
         </div>
@@ -557,7 +564,7 @@ function VSCodeConnectInfo({ podName }: { podName: string }) {
   );
 }
 
-/* ── TracesTab (11.4, 11.5, 11.7, 12.5) ── */
+/* -- TracesTab (11.4, 11.5, 11.7, 12.5) -- */
 
 function TracesTab({ runId }: { runId: string }) {
   const { spans, loading } = useTraces(runId);
@@ -565,7 +572,7 @@ function TracesTab({ runId }: { runId: string }) {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
         Loading traces...
       </div>
     );
@@ -574,7 +581,7 @@ function TracesTab({ runId }: { runId: string }) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Timeline */}
-      <div className="flex-shrink-0 border-b border-edge overflow-y-auto max-h-[40%]">
+      <div className="flex-shrink-0 border-b border-border overflow-y-auto max-h-[40%]">
         <TraceTimeline
           spans={spans}
           selectedSpanId={selectedSpan?.id}
@@ -585,7 +592,7 @@ function TracesTab({ runId }: { runId: string }) {
       {/* Detail pane */}
       <div className="flex-1 overflow-y-auto">
         {selectedSpan === null && (
-          <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
             Select a span to view details
           </div>
         )}
@@ -614,7 +621,7 @@ function TracesTab({ runId }: { runId: string }) {
   );
 }
 
-/* ── SpanMetadataView ── */
+/* -- SpanMetadataView -- */
 
 function SpanMetadataView({ span }: { span: TraceSpan }) {
   return (
@@ -629,10 +636,10 @@ function SpanMetadataView({ span }: { span: TraceSpan }) {
 
       {span.metadata && Object.keys(span.metadata).length > 0 && (
         <div>
-          <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-txt-tertiary">
+          <h4 className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
             Metadata
           </h4>
-          <pre className="rounded border border-edge bg-surface-2 p-3 text-xs font-mono text-txt-secondary overflow-x-auto whitespace-pre-wrap">
+          <pre className="border border-border bg-muted p-3 text-xs font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap">
             {JSON.stringify(span.metadata, null, 2)}
           </pre>
         </div>
@@ -641,17 +648,14 @@ function SpanMetadataView({ span }: { span: TraceSpan }) {
   );
 }
 
-/* ── DisabledMessage ── */
-
-
-/* ── MetaRow ── */
+/* -- MetaRow -- */
 
 function MetaRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
-      <span className="text-xs text-txt-tertiary whitespace-nowrap">{label}</span>
+      <span className="text-xs text-muted-foreground/60 whitespace-nowrap">{label}</span>
       <span
-        className={`text-sm text-txt-secondary text-right truncate ${mono ? "font-mono text-xs" : ""}`}
+        className={`text-sm text-muted-foreground text-right truncate ${mono ? "font-mono text-xs" : ""}`}
       >
         {value}
       </span>

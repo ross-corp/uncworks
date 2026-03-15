@@ -50,8 +50,8 @@ export default function FilePreview({
   return (
     <div className="flex h-full flex-col">
       {/* File path header */}
-      <div className="border-b border-edge bg-surface-2 px-3 py-1.5">
-        <span className="font-mono text-xs text-txt-tertiary truncate">
+      <div className="border-b border-border bg-muted px-3 py-1.5">
+        <span className="font-mono text-xs text-muted-foreground/60 truncate">
           {path}
         </span>
       </div>
@@ -60,7 +60,7 @@ export default function FilePreview({
       <div className="flex-1 overflow-hidden">
         <Suspense
           fallback={
-            <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
               Loading editor...
             </div>
           }
@@ -77,7 +77,7 @@ export default function FilePreview({
               lineNumbers: "on",
               scrollBeyondLastLine: false,
               fontSize: 13,
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'IoskeleyMono', monospace",
               padding: { top: 8 },
             }}
           />

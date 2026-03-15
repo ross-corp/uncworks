@@ -24,7 +24,7 @@ export const WithError: Story = {
 export const WithChildren: Story = {
   render: () => (
     <ErrorBoundary>
-      <div className="p-4 text-sm text-txt-secondary">
+      <div className="p-4 text-sm text-muted-foreground">
         This content renders normally when there is no error.
       </div>
     </ErrorBoundary>
