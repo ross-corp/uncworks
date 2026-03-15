@@ -198,6 +198,7 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       parentRunId: (pb.spec as Record<string, unknown>)?.parentRunId as string | undefined,
       orchestrationMode: (pb.spec as Record<string, unknown>)?.orchestrationMode as string | undefined as AgentRunSpec["orchestrationMode"],
       specRunId: (pb.spec as Record<string, unknown>)?.specRunId as string | undefined,
+      displayName: pb.spec?.displayName || undefined,
     },
     status: {
       phase: phaseFromProto(pb.status?.phase ?? PbAgentRunPhase.UNSPECIFIED),

@@ -15,7 +15,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file aot/api/v1/api.proto.
  */
 export const file_aot_api_v1_api: GenFile = /*@__PURE__*/
-  fileDesc("ChRhb3QvYXBpL3YxL2FwaS5wcm90bxIKYW90LmFwaS52MSLYAQoIQWdlbnRSdW4SCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRImCgRzcGVjGAMgASgLMhguYW90LmFwaS52MS5BZ2VudFJ1blNwZWMSKgoGc3RhdHVzGAQgASgLMhouYW90LmFwaS52MS5BZ2VudFJ1blN0YXR1cxIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJBCgpSZXBvc2l0b3J5EhUKA3VybBgBIAEoCUIIukgFcgOIAQESDgoGYnJhbmNoGAIgASgJEgwKBHBhdGgYAyABKAkinQMKDEFnZW50UnVuU3BlYxIuCgdiYWNrZW5kGAEgASgOMhMuYW90LmFwaS52MS5CYWNrZW5kQgi6SAWCAQIgABIvCgVyZXBvcxgCIAMoCzIWLmFvdC5hcGkudjEuUmVwb3NpdG9yeUIIukgFkgECCAESDgoGcHJvbXB0GAQgASgJEhUKDWRldmJveF9jb25maWcYBSABKAkSHAoLdHRsX3NlY29uZHMYBiABKAVCB7pIBBoCKAASNwoIZW52X3ZhcnMYByADKAsyJS5hb3QuYXBpLnYxLkFnZW50UnVuU3BlYy5FbnZWYXJzRW50cnkSEgoKbW9kZWxfdGllchgIIAEoCRINCgVpbWFnZRgJIAEoCRISCgptYXhfYnVkZ2V0GAogASgBEhQKDHNwZWNfY29udGVudBgLIAEoCRITCgtzcGVjX3NvdXJjZRgMIAEoCRIWCg53b3Jrc3BhY2VfbmFtZRgNIAEoCRouCgxFbnZWYXJzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUoECA4QDyLdAgoOQWdlbnRSdW5TdGF0dXMSKAoFcGhhc2UYASABKA4yGS5hb3QuYXBpLnYxLkFnZW50UnVuUGhhc2USDwoHbWVzc2FnZRgCIAEoCRIQCghwb2RfbmFtZRgDIAEoCRIQCgh0cmFjZV9pZBgEIAEoCRIuCgpzdGFydGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxjb21wbGV0ZWRfYXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhUKDXdvcmt0cmVlX3BhdGgYByABKAkSEgoKbG9nX291dHB1dBgIIAEoCRIwCgxyZXRhaW5fdW50aWwYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhcKD2RlcGxveW1lbnRfbmFtZRgKIAEoCRIUCgxkZWJ1Z19hY3RpdmUYCyABKAgiPwoVQ3JlYXRlQWdlbnRSdW5SZXF1ZXN0EiYKBHNwZWMYASABKAsyGC5hb3QuYXBpLnYxLkFnZW50UnVuU3BlYyJBChZDcmVhdGVBZ2VudFJ1blJlc3BvbnNlEicKCWFnZW50X3J1bhgBIAEoCzIULmFvdC5hcGkudjEuQWdlbnRSdW4iIAoSR2V0QWdlbnRSdW5SZXF1ZXN0EgoKAmlkGAEgASgJImYKFExpc3RBZ2VudFJ1bnNSZXF1ZXN0Ei8KDHBoYXNlX2ZpbHRlchgBIAEoDjIZLmFvdC5hcGkudjEuQWdlbnRSdW5QaGFzZRINCgVsaW1pdBgCIAEoBRIOCgZjdXJzb3IYAyABKAkiVgoVTGlzdEFnZW50UnVuc1Jlc3BvbnNlEigKCmFnZW50X3J1bnMYASADKAsyFC5hb3QuYXBpLnYxLkFnZW50UnVuEhMKC25leHRfY3Vyc29yGAIgASgJIiIKFFdhdGNoQWdlbnRSdW5SZXF1ZXN0EgoKAmlkGAEgASgJIpIBCg1BZ2VudFJ1bkV2ZW50EhQKDGFnZW50X3J1bl9pZBgBIAEoCRIrCgR0eXBlGAIgASgOMh0uYW90LmFwaS52MS5BZ2VudFJ1bkV2ZW50VHlwZRIPCgdwYXlsb2FkGAMgASgJEi0KCXRpbWVzdGFtcBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiIwoVQ2FuY2VsQWdlbnRSdW5SZXF1ZXN0EgoKAmlkGAEgASgJIkEKFkNhbmNlbEFnZW50UnVuUmVzcG9uc2USJwoJYWdlbnRfcnVuGAEgASgLMhQuYW90LmFwaS52MS5BZ2VudFJ1biI8ChVTZW5kSHVtYW5JbnB1dFJlcXVlc3QSFAoMYWdlbnRfcnVuX2lkGAEgASgJEg0KBWlucHV0GAIgASgJIioKFlNlbmRIdW1hbklucHV0UmVzcG9uc2USEAoIYWNjZXB0ZWQYASABKAgqXwoHQmFja2VuZBIXChNCQUNLRU5EX1VOU1BFQ0lGSUVEEAASDwoLQkFDS0VORF9QT0QQARIUChBCQUNLRU5EX0tVQkVWSVJUEAISFAoQQkFDS0VORF9FWFRFUk5BTBADKusBCg1BZ2VudFJ1blBoYXNlEh8KG0FHRU5UX1JVTl9QSEFTRV9VTlNQRUNJRklFRBAAEhsKF0FHRU5UX1JVTl9QSEFTRV9QRU5ESU5HEAESGwoXQUdFTlRfUlVOX1BIQVNFX1JVTk5JTkcQAhIlCiFBR0VOVF9SVU5fUEhBU0VfV0FJVElOR19GT1JfSU5QVVQQAxIdChlBR0VOVF9SVU5fUEhBU0VfU1VDQ0VFREVEEAQSGgoWQUdFTlRfUlVOX1BIQVNFX0ZBSUxFRBAFEh0KGUFHRU5UX1JVTl9QSEFTRV9DQU5DRUxMRUQQBirzAQoRQWdlbnRSdW5FdmVudFR5cGUSJAogQUdFTlRfUlVOX0VWRU5UX1RZUEVfVU5TUEVDSUZJRUQQABImCiJBR0VOVF9SVU5fRVZFTlRfVFlQRV9QSEFTRV9DSEFOR0VEEAESHAoYQUdFTlRfUlVOX0VWRU5UX1RZUEVfTE9HEAISIgoeQUdFTlRfUlVOX0VWRU5UX1RZUEVfVE9PTF9DQUxMEAMSKgomQUdFTlRfUlVOX0VWRU5UX1RZUEVfV0FJVElOR19GT1JfSU5QVVQQBBIiCh5BR0VOVF9SVU5fRVZFTlRfVFlQRV9DT01QTEVURUQQBTKCBAoKQU9UU2VydmljZRJXCg5DcmVhdGVBZ2VudFJ1bhIhLmFvdC5hcGkudjEuQ3JlYXRlQWdlbnRSdW5SZXF1ZXN0GiIuYW90LmFwaS52MS5DcmVhdGVBZ2VudFJ1blJlc3BvbnNlEkMKC0dldEFnZW50UnVuEh4uYW90LmFwaS52MS5HZXRBZ2VudFJ1blJlcXVlc3QaFC5hb3QuYXBpLnYxLkFnZW50UnVuElQKDUxpc3RBZ2VudFJ1bnMSIC5hb3QuYXBpLnYxLkxpc3RBZ2VudFJ1bnNSZXF1ZXN0GiEuYW90LmFwaS52MS5MaXN0QWdlbnRSdW5zUmVzcG9uc2USTgoNV2F0Y2hBZ2VudFJ1bhIgLmFvdC5hcGkudjEuV2F0Y2hBZ2VudFJ1blJlcXVlc3QaGS5hb3QuYXBpLnYxLkFnZW50UnVuRXZlbnQwARJXCg5DYW5jZWxBZ2VudFJ1bhIhLmFvdC5hcGkudjEuQ2FuY2VsQWdlbnRSdW5SZXF1ZXN0GiIuYW90LmFwaS52MS5DYW5jZWxBZ2VudFJ1blJlc3BvbnNlElcKDlNlbmRIdW1hbklucHV0EiEuYW90LmFwaS52MS5TZW5kSHVtYW5JbnB1dFJlcXVlc3QaIi5hb3QuYXBpLnYxLlNlbmRIdW1hbklucHV0UmVzcG9uc2VCLVorZ2l0aHViLmNvbS91bmN3b3Jrcy9hb3QvZ2VuL2dvL2FwaS92MTthcGl2MWIGcHJvdG8z", [file_buf_validate_validate, file_google_protobuf_timestamp]);
+  fileDesc("ChRhb3QvYXBpL3YxL2FwaS5wcm90bxIKYW90LmFwaS52MSLqAQoIQWdlbnRSdW4SCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRImCgRzcGVjGAMgASgLMhguYW90LmFwaS52MS5BZ2VudFJ1blNwZWMSKgoGc3RhdHVzGAQgASgLMhouYW90LmFwaS52MS5BZ2VudFJ1blN0YXR1cxIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghjaGlsZHJlbhgHIAMoCSJBCgpSZXBvc2l0b3J5EhUKA3VybBgBIAEoCUIIukgFcgOIAQESDgoGYnJhbmNoGAIgASgJEgwKBHBhdGgYAyABKAkizAQKDEFnZW50UnVuU3BlYxIuCgdiYWNrZW5kGAEgASgOMhMuYW90LmFwaS52MS5CYWNrZW5kQgi6SAWCAQIgABIvCgVyZXBvcxgCIAMoCzIWLmFvdC5hcGkudjEuUmVwb3NpdG9yeUIIukgFkgECCAESDgoGcHJvbXB0GAQgASgJEhUKDWRldmJveF9jb25maWcYBSABKAkSHAoLdHRsX3NlY29uZHMYBiABKAVCB7pIBBoCKAASNwoIZW52X3ZhcnMYByADKAsyJS5hb3QuYXBpLnYxLkFnZW50UnVuU3BlYy5FbnZWYXJzRW50cnkSEgoKbW9kZWxfdGllchgIIAEoCRINCgVpbWFnZRgJIAEoCRISCgptYXhfYnVkZ2V0GAogASgBEhQKDHNwZWNfY29udGVudBgLIAEoCRITCgtzcGVjX3NvdXJjZRgMIAEoCRIWCg53b3Jrc3BhY2VfbmFtZRgNIAEoCRIVCg1wYXJlbnRfcnVuX2lkGA8gASgJEjkKEm9yY2hlc3RyYXRpb25fbW9kZRgQIAEoDjIdLmFvdC5hcGkudjEuT3JjaGVzdHJhdGlvbk1vZGUSMAoNb3JjaGVzdHJhdGlvbhgRIAEoCzIZLmFvdC5hcGkudjEuT3JjaGVzdHJhdGlvbhITCgtzcGVjX3J1bl9pZBgSIAEoCRIUCgxkaXNwbGF5X25hbWUYEyABKAkaLgoMRW52VmFyc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAFKBAgOEA8iRAoRT3JjaGVzdHJhdGlvblRhc2sSDAoEbmFtZRgBIAEoCRIOCgZwcm9tcHQYAiABKAkSEQoJcmVwb191cmxzGAMgAygJIj0KDU9yY2hlc3RyYXRpb24SLAoFdGFza3MYASADKAsyHS5hb3QuYXBpLnYxLk9yY2hlc3RyYXRpb25UYXNrIt0CCg5BZ2VudFJ1blN0YXR1cxIoCgVwaGFzZRgBIAEoDjIZLmFvdC5hcGkudjEuQWdlbnRSdW5QaGFzZRIPCgdtZXNzYWdlGAIgASgJEhAKCHBvZF9uYW1lGAMgASgJEhAKCHRyYWNlX2lkGAQgASgJEi4KCnN0YXJ0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjAKDGNvbXBsZXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFQoNd29ya3RyZWVfcGF0aBgHIAEoCRISCgpsb2dfb3V0cHV0GAggASgJEjAKDHJldGFpbl91bnRpbBgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFwoPZGVwbG95bWVudF9uYW1lGAogASgJEhQKDGRlYnVnX2FjdGl2ZRgLIAEoCCI/ChVDcmVhdGVBZ2VudFJ1blJlcXVlc3QSJgoEc3BlYxgBIAEoCzIYLmFvdC5hcGkudjEuQWdlbnRSdW5TcGVjIkEKFkNyZWF0ZUFnZW50UnVuUmVzcG9uc2USJwoJYWdlbnRfcnVuGAEgASgLMhQuYW90LmFwaS52MS5BZ2VudFJ1biIgChJHZXRBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkikgEKFExpc3RBZ2VudFJ1bnNSZXF1ZXN0Ei8KDHBoYXNlX2ZpbHRlchgBIAEoDjIZLmFvdC5hcGkudjEuQWdlbnRSdW5QaGFzZRINCgVsaW1pdBgCIAEoBRIOCgZjdXJzb3IYAyABKAkSEwoLc3BlY19ydW5faWQYBCABKAkSFQoNcGFyZW50X3J1bl9pZBgFIAEoCSJWChVMaXN0QWdlbnRSdW5zUmVzcG9uc2USKAoKYWdlbnRfcnVucxgBIAMoCzIULmFvdC5hcGkudjEuQWdlbnRSdW4SEwoLbmV4dF9jdXJzb3IYAiABKAkiIgoUV2F0Y2hBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkikgEKDUFnZW50UnVuRXZlbnQSFAoMYWdlbnRfcnVuX2lkGAEgASgJEisKBHR5cGUYAiABKA4yHS5hb3QuYXBpLnYxLkFnZW50UnVuRXZlbnRUeXBlEg8KB3BheWxvYWQYAyABKAkSLQoJdGltZXN0YW1wGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIjChVDYW5jZWxBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkiQQoWQ2FuY2VsQWdlbnRSdW5SZXNwb25zZRInCglhZ2VudF9ydW4YASABKAsyFC5hb3QuYXBpLnYxLkFnZW50UnVuIjwKFVNlbmRIdW1hbklucHV0UmVxdWVzdBIUCgxhZ2VudF9ydW5faWQYASABKAkSDQoFaW5wdXQYAiABKAkiKgoWU2VuZEh1bWFuSW5wdXRSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoCCIgChJHZXRSdW5HcmFwaFJlcXVlc3QSCgoCaWQYASABKAkitgEKDFJ1bkdyYXBoTm9kZRIMCgRuYW1lGAEgASgJEigKBXBoYXNlGAIgASgOMhkuYW90LmFwaS52MS5BZ2VudFJ1blBoYXNlEgwKBHJvbGUYAyABKAkSLgoKc3RhcnRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMAoMY29tcGxldGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCItCgxSdW5HcmFwaEVkZ2USDgoGcGFyZW50GAEgASgJEg0KBWNoaWxkGAIgASgJIlwKCFJ1bkdyYXBoEicKBW5vZGVzGAEgAygLMhguYW90LmFwaS52MS5SdW5HcmFwaE5vZGUSJwoFZWRnZXMYAiADKAsyGC5hb3QuYXBpLnYxLlJ1bkdyYXBoRWRnZSLfAQoVU2VhcmNoUGFzdFdvcmtSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEhAKCHJlcG9fdXJsGAIgASgJEjEKDWNyZWF0ZWRfYWZ0ZXIYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjIKDmNyZWF0ZWRfYmVmb3JlGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIvCg1zb3VyY2VfZmlsdGVyGAUgASgOMhguYW90LmFwaS52MS5Tb3VyY2VGaWx0ZXISDQoFbGltaXQYBiABKAUiRQoWU2VhcmNoUGFzdFdvcmtSZXNwb25zZRIrCgdyZXN1bHRzGAEgAygLMhouYW90LmFwaS52MS5QYXN0V29ya1Jlc3VsdCKDAgoOUGFzdFdvcmtSZXN1bHQSEgoKY2h1bmtfdGV4dBgBIAEoCRITCgtzb3VyY2VfdHlwZRgCIAEoCRIYChBzaW1pbGFyaXR5X3Njb3JlGAMgASgBEg4KBnJ1bl9pZBgEIAEoCRIRCglmaWxlX3BhdGgYBSABKAkSEAoIbGFuZ3VhZ2UYBiABKAkSEQoJbm9kZV90eXBlGAcgASgJEhIKCmNodW5rX3R5cGUYCCABKAkSEAoIc2V2ZXJpdHkYCSABKAkSEAoIcmVwb191cmwYCiABKAkSLgoKY3JlYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAqkgEKEU9yY2hlc3RyYXRpb25Nb2RlEiIKHk9SQ0hFU1RSQVRJT05fTU9ERV9VTlNQRUNJRklFRBAAEh0KGU9SQ0hFU1RSQVRJT05fTU9ERV9TSU5HTEUQARIbChdPUkNIRVNUUkFUSU9OX01PREVfQVVUTxACEh0KGU9SQ0hFU1RSQVRJT05fTU9ERV9NQU5VQUwQAypfCgdCYWNrZW5kEhcKE0JBQ0tFTkRfVU5TUEVDSUZJRUQQABIPCgtCQUNLRU5EX1BPRBABEhQKEEJBQ0tFTkRfS1VCRVZJUlQQAhIUChBCQUNLRU5EX0VYVEVSTkFMEAMq6wEKDUFnZW50UnVuUGhhc2USHwobQUdFTlRfUlVOX1BIQVNFX1VOU1BFQ0lGSUVEEAASGwoXQUdFTlRfUlVOX1BIQVNFX1BFTkRJTkcQARIbChdBR0VOVF9SVU5fUEhBU0VfUlVOTklORxACEiUKIUFHRU5UX1JVTl9QSEFTRV9XQUlUSU5HX0ZPUl9JTlBVVBADEh0KGUFHRU5UX1JVTl9QSEFTRV9TVUNDRUVERUQQBBIaChZBR0VOVF9SVU5fUEhBU0VfRkFJTEVEEAUSHQoZQUdFTlRfUlVOX1BIQVNFX0NBTkNFTExFRBAGKvMBChFBZ2VudFJ1bkV2ZW50VHlwZRIkCiBBR0VOVF9SVU5fRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEiYKIkFHRU5UX1JVTl9FVkVOVF9UWVBFX1BIQVNFX0NIQU5HRUQQARIcChhBR0VOVF9SVU5fRVZFTlRfVFlQRV9MT0cQAhIiCh5BR0VOVF9SVU5fRVZFTlRfVFlQRV9UT09MX0NBTEwQAxIqCiZBR0VOVF9SVU5fRVZFTlRfVFlQRV9XQUlUSU5HX0ZPUl9JTlBVVBAEEiIKHkFHRU5UX1JVTl9FVkVOVF9UWVBFX0NPTVBMRVRFRBAFKlYKDFNvdXJjZUZpbHRlchIVChFTT1VSQ0VfRklMVEVSX0FMTBAAEhYKElNPVVJDRV9GSUxURVJfQ09ERRABEhcKE1NPVVJDRV9GSUxURVJfVFJBQ0UQAjKgBQoKQU9UU2VydmljZRJXCg5DcmVhdGVBZ2VudFJ1bhIhLmFvdC5hcGkudjEuQ3JlYXRlQWdlbnRSdW5SZXF1ZXN0GiIuYW90LmFwaS52MS5DcmVhdGVBZ2VudFJ1blJlc3BvbnNlEkMKC0dldEFnZW50UnVuEh4uYW90LmFwaS52MS5HZXRBZ2VudFJ1blJlcXVlc3QaFC5hb3QuYXBpLnYxLkFnZW50UnVuElQKDUxpc3RBZ2VudFJ1bnMSIC5hb3QuYXBpLnYxLkxpc3RBZ2VudFJ1bnNSZXF1ZXN0GiEuYW90LmFwaS52MS5MaXN0QWdlbnRSdW5zUmVzcG9uc2USTgoNV2F0Y2hBZ2VudFJ1bhIgLmFvdC5hcGkudjEuV2F0Y2hBZ2VudFJ1blJlcXVlc3QaGS5hb3QuYXBpLnYxLkFnZW50UnVuRXZlbnQwARJXCg5DYW5jZWxBZ2VudFJ1bhIhLmFvdC5hcGkudjEuQ2FuY2VsQWdlbnRSdW5SZXF1ZXN0GiIuYW90LmFwaS52MS5DYW5jZWxBZ2VudFJ1blJlc3BvbnNlElcKDlNlbmRIdW1hbklucHV0EiEuYW90LmFwaS52MS5TZW5kSHVtYW5JbnB1dFJlcXVlc3QaIi5hb3QuYXBpLnYxLlNlbmRIdW1hbklucHV0UmVzcG9uc2USQwoLR2V0UnVuR3JhcGgSHi5hb3QuYXBpLnYxLkdldFJ1bkdyYXBoUmVxdWVzdBoULmFvdC5hcGkudjEuUnVuR3JhcGgSVwoOU2VhcmNoUGFzdFdvcmsSIS5hb3QuYXBpLnYxLlNlYXJjaFBhc3RXb3JrUmVxdWVzdBoiLmFvdC5hcGkudjEuU2VhcmNoUGFzdFdvcmtSZXNwb25zZUItWitnaXRodWIuY29tL3VuY3dvcmtzL2FvdC9nZW4vZ28vYXBpL3YxO2FwaXYxYgZwcm90bzM", [file_buf_validate_validate, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message aot.api.v1.AgentRun
@@ -50,6 +50,13 @@ export type AgentRun = Message<"aot.api.v1.AgentRun"> & {
    * @generated from field: google.protobuf.Timestamp updated_at = 6;
    */
   updatedAt?: Timestamp;
+
+  /**
+   * Children contains the names of junior AgentRuns spawned by this run.
+   *
+   * @generated from field: repeated string children = 7;
+   */
+  children: string[];
 };
 
 /**
@@ -165,6 +172,41 @@ export type AgentRunSpec = Message<"aot.api.v1.AgentRunSpec"> & {
    * @generated from field: string workspace_name = 13;
    */
   workspaceName: string;
+
+  /**
+   * ParentRunID links this junior run to its parent senior run.
+   *
+   * @generated from field: string parent_run_id = 15;
+   */
+  parentRunId: string;
+
+  /**
+   * OrchestrationMode controls decomposition behavior: single, auto, or manual.
+   *
+   * @generated from field: aot.api.v1.OrchestrationMode orchestration_mode = 16;
+   */
+  orchestrationMode: OrchestrationMode;
+
+  /**
+   * Orchestration defines the manual orchestration task list.
+   *
+   * @generated from field: aot.api.v1.Orchestration orchestration = 17;
+   */
+  orchestration?: Orchestration;
+
+  /**
+   * SpecRunID groups all runs from a single spec execution.
+   *
+   * @generated from field: string spec_run_id = 18;
+   */
+  specRunId: string;
+
+  /**
+   * DisplayName is a human-readable name generated from the prompt by the LLM.
+   *
+   * @generated from field: string display_name = 19;
+   */
+  displayName: string;
 };
 
 /**
@@ -173,6 +215,54 @@ export type AgentRunSpec = Message<"aot.api.v1.AgentRunSpec"> & {
  */
 export const AgentRunSpecSchema: GenMessage<AgentRunSpec> = /*@__PURE__*/
   messageDesc(file_aot_api_v1_api, 2);
+
+/**
+ * OrchestrationTask defines a single sub-task in a manual orchestration.
+ *
+ * @generated from message aot.api.v1.OrchestrationTask
+ */
+export type OrchestrationTask = Message<"aot.api.v1.OrchestrationTask"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string prompt = 2;
+   */
+  prompt: string;
+
+  /**
+   * @generated from field: repeated string repo_urls = 3;
+   */
+  repoUrls: string[];
+};
+
+/**
+ * Describes the message aot.api.v1.OrchestrationTask.
+ * Use `create(OrchestrationTaskSchema)` to create a new message.
+ */
+export const OrchestrationTaskSchema: GenMessage<OrchestrationTask> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 3);
+
+/**
+ * Orchestration contains the task list for manual orchestration mode.
+ *
+ * @generated from message aot.api.v1.Orchestration
+ */
+export type Orchestration = Message<"aot.api.v1.Orchestration"> & {
+  /**
+   * @generated from field: repeated aot.api.v1.OrchestrationTask tasks = 1;
+   */
+  tasks: OrchestrationTask[];
+};
+
+/**
+ * Describes the message aot.api.v1.Orchestration.
+ * Use `create(OrchestrationSchema)` to create a new message.
+ */
+export const OrchestrationSchema: GenMessage<Orchestration> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 4);
 
 /**
  * @generated from message aot.api.v1.AgentRunStatus
@@ -249,7 +339,7 @@ export type AgentRunStatus = Message<"aot.api.v1.AgentRunStatus"> & {
  * Use `create(AgentRunStatusSchema)` to create a new message.
  */
 export const AgentRunStatusSchema: GenMessage<AgentRunStatus> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 3);
+  messageDesc(file_aot_api_v1_api, 5);
 
 /**
  * @generated from message aot.api.v1.CreateAgentRunRequest
@@ -266,7 +356,7 @@ export type CreateAgentRunRequest = Message<"aot.api.v1.CreateAgentRunRequest"> 
  * Use `create(CreateAgentRunRequestSchema)` to create a new message.
  */
 export const CreateAgentRunRequestSchema: GenMessage<CreateAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 4);
+  messageDesc(file_aot_api_v1_api, 6);
 
 /**
  * @generated from message aot.api.v1.CreateAgentRunResponse
@@ -283,7 +373,7 @@ export type CreateAgentRunResponse = Message<"aot.api.v1.CreateAgentRunResponse"
  * Use `create(CreateAgentRunResponseSchema)` to create a new message.
  */
 export const CreateAgentRunResponseSchema: GenMessage<CreateAgentRunResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 5);
+  messageDesc(file_aot_api_v1_api, 7);
 
 /**
  * @generated from message aot.api.v1.GetAgentRunRequest
@@ -300,7 +390,7 @@ export type GetAgentRunRequest = Message<"aot.api.v1.GetAgentRunRequest"> & {
  * Use `create(GetAgentRunRequestSchema)` to create a new message.
  */
 export const GetAgentRunRequestSchema: GenMessage<GetAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 6);
+  messageDesc(file_aot_api_v1_api, 8);
 
 /**
  * @generated from message aot.api.v1.ListAgentRunsRequest
@@ -320,6 +410,20 @@ export type ListAgentRunsRequest = Message<"aot.api.v1.ListAgentRunsRequest"> & 
    * @generated from field: string cursor = 3;
    */
   cursor: string;
+
+  /**
+   * SpecRunID filters runs belonging to a specific spec execution.
+   *
+   * @generated from field: string spec_run_id = 4;
+   */
+  specRunId: string;
+
+  /**
+   * ParentRunID filters runs that are children of a specific parent.
+   *
+   * @generated from field: string parent_run_id = 5;
+   */
+  parentRunId: string;
 };
 
 /**
@@ -327,7 +431,7 @@ export type ListAgentRunsRequest = Message<"aot.api.v1.ListAgentRunsRequest"> & 
  * Use `create(ListAgentRunsRequestSchema)` to create a new message.
  */
 export const ListAgentRunsRequestSchema: GenMessage<ListAgentRunsRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 7);
+  messageDesc(file_aot_api_v1_api, 9);
 
 /**
  * @generated from message aot.api.v1.ListAgentRunsResponse
@@ -349,7 +453,7 @@ export type ListAgentRunsResponse = Message<"aot.api.v1.ListAgentRunsResponse"> 
  * Use `create(ListAgentRunsResponseSchema)` to create a new message.
  */
 export const ListAgentRunsResponseSchema: GenMessage<ListAgentRunsResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 8);
+  messageDesc(file_aot_api_v1_api, 10);
 
 /**
  * @generated from message aot.api.v1.WatchAgentRunRequest
@@ -366,7 +470,7 @@ export type WatchAgentRunRequest = Message<"aot.api.v1.WatchAgentRunRequest"> & 
  * Use `create(WatchAgentRunRequestSchema)` to create a new message.
  */
 export const WatchAgentRunRequestSchema: GenMessage<WatchAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 9);
+  messageDesc(file_aot_api_v1_api, 11);
 
 /**
  * @generated from message aot.api.v1.AgentRunEvent
@@ -398,7 +502,7 @@ export type AgentRunEvent = Message<"aot.api.v1.AgentRunEvent"> & {
  * Use `create(AgentRunEventSchema)` to create a new message.
  */
 export const AgentRunEventSchema: GenMessage<AgentRunEvent> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 10);
+  messageDesc(file_aot_api_v1_api, 12);
 
 /**
  * @generated from message aot.api.v1.CancelAgentRunRequest
@@ -415,7 +519,7 @@ export type CancelAgentRunRequest = Message<"aot.api.v1.CancelAgentRunRequest"> 
  * Use `create(CancelAgentRunRequestSchema)` to create a new message.
  */
 export const CancelAgentRunRequestSchema: GenMessage<CancelAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 11);
+  messageDesc(file_aot_api_v1_api, 13);
 
 /**
  * @generated from message aot.api.v1.CancelAgentRunResponse
@@ -432,7 +536,7 @@ export type CancelAgentRunResponse = Message<"aot.api.v1.CancelAgentRunResponse"
  * Use `create(CancelAgentRunResponseSchema)` to create a new message.
  */
 export const CancelAgentRunResponseSchema: GenMessage<CancelAgentRunResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 12);
+  messageDesc(file_aot_api_v1_api, 14);
 
 /**
  * @generated from message aot.api.v1.SendHumanInputRequest
@@ -454,7 +558,7 @@ export type SendHumanInputRequest = Message<"aot.api.v1.SendHumanInputRequest"> 
  * Use `create(SendHumanInputRequestSchema)` to create a new message.
  */
 export const SendHumanInputRequestSchema: GenMessage<SendHumanInputRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 13);
+  messageDesc(file_aot_api_v1_api, 15);
 
 /**
  * @generated from message aot.api.v1.SendHumanInputResponse
@@ -471,7 +575,278 @@ export type SendHumanInputResponse = Message<"aot.api.v1.SendHumanInputResponse"
  * Use `create(SendHumanInputResponseSchema)` to create a new message.
  */
 export const SendHumanInputResponseSchema: GenMessage<SendHumanInputResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 14);
+  messageDesc(file_aot_api_v1_api, 16);
+
+/**
+ * @generated from message aot.api.v1.GetRunGraphRequest
+ */
+export type GetRunGraphRequest = Message<"aot.api.v1.GetRunGraphRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message aot.api.v1.GetRunGraphRequest.
+ * Use `create(GetRunGraphRequestSchema)` to create a new message.
+ */
+export const GetRunGraphRequestSchema: GenMessage<GetRunGraphRequest> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 17);
+
+/**
+ * @generated from message aot.api.v1.RunGraphNode
+ */
+export type RunGraphNode = Message<"aot.api.v1.RunGraphNode"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: aot.api.v1.AgentRunPhase phase = 2;
+   */
+  phase: AgentRunPhase;
+
+  /**
+   * @generated from field: string role = 3;
+   */
+  role: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp started_at = 4;
+   */
+  startedAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp completed_at = 5;
+   */
+  completedAt?: Timestamp;
+};
+
+/**
+ * Describes the message aot.api.v1.RunGraphNode.
+ * Use `create(RunGraphNodeSchema)` to create a new message.
+ */
+export const RunGraphNodeSchema: GenMessage<RunGraphNode> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 18);
+
+/**
+ * @generated from message aot.api.v1.RunGraphEdge
+ */
+export type RunGraphEdge = Message<"aot.api.v1.RunGraphEdge"> & {
+  /**
+   * @generated from field: string parent = 1;
+   */
+  parent: string;
+
+  /**
+   * @generated from field: string child = 2;
+   */
+  child: string;
+};
+
+/**
+ * Describes the message aot.api.v1.RunGraphEdge.
+ * Use `create(RunGraphEdgeSchema)` to create a new message.
+ */
+export const RunGraphEdgeSchema: GenMessage<RunGraphEdge> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 19);
+
+/**
+ * @generated from message aot.api.v1.RunGraph
+ */
+export type RunGraph = Message<"aot.api.v1.RunGraph"> & {
+  /**
+   * @generated from field: repeated aot.api.v1.RunGraphNode nodes = 1;
+   */
+  nodes: RunGraphNode[];
+
+  /**
+   * @generated from field: repeated aot.api.v1.RunGraphEdge edges = 2;
+   */
+  edges: RunGraphEdge[];
+};
+
+/**
+ * Describes the message aot.api.v1.RunGraph.
+ * Use `create(RunGraphSchema)` to create a new message.
+ */
+export const RunGraphSchema: GenMessage<RunGraph> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 20);
+
+/**
+ * @generated from message aot.api.v1.SearchPastWorkRequest
+ */
+export type SearchPastWorkRequest = Message<"aot.api.v1.SearchPastWorkRequest"> & {
+  /**
+   * Natural language query string.
+   *
+   * @generated from field: string query = 1;
+   */
+  query: string;
+
+  /**
+   * Optional: filter results to a specific repository.
+   *
+   * @generated from field: string repo_url = 2;
+   */
+  repoUrl: string;
+
+  /**
+   * Optional: filter results created after this timestamp.
+   *
+   * @generated from field: google.protobuf.Timestamp created_after = 3;
+   */
+  createdAfter?: Timestamp;
+
+  /**
+   * Optional: filter results created before this timestamp.
+   *
+   * @generated from field: google.protobuf.Timestamp created_before = 4;
+   */
+  createdBefore?: Timestamp;
+
+  /**
+   * Optional: filter by source type (code, trace, or both).
+   *
+   * @generated from field: aot.api.v1.SourceFilter source_filter = 5;
+   */
+  sourceFilter: SourceFilter;
+
+  /**
+   * Maximum number of results to return (default 10, max 100).
+   *
+   * @generated from field: int32 limit = 6;
+   */
+  limit: number;
+};
+
+/**
+ * Describes the message aot.api.v1.SearchPastWorkRequest.
+ * Use `create(SearchPastWorkRequestSchema)` to create a new message.
+ */
+export const SearchPastWorkRequestSchema: GenMessage<SearchPastWorkRequest> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 21);
+
+/**
+ * @generated from message aot.api.v1.SearchPastWorkResponse
+ */
+export type SearchPastWorkResponse = Message<"aot.api.v1.SearchPastWorkResponse"> & {
+  /**
+   * @generated from field: repeated aot.api.v1.PastWorkResult results = 1;
+   */
+  results: PastWorkResult[];
+};
+
+/**
+ * Describes the message aot.api.v1.SearchPastWorkResponse.
+ * Use `create(SearchPastWorkResponseSchema)` to create a new message.
+ */
+export const SearchPastWorkResponseSchema: GenMessage<SearchPastWorkResponse> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 22);
+
+/**
+ * @generated from message aot.api.v1.PastWorkResult
+ */
+export type PastWorkResult = Message<"aot.api.v1.PastWorkResult"> & {
+  /**
+   * @generated from field: string chunk_text = 1;
+   */
+  chunkText: string;
+
+  /**
+   * "code" or "trace"
+   *
+   * @generated from field: string source_type = 2;
+   */
+  sourceType: string;
+
+  /**
+   * @generated from field: double similarity_score = 3;
+   */
+  similarityScore: number;
+
+  /**
+   * @generated from field: string run_id = 4;
+   */
+  runId: string;
+
+  /**
+   * @generated from field: string file_path = 5;
+   */
+  filePath: string;
+
+  /**
+   * @generated from field: string language = 6;
+   */
+  language: string;
+
+  /**
+   * @generated from field: string node_type = 7;
+   */
+  nodeType: string;
+
+  /**
+   * @generated from field: string chunk_type = 8;
+   */
+  chunkType: string;
+
+  /**
+   * @generated from field: string severity = 9;
+   */
+  severity: string;
+
+  /**
+   * @generated from field: string repo_url = 10;
+   */
+  repoUrl: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 11;
+   */
+  createdAt?: Timestamp;
+};
+
+/**
+ * Describes the message aot.api.v1.PastWorkResult.
+ * Use `create(PastWorkResultSchema)` to create a new message.
+ */
+export const PastWorkResultSchema: GenMessage<PastWorkResult> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 23);
+
+/**
+ * OrchestrationMode specifies how an agent run handles decomposition.
+ *
+ * @generated from enum aot.api.v1.OrchestrationMode
+ */
+export enum OrchestrationMode {
+  /**
+   * @generated from enum value: ORCHESTRATION_MODE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: ORCHESTRATION_MODE_SINGLE = 1;
+   */
+  SINGLE = 1,
+
+  /**
+   * @generated from enum value: ORCHESTRATION_MODE_AUTO = 2;
+   */
+  AUTO = 2,
+
+  /**
+   * @generated from enum value: ORCHESTRATION_MODE_MANUAL = 3;
+   */
+  MANUAL = 3,
+}
+
+/**
+ * Describes the enum aot.api.v1.OrchestrationMode.
+ */
+export const OrchestrationModeSchema: GenEnum<OrchestrationMode> = /*@__PURE__*/
+  enumDesc(file_aot_api_v1_api, 0);
 
 /**
  * Backend specifies the execution backend for an agent run.
@@ -504,7 +879,7 @@ export enum Backend {
  * Describes the enum aot.api.v1.Backend.
  */
 export const BackendSchema: GenEnum<Backend> = /*@__PURE__*/
-  enumDesc(file_aot_api_v1_api, 0);
+  enumDesc(file_aot_api_v1_api, 1);
 
 /**
  * AgentRunPhase represents the lifecycle phase of an agent run.
@@ -552,7 +927,7 @@ export enum AgentRunPhase {
  * Describes the enum aot.api.v1.AgentRunPhase.
  */
 export const AgentRunPhaseSchema: GenEnum<AgentRunPhase> = /*@__PURE__*/
-  enumDesc(file_aot_api_v1_api, 1);
+  enumDesc(file_aot_api_v1_api, 2);
 
 /**
  * @generated from enum aot.api.v1.AgentRunEventType
@@ -593,7 +968,35 @@ export enum AgentRunEventType {
  * Describes the enum aot.api.v1.AgentRunEventType.
  */
 export const AgentRunEventTypeSchema: GenEnum<AgentRunEventType> = /*@__PURE__*/
-  enumDesc(file_aot_api_v1_api, 2);
+  enumDesc(file_aot_api_v1_api, 3);
+
+/**
+ * SourceFilter controls which knowledge base indexes are searched.
+ *
+ * @generated from enum aot.api.v1.SourceFilter
+ */
+export enum SourceFilter {
+  /**
+   * @generated from enum value: SOURCE_FILTER_ALL = 0;
+   */
+  ALL = 0,
+
+  /**
+   * @generated from enum value: SOURCE_FILTER_CODE = 1;
+   */
+  CODE = 1,
+
+  /**
+   * @generated from enum value: SOURCE_FILTER_TRACE = 2;
+   */
+  TRACE = 2,
+}
+
+/**
+ * Describes the enum aot.api.v1.SourceFilter.
+ */
+export const SourceFilterSchema: GenEnum<SourceFilter> = /*@__PURE__*/
+  enumDesc(file_aot_api_v1_api, 4);
 
 /**
  * AOTService is the main API for clients (Web UI, CLI) to interact with the Control Plane.
@@ -660,6 +1063,26 @@ export const AOTService: GenService<{
     methodKind: "unary";
     input: typeof SendHumanInputRequestSchema;
     output: typeof SendHumanInputResponseSchema;
+  },
+  /**
+   * GetRunGraph returns the tree of runs for a spec execution.
+   *
+   * @generated from rpc aot.api.v1.AOTService.GetRunGraph
+   */
+  getRunGraph: {
+    methodKind: "unary";
+    input: typeof GetRunGraphRequestSchema;
+    output: typeof RunGraphSchema;
+  },
+  /**
+   * SearchPastWork searches the knowledge base for relevant past work using natural language.
+   *
+   * @generated from rpc aot.api.v1.AOTService.SearchPastWork
+   */
+  searchPastWork: {
+    methodKind: "unary";
+    input: typeof SearchPastWorkRequestSchema;
+    output: typeof SearchPastWorkResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_aot_api_v1_api, 0);

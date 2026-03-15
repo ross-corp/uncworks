@@ -34,12 +34,14 @@ export default function RunDetail({
   onCancel,
   onClone,
   onSendInput,
+  onRefresh,
 }: {
   run: AgentRun;
   onClose: () => void;
   onCancel: (id: string) => void;
   onClone: (run: AgentRun) => void;
   onSendInput: (id: string, input: string) => void;
+  onRefresh?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("info");
   const [humanInput, setHumanInput] = useState("");
@@ -48,8 +50,9 @@ export default function RunDetail({
   const hasPod = !!run.status.podName;
   const hasOrchestration = (run.children && run.children.length > 0) || !!run.spec.parentRunId;
 
-  const streamRunId = isActive ? run.id : null;
-  const { logLines, isStreaming } = useWatchRun(streamRunId);
+  const isWatchable = run.status.phase === "pending" || isActive;
+  const streamRunId = isWatchable ? run.id : null;
+  const { logLines, isStreaming } = useWatchRun(streamRunId, onRefresh ? () => onRefresh() : undefined);
 
   // Escape closes detail
   useEffect(() => {

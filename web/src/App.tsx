@@ -282,6 +282,7 @@ function Dashboard() {
               onCancel={handleCancel}
               onClone={handleClone}
               onSendInput={handleSendInput}
+              onRefresh={fetchRuns}
             />
           ) : (
             <div />

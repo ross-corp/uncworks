@@ -2,11 +2,20 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"math/big"
+	"net/http"
+	"os"
+	"regexp"
 	"sort"
+	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -17,6 +26,8 @@ import (
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
+	"github.com/uncworks/aot/internal/brain"
+	"github.com/uncworks/aot/internal/embeddings"
 	"github.com/uncworks/aot/internal/eventbus"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
@@ -29,14 +40,24 @@ type AOTServiceHandler struct {
 	TemporalClient temporalclient.Client
 	EventBus       eventbus.EventBus
 	Namespace      string
+	LiteLLMBaseURL string
+
+	// Knowledge system (optional — nil means search is unavailable)
+	BrainSearcher *brain.Searcher
+	Embedder      *embeddings.Embedder
 }
 
 // NewAOTServiceHandler creates a new AOTService handler.
 func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namespace string) *AOTServiceHandler {
+	litellmURL := os.Getenv("LITELLM_BASE_URL")
+	if litellmURL == "" {
+		litellmURL = "http://litellm.aot.svc.cluster.local:4000"
+	}
 	return &AOTServiceHandler{
-		K8sClient: k8sClient,
-		EventBus:  bus,
-		Namespace: namespace,
+		K8sClient:      k8sClient,
+		EventBus:       bus,
+		Namespace:      namespace,
+		LiteLLMBaseURL: litellmURL,
 	}
 }
 
@@ -50,10 +71,14 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("generate name: %w", err))
 	}
 
+	// Generate a human-readable display name from the prompt via LLM.
+	displayName := s.generateDisplayName(ctx, req.Msg.Spec.Prompt)
+
 	crd := &aotv1alpha1.AgentRun{}
 	crd.Name = name
 	crd.Namespace = s.Namespace
 	crd.Spec = specProtoToCRD(req.Msg.Spec)
+	crd.Spec.DisplayName = displayName
 	crd.Status.Phase = aotv1alpha1.AgentRunPhasePending
 	crd.Status.Message = "Queued"
 
@@ -321,6 +346,82 @@ func (s *AOTServiceHandler) SendHumanInput(ctx context.Context, req *connect.Req
 	return connect.NewResponse(&apiv1.SendHumanInputResponse{Accepted: true}), nil
 }
 
+// SearchPastWork searches the knowledge base for relevant past work using natural language.
+func (s *AOTServiceHandler) SearchPastWork(ctx context.Context, req *connect.Request[apiv1.SearchPastWorkRequest]) (*connect.Response[apiv1.SearchPastWorkResponse], error) {
+	if req.Msg.Query == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query is required"))
+	}
+
+	if s.BrainSearcher == nil || s.Embedder == nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("knowledge system not configured"))
+	}
+
+	// Embed the query
+	queryVec, err := s.Embedder.Embed(ctx, req.Msg.Query)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("embed query: %w", err))
+	}
+
+	// Build search query
+	limit := int(req.Msg.Limit)
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	sourceFilter := ""
+	switch req.Msg.SourceFilter {
+	case apiv1.SourceFilter_SOURCE_FILTER_CODE:
+		sourceFilter = "code"
+	case apiv1.SourceFilter_SOURCE_FILTER_TRACE:
+		sourceFilter = "trace"
+	}
+
+	var createdAfter, createdBefore *time.Time
+	if req.Msg.CreatedAfter != nil {
+		t := req.Msg.CreatedAfter.AsTime()
+		createdAfter = &t
+	}
+	if req.Msg.CreatedBefore != nil {
+		t := req.Msg.CreatedBefore.AsTime()
+		createdBefore = &t
+	}
+
+	results, err := s.BrainSearcher.Search(ctx, brain.SearchQuery{
+		QueryVec:      queryVec,
+		RepoURL:       req.Msg.RepoUrl,
+		SourceFilter:  sourceFilter,
+		CreatedAfter:  createdAfter,
+		CreatedBefore: createdBefore,
+		Limit:         limit,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("search: %w", err))
+	}
+
+	var protoResults []*apiv1.PastWorkResult
+	for _, r := range results {
+		pr := &apiv1.PastWorkResult{
+			ChunkText:       r.ChunkText,
+			SourceType:      r.SourceType,
+			SimilarityScore: r.BoostedScore,
+			RunId:           r.AgentRunID,
+			FilePath:        r.FilePath,
+			Language:        r.Language,
+			NodeType:        r.NodeType,
+			ChunkType:       r.ChunkType,
+			Severity:        r.Severity,
+			RepoUrl:         r.RepoURL,
+			CreatedAt:       timestamppb.New(r.CreatedAt),
+		}
+		protoResults = append(protoResults, pr)
+	}
+
+	return connect.NewResponse(&apiv1.SearchPastWorkResponse{Results: protoResults}), nil
+}
+
 // isTerminalPhase returns true for phases that indicate a completed run.
 func isTerminalPhase(phase apiv1.AgentRunPhase) bool {
 	switch phase {
@@ -344,6 +445,92 @@ func generateRunName() (string, error) {
 		suffix[i] = chars[n.Int64()]
 	}
 	return fmt.Sprintf("ar-%s", string(suffix)), nil
+}
+
+// displayNameRegex validates generated display names.
+var displayNameRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{2,48}[a-z0-9]$`)
+
+// generateDisplayName calls the LiteLLM proxy to generate a short kebab-case
+// display name from the run's prompt. Returns an empty string on any failure.
+func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt string) string {
+	if s.LiteLLMBaseURL == "" || prompt == "" {
+		return ""
+	}
+
+	// Truncate prompt to 200 characters.
+	truncated := prompt
+	if len(truncated) > 200 {
+		truncated = truncated[:200]
+	}
+
+	reqBody := map[string]interface{}{
+		"model": "default",
+		"messages": []map[string]string{
+			{"role": "system", "content": "Generate a short kebab-case name (3-5 words) for this coding task. Output ONLY the name, nothing else."},
+			{"role": "user", "content": truncated},
+		},
+		"max_tokens": 20,
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		log.Printf("WARNING: failed to marshal display name request: %v", err)
+		return ""
+	}
+
+	llmCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	url := strings.TrimRight(s.LiteLLMBaseURL, "/") + "/v1/chat/completions"
+	httpReq, err := http.NewRequestWithContext(llmCtx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		log.Printf("WARNING: failed to create display name request: %v", err)
+		return ""
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		log.Printf("WARNING: display name LLM call failed: %v", err)
+		return ""
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("WARNING: display name LLM returned status %d", resp.StatusCode)
+		return ""
+	}
+
+	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		log.Printf("WARNING: failed to read display name response: %v", err)
+		return ""
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(respBytes, &result); err != nil {
+		log.Printf("WARNING: failed to parse display name response: %v", err)
+		return ""
+	}
+
+	if len(result.Choices) == 0 {
+		log.Printf("WARNING: display name LLM returned no choices")
+		return ""
+	}
+
+	name := strings.TrimSpace(strings.ToLower(result.Choices[0].Message.Content))
+
+	if !displayNameRegex.MatchString(name) {
+		log.Printf("WARNING: generated display name %q failed validation", name)
+		return ""
+	}
+
+	return name
 }
 
 // protoBackendToCRD maps the proto Backend enum to the CRD BackendType.
@@ -395,6 +582,7 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 		ParentRunID:       spec.ParentRunId,
 		OrchestrationMode: protoOrchModeToCRD(spec.OrchestrationMode),
 		SpecRunID:         spec.SpecRunId,
+		DisplayName:       spec.DisplayName,
 	}
 	if spec.Orchestration != nil && len(spec.Orchestration.Tasks) > 0 {
 		orch := &aotv1alpha1.Orchestration{}
@@ -459,6 +647,7 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		ParentRunId:       crd.Spec.ParentRunID,
 		OrchestrationMode: crdOrchModeToProto(crd.Spec.OrchestrationMode),
 		SpecRunId:         crd.Spec.SpecRunID,
+		DisplayName:       crd.Spec.DisplayName,
 	}
 	if crd.Spec.Orchestration != nil {
 		orch := &apiv1.Orchestration{}

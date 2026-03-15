@@ -154,6 +154,16 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 
 	g.process = proc
 
+	// Write an initial trace span so the traces tab has data immediately.
+	appendTraceSpan(TraceSpan{
+		ID:        uuid.New().String(),
+		Name:      "agent_started",
+		Type:      "lifecycle",
+		StartTime: time.Now(),
+		EndTime:   time.Now(),
+		Metadata:  map[string]interface{}{"prompt": req.Msg.Prompt, "agentRunId": req.Msg.AgentRunId},
+	})
+
 	// Monitor process in background
 	go g.monitorProcess(req.Msg.AgentRunId)
 
@@ -161,7 +171,7 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 }
 
 func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
-	args := []string{"-p", req.Prompt}
+	args := []string{"-p", req.Prompt, "--verbose"}
 	// Use model from env if configured
 	if model := os.Getenv("PI_MODEL"); model != "" {
 		args = append(args, "--model", model)
@@ -172,8 +182,10 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 		cmd.Dir = "/workspace"
 	}
 
-	// Inherit current environment and add request-specific vars on top
-	cmd.Env = os.Environ()
+	// Inherit current environment and add request-specific vars on top.
+	// Set PI_LOG_LEVEL=debug so pi-coding-agent emits tool call and
+	// LLM response details to stdout where the sidecar can capture them.
+	cmd.Env = append(os.Environ(), "PI_LOG_LEVEL=debug")
 	for k, v := range req.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -237,6 +249,8 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 		defer wg.Done()
 		defer func() { _ = reader.Close() }()
 		scanner := bufio.NewScanner(reader)
+		// Allow up to 256KB per line for verbose tool output.
+		scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
 		for scanner.Scan() {
 			line := make([]byte, len(scanner.Bytes()))
 			copy(line, scanner.Bytes())
@@ -246,6 +260,12 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 				proc.mu.Lock()
 				_, _ = proc.logFile.Write(append(line, '\n'))
 				proc.mu.Unlock()
+			}
+
+			// Heuristic: detect tool call lines from pi-coding-agent stdout
+			// and record trace spans even if the extension doesn't notify us.
+			if outputType == agentv1.OutputType_OUTPUT_TYPE_STDOUT {
+				maybeCaptureStdoutSpan(string(line))
 			}
 
 			output := &agentv1.AgentOutput{
@@ -387,6 +407,13 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 	case agentv1.EventType_EVENT_TYPE_STARTED:
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING
 		log.Printf("Agent resumed RUNNING")
+		appendTraceSpan(TraceSpan{
+			ID:        uuid.New().String(),
+			Name:      "agent_resumed",
+			Type:      "lifecycle",
+			StartTime: now,
+			EndTime:   now,
+		})
 
 	case agentv1.EventType_EVENT_TYPE_TOOL_CALL:
 		// 10.1 + 10.2: Record tool call span with git diff
@@ -454,6 +481,59 @@ func (g *Gateway) StopAgent(_ context.Context, req *connect.Request[agentv1.Stop
 	}
 
 	return connect.NewResponse(&agentv1.StopAgentResponse{Stopped: true}), nil
+}
+
+// --- Stdout-based span detection ---
+
+// stdoutToolCallPrefixes are line prefixes that indicate pi-coding-agent is
+// invoking a tool. Different versions of pi emit these in slightly different
+// formats, so we check several common patterns.
+var stdoutToolCallPrefixes = []string{
+	"⚡ Running tool:",  // common in pi verbose output
+	"> Running tool:",  // alternate format
+	"Tool call:",       // generic
+	"[tool_call]",      // structured log format
+	"Running command:", // shell/bash tool
+}
+
+// maybeCaptureStdoutSpan inspects a single stdout line and, if it looks like
+// a tool invocation, records a trace span. This is a fallback for when the
+// extension doesn't send NotifyEvent TOOL_CALL events.
+func maybeCaptureStdoutSpan(line string) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return
+	}
+
+	for _, prefix := range stdoutToolCallPrefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			toolInfo := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+			now := time.Now()
+			appendTraceSpan(TraceSpan{
+				ID:        uuid.New().String(),
+				Name:      toolInfo,
+				Type:      "tool",
+				StartTime: now,
+				EndTime:   now,
+				Metadata:  map[string]interface{}{"source": "stdout", "raw": trimmed},
+			})
+			return
+		}
+	}
+
+	// Also detect LLM response lines from stdout
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "[llm]") || strings.HasPrefix(lower, "llm response:") {
+		now := time.Now()
+		appendTraceSpan(TraceSpan{
+			ID:        uuid.New().String(),
+			Name:      "llm_response",
+			Type:      "llm",
+			StartTime: now,
+			EndTime:   now,
+			Metadata:  map[string]interface{}{"source": "stdout", "raw": trimmed},
+		})
+	}
 }
 
 // --- Trace helpers (Section 10) ---
