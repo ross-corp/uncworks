@@ -159,25 +159,19 @@
     border-radius: inherit;
   }
 
-  /* Phosphor bloom glow on text */
+  /* Phosphor bloom glow on text — subtle */
   .fx-glow {
-    text-shadow:
-      0 0 4px var(--glow-primary),
-      0 0 12px var(--glow-primary);
+    text-shadow: 0 0 3px var(--glow-primary);
   }
 
-  /* Amber phosphor glow */
+  /* Amber phosphor glow — subtle */
   .fx-glow-amber {
-    text-shadow:
-      0 0 4px var(--glow-primary),
-      0 0 12px var(--glow-primary);
+    text-shadow: 0 0 3px var(--glow-primary);
   }
 
-  /* Danger glow */
+  /* Danger glow — subtle */
   .fx-glow-danger {
-    text-shadow:
-      0 0 4px oklch(0.55 0.22 25 / 0.5),
-      0 0 12px oklch(0.55 0.22 25 / 0.5);
+    text-shadow: 0 0 3px oklch(0.55 0.22 25 / 0.4);
   }
 
   /* Box glow effects */
