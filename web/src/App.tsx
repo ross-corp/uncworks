@@ -240,7 +240,7 @@ function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen" style={{ backgroundColor: "var(--color-bg)", color: "var(--color-fg)" }}>
+    <div className="flex h-screen" style={{ backgroundColor: "var(--unc-bg)", color: "var(--unc-fg)" }}>
       {/* Icon Rail - 48px fixed left */}
       <IconRail
         activeFilter={statusFilter}
@@ -255,11 +255,11 @@ function Dashboard() {
           className="flex items-center justify-between px-4 shrink-0"
           style={{
             height: "48px",
-            borderBottom: "1px solid var(--color-border)",
+            borderBottom: "1px solid var(--unc-border)",
           }}
         >
-          <span className="text-sm font-semibold" style={{ color: "var(--color-fg)" }}>AOT</span>
-          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+          <span className="text-sm font-semibold" style={{ color: "var(--unc-fg)" }}>AOT</span>
+          <span className="text-xs" style={{ color: "var(--unc-muted)" }}>
             Cmd+K search · j/k navigate · n new run
           </span>
         </header>

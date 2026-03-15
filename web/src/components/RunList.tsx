@@ -1,5 +1,4 @@
 import type { AgentRun } from "../types/agent-run";
-import { getRunLabel } from "../lib/runLabel";
 
 interface RunListProps {
   runs: AgentRun[];
@@ -10,12 +9,12 @@ interface RunListProps {
 }
 
 const PHASE_COLORS: Record<string, string> = {
-  running: "var(--color-active, #3b82f6)",
-  waiting_for_input: "var(--color-warning, #f59e0b)",
-  pending: "var(--color-neutral, #6b7280)",
-  succeeded: "var(--color-success, #22c55e)",
-  failed: "var(--color-error, #ef4444)",
-  cancelled: "var(--color-neutral, #6b7280)",
+  running: "var(--unc-active, #3b82f6)",
+  waiting_for_input: "var(--unc-warning, #f59e0b)",
+  pending: "var(--unc-neutral, #6b7280)",
+  succeeded: "var(--unc-success, #22c55e)",
+  failed: "var(--unc-error, #ef4444)",
+  cancelled: "var(--unc-neutral, #6b7280)",
 };
 
 function formatAge(iso: string): string {
@@ -37,7 +36,7 @@ function repoName(url: string): string {
 export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: RunListProps) {
   if (loading) {
     return (
-      <div data-testid="run-list" className="flex h-full items-center justify-center text-sm" style={{ color: "var(--color-muted)" }}>
+      <div data-testid="run-list" className="flex h-full items-center justify-center text-sm" style={{ color: "var(--unc-muted)" }}>
         Loading...
       </div>
     );
@@ -45,7 +44,7 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
 
   if (runs.length === 0) {
     return (
-      <div data-testid="run-list" className="flex h-full items-center justify-center text-sm" style={{ color: "var(--color-muted)" }}>
+      <div data-testid="run-list" className="flex h-full items-center justify-center text-sm" style={{ color: "var(--unc-muted)" }}>
         No runs
       </div>
     );
@@ -62,8 +61,8 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
             style={{
               height: "28px",
               fontSize: "11px",
-              color: "var(--color-muted)",
-              borderBottom: "1px solid var(--color-border)",
+              color: "var(--unc-muted)",
+              borderBottom: "1px solid var(--unc-border)",
             }}
           >
             <th style={{ width: "20px", padding: "0 4px" }}></th>
@@ -94,12 +93,12 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                   lineHeight: "1.4",
                   cursor: "pointer",
                   backgroundColor: isSelected
-                    ? "color-mix(in srgb, var(--color-accent) 10%, transparent)"
+                    ? "color-mix(in srgb, var(--unc-accent) 10%, transparent)"
                     : isEven
-                    ? "color-mix(in srgb, var(--color-muted) 5%, transparent)"
+                    ? "color-mix(in srgb, var(--unc-muted) 5%, transparent)"
                     : "transparent",
-                  borderLeft: isSelected ? "2px solid var(--color-accent)" : "2px solid transparent",
-                  color: "var(--color-fg)",
+                  borderLeft: isSelected ? "2px solid var(--unc-accent)" : "2px solid transparent",
+                  color: "var(--unc-fg)",
                 }}
               >
                 <td style={{ padding: "0 4px", textAlign: "center" }}>
@@ -109,7 +108,7 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                       width: "8px",
                       height: "8px",
                       borderRadius: "50%",
-                      backgroundColor: PHASE_COLORS[run.status.phase] ?? "var(--color-neutral)",
+                      backgroundColor: PHASE_COLORS[run.status.phase] ?? "var(--unc-neutral)",
                       animation: isRunning ? "pulse 2s infinite" : "none",
                     }}
                   />
@@ -120,13 +119,18 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
+                    fontFamily: "monospace",
                   }}
                 >
-                  <span style={{ fontSize: "13px" }}>{getRunLabel(run)}</span>
-                  {run.spec.displayName && (
-                    <span style={{ fontSize: "11px", color: "var(--color-muted)", marginLeft: "6px", fontFamily: "monospace" }}>
-                      {run.id}
-                    </span>
+                  {run.spec.displayName ? (
+                    <>
+                      <span style={{ fontSize: "13px" }}>{run.spec.displayName}</span>
+                      <span style={{ fontSize: "11px", color: "var(--unc-muted)", marginLeft: "6px" }}>
+                        {run.name}
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: "13px" }}>{run.name}</span>
                   )}
                 </td>
                 <td
@@ -155,7 +159,7 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                   style={{
                     padding: "0 8px",
                     fontSize: "12px",
-                    color: PHASE_COLORS[run.status.phase] ?? "var(--color-muted)",
+                    color: PHASE_COLORS[run.status.phase] ?? "var(--unc-muted)",
                   }}
                 >
                   {run.status.phase}
@@ -165,7 +169,7 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                     padding: "0 8px",
                     textAlign: "right",
                     fontSize: "11px",
-                    color: "var(--color-muted)",
+                    color: "var(--unc-muted)",
                   }}
                 >
                   {formatAge(run.createdAt)}

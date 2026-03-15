@@ -48,8 +48,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 const TYPE_STYLES: Record<ToastType, string> = {
-  success: "border-[var(--color-success)]/30 bg-[var(--color-success)]/10 text-[var(--color-success)]",
-  error: "border-[var(--color-error)]/30 bg-[var(--color-error)]/10 text-[var(--color-error)]",
+  success: "border-[var(--unc-success)]/30 bg-[var(--unc-success)]/10 text-[var(--unc-success)]",
+  error: "border-[var(--unc-error)]/30 bg-[var(--unc-error)]/10 text-[var(--unc-error)]",
   info: "border-primary/30 bg-primary/10 text-primary",
 };
 

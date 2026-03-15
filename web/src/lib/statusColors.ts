@@ -1,7 +1,7 @@
 import type { AgentRunPhase } from "../types/agent-run";
 
 export interface StatusColorTokens {
-  /** CSS custom property for the foreground/dot color, e.g. "var(--color-success)" */
+  /** CSS custom property for the foreground/dot color, e.g. "var(--unc-success)" */
   color: string;
   /** CSS custom property for the muted/background variant */
   mutedColor: string;
@@ -11,33 +11,33 @@ export interface StatusColorTokens {
 
 const STATUS_COLOR_MAP: Record<AgentRunPhase, StatusColorTokens> = {
   succeeded: {
-    color: "var(--color-success)",
-    mutedColor: "var(--color-success-muted)",
+    color: "var(--unc-success)",
+    mutedColor: "var(--unc-success-muted)",
     semantic: "success",
   },
   running: {
-    color: "var(--color-active)",
-    mutedColor: "var(--color-active-muted)",
+    color: "var(--unc-active)",
+    mutedColor: "var(--unc-active-muted)",
     semantic: "active",
   },
   waiting_for_input: {
-    color: "var(--color-active)",
-    mutedColor: "var(--color-active-muted)",
+    color: "var(--unc-active)",
+    mutedColor: "var(--unc-active-muted)",
     semantic: "active",
   },
   pending: {
-    color: "var(--color-warning)",
-    mutedColor: "var(--color-warning-muted)",
+    color: "var(--unc-warning)",
+    mutedColor: "var(--unc-warning-muted)",
     semantic: "warning",
   },
   failed: {
-    color: "var(--color-error)",
-    mutedColor: "var(--color-error-muted)",
+    color: "var(--unc-error)",
+    mutedColor: "var(--unc-error-muted)",
     semantic: "error",
   },
   cancelled: {
-    color: "var(--color-neutral)",
-    mutedColor: "var(--color-neutral-muted)",
+    color: "var(--unc-neutral)",
+    mutedColor: "var(--unc-neutral-muted)",
     semantic: "neutral",
   },
 };

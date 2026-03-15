@@ -474,7 +474,7 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		log.Printf("WARNING: failed to marshal display name request: %v", err)
-		return ""
+		return deriveNameFromPrompt(prompt)
 	}
 
 	llmCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -484,26 +484,26 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 	httpReq, err := http.NewRequestWithContext(llmCtx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		log.Printf("WARNING: failed to create display name request: %v", err)
-		return ""
+		return deriveNameFromPrompt(prompt)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		log.Printf("WARNING: display name LLM call failed: %v", err)
-		return ""
+		log.Printf("WARNING: display name LLM call failed, using prompt fallback: %v", err)
+		return deriveNameFromPrompt(prompt)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("WARNING: display name LLM returned status %d", resp.StatusCode)
-		return ""
+		log.Printf("WARNING: display name LLM returned status %d, using prompt fallback", resp.StatusCode)
+		return deriveNameFromPrompt(prompt)
 	}
 
 	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
 		log.Printf("WARNING: failed to read display name response: %v", err)
-		return ""
+		return deriveNameFromPrompt(prompt)
 	}
 
 	var result struct {
@@ -515,21 +515,43 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 	}
 	if err := json.Unmarshal(respBytes, &result); err != nil {
 		log.Printf("WARNING: failed to parse display name response: %v", err)
-		return ""
+		return deriveNameFromPrompt(prompt)
 	}
 
 	if len(result.Choices) == 0 {
 		log.Printf("WARNING: display name LLM returned no choices")
-		return ""
+		return deriveNameFromPrompt(prompt)
 	}
 
 	name := strings.TrimSpace(strings.ToLower(result.Choices[0].Message.Content))
 
 	if !displayNameRegex.MatchString(name) {
-		log.Printf("WARNING: generated display name %q failed validation", name)
-		return ""
+		log.Printf("WARNING: generated display name %q failed validation, falling back to prompt derivation", name)
+		return deriveNameFromPrompt(prompt)
 	}
 
+	return name
+}
+
+// deriveNameFromPrompt creates a simple kebab-case name from the first 5 words
+// of a prompt. Used as a fallback when LLM-based name generation fails.
+func deriveNameFromPrompt(prompt string) string {
+	words := strings.Fields(prompt)
+	if len(words) > 5 {
+		words = words[:5]
+	}
+	name := strings.Join(words, "-")
+	name = strings.ToLower(name)
+	// Remove non-alphanumeric except hyphens
+	name = regexp.MustCompile(`[^a-z0-9-]`).ReplaceAllString(name, "")
+	name = regexp.MustCompile(`-+`).ReplaceAllString(name, "-")
+	name = strings.Trim(name, "-")
+	if len(name) > 50 {
+		name = name[:50]
+	}
+	if name == "" {
+		return ""
+	}
 	return name
 }
 

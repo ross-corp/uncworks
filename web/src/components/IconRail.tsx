@@ -39,8 +39,8 @@ export function IconRail({ activeFilter, onFilterChange, onNewRun }: IconRailPro
       className="flex flex-col items-center gap-2 py-3 shrink-0"
       style={{
         width: "48px",
-        borderRight: "1px solid var(--color-border)",
-        backgroundColor: "var(--color-bg)",
+        borderRight: "1px solid var(--unc-border)",
+        backgroundColor: "var(--unc-bg)",
       }}
     >
       <div className="relative" ref={popoverRef}>
@@ -53,7 +53,7 @@ export function IconRail({ activeFilter, onFilterChange, onNewRun }: IconRailPro
             width: "32px",
             height: "32px",
             borderRadius: "4px",
-            color: hasActiveFilter ? "var(--color-accent)" : "var(--color-muted)",
+            color: hasActiveFilter ? "var(--unc-accent)" : "var(--unc-muted)",
             cursor: "pointer",
             backgroundColor: "transparent",
             border: "none",
@@ -68,8 +68,8 @@ export function IconRail({ activeFilter, onFilterChange, onNewRun }: IconRailPro
           <div
             className="absolute left-full top-0 ml-2 z-50 py-1"
             style={{
-              backgroundColor: "var(--color-bg)",
-              border: "1px solid var(--color-border)",
+              backgroundColor: "var(--unc-bg)",
+              border: "1px solid var(--unc-border)",
               minWidth: "120px",
               boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
             }}
@@ -83,8 +83,8 @@ export function IconRail({ activeFilter, onFilterChange, onNewRun }: IconRailPro
                 }}
                 className="block w-full text-left px-3 py-1.5 text-sm"
                 style={{
-                  backgroundColor: activeFilter === opt.value ? "var(--color-border)" : "transparent",
-                  color: "var(--color-fg)",
+                  backgroundColor: activeFilter === opt.value ? "var(--unc-border)" : "transparent",
+                  color: "var(--unc-fg)",
                   cursor: "pointer",
                   border: "none",
                 }}
@@ -105,7 +105,7 @@ export function IconRail({ activeFilter, onFilterChange, onNewRun }: IconRailPro
           width: "32px",
           height: "32px",
           borderRadius: "4px",
-          color: "var(--color-muted)",
+          color: "var(--unc-muted)",
           cursor: "pointer",
           backgroundColor: "transparent",
           border: "none",
@@ -126,7 +126,7 @@ export function IconRail({ activeFilter, onFilterChange, onNewRun }: IconRailPro
           width: "32px",
           height: "32px",
           borderRadius: "4px",
-          color: "var(--color-muted)",
+          color: "var(--unc-muted)",
           cursor: "pointer",
           backgroundColor: "transparent",
           border: "none",

@@ -140,9 +140,9 @@ export default function CommandPalette({
           <div
             className="pointer-events-auto mt-[20vh] h-fit max-w-lg w-full mx-auto border shadow-lg"
             style={{
-              backgroundColor: "var(--color-bg)",
-              color: "var(--color-fg)",
-              borderColor: "var(--color-border)",
+              backgroundColor: "var(--unc-bg)",
+              color: "var(--unc-fg)",
+              borderColor: "var(--unc-border)",
             }}
           >
             {/* Search input */}
@@ -157,9 +157,9 @@ export default function CommandPalette({
               placeholder="Search runs, commands..."
               className="w-full px-4 py-3 text-sm outline-none border-b"
               style={{
-                backgroundColor: "var(--color-bg)",
-                color: "var(--color-fg)",
-                borderColor: "var(--color-border)",
+                backgroundColor: "var(--unc-bg)",
+                color: "var(--unc-fg)",
+                borderColor: "var(--unc-border)",
               }}
             />
 
@@ -172,7 +172,7 @@ export default function CommandPalette({
               {results.length === 0 && (
                 <div
                   className="px-4 py-6 text-center text-sm"
-                  style={{ color: "var(--color-muted)" }}
+                  style={{ color: "var(--unc-muted)" }}
                 >
                   No results
                 </div>
@@ -279,7 +279,7 @@ function renderGrouped(
     <div key={group.type}>
       <div
         className="px-4 py-1 text-xs font-medium"
-        style={{ color: "var(--color-muted)" }}
+        style={{ color: "var(--unc-muted)" }}
       >
         {group.label}
       </div>
@@ -292,15 +292,15 @@ function renderGrouped(
             onClick={() => onSelect(result)}
             className="w-full text-left px-4 py-2 text-sm flex items-center justify-between cursor-pointer"
             style={{
-              backgroundColor: isHighlighted ? "var(--color-border)" : "transparent",
-              color: "var(--color-fg)",
+              backgroundColor: isHighlighted ? "var(--unc-border)" : "transparent",
+              color: "var(--unc-fg)",
             }}
           >
             <span>{result.label}</span>
             {result.detail && (
               <span
                 className="text-xs truncate ml-4"
-                style={{ color: "var(--color-muted)" }}
+                style={{ color: "var(--unc-muted)" }}
               >
                 {result.detail}
               </span>

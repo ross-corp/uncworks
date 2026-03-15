@@ -43,5 +43,15 @@ model_list:
       model: "openrouter/qwen/qwen3-coder:free"
 
 litellm_settings:
+  # Fallback: if primary model is rate-limited, try alternatives
+  fallbacks:
+    - {"qwen3-coder": ["mistral-small", "gemma-3-4b", "default"]}
+    - {"mistral-small": ["qwen3-coder", "gemma-3-4b", "default"]}
+    - {"gemma-3-4b": ["qwen3-coder", "mistral-small", "default"]}
+
+  # Retry settings
+  num_retries: 3
+  retry_after: 5  # seconds between retries
+
   drop_params: true
   max_parallel_requests: 10
