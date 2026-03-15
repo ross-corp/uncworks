@@ -93,6 +93,10 @@ func run() error {
 	// Register activities
 	w.RegisterActivity(activities)
 
+	// Register knowledge activities (context hydration, run data persistence, embedding)
+	knowledgeActivities := &aottemporal.KnowledgeActivities{}
+	w.RegisterActivity(knowledgeActivities)
+
 	// Start worker (blocks until interrupted)
 	log.Printf("Starting Temporal worker on queue %s", taskQueue)
 	if err := w.Run(worker.InterruptCh()); err != nil {
