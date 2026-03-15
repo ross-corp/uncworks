@@ -758,9 +758,13 @@ const ActivityCollectJuniorResults = "CollectJuniorResults"
 
 // modelIDFromTier maps a model tier name to a pi-coding-agent model identifier.
 // LiteLLM exposes models as OpenAI-compatible, so we use the openai/ prefix.
+// modelIDFromTier returns the model name to pass to pi-coding-agent.
+// Pi connects to LiteLLM via OPENAI_BASE_URL. We prefix with "openai/"
+// so pi uses the OpenAI-compatible provider (which routes through LiteLLM)
+// instead of trying to auto-detect the provider from the model name.
 func modelIDFromTier(tier string) string {
 	if tier == "" {
-		return "litellm/default"
+		return "openai/default"
 	}
-	return "litellm/" + tier
+	return "openai/" + tier
 }
