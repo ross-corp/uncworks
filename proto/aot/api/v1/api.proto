@@ -27,6 +27,17 @@ service AOTService {
 
   // SendHumanInput provides human-in-the-loop input to a paused agent.
   rpc SendHumanInput(SendHumanInputRequest) returns (SendHumanInputResponse);
+
+  // GetRunGraph returns the tree of runs for a spec execution.
+  rpc GetRunGraph(GetRunGraphRequest) returns (RunGraph);
+}
+
+// OrchestrationMode specifies how an agent run handles decomposition.
+enum OrchestrationMode {
+  ORCHESTRATION_MODE_UNSPECIFIED = 0;
+  ORCHESTRATION_MODE_SINGLE = 1;
+  ORCHESTRATION_MODE_AUTO = 2;
+  ORCHESTRATION_MODE_MANUAL = 3;
 }
 
 // Backend specifies the execution backend for an agent run.
@@ -55,6 +66,8 @@ message AgentRun {
   AgentRunStatus status = 4;
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp updated_at = 6;
+  // Children contains the names of junior AgentRuns spawned by this run.
+  repeated string children = 7;
 }
 
 // Repository specifies a git repository to clone into the agent workspace.
@@ -86,6 +99,26 @@ message AgentRunSpec {
   string workspace_name = 13;
   // Field 14 is reserved (was retain_pod_minutes, removed in persistent-workspace-architecture).
   reserved 14;
+  // ParentRunID links this junior run to its parent senior run.
+  string parent_run_id = 15;
+  // OrchestrationMode controls decomposition behavior: single, auto, or manual.
+  OrchestrationMode orchestration_mode = 16;
+  // Orchestration defines the manual orchestration task list.
+  Orchestration orchestration = 17;
+  // SpecRunID groups all runs from a single spec execution.
+  string spec_run_id = 18;
+}
+
+// OrchestrationTask defines a single sub-task in a manual orchestration.
+message OrchestrationTask {
+  string name = 1;
+  string prompt = 2;
+  repeated string repo_urls = 3;
+}
+
+// Orchestration contains the task list for manual orchestration mode.
+message Orchestration {
+  repeated OrchestrationTask tasks = 1;
 }
 
 message AgentRunStatus {
@@ -123,6 +156,10 @@ message ListAgentRunsRequest {
   AgentRunPhase phase_filter = 1;
   int32 limit = 2;
   string cursor = 3;
+  // SpecRunID filters runs belonging to a specific spec execution.
+  string spec_run_id = 4;
+  // ParentRunID filters runs that are children of a specific parent.
+  string parent_run_id = 5;
 }
 
 message ListAgentRunsResponse {
@@ -165,4 +202,26 @@ message SendHumanInputRequest {
 
 message SendHumanInputResponse {
   bool accepted = 1;
+}
+
+message GetRunGraphRequest {
+  string id = 1;
+}
+
+message RunGraphNode {
+  string name = 1;
+  AgentRunPhase phase = 2;
+  string role = 3;
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp completed_at = 5;
+}
+
+message RunGraphEdge {
+  string parent = 1;
+  string child = 2;
+}
+
+message RunGraph {
+  repeated RunGraphNode nodes = 1;
+  repeated RunGraphEdge edges = 2;
 }

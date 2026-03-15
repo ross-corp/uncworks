@@ -12,7 +12,7 @@
 - [x] 2.2 Create `web/public/fonts/` directory and copy IoskeleyMono font files into it
 - [x] 2.3 Add @font-face declarations for IoskeleyMono in the CSS (weight 400, 500, 600, 700 if available)
 - [x] 2.4 Remove the Google Fonts @import for Inter and JetBrains Mono from web/src/index.css
-- [ ] 2.5 Verify IoskeleyMono renders correctly in the browser dev tools
+- [x] 2.5 Verify IoskeleyMono renders correctly in the browser dev tools
 
 ## 3. Design Tokens Migration
 
@@ -108,32 +108,32 @@
 
 - [x] 12.1 Update web/.storybook/preview.ts: kept import of index.css (which now contains MU-TH-UR globals). Added dark background decorator with mu-th-ur black (#000000).
 - [x] 12.2 Update all .stories.tsx files to reflect the new component APIs: Updated Layout.stories.tsx (replaced surface/txt/edge classes with MU-TH-UR equivalents), ErrorBoundary.stories.tsx (replaced text-txt-secondary with text-muted-foreground), Toast.stories.tsx (replaced btn-primary with Button component). Other stories (StatusBadge, AgentRunTable, Skeleton, AgentRunDetailPanel, EventsView, ConfirmDialog, Sidebar, AgentRunForm) only pass props to the migrated components and needed no changes.
-- [ ] 12.3 Verify all stories render correctly in Storybook with MU-TH-UR styling by running `npm run storybook`
+- [x] 12.3 Verify all stories render correctly in Storybook with MU-TH-UR styling by running `npm run storybook`
 
 ## 13. Global Search-and-Replace Cleanup
 
-- [ ] 13.1 Search all .tsx files for remaining `bg-surface-` class references and replace with MU-TH-UR equivalents (bg-background, bg-card, bg-muted)
-- [ ] 13.2 Search all .tsx files for remaining `text-txt-` class references and replace with MU-TH-UR equivalents (text-foreground, text-muted-foreground)
-- [ ] 13.3 Search all .tsx files for remaining `border-edge` class references and replace with border-border or border-primary
-- [ ] 13.4 Search all .tsx files for remaining `text-danger`, `text-warning`, `text-success`, `text-info` class references and replace with text-destructive, text-primary, text-secondary respectively
-- [ ] 13.5 Search all .tsx files for remaining `rounded` class references and remove them (border-radius is globally 0px)
-- [ ] 13.6 Search all .tsx files for remaining `.btn` and `.input-field` class references and replace with component usage
-- [ ] 13.7 Search all .tsx files for remaining `font-sans` references and verify they resolve to IoskeleyMono
+- [x] 13.1 Search all .tsx files for remaining `bg-surface-` class references and replace with MU-TH-UR equivalents (bg-background, bg-card, bg-muted)
+- [x] 13.2 Search all .tsx files for remaining `text-txt-` class references and replace with MU-TH-UR equivalents (text-foreground, text-muted-foreground)
+- [x] 13.3 Search all .tsx files for remaining `border-edge` class references and replace with border-border or border-primary
+- [x] 13.4 Search all .tsx files for remaining `text-danger`, `text-warning`, `text-success`, `text-info` class references and replace with text-destructive, text-primary, text-secondary respectively
+- [x] 13.5 Search all .tsx files for remaining `rounded` class references and remove them (border-radius is globally 0px)
+- [x] 13.6 Search all .tsx files for remaining `.btn` and `.input-field` class references and replace with component usage
+- [x] 13.7 Search all .tsx files for remaining `font-sans` references and verify they resolve to IoskeleyMono
 
 ## 14. Testing and Verification
 
-- [ ] 14.1 Run `npm run build` in web/ and verify zero build errors
-- [ ] 14.2 Run `tsc --noEmit` in web/ and verify zero TypeScript errors
-- [ ] 14.3 Run `npm run dev` and visually verify the app renders with MU-TH-UR aesthetic: pure black background, amber text, green secondary, no rounded corners, IoskeleyMono font, uppercase body text
-- [ ] 14.4 Verify fx-scanlines effect is visible on Card/panel components
-- [ ] 14.5 Verify fx-glow effect is visible on headings and active nav items
-- [ ] 14.6 Verify fx-flicker animation runs on the app wrapper
-- [ ] 14.7 Verify all form inputs render with MU-TH-UR Input component styling (black bg, amber border on focus)
-- [ ] 14.8 Verify all modals/dialogs render with AlertDialog/Dialog components (black bg, amber borders)
-- [ ] 14.9 Verify the sidebar renders with MU-TH-UR Sidebar component
-- [ ] 14.10 Verify table views render with MU-TH-UR Table component styling
-- [ ] 14.11 Verify toast notifications render with MU-TH-UR styling
-- [ ] 14.12 Verify scrollbars use MU-TH-UR custom scrollbar styling (6px, black track, muted thumb)
-- [ ] 14.13 Verify that `prefers-reduced-motion: reduce` disables all CRT animations (flicker, glitch, pulse)
-- [ ] 14.14 Update E2E test selectors in web/e2e/*.spec.ts if component structure changes break existing CSS selectors or data attributes
-- [ ] 14.15 Run E2E tests (`npx playwright test`) and verify all pass or document failures with fix plan
+- [x] 14.1 Run `npm run build` in web/ and verify zero build errors
+- [x] 14.2 Run `tsc --noEmit` in web/ and verify zero TypeScript errors
+- [x] 14.3 Run `npm run dev` and visually verify the app renders with MU-TH-UR aesthetic: pure black background, amber text, green secondary, no rounded corners, IoskeleyMono font, uppercase body text
+- [x] 14.4 Verify fx-scanlines effect is visible on Card/panel components
+- [x] 14.5 Verify fx-glow effect is visible on headings and active nav items
+- [x] 14.6 Verify fx-flicker animation runs on the app wrapper
+- [x] 14.7 Verify all form inputs render with MU-TH-UR Input component styling (black bg, amber border on focus)
+- [x] 14.8 Verify all modals/dialogs render with AlertDialog/Dialog components (black bg, amber borders)
+- [x] 14.9 Verify the sidebar renders with MU-TH-UR Sidebar component
+- [x] 14.10 Verify table views render with MU-TH-UR Table component styling
+- [x] 14.11 Verify toast notifications render with MU-TH-UR styling
+- [x] 14.12 Verify scrollbars use MU-TH-UR custom scrollbar styling (6px, black track, muted thumb)
+- [x] 14.13 Verify that `prefers-reduced-motion: reduce` disables all CRT animations (flicker, glitch, pulse)
+- [x] 14.14 Update E2E test selectors in web/e2e/*.spec.ts if component structure changes break existing CSS selectors or data attributes
+- [x] 14.15 Run E2E tests (`npx playwright test`) and verify all pass or document failures with fix plan

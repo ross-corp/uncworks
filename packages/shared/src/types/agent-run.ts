@@ -17,6 +17,21 @@ export interface Repository {
   path?: string;
 }
 
+/** Orchestration mode for an AgentRun. */
+export type OrchestrationMode = "single" | "auto" | "manual";
+
+/** A single task in a manual orchestration. */
+export interface OrchestrationTask {
+  name: string;
+  prompt: string;
+  repoUrls?: string[];
+}
+
+/** Orchestration configuration for manual mode. */
+export interface Orchestration {
+  tasks: OrchestrationTask[];
+}
+
 /** Spec for creating an AgentRun. */
 export interface AgentRunSpec {
   backend: Backend;
@@ -30,6 +45,10 @@ export interface AgentRunSpec {
   specContent?: string;
   specSource?: string;
   workspaceName?: string;
+  parentRunId?: string;
+  orchestrationMode?: OrchestrationMode;
+  orchestration?: Orchestration;
+  specRunId?: string;
 }
 
 /** Status of an AgentRun. */
@@ -54,6 +73,28 @@ export interface AgentRun {
   status: AgentRunStatus;
   createdAt: string;
   updatedAt: string;
+  children?: string[];
+}
+
+/** A node in the run graph. */
+export interface RunGraphNode {
+  name: string;
+  phase: AgentRunPhase;
+  role: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+/** An edge in the run graph. */
+export interface RunGraphEdge {
+  parent: string;
+  child: string;
+}
+
+/** The run graph for a spec execution. */
+export interface RunGraph {
+  nodes: RunGraphNode[];
+  edges: RunGraphEdge[];
 }
 
 /** Event emitted for an AgentRun. */

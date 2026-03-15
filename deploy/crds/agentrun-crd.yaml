@@ -112,6 +112,44 @@ spec:
                       type: integer
                       format: int32
                       default: 20
+                parentRunID:
+                  type: string
+                orchestrationMode:
+                  type: string
+                  enum:
+                    - single
+                    - auto
+                    - manual
+                  default: single
+                orchestration:
+                  type: object
+                  properties:
+                    tasks:
+                      type: array
+                      maxItems: 7
+                      items:
+                        type: object
+                        required:
+                          - name
+                          - prompt
+                        properties:
+                          name:
+                            type: string
+                            pattern: "^[a-z0-9-]+$"
+                          prompt:
+                            type: string
+                          repoUrls:
+                            type: array
+                            items:
+                              type: string
+                specRunID:
+                  type: string
+                specContent:
+                  type: string
+                specSource:
+                  type: string
+                workspaceName:
+                  type: string
             status:
               type: object
               properties:

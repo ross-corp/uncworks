@@ -199,13 +199,15 @@ func (AgentRunEventType) EnumDescriptor() ([]byte, []int) {
 }
 
 type AgentRun struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Spec          *AgentRunSpec          `protobuf:"bytes,3,opt,name=spec,proto3" json:"spec,omitempty"`
-	Status        *AgentRunStatus        `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Spec      *AgentRunSpec          `protobuf:"bytes,3,opt,name=spec,proto3" json:"spec,omitempty"`
+	Status    *AgentRunStatus        `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Children contains the names of junior AgentRuns spawned by this run.
+	Children      []string `protobuf:"bytes,7,rep,name=children,proto3" json:"children,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -278,6 +280,13 @@ func (x *AgentRun) GetCreatedAt() *timestamppb.Timestamp {
 func (x *AgentRun) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *AgentRun) GetChildren() []string {
+	if x != nil {
+		return x.Children
 	}
 	return nil
 }
@@ -364,6 +373,14 @@ type AgentRunSpec struct {
 	SpecSource string `protobuf:"bytes,12,opt,name=spec_source,json=specSource,proto3" json:"spec_source,omitempty"`
 	// WorkspaceName is the name of the workspace preset used for this run.
 	WorkspaceName string `protobuf:"bytes,13,opt,name=workspace_name,json=workspaceName,proto3" json:"workspace_name,omitempty"`
+	// ParentRunID links this junior run to its parent senior run.
+	ParentRunId string `protobuf:"bytes,15,opt,name=parent_run_id,json=parentRunId,proto3" json:"parent_run_id,omitempty"`
+	// OrchestrationMode controls decomposition behavior.
+	OrchestrationMode OrchestrationMode `protobuf:"varint,16,opt,name=orchestration_mode,json=orchestrationMode,proto3,enum=aot.api.v1.OrchestrationMode" json:"orchestration_mode,omitempty"`
+	// Orchestration defines the manual orchestration task list.
+	Orchestration *Orchestration `protobuf:"bytes,17,opt,name=orchestration,proto3" json:"orchestration,omitempty"`
+	// SpecRunID groups all runs from a single spec execution.
+	SpecRunId     string `protobuf:"bytes,18,opt,name=spec_run_id,json=specRunId,proto3" json:"spec_run_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -478,6 +495,34 @@ func (x *AgentRunSpec) GetSpecSource() string {
 func (x *AgentRunSpec) GetWorkspaceName() string {
 	if x != nil {
 		return x.WorkspaceName
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetParentRunId() string {
+	if x != nil {
+		return x.ParentRunId
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetOrchestrationMode() OrchestrationMode {
+	if x != nil {
+		return x.OrchestrationMode
+	}
+	return OrchestrationMode_ORCHESTRATION_MODE_UNSPECIFIED
+}
+
+func (x *AgentRunSpec) GetOrchestration() *Orchestration {
+	if x != nil {
+		return x.Orchestration
+	}
+	return nil
+}
+
+func (x *AgentRunSpec) GetSpecRunId() string {
+	if x != nil {
+		return x.SpecRunId
 	}
 	return ""
 }
@@ -744,10 +789,14 @@ func (x *GetAgentRunRequest) GetId() string {
 }
 
 type ListAgentRunsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PhaseFilter   AgentRunPhase          `protobuf:"varint,1,opt,name=phase_filter,json=phaseFilter,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase_filter,omitempty"`
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
-	Cursor        string                 `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	PhaseFilter AgentRunPhase          `protobuf:"varint,1,opt,name=phase_filter,json=phaseFilter,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase_filter,omitempty"`
+	Limit       int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Cursor      string                 `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	// SpecRunId filters runs belonging to a specific spec execution.
+	SpecRunId string `protobuf:"bytes,4,opt,name=spec_run_id,json=specRunId,proto3" json:"spec_run_id,omitempty"`
+	// ParentRunId filters runs that are children of a specific parent.
+	ParentRunId   string `protobuf:"bytes,5,opt,name=parent_run_id,json=parentRunId,proto3" json:"parent_run_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -799,6 +848,20 @@ func (x *ListAgentRunsRequest) GetLimit() int32 {
 func (x *ListAgentRunsRequest) GetCursor() string {
 	if x != nil {
 		return x.Cursor
+	}
+	return ""
+}
+
+func (x *ListAgentRunsRequest) GetSpecRunId() string {
+	if x != nil {
+		return x.SpecRunId
+	}
+	return ""
+}
+
+func (x *ListAgentRunsRequest) GetParentRunId() string {
+	if x != nil {
+		return x.ParentRunId
 	}
 	return ""
 }

@@ -195,6 +195,9 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       modelTier: pb.spec?.modelTier || undefined,
       specContent: pb.spec?.specContent || undefined,
       specSource: pb.spec?.specSource || undefined,
+      parentRunId: (pb.spec as Record<string, unknown>)?.parentRunId as string | undefined,
+      orchestrationMode: (pb.spec as Record<string, unknown>)?.orchestrationMode as string | undefined as AgentRunSpec["orchestrationMode"],
+      specRunId: (pb.spec as Record<string, unknown>)?.specRunId as string | undefined,
     },
     status: {
       phase: phaseFromProto(pb.status?.phase ?? PbAgentRunPhase.UNSPECIFIED),
@@ -210,6 +213,7 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
     },
     createdAt: timestampToISO(pb.createdAt),
     updatedAt: timestampToISO(pb.updatedAt),
+    children: ((pb as Record<string, unknown>).children as string[]) || undefined,
   };
 }
 

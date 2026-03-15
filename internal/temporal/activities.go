@@ -747,6 +747,17 @@ func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndClea
 	return nil
 }
 
+// CollectJuniorResults collects git diff output from each junior's workspace.
+func (a *Activities) CollectJuniorResults(ctx context.Context, input CollectJuniorResultsInput) (*CollectJuniorResultsOutput, error) {
+	results := make(map[string]string)
+	for _, name := range input.JuniorNames {
+		// In a full implementation, this would exec into the junior's pod
+		// and run `git diff HEAD~1`. For now, record the junior name.
+		results[name] = fmt.Sprintf("[diff from %s — collection pending]", name)
+	}
+	return &CollectJuniorResultsOutput{Results: results}, nil
+}
+
 // sidecarClient creates a ConnectRPC client for the sidecar running in the given pod.
 // Uses the pod IP directly since pod DNS names don't resolve without a headless Service.
 func (a *Activities) sidecarClient(podIP string) agentv1connect.AgentSidecarServiceClient {

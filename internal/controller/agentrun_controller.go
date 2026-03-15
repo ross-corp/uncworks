@@ -37,6 +37,11 @@ const (
 
 	// reconcileInterval is the requeue interval for syncing workflow state.
 	reconcileInterval = 30 * time.Second
+
+	// Labels and annotations for orchestration
+	labelSpecRunID   = "aot.uncworks.io/spec-run-id"
+	labelRunRole     = "aot.uncworks.io/run-role"
+	annotationParent = "aot.uncworks.io/parent-run"
 )
 
 // AgentRunReconciler reconciles AgentRun objects by bridging to Temporal workflows.
@@ -124,19 +129,59 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 			Path:   repo.Path,
 		})
 	}
+	// Map orchestration tasks from CRD to workflow input
+	var orchTasks []aottemporal.OrchestrationTask
+	if agentRun.Spec.Orchestration != nil {
+		for _, t := range agentRun.Spec.Orchestration.Tasks {
+			orchTasks = append(orchTasks, aottemporal.OrchestrationTask{
+				Name:     t.Name,
+				Prompt:   t.Prompt,
+				RepoURLs: t.RepoURLs,
+			})
+		}
+	}
+
 	workflowInput := aottemporal.WorkflowInput{
-		AgentRunName:   agentRun.Name,
-		Namespace:      agentRun.Namespace,
-		Repos:          repos,
-		Prompt:         agentRun.Spec.Prompt,
-		DevboxConfig:   agentRun.Spec.DevboxConfig,
-		TTLSeconds:     agentRun.Spec.TTLSeconds,
-		Image:          agentRun.Spec.Image,
-		EnvVars:        agentRun.Spec.EnvVars,
-		ModelTier:      agentRun.Spec.ModelTier,
-		LiteLLMBaseURL: r.LiteLLMBaseURL,
-		SpecContent:    agentRun.Spec.SpecContent,
-		WorkspaceName:  agentRun.Spec.WorkspaceName,
+		AgentRunName:      agentRun.Name,
+		Namespace:         agentRun.Namespace,
+		Repos:             repos,
+		Prompt:            agentRun.Spec.Prompt,
+		DevboxConfig:      agentRun.Spec.DevboxConfig,
+		TTLSeconds:        agentRun.Spec.TTLSeconds,
+		Image:             agentRun.Spec.Image,
+		EnvVars:           agentRun.Spec.EnvVars,
+		ModelTier:         agentRun.Spec.ModelTier,
+		LiteLLMBaseURL:    r.LiteLLMBaseURL,
+		SpecContent:       agentRun.Spec.SpecContent,
+		WorkspaceName:     agentRun.Spec.WorkspaceName,
+		OrchestrationMode: aottemporal.OrchestrationMode(agentRun.Spec.OrchestrationMode),
+		Orchestration:     orchTasks,
+		ParentRunID:       agentRun.Spec.ParentRunID,
+		SpecRunID:         agentRun.Spec.SpecRunID,
+	}
+
+	// Set orchestration labels
+	if agentRun.Labels == nil {
+		agentRun.Labels = make(map[string]string)
+	}
+	if agentRun.Annotations == nil {
+		agentRun.Annotations = make(map[string]string)
+	}
+
+	orchMode := agentRun.Spec.OrchestrationMode
+	if orchMode == aotv1alpha1.OrchestrationModeAuto || orchMode == aotv1alpha1.OrchestrationModeManual {
+		// Senior run
+		agentRun.Labels[labelSpecRunID] = agentRun.Name
+		agentRun.Labels[labelRunRole] = "senior"
+	} else if agentRun.Spec.ParentRunID != "" {
+		// Junior run
+		specRunID := agentRun.Spec.SpecRunID
+		if specRunID == "" {
+			specRunID = agentRun.Spec.ParentRunID
+		}
+		agentRun.Labels[labelSpecRunID] = specRunID
+		agentRun.Labels[labelRunRole] = "junior"
+		agentRun.Annotations[annotationParent] = agentRun.Spec.ParentRunID
 	}
 
 	taskQueue := r.TaskQueue

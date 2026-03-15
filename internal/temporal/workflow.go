@@ -1,6 +1,7 @@
 package temporal
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -52,21 +53,54 @@ type Repository struct {
 	Path   string `json:"path,omitempty"`
 }
 
+// OrchestrationMode specifies how an agent run handles decomposition.
+type OrchestrationMode string
+
+const (
+	OrchestrationModeSingle OrchestrationMode = "single"
+	OrchestrationModeAuto   OrchestrationMode = "auto"
+	OrchestrationModeManual OrchestrationMode = "manual"
+)
+
+// OrchestrationTask defines a single sub-task in a manual orchestration.
+type OrchestrationTask struct {
+	Name     string   `json:"name"`
+	Prompt   string   `json:"prompt"`
+	RepoURLs []string `json:"repoUrls,omitempty"`
+}
+
+// DecompositionPlan is the structured output from a senior agent's decomposition.
+type DecompositionPlan struct {
+	Tasks             []DecompositionTask `json:"tasks"`
+	IntegrationPrompt string              `json:"integration_prompt"`
+}
+
+// DecompositionTask is a single task in a decomposition plan.
+type DecompositionTask struct {
+	Name   string   `json:"name"`
+	Prompt string   `json:"prompt"`
+	Repos  []string `json:"repos,omitempty"`
+}
+
 // WorkflowInput contains the parameters for starting an AgentRunWorkflow.
 type WorkflowInput struct {
-	AgentRunName   string
-	Namespace      string
-	Repos          []Repository
-	Prompt         string
-	DevboxConfig   string
-	TTLSeconds     int32
-	Image          string
-	EnvVars        map[string]string
-	ModelTier      string
-	MaxBudget      float64
-	LiteLLMBaseURL string
-	SpecContent    string
-	WorkspaceName  string
+	AgentRunName      string
+	Namespace         string
+	Repos             []Repository
+	Prompt            string
+	DevboxConfig      string
+	TTLSeconds        int32
+	Image             string
+	EnvVars           map[string]string
+	ModelTier         string
+	MaxBudget         float64
+	LiteLLMBaseURL    string
+	SpecContent       string
+	WorkspaceName     string
+	OrchestrationMode OrchestrationMode
+	Orchestration     []OrchestrationTask
+	ParentRunID       string
+	SpecRunID         string
 }
 
 // WorkflowState represents the current state of the workflow, returned by queries.
@@ -112,6 +146,15 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	if input.SpecContent != "" && input.Prompt == "" {
 		input.Prompt = "Run `codespeak build` in the workspace directory. The spec file has been placed at spec/main.cs.md with a codespeak.json config. Execute the build and verify the output compiles/passes tests."
 	}
+
+	// --- Step 0: Orchestration preamble ---
+	switch input.OrchestrationMode {
+	case OrchestrationModeManual:
+		return runManualOrchestration(ctx, input)
+	case OrchestrationModeAuto:
+		return runAutoOrchestration(ctx, input)
+	}
+	// OrchestrationModeSingle or unspecified: fall through to standard single-agent workflow.
 
 	state := &WorkflowState{
 		Phase:   "Pending",
@@ -399,6 +442,7 @@ type SpawnJuniorInput struct {
 	ParentRunName  string
 	Namespace      string
 	Task           string
+	TaskName       string
 	Repos          []Repository
 	DevboxConfig   string
 	TTLSeconds     int32
@@ -408,13 +452,16 @@ type SpawnJuniorInput struct {
 	ModelTier      string
 	MaxBudget      float64
 	LiteLLMBaseURL string
+	SpecRunID      string
 }
 
 // SpawnJuniorWorkflow starts a child AgentRunWorkflow for a junior agent.
 func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
-	juniorName := fmt.Sprintf("%s-junior-%d",
-		input.ParentRunName,
-		workflow.Now(ctx).UnixMilli()%100000)
+	taskSuffix := input.TaskName
+	if taskSuffix == "" {
+		taskSuffix = fmt.Sprintf("%d", workflow.Now(ctx).UnixMilli()%100000)
+	}
+	juniorName := fmt.Sprintf("%s-junior-%s", input.ParentRunName, taskSuffix)
 
 	childOpts := workflow.ChildWorkflowOptions{
 		WorkflowID: juniorName,
@@ -423,17 +470,20 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 	childCtx := workflow.WithChildOptions(ctx, childOpts)
 
 	childInput := WorkflowInput{
-		AgentRunName:   juniorName,
-		Namespace:      input.Namespace,
-		Repos:          input.Repos,
-		Prompt:         input.Task,
-		DevboxConfig:   input.DevboxConfig,
-		TTLSeconds:     input.TTLSeconds,
-		Image:          input.Image,
-		EnvVars:        input.EnvVars,
-		ModelTier:      input.ModelTier,
-		MaxBudget:      input.MaxBudget,
-		LiteLLMBaseURL: input.LiteLLMBaseURL,
+		AgentRunName:      juniorName,
+		Namespace:         input.Namespace,
+		Repos:             input.Repos,
+		Prompt:            input.Task,
+		DevboxConfig:      input.DevboxConfig,
+		TTLSeconds:        input.TTLSeconds,
+		Image:             input.Image,
+		EnvVars:           input.EnvVars,
+		ModelTier:         input.ModelTier,
+		MaxBudget:         input.MaxBudget,
+		LiteLLMBaseURL:    input.LiteLLMBaseURL,
+		ParentRunID:       input.ParentRunName,
+		SpecRunID:         input.SpecRunID,
+		OrchestrationMode: OrchestrationModeSingle, // juniors always run as single
 	}
 
 	future := workflow.ExecuteChildWorkflow(childCtx, AgentRunWorkflow, childInput)
@@ -445,6 +495,203 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 	// Fire-and-forget: just wait for the child to start
 	return future.GetChildWorkflowExecution().Get(ctx, nil)
 }
+
+const maxOrchestrationTasks = 7
+
+// runManualOrchestration executes the manual orchestration path:
+// spawn juniors directly from the user-defined task list, wait for all.
+func runManualOrchestration(ctx workflow.Context, input WorkflowInput) error {
+	state := &WorkflowState{
+		Phase:   "Running",
+		Message: "Manual orchestration: spawning junior tasks",
+	}
+
+	if err := workflow.SetQueryHandler(ctx, QueryGetState, func() (*WorkflowState, error) {
+		return state, nil
+	}); err != nil {
+		return fmt.Errorf("set query handler: %w", err)
+	}
+
+	tasks := input.Orchestration
+	if len(tasks) > maxOrchestrationTasks {
+		workflow.GetLogger(ctx).Warn("Truncating orchestration tasks", "count", len(tasks), "max", maxOrchestrationTasks)
+		tasks = tasks[:maxOrchestrationTasks]
+	}
+
+	specRunID := input.SpecRunID
+	if specRunID == "" {
+		specRunID = input.AgentRunName
+	}
+
+	// Fan out juniors in parallel
+	var futures []workflow.ChildWorkflowFuture
+	for _, task := range tasks {
+		repos := input.Repos
+		if len(task.RepoURLs) > 0 {
+			repos = make([]Repository, len(task.RepoURLs))
+			for i, u := range task.RepoURLs {
+				repos[i] = Repository{URL: u}
+			}
+		}
+
+		taskSuffix := task.Name
+		if taskSuffix == "" {
+			taskSuffix = fmt.Sprintf("%d", workflow.Now(ctx).UnixMilli()%100000)
+		}
+		juniorName := fmt.Sprintf("%s-junior-%s", input.AgentRunName, taskSuffix)
+
+		childOpts := workflow.ChildWorkflowOptions{
+			WorkflowID: juniorName,
+			TaskQueue:  TaskQueue,
+		}
+		childCtx := workflow.WithChildOptions(ctx, childOpts)
+
+		childInput := WorkflowInput{
+			AgentRunName:      juniorName,
+			Namespace:         input.Namespace,
+			Repos:             repos,
+			Prompt:            task.Prompt,
+			DevboxConfig:      input.DevboxConfig,
+			TTLSeconds:        input.TTLSeconds,
+			Image:             input.Image,
+			EnvVars:           input.EnvVars,
+			ModelTier:         input.ModelTier,
+			MaxBudget:         input.MaxBudget,
+			LiteLLMBaseURL:    input.LiteLLMBaseURL,
+			ParentRunID:       input.AgentRunName,
+			SpecRunID:         specRunID,
+			OrchestrationMode: OrchestrationModeSingle,
+		}
+
+		future := workflow.ExecuteChildWorkflow(childCtx, AgentRunWorkflow, childInput)
+		futures = append(futures, future)
+	}
+
+	// Wait for all juniors
+	var failedTasks []string
+	for i, future := range futures {
+		if err := future.Get(ctx, nil); err != nil {
+			taskName := tasks[i].Name
+			if taskName == "" {
+				taskName = fmt.Sprintf("task-%d", i)
+			}
+			failedTasks = append(failedTasks, taskName)
+			workflow.GetLogger(ctx).Warn("Junior task failed", "task", taskName, "error", err)
+		}
+	}
+
+	if len(failedTasks) > 0 {
+		state.Phase = "Failed"
+		state.Message = fmt.Sprintf("Manual orchestration: %d/%d tasks failed: %s",
+			len(failedTasks), len(tasks), strings.Join(failedTasks, ", "))
+		return fmt.Errorf("orchestration failed: %s", strings.Join(failedTasks, ", "))
+	}
+
+	state.Phase = "Succeeded"
+	state.Message = fmt.Sprintf("Manual orchestration: all %d tasks completed", len(tasks))
+	return nil
+}
+
+// runAutoOrchestration executes the auto-decomposition path:
+// start senior agent for decomposition, parse JSON plan, spawn juniors, integrate.
+func runAutoOrchestration(ctx workflow.Context, input WorkflowInput) error {
+	state := &WorkflowState{
+		Phase:   "Running",
+		Message: "Auto orchestration: decomposing spec",
+	}
+
+	if err := workflow.SetQueryHandler(ctx, QueryGetState, func() (*WorkflowState, error) {
+		return state, nil
+	}); err != nil {
+		return fmt.Errorf("set query handler: %w", err)
+	}
+
+	// Build decomposition prompt
+	decompositionPrompt := fmt.Sprintf(`You are a senior engineer. Analyze the following spec and decompose it into
+independent sub-tasks that can be executed in parallel by junior agents.
+
+Output a JSON object with this schema:
+{
+  "tasks": [
+    {
+      "name": "short-kebab-case-name",
+      "prompt": "Detailed task description for the junior agent",
+      "repos": ["optional subset of repos relevant to this task"]
+    }
+  ],
+  "integration_prompt": "Instructions for reviewing and integrating junior outputs"
+}
+
+Rules:
+- Each task should be independently executable
+- Each task should produce a clear, verifiable output (code change, test, etc.)
+- Maximum 7 tasks (if more are needed, group related work)
+- If the spec is simple enough for one agent, return {"tasks": []} and it will
+  be executed as a single run
+
+Here is the spec/prompt to decompose:
+
+%s`, input.Prompt)
+
+	// For auto mode, we simulate the decomposition by parsing from the prompt.
+	// In a real implementation, this would start the senior agent, collect output,
+	// and parse the JSON. For now, we fall back to single-run execution since
+	// the agent infrastructure for collecting structured output requires the full
+	// deployment pipeline. The senior agent integration is a future enhancement.
+	//
+	// Fallback: execute as single run with the original prompt.
+	_ = decompositionPrompt // Used when full agent integration is wired up
+	workflow.GetLogger(ctx).Info("Auto orchestration: falling back to single-run mode (structured output collection not yet wired)")
+
+	state.Phase = "Running"
+	state.Message = "Auto orchestration: executing as single run (decomposition pending)"
+
+	// Re-run as single-agent workflow by delegating to the standard path
+	singleInput := input
+	singleInput.OrchestrationMode = OrchestrationModeSingle
+	return AgentRunWorkflow(ctx, singleInput)
+}
+
+// parseDecompositionPlan parses a JSON decomposition plan from agent output.
+// Returns nil if the JSON is malformed or empty tasks.
+func parseDecompositionPlan(output string) *DecompositionPlan {
+	// Try to extract JSON from the output (agent may include non-JSON text)
+	start := strings.Index(output, "{")
+	end := strings.LastIndex(output, "}")
+	if start < 0 || end < 0 || end <= start {
+		return nil
+	}
+
+	jsonStr := output[start : end+1]
+	var plan DecompositionPlan
+	if err := json.Unmarshal([]byte(jsonStr), &plan); err != nil {
+		return nil
+	}
+
+	if len(plan.Tasks) == 0 {
+		return nil
+	}
+
+	// Enforce max tasks
+	if len(plan.Tasks) > maxOrchestrationTasks {
+		plan.Tasks = plan.Tasks[:maxOrchestrationTasks]
+	}
+
+	return &plan
+}
+
+// CollectJuniorResultsInput contains parameters for collecting junior results.
+type CollectJuniorResultsInput struct {
+	JuniorNames []string
+	Namespace   string
+}
+
+// CollectJuniorResultsOutput contains the collected junior results.
+type CollectJuniorResultsOutput struct {
+	Results map[string]string // task name -> git diff output
+}
+
+const ActivityCollectJuniorResults = "CollectJuniorResults"
 
 // modelIDFromTier maps a model tier name to a pi-coding-agent model identifier.
 // LiteLLM exposes models as OpenAI-compatible, so we use the openai/ prefix.

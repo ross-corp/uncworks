@@ -5,6 +5,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// OrchestrationMode specifies how an agent run handles decomposition.
+// +kubebuilder:validation:Enum=single;auto;manual
+type OrchestrationMode string
+
+const (
+	OrchestrationModeSingle OrchestrationMode = "single"
+	OrchestrationModeAuto   OrchestrationMode = "auto"
+	OrchestrationModeManual OrchestrationMode = "manual"
+)
+
+// OrchestrationTask defines a single sub-task in a manual orchestration.
+type OrchestrationTask struct {
+	// Name is a short kebab-case identifier for the task.
+	Name string `json:"name"`
+	// Prompt is the task description for the junior agent.
+	Prompt string `json:"prompt"`
+	// RepoURLs optionally restricts which repos are cloned for this task.
+	// +optional
+	RepoURLs []string `json:"repoUrls,omitempty"`
+}
+
+// Orchestration contains the task list for manual orchestration mode.
+type Orchestration struct {
+	// Tasks is the list of sub-tasks to execute.
+	Tasks []OrchestrationTask `json:"tasks"`
+}
+
 // BackendType specifies the execution backend for an AgentRun.
 // +kubebuilder:validation:Enum=Pod;KubeVirt;External
 type BackendType string
@@ -94,6 +121,23 @@ type AgentRunSpec struct {
 	// WorkspaceName is the name of the workspace preset used for this run.
 	// +optional
 	WorkspaceName string `json:"workspaceName,omitempty"`
+
+	// ParentRunID links this junior run to its parent senior run.
+	// +optional
+	ParentRunID string `json:"parentRunID,omitempty"`
+
+	// OrchestrationMode controls decomposition behavior: single (default), auto, or manual.
+	// +kubebuilder:default=single
+	// +optional
+	OrchestrationMode OrchestrationMode `json:"orchestrationMode,omitempty"`
+
+	// Orchestration defines the manual orchestration task list.
+	// +optional
+	Orchestration *Orchestration `json:"orchestration,omitempty"`
+
+	// SpecRunID groups all runs from a single spec execution.
+	// +optional
+	SpecRunID string `json:"specRunID,omitempty"`
 }
 
 // ExternalBackendConfig holds configuration for the External (SSH/Lima) backend.
