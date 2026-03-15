@@ -138,6 +138,10 @@ type AgentRunSpec struct {
 	// SpecRunID groups all runs from a single spec execution.
 	// +optional
 	SpecRunID string `json:"specRunID,omitempty"`
+
+	// DisplayName is a human-readable name generated from the prompt by the LLM.
+	// +optional
+	DisplayName string `json:"displayName,omitempty"`
 }
 
 // ExternalBackendConfig holds configuration for the External (SSH/Lima) backend.

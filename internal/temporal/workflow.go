@@ -134,6 +134,11 @@ const (
 	ActivityCreateAgentDeployment = "CreateAgentDeployment"
 	ActivityScaleDownDeployment   = "ScaleDownDeployment"
 	ActivityArchiveAndCleanup     = "ArchiveAndCleanup"
+
+	// Knowledge system activities (persistent-knowledge-system)
+	ActivityPersistRunData = "PersistRunData"
+	ActivityEmbedRunData   = "EmbedRunData"
+	ActivityHydrateContext = "HydrateContext"
 )
 
 // AgentRunWorkflow orchestrates the full lifecycle of an agent run.
@@ -192,6 +197,36 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		cleanupCtx = workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
 			StartToCloseTimeout: 30 * time.Second,
 		})
+
+		// Persist run data to PostgreSQL (knowledge system) before scale-down
+		if deploymentName != "" {
+			repoURL := ""
+			if len(input.Repos) > 0 {
+				repoURL = input.Repos[0].URL
+			}
+			persistCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
+				StartToCloseTimeout: 2 * time.Minute,
+			})
+			if err := workflow.ExecuteActivity(persistCtx, ActivityPersistRunData, PersistRunDataInput{
+				AgentRunID:    input.AgentRunName,
+				WorkspacePath: "/workspace",
+				RepoURL:       repoURL,
+			}).Get(persistCtx, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Failed to persist run data", "error", err)
+			}
+
+			// Embed run data asynchronously (does not block workflow completion)
+			embedCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
+				StartToCloseTimeout: 5 * time.Minute,
+			})
+			if err := workflow.ExecuteActivity(embedCtx, ActivityEmbedRunData, EmbedRunDataInput{
+				AgentRunID: input.AgentRunName,
+				RepoURL:    repoURL,
+			}).Get(embedCtx, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Failed to embed run data", "error", err)
+			}
+		}
+
 		if llmKey != "" {
 			if err := workflow.ExecuteActivity(cleanupCtx, ActivityRevokeLLMKey, RevokeLLMKeyInput{
 				Key: llmKey,
@@ -295,6 +330,34 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 	// Use the workspace root as the working directory for multi-repo support.
 	workspacePath := "/workspace"
+
+	// --- Step 3b: Hydrate context from past work (knowledge system) ---
+	// This runs with a 5-second timeout and degrades gracefully on failure.
+	{
+		hydrateCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+			StartToCloseTimeout: 5 * time.Second,
+		})
+		repoURL := ""
+		if len(input.Repos) > 0 {
+			repoURL = input.Repos[0].URL
+		}
+		agentType := ""
+		if input.OrchestrationMode == OrchestrationModeAuto {
+			agentType = "senior"
+		}
+		var hydrateOutput HydrateContextOutput
+		if err := workflow.ExecuteActivity(hydrateCtx, ActivityHydrateContext, HydrateContextInput{
+			AgentRunID:    input.AgentRunName,
+			WorkspacePath: workspacePath,
+			Prompt:        input.Prompt,
+			RepoURL:       repoURL,
+			AgentType:     agentType,
+		}).Get(hydrateCtx, &hydrateOutput); err != nil {
+			workflow.GetLogger(ctx).Warn("Context hydration failed (proceeding without)", "error", err)
+		} else if hydrateOutput.ContextWritten {
+			workflow.GetLogger(ctx).Info("Context hydration complete — past work context written to workspace")
+		}
+	}
 
 	// --- Step 4: Start agent ---
 	state.Phase = "Running"

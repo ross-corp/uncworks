@@ -1,5 +1,10 @@
 import type { AgentRun } from "../types/agent-run";
 
+/** Returns the display name for a run, falling back to the K8s name. */
+function runDisplayName(run: AgentRun): string {
+  return run.spec.displayName || run.name;
+}
+
 interface RunListProps {
   runs: AgentRun[];
   selectedId: string | null;
@@ -66,7 +71,7 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
             }}
           >
             <th style={{ width: "20px", padding: "0 4px" }}></th>
-            <th style={{ width: "100px", padding: "0 8px", textAlign: "left", fontWeight: 500 }}>ID</th>
+            <th style={{ width: "160px", padding: "0 8px", textAlign: "left", fontWeight: 500 }}>Name</th>
             <th style={{ padding: "0 8px", textAlign: "left", fontWeight: 500 }}>Prompt</th>
             <th style={{ width: "120px", padding: "0 8px", textAlign: "left", fontWeight: 500 }}>Repo</th>
             <th style={{ width: "80px", padding: "0 8px", textAlign: "left", fontWeight: 500 }}>Phase</th>
@@ -116,14 +121,17 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                 <td
                   style={{
                     padding: "0 8px",
-                    fontFamily: "monospace",
-                    fontSize: "12px",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {run.id.slice(0, 8)}
+                  <span style={{ fontSize: "13px" }}>{runDisplayName(run)}</span>
+                  {run.spec.displayName && (
+                    <span style={{ fontSize: "11px", color: "var(--color-muted)", marginLeft: "6px", fontFamily: "monospace" }}>
+                      {run.id}
+                    </span>
+                  )}
                 </td>
                 <td
                   style={{

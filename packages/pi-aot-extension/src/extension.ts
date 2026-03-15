@@ -115,6 +115,39 @@ export class AOTExtension {
     }
   }
 
+  private async notifyToolCall(
+    name: string,
+    params: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.notifClient) return;
+    try {
+      await this.notifClient.notifyEvent(
+        create(NotifyEventRequestSchema, {
+          agentRunId: this.config.agentRunId,
+          eventType: EventType.TOOL_CALL,
+          payload: JSON.stringify({ name, params }),
+        })
+      );
+    } catch (err) {
+      console.warn("Failed to send TOOL_CALL notification:", err);
+    }
+  }
+
+  private async notifyLog(label: string, detail: string): Promise<void> {
+    if (!this.notifClient) return;
+    try {
+      await this.notifClient.notifyEvent(
+        create(NotifyEventRequestSchema, {
+          agentRunId: this.config.agentRunId,
+          eventType: EventType.LOG,
+          payload: JSON.stringify({ label, detail }),
+        })
+      );
+    } catch (err) {
+      console.warn("Failed to send LOG notification:", err);
+    }
+  }
+
   /** Register a tool with the extension. */
   registerTool(tool: ToolDefinition): void {
     this.tools.set(tool.name, tool);
@@ -135,6 +168,9 @@ export class AOTExtension {
       return { success: false, output: "", error: `Unknown tool: ${name}` };
     }
 
+    // Notify sidecar of the tool call so it records a trace span
+    this.notifyToolCall(name, params);
+
     return this.tracer.startActiveSpan(`tool.${name}`, async (span) => {
       span.setAttribute("tool.name", name);
       span.setAttribute("agent_run_id", this.config.agentRunId);
@@ -149,10 +185,16 @@ export class AOTExtension {
             message: result.error,
           });
         }
+        // Notify sidecar with tool result as a log event
+        this.notifyLog(
+          `tool_result:${name}`,
+          result.success ? "ok" : result.error ?? "error"
+        );
         return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         span.setStatus({ code: SpanStatusCode.ERROR, message });
+        this.notifyLog(`tool_error:${name}`, message);
         return { success: false, output: "", error: message };
       } finally {
         span.end();

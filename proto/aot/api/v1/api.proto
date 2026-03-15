@@ -30,6 +30,9 @@ service AOTService {
 
   // GetRunGraph returns the tree of runs for a spec execution.
   rpc GetRunGraph(GetRunGraphRequest) returns (RunGraph);
+
+  // SearchPastWork searches the knowledge base for relevant past work using natural language.
+  rpc SearchPastWork(SearchPastWorkRequest) returns (SearchPastWorkResponse);
 }
 
 // OrchestrationMode specifies how an agent run handles decomposition.
@@ -107,6 +110,8 @@ message AgentRunSpec {
   Orchestration orchestration = 17;
   // SpecRunID groups all runs from a single spec execution.
   string spec_run_id = 18;
+  // DisplayName is a human-readable name generated from the prompt by the LLM.
+  string display_name = 19;
 }
 
 // OrchestrationTask defines a single sub-task in a manual orchestration.
@@ -224,4 +229,44 @@ message RunGraphEdge {
 message RunGraph {
   repeated RunGraphNode nodes = 1;
   repeated RunGraphEdge edges = 2;
+}
+
+// SourceFilter controls which knowledge base indexes are searched.
+enum SourceFilter {
+  SOURCE_FILTER_ALL = 0;
+  SOURCE_FILTER_CODE = 1;
+  SOURCE_FILTER_TRACE = 2;
+}
+
+message SearchPastWorkRequest {
+  // Natural language query string.
+  string query = 1;
+  // Optional: filter results to a specific repository.
+  string repo_url = 2;
+  // Optional: filter results created after this timestamp.
+  google.protobuf.Timestamp created_after = 3;
+  // Optional: filter results created before this timestamp.
+  google.protobuf.Timestamp created_before = 4;
+  // Optional: filter by source type (code, trace, or both).
+  SourceFilter source_filter = 5;
+  // Maximum number of results to return (default 10, max 100).
+  int32 limit = 6;
+}
+
+message SearchPastWorkResponse {
+  repeated PastWorkResult results = 1;
+}
+
+message PastWorkResult {
+  string chunk_text = 1;
+  string source_type = 2;       // "code" or "trace"
+  double similarity_score = 3;
+  string run_id = 4;
+  string file_path = 5;
+  string language = 6;
+  string node_type = 7;
+  string chunk_type = 8;
+  string severity = 9;
+  string repo_url = 10;
+  google.protobuf.Timestamp created_at = 11;
 }

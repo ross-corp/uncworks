@@ -49,6 +49,7 @@ export interface AgentRunSpec {
   orchestrationMode?: OrchestrationMode;
   orchestration?: Orchestration;
   specRunId?: string;
+  displayName?: string;
 }
 
 /** Status of an AgentRun. */

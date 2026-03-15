@@ -200,7 +200,7 @@ function buildResults(query: string, runs: AgentRun[]): PaletteResult[] {
         mruResults.push({
           id: `run-${run.id}`,
           type: "run",
-          label: run.name || run.id,
+          label: run.spec.displayName || run.name || run.id,
           detail: run.spec.prompt.slice(0, 60),
           value: run.id,
         });
@@ -211,7 +211,7 @@ function buildResults(query: string, runs: AgentRun[]): PaletteResult[] {
     const recentRuns: PaletteResult[] = runs.slice(0, 5).map((r) => ({
       id: `run-${r.id}`,
       type: "run" as ResultType,
-      label: r.name || r.id,
+      label: r.spec.displayName || r.name || r.id,
       detail: r.spec.prompt.slice(0, 60),
       value: r.id,
     }));
@@ -230,14 +230,15 @@ function buildResults(query: string, runs: AgentRun[]): PaletteResult[] {
 
   // Search runs
   for (const run of runs) {
-    const haystack = [run.name, run.id, run.spec.prompt, ...run.spec.repos.map((r) => r.url)]
+    const haystack = [run.spec.displayName, run.name, run.id, run.spec.prompt, ...run.spec.repos.map((r) => r.url)]
+      .filter(Boolean)
       .join(" ")
       .toLowerCase();
     if (haystack.includes(q)) {
       results.push({
         id: `run-${run.id}`,
         type: "run",
-        label: run.name || run.id,
+        label: run.spec.displayName || run.name || run.id,
         detail: run.spec.prompt.slice(0, 60),
         value: run.id,
       });

@@ -35,6 +35,8 @@ interface DetailPaneProps {
   /** Controlled active tab — when provided, the parent drives tab state (e.g. via keyboard Tab cycling). */
   activeTab?: TabId;
   onTabChange?: (tab: TabId) => void;
+  /** Called when the watch stream receives a phase_changed event, so the parent can re-fetch runs. */
+  onRefresh?: () => void;
 }
 
 /**
@@ -53,6 +55,7 @@ export default function DetailPane({
   onSendInput,
   activeTab: controlledTab,
   onTabChange,
+  onRefresh,
 }: DetailPaneProps) {
   const [internalTab, setInternalTab] = useState<TabId>("info");
   const activeTab = controlledTab ?? internalTab;
@@ -73,8 +76,9 @@ export default function DetailPane({
   const isActive = run.status.phase === "running" || run.status.phase === "waiting_for_input";
   const hasPod = !!run.status.podName;
 
-  const streamRunId = isActive ? run.id : null;
-  const { logLines, isStreaming } = useWatchRun(streamRunId);
+  const isWatchable = run.status.phase === "pending" || isActive;
+  const streamRunId = isWatchable ? run.id : null;
+  const { logLines, isStreaming } = useWatchRun(streamRunId, onRefresh ? () => onRefresh() : undefined);
 
   // Phase color mapping using semantic tokens
   const phaseColorMap: Record<string, string> = {
@@ -94,7 +98,10 @@ export default function DetailPane({
         style={{ borderColor: "var(--color-border, hsl(var(--border)))" }}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <span className="text-sm font-bold truncate">{run.name}</span>
+          <span className="text-sm font-bold truncate">{run.spec.displayName || run.name}</span>
+          {run.spec.displayName && (
+            <span className="text-xs font-mono truncate" style={{ color: "var(--color-muted)" }}>{run.name}</span>
+          )}
           <span
             className="text-xs font-medium"
             data-testid="detail-phase"
@@ -226,7 +233,7 @@ function InfoTab({
   return (
     <div className="overflow-y-auto p-4 space-y-4">
       {/* Run ID + full prompt + repo + phase + timestamps */}
-      <div data-testid="detail-name" className="text-sm font-semibold">{run.name}</div>
+      <div data-testid="detail-name" className="text-sm font-semibold">{run.spec.displayName || run.name}</div>
 
       <div className="space-y-2 text-xs">
         <MetaRow label="Run ID" value={run.id} mono />

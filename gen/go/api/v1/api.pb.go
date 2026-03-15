@@ -25,6 +25,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// OrchestrationMode specifies how an agent run handles decomposition.
+type OrchestrationMode int32
+
+const (
+	OrchestrationMode_ORCHESTRATION_MODE_UNSPECIFIED OrchestrationMode = 0
+	OrchestrationMode_ORCHESTRATION_MODE_SINGLE      OrchestrationMode = 1
+	OrchestrationMode_ORCHESTRATION_MODE_AUTO        OrchestrationMode = 2
+	OrchestrationMode_ORCHESTRATION_MODE_MANUAL      OrchestrationMode = 3
+)
+
+// Enum value maps for OrchestrationMode.
+var (
+	OrchestrationMode_name = map[int32]string{
+		0: "ORCHESTRATION_MODE_UNSPECIFIED",
+		1: "ORCHESTRATION_MODE_SINGLE",
+		2: "ORCHESTRATION_MODE_AUTO",
+		3: "ORCHESTRATION_MODE_MANUAL",
+	}
+	OrchestrationMode_value = map[string]int32{
+		"ORCHESTRATION_MODE_UNSPECIFIED": 0,
+		"ORCHESTRATION_MODE_SINGLE":      1,
+		"ORCHESTRATION_MODE_AUTO":        2,
+		"ORCHESTRATION_MODE_MANUAL":      3,
+	}
+)
+
+func (x OrchestrationMode) Enum() *OrchestrationMode {
+	p := new(OrchestrationMode)
+	*p = x
+	return p
+}
+
+func (x OrchestrationMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OrchestrationMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_aot_api_v1_api_proto_enumTypes[0].Descriptor()
+}
+
+func (OrchestrationMode) Type() protoreflect.EnumType {
+	return &file_aot_api_v1_api_proto_enumTypes[0]
+}
+
+func (x OrchestrationMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OrchestrationMode.Descriptor instead.
+func (OrchestrationMode) EnumDescriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{0}
+}
+
 // Backend specifies the execution backend for an agent run.
 type Backend int32
 
@@ -62,11 +115,11 @@ func (x Backend) String() string {
 }
 
 func (Backend) Descriptor() protoreflect.EnumDescriptor {
-	return file_aot_api_v1_api_proto_enumTypes[0].Descriptor()
+	return file_aot_api_v1_api_proto_enumTypes[1].Descriptor()
 }
 
 func (Backend) Type() protoreflect.EnumType {
-	return &file_aot_api_v1_api_proto_enumTypes[0]
+	return &file_aot_api_v1_api_proto_enumTypes[1]
 }
 
 func (x Backend) Number() protoreflect.EnumNumber {
@@ -75,7 +128,7 @@ func (x Backend) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Backend.Descriptor instead.
 func (Backend) EnumDescriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{0}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{1}
 }
 
 // AgentRunPhase represents the lifecycle phase of an agent run.
@@ -124,11 +177,11 @@ func (x AgentRunPhase) String() string {
 }
 
 func (AgentRunPhase) Descriptor() protoreflect.EnumDescriptor {
-	return file_aot_api_v1_api_proto_enumTypes[1].Descriptor()
+	return file_aot_api_v1_api_proto_enumTypes[2].Descriptor()
 }
 
 func (AgentRunPhase) Type() protoreflect.EnumType {
-	return &file_aot_api_v1_api_proto_enumTypes[1]
+	return &file_aot_api_v1_api_proto_enumTypes[2]
 }
 
 func (x AgentRunPhase) Number() protoreflect.EnumNumber {
@@ -137,7 +190,7 @@ func (x AgentRunPhase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AgentRunPhase.Descriptor instead.
 func (AgentRunPhase) EnumDescriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{1}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{2}
 }
 
 type AgentRunEventType int32
@@ -182,11 +235,11 @@ func (x AgentRunEventType) String() string {
 }
 
 func (AgentRunEventType) Descriptor() protoreflect.EnumDescriptor {
-	return file_aot_api_v1_api_proto_enumTypes[2].Descriptor()
+	return file_aot_api_v1_api_proto_enumTypes[3].Descriptor()
 }
 
 func (AgentRunEventType) Type() protoreflect.EnumType {
-	return &file_aot_api_v1_api_proto_enumTypes[2]
+	return &file_aot_api_v1_api_proto_enumTypes[3]
 }
 
 func (x AgentRunEventType) Number() protoreflect.EnumNumber {
@@ -195,7 +248,57 @@ func (x AgentRunEventType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AgentRunEventType.Descriptor instead.
 func (AgentRunEventType) EnumDescriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{2}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{3}
+}
+
+// SourceFilter controls which knowledge base indexes are searched.
+type SourceFilter int32
+
+const (
+	SourceFilter_SOURCE_FILTER_ALL   SourceFilter = 0
+	SourceFilter_SOURCE_FILTER_CODE  SourceFilter = 1
+	SourceFilter_SOURCE_FILTER_TRACE SourceFilter = 2
+)
+
+// Enum value maps for SourceFilter.
+var (
+	SourceFilter_name = map[int32]string{
+		0: "SOURCE_FILTER_ALL",
+		1: "SOURCE_FILTER_CODE",
+		2: "SOURCE_FILTER_TRACE",
+	}
+	SourceFilter_value = map[string]int32{
+		"SOURCE_FILTER_ALL":   0,
+		"SOURCE_FILTER_CODE":  1,
+		"SOURCE_FILTER_TRACE": 2,
+	}
+)
+
+func (x SourceFilter) Enum() *SourceFilter {
+	p := new(SourceFilter)
+	*p = x
+	return p
+}
+
+func (x SourceFilter) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SourceFilter) Descriptor() protoreflect.EnumDescriptor {
+	return file_aot_api_v1_api_proto_enumTypes[4].Descriptor()
+}
+
+func (SourceFilter) Type() protoreflect.EnumType {
+	return &file_aot_api_v1_api_proto_enumTypes[4]
+}
+
+func (x SourceFilter) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SourceFilter.Descriptor instead.
+func (SourceFilter) EnumDescriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{4}
 }
 
 type AgentRun struct {
@@ -375,12 +478,14 @@ type AgentRunSpec struct {
 	WorkspaceName string `protobuf:"bytes,13,opt,name=workspace_name,json=workspaceName,proto3" json:"workspace_name,omitempty"`
 	// ParentRunID links this junior run to its parent senior run.
 	ParentRunId string `protobuf:"bytes,15,opt,name=parent_run_id,json=parentRunId,proto3" json:"parent_run_id,omitempty"`
-	// OrchestrationMode controls decomposition behavior.
+	// OrchestrationMode controls decomposition behavior: single, auto, or manual.
 	OrchestrationMode OrchestrationMode `protobuf:"varint,16,opt,name=orchestration_mode,json=orchestrationMode,proto3,enum=aot.api.v1.OrchestrationMode" json:"orchestration_mode,omitempty"`
 	// Orchestration defines the manual orchestration task list.
 	Orchestration *Orchestration `protobuf:"bytes,17,opt,name=orchestration,proto3" json:"orchestration,omitempty"`
 	// SpecRunID groups all runs from a single spec execution.
-	SpecRunId     string `protobuf:"bytes,18,opt,name=spec_run_id,json=specRunId,proto3" json:"spec_run_id,omitempty"`
+	SpecRunId string `protobuf:"bytes,18,opt,name=spec_run_id,json=specRunId,proto3" json:"spec_run_id,omitempty"`
+	// DisplayName is a human-readable name generated from the prompt by the LLM.
+	DisplayName   string `protobuf:"bytes,19,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -527,6 +632,119 @@ func (x *AgentRunSpec) GetSpecRunId() string {
 	return ""
 }
 
+func (x *AgentRunSpec) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+// OrchestrationTask defines a single sub-task in a manual orchestration.
+type OrchestrationTask struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Prompt        string                 `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	RepoUrls      []string               `protobuf:"bytes,3,rep,name=repo_urls,json=repoUrls,proto3" json:"repo_urls,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrchestrationTask) Reset() {
+	*x = OrchestrationTask{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrchestrationTask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrchestrationTask) ProtoMessage() {}
+
+func (x *OrchestrationTask) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrchestrationTask.ProtoReflect.Descriptor instead.
+func (*OrchestrationTask) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *OrchestrationTask) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *OrchestrationTask) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *OrchestrationTask) GetRepoUrls() []string {
+	if x != nil {
+		return x.RepoUrls
+	}
+	return nil
+}
+
+// Orchestration contains the task list for manual orchestration mode.
+type Orchestration struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tasks         []*OrchestrationTask   `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Orchestration) Reset() {
+	*x = Orchestration{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Orchestration) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Orchestration) ProtoMessage() {}
+
+func (x *Orchestration) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Orchestration.ProtoReflect.Descriptor instead.
+func (*Orchestration) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Orchestration) GetTasks() []*OrchestrationTask {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
 type AgentRunStatus struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	Phase       AgentRunPhase          `protobuf:"varint,1,opt,name=phase,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase,omitempty"`
@@ -551,7 +769,7 @@ type AgentRunStatus struct {
 
 func (x *AgentRunStatus) Reset() {
 	*x = AgentRunStatus{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[3]
+	mi := &file_aot_api_v1_api_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -563,7 +781,7 @@ func (x *AgentRunStatus) String() string {
 func (*AgentRunStatus) ProtoMessage() {}
 
 func (x *AgentRunStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[3]
+	mi := &file_aot_api_v1_api_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -576,7 +794,7 @@ func (x *AgentRunStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunStatus.ProtoReflect.Descriptor instead.
 func (*AgentRunStatus) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{3}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AgentRunStatus) GetPhase() AgentRunPhase {
@@ -665,7 +883,7 @@ type CreateAgentRunRequest struct {
 
 func (x *CreateAgentRunRequest) Reset() {
 	*x = CreateAgentRunRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[4]
+	mi := &file_aot_api_v1_api_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -677,7 +895,7 @@ func (x *CreateAgentRunRequest) String() string {
 func (*CreateAgentRunRequest) ProtoMessage() {}
 
 func (x *CreateAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[4]
+	mi := &file_aot_api_v1_api_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -690,7 +908,7 @@ func (x *CreateAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*CreateAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{4}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateAgentRunRequest) GetSpec() *AgentRunSpec {
@@ -709,7 +927,7 @@ type CreateAgentRunResponse struct {
 
 func (x *CreateAgentRunResponse) Reset() {
 	*x = CreateAgentRunResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[5]
+	mi := &file_aot_api_v1_api_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -721,7 +939,7 @@ func (x *CreateAgentRunResponse) String() string {
 func (*CreateAgentRunResponse) ProtoMessage() {}
 
 func (x *CreateAgentRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[5]
+	mi := &file_aot_api_v1_api_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -734,7 +952,7 @@ func (x *CreateAgentRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAgentRunResponse.ProtoReflect.Descriptor instead.
 func (*CreateAgentRunResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{5}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CreateAgentRunResponse) GetAgentRun() *AgentRun {
@@ -753,7 +971,7 @@ type GetAgentRunRequest struct {
 
 func (x *GetAgentRunRequest) Reset() {
 	*x = GetAgentRunRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[6]
+	mi := &file_aot_api_v1_api_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -765,7 +983,7 @@ func (x *GetAgentRunRequest) String() string {
 func (*GetAgentRunRequest) ProtoMessage() {}
 
 func (x *GetAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[6]
+	mi := &file_aot_api_v1_api_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -778,7 +996,7 @@ func (x *GetAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{6}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetAgentRunRequest) GetId() string {
@@ -793,9 +1011,9 @@ type ListAgentRunsRequest struct {
 	PhaseFilter AgentRunPhase          `protobuf:"varint,1,opt,name=phase_filter,json=phaseFilter,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase_filter,omitempty"`
 	Limit       int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
 	Cursor      string                 `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
-	// SpecRunId filters runs belonging to a specific spec execution.
+	// SpecRunID filters runs belonging to a specific spec execution.
 	SpecRunId string `protobuf:"bytes,4,opt,name=spec_run_id,json=specRunId,proto3" json:"spec_run_id,omitempty"`
-	// ParentRunId filters runs that are children of a specific parent.
+	// ParentRunID filters runs that are children of a specific parent.
 	ParentRunId   string `protobuf:"bytes,5,opt,name=parent_run_id,json=parentRunId,proto3" json:"parent_run_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -803,7 +1021,7 @@ type ListAgentRunsRequest struct {
 
 func (x *ListAgentRunsRequest) Reset() {
 	*x = ListAgentRunsRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[7]
+	mi := &file_aot_api_v1_api_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -815,7 +1033,7 @@ func (x *ListAgentRunsRequest) String() string {
 func (*ListAgentRunsRequest) ProtoMessage() {}
 
 func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[7]
+	mi := &file_aot_api_v1_api_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -828,7 +1046,7 @@ func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentRunsRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{7}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListAgentRunsRequest) GetPhaseFilter() AgentRunPhase {
@@ -876,7 +1094,7 @@ type ListAgentRunsResponse struct {
 
 func (x *ListAgentRunsResponse) Reset() {
 	*x = ListAgentRunsResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[8]
+	mi := &file_aot_api_v1_api_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -888,7 +1106,7 @@ func (x *ListAgentRunsResponse) String() string {
 func (*ListAgentRunsResponse) ProtoMessage() {}
 
 func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[8]
+	mi := &file_aot_api_v1_api_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -901,7 +1119,7 @@ func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentRunsResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{8}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListAgentRunsResponse) GetAgentRuns() []*AgentRun {
@@ -927,7 +1145,7 @@ type WatchAgentRunRequest struct {
 
 func (x *WatchAgentRunRequest) Reset() {
 	*x = WatchAgentRunRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[9]
+	mi := &file_aot_api_v1_api_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -939,7 +1157,7 @@ func (x *WatchAgentRunRequest) String() string {
 func (*WatchAgentRunRequest) ProtoMessage() {}
 
 func (x *WatchAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[9]
+	mi := &file_aot_api_v1_api_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -952,7 +1170,7 @@ func (x *WatchAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*WatchAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{9}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *WatchAgentRunRequest) GetId() string {
@@ -974,7 +1192,7 @@ type AgentRunEvent struct {
 
 func (x *AgentRunEvent) Reset() {
 	*x = AgentRunEvent{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[10]
+	mi := &file_aot_api_v1_api_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -986,7 +1204,7 @@ func (x *AgentRunEvent) String() string {
 func (*AgentRunEvent) ProtoMessage() {}
 
 func (x *AgentRunEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[10]
+	mi := &file_aot_api_v1_api_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -999,7 +1217,7 @@ func (x *AgentRunEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunEvent.ProtoReflect.Descriptor instead.
 func (*AgentRunEvent) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{10}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AgentRunEvent) GetAgentRunId() string {
@@ -1039,7 +1257,7 @@ type CancelAgentRunRequest struct {
 
 func (x *CancelAgentRunRequest) Reset() {
 	*x = CancelAgentRunRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[11]
+	mi := &file_aot_api_v1_api_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1051,7 +1269,7 @@ func (x *CancelAgentRunRequest) String() string {
 func (*CancelAgentRunRequest) ProtoMessage() {}
 
 func (x *CancelAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[11]
+	mi := &file_aot_api_v1_api_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1064,7 +1282,7 @@ func (x *CancelAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*CancelAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{11}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CancelAgentRunRequest) GetId() string {
@@ -1083,7 +1301,7 @@ type CancelAgentRunResponse struct {
 
 func (x *CancelAgentRunResponse) Reset() {
 	*x = CancelAgentRunResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[12]
+	mi := &file_aot_api_v1_api_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1095,7 +1313,7 @@ func (x *CancelAgentRunResponse) String() string {
 func (*CancelAgentRunResponse) ProtoMessage() {}
 
 func (x *CancelAgentRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[12]
+	mi := &file_aot_api_v1_api_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1108,7 +1326,7 @@ func (x *CancelAgentRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelAgentRunResponse.ProtoReflect.Descriptor instead.
 func (*CancelAgentRunResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{12}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CancelAgentRunResponse) GetAgentRun() *AgentRun {
@@ -1128,7 +1346,7 @@ type SendHumanInputRequest struct {
 
 func (x *SendHumanInputRequest) Reset() {
 	*x = SendHumanInputRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[13]
+	mi := &file_aot_api_v1_api_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1140,7 +1358,7 @@ func (x *SendHumanInputRequest) String() string {
 func (*SendHumanInputRequest) ProtoMessage() {}
 
 func (x *SendHumanInputRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[13]
+	mi := &file_aot_api_v1_api_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1153,7 +1371,7 @@ func (x *SendHumanInputRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendHumanInputRequest.ProtoReflect.Descriptor instead.
 func (*SendHumanInputRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{13}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SendHumanInputRequest) GetAgentRunId() string {
@@ -1179,7 +1397,7 @@ type SendHumanInputResponse struct {
 
 func (x *SendHumanInputResponse) Reset() {
 	*x = SendHumanInputResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[14]
+	mi := &file_aot_api_v1_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1191,7 +1409,7 @@ func (x *SendHumanInputResponse) String() string {
 func (*SendHumanInputResponse) ProtoMessage() {}
 
 func (x *SendHumanInputResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[14]
+	mi := &file_aot_api_v1_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1204,7 +1422,7 @@ func (x *SendHumanInputResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendHumanInputResponse.ProtoReflect.Descriptor instead.
 func (*SendHumanInputResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{14}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SendHumanInputResponse) GetAccepted() bool {
@@ -1214,12 +1432,494 @@ func (x *SendHumanInputResponse) GetAccepted() bool {
 	return false
 }
 
+type GetRunGraphRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRunGraphRequest) Reset() {
+	*x = GetRunGraphRequest{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRunGraphRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRunGraphRequest) ProtoMessage() {}
+
+func (x *GetRunGraphRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRunGraphRequest.ProtoReflect.Descriptor instead.
+func (*GetRunGraphRequest) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetRunGraphRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type RunGraphNode struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Phase         AgentRunPhase          `protobuf:"varint,2,opt,name=phase,proto3,enum=aot.api.v1.AgentRunPhase" json:"phase,omitempty"`
+	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	CompletedAt   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunGraphNode) Reset() {
+	*x = RunGraphNode{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunGraphNode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunGraphNode) ProtoMessage() {}
+
+func (x *RunGraphNode) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunGraphNode.ProtoReflect.Descriptor instead.
+func (*RunGraphNode) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *RunGraphNode) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RunGraphNode) GetPhase() AgentRunPhase {
+	if x != nil {
+		return x.Phase
+	}
+	return AgentRunPhase_AGENT_RUN_PHASE_UNSPECIFIED
+}
+
+func (x *RunGraphNode) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *RunGraphNode) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *RunGraphNode) GetCompletedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CompletedAt
+	}
+	return nil
+}
+
+type RunGraphEdge struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Parent        string                 `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	Child         string                 `protobuf:"bytes,2,opt,name=child,proto3" json:"child,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunGraphEdge) Reset() {
+	*x = RunGraphEdge{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunGraphEdge) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunGraphEdge) ProtoMessage() {}
+
+func (x *RunGraphEdge) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunGraphEdge.ProtoReflect.Descriptor instead.
+func (*RunGraphEdge) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *RunGraphEdge) GetParent() string {
+	if x != nil {
+		return x.Parent
+	}
+	return ""
+}
+
+func (x *RunGraphEdge) GetChild() string {
+	if x != nil {
+		return x.Child
+	}
+	return ""
+}
+
+type RunGraph struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nodes         []*RunGraphNode        `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	Edges         []*RunGraphEdge        `protobuf:"bytes,2,rep,name=edges,proto3" json:"edges,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunGraph) Reset() {
+	*x = RunGraph{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunGraph) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunGraph) ProtoMessage() {}
+
+func (x *RunGraph) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunGraph.ProtoReflect.Descriptor instead.
+func (*RunGraph) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *RunGraph) GetNodes() []*RunGraphNode {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+func (x *RunGraph) GetEdges() []*RunGraphEdge {
+	if x != nil {
+		return x.Edges
+	}
+	return nil
+}
+
+type SearchPastWorkRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Natural language query string.
+	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	// Optional: filter results to a specific repository.
+	RepoUrl string `protobuf:"bytes,2,opt,name=repo_url,json=repoUrl,proto3" json:"repo_url,omitempty"`
+	// Optional: filter results created after this timestamp.
+	CreatedAfter *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=created_after,json=createdAfter,proto3" json:"created_after,omitempty"`
+	// Optional: filter results created before this timestamp.
+	CreatedBefore *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_before,json=createdBefore,proto3" json:"created_before,omitempty"`
+	// Optional: filter by source type (code, trace, or both).
+	SourceFilter SourceFilter `protobuf:"varint,5,opt,name=source_filter,json=sourceFilter,proto3,enum=aot.api.v1.SourceFilter" json:"source_filter,omitempty"`
+	// Maximum number of results to return (default 10, max 100).
+	Limit         int32 `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchPastWorkRequest) Reset() {
+	*x = SearchPastWorkRequest{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchPastWorkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchPastWorkRequest) ProtoMessage() {}
+
+func (x *SearchPastWorkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchPastWorkRequest.ProtoReflect.Descriptor instead.
+func (*SearchPastWorkRequest) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *SearchPastWorkRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *SearchPastWorkRequest) GetRepoUrl() string {
+	if x != nil {
+		return x.RepoUrl
+	}
+	return ""
+}
+
+func (x *SearchPastWorkRequest) GetCreatedAfter() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAfter
+	}
+	return nil
+}
+
+func (x *SearchPastWorkRequest) GetCreatedBefore() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedBefore
+	}
+	return nil
+}
+
+func (x *SearchPastWorkRequest) GetSourceFilter() SourceFilter {
+	if x != nil {
+		return x.SourceFilter
+	}
+	return SourceFilter_SOURCE_FILTER_ALL
+}
+
+func (x *SearchPastWorkRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type SearchPastWorkResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*PastWorkResult      `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchPastWorkResponse) Reset() {
+	*x = SearchPastWorkResponse{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchPastWorkResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchPastWorkResponse) ProtoMessage() {}
+
+func (x *SearchPastWorkResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchPastWorkResponse.ProtoReflect.Descriptor instead.
+func (*SearchPastWorkResponse) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *SearchPastWorkResponse) GetResults() []*PastWorkResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+type PastWorkResult struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ChunkText       string                 `protobuf:"bytes,1,opt,name=chunk_text,json=chunkText,proto3" json:"chunk_text,omitempty"`
+	SourceType      string                 `protobuf:"bytes,2,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"` // "code" or "trace"
+	SimilarityScore float64                `protobuf:"fixed64,3,opt,name=similarity_score,json=similarityScore,proto3" json:"similarity_score,omitempty"`
+	RunId           string                 `protobuf:"bytes,4,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	FilePath        string                 `protobuf:"bytes,5,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
+	Language        string                 `protobuf:"bytes,6,opt,name=language,proto3" json:"language,omitempty"`
+	NodeType        string                 `protobuf:"bytes,7,opt,name=node_type,json=nodeType,proto3" json:"node_type,omitempty"`
+	ChunkType       string                 `protobuf:"bytes,8,opt,name=chunk_type,json=chunkType,proto3" json:"chunk_type,omitempty"`
+	Severity        string                 `protobuf:"bytes,9,opt,name=severity,proto3" json:"severity,omitempty"`
+	RepoUrl         string                 `protobuf:"bytes,10,opt,name=repo_url,json=repoUrl,proto3" json:"repo_url,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *PastWorkResult) Reset() {
+	*x = PastWorkResult{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PastWorkResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PastWorkResult) ProtoMessage() {}
+
+func (x *PastWorkResult) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PastWorkResult.ProtoReflect.Descriptor instead.
+func (*PastWorkResult) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *PastWorkResult) GetChunkText() string {
+	if x != nil {
+		return x.ChunkText
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetSourceType() string {
+	if x != nil {
+		return x.SourceType
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetSimilarityScore() float64 {
+	if x != nil {
+		return x.SimilarityScore
+	}
+	return 0
+}
+
+func (x *PastWorkResult) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetFilePath() string {
+	if x != nil {
+		return x.FilePath
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetNodeType() string {
+	if x != nil {
+		return x.NodeType
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetChunkType() string {
+	if x != nil {
+		return x.ChunkType
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetRepoUrl() string {
+	if x != nil {
+		return x.RepoUrl
+	}
+	return ""
+}
+
+func (x *PastWorkResult) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
 var File_aot_api_v1_api_proto protoreflect.FileDescriptor
 
 const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"\x14aot/api/v1/api.proto\x12\n" +
-	"aot.api.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x86\x02\n" +
+	"aot.api.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa2\x02\n" +
 	"\bAgentRun\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12,\n" +
@@ -1228,12 +1928,13 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"T\n" +
+	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1a\n" +
+	"\bchildren\x18\a \x03(\tR\bchildren\"T\n" +
 	"\n" +
 	"Repository\x12\x1a\n" +
 	"\x03url\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\x03url\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\"\xa9\x04\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"\x9f\x06\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x126\n" +
 	"\x05repos\x18\x02 \x03(\v2\x16.aot.api.v1.RepositoryB\b\xbaH\x05\x92\x01\x02\b\x01R\x05repos\x12\x16\n" +
@@ -1251,10 +1952,21 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\fspec_content\x18\v \x01(\tR\vspecContent\x12\x1f\n" +
 	"\vspec_source\x18\f \x01(\tR\n" +
 	"specSource\x12%\n" +
-	"\x0eworkspace_name\x18\r \x01(\tR\rworkspaceName\x1a:\n" +
+	"\x0eworkspace_name\x18\r \x01(\tR\rworkspaceName\x12\"\n" +
+	"\rparent_run_id\x18\x0f \x01(\tR\vparentRunId\x12L\n" +
+	"\x12orchestration_mode\x18\x10 \x01(\x0e2\x1d.aot.api.v1.OrchestrationModeR\x11orchestrationMode\x12?\n" +
+	"\rorchestration\x18\x11 \x01(\v2\x19.aot.api.v1.OrchestrationR\rorchestration\x12\x1e\n" +
+	"\vspec_run_id\x18\x12 \x01(\tR\tspecRunId\x12!\n" +
+	"\fdisplay_name\x18\x13 \x01(\tR\vdisplayName\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0e\x10\x0f\"\xda\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0e\x10\x0f\"\\\n" +
+	"\x11OrchestrationTask\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x12\x1b\n" +
+	"\trepo_urls\x18\x03 \x03(\tR\brepoUrls\"D\n" +
+	"\rOrchestration\x123\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x1d.aot.api.v1.OrchestrationTaskR\x05tasks\"\xda\x03\n" +
 	"\x0eAgentRunStatus\x12/\n" +
 	"\x05phase\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\x05phase\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
@@ -1275,11 +1987,13 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x16CreateAgentRunResponse\x121\n" +
 	"\tagent_run\x18\x01 \x01(\v2\x14.aot.api.v1.AgentRunR\bagentRun\"$\n" +
 	"\x12GetAgentRunRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x82\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xc6\x01\n" +
 	"\x14ListAgentRunsRequest\x12<\n" +
 	"\fphase_filter\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\vphaseFilter\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"m\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\x12\x1e\n" +
+	"\vspec_run_id\x18\x04 \x01(\tR\tspecRunId\x12\"\n" +
+	"\rparent_run_id\x18\x05 \x01(\tR\vparentRunId\"m\n" +
 	"\x15ListAgentRunsResponse\x123\n" +
 	"\n" +
 	"agent_runs\x18\x01 \x03(\v2\x14.aot.api.v1.AgentRunR\tagentRuns\x12\x1f\n" +
@@ -1302,7 +2016,53 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"agentRunId\x12\x14\n" +
 	"\x05input\x18\x02 \x01(\tR\x05input\"4\n" +
 	"\x16SendHumanInputResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted*_\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"$\n" +
+	"\x12GetRunGraphRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xe1\x01\n" +
+	"\fRunGraphNode\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12/\n" +
+	"\x05phase\x18\x02 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\x05phase\x12\x12\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x129\n" +
+	"\n" +
+	"started_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12=\n" +
+	"\fcompleted_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\"<\n" +
+	"\fRunGraphEdge\x12\x16\n" +
+	"\x06parent\x18\x01 \x01(\tR\x06parent\x12\x14\n" +
+	"\x05child\x18\x02 \x01(\tR\x05child\"j\n" +
+	"\bRunGraph\x12.\n" +
+	"\x05nodes\x18\x01 \x03(\v2\x18.aot.api.v1.RunGraphNodeR\x05nodes\x12.\n" +
+	"\x05edges\x18\x02 \x03(\v2\x18.aot.api.v1.RunGraphEdgeR\x05edges\"\xa1\x02\n" +
+	"\x15SearchPastWorkRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\x12\x19\n" +
+	"\brepo_url\x18\x02 \x01(\tR\arepoUrl\x12?\n" +
+	"\rcreated_after\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\fcreatedAfter\x12A\n" +
+	"\x0ecreated_before\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\rcreatedBefore\x12=\n" +
+	"\rsource_filter\x18\x05 \x01(\x0e2\x18.aot.api.v1.SourceFilterR\fsourceFilter\x12\x14\n" +
+	"\x05limit\x18\x06 \x01(\x05R\x05limit\"N\n" +
+	"\x16SearchPastWorkResponse\x124\n" +
+	"\aresults\x18\x01 \x03(\v2\x1a.aot.api.v1.PastWorkResultR\aresults\"\xf9\x02\n" +
+	"\x0ePastWorkResult\x12\x1d\n" +
+	"\n" +
+	"chunk_text\x18\x01 \x01(\tR\tchunkText\x12\x1f\n" +
+	"\vsource_type\x18\x02 \x01(\tR\n" +
+	"sourceType\x12)\n" +
+	"\x10similarity_score\x18\x03 \x01(\x01R\x0fsimilarityScore\x12\x15\n" +
+	"\x06run_id\x18\x04 \x01(\tR\x05runId\x12\x1b\n" +
+	"\tfile_path\x18\x05 \x01(\tR\bfilePath\x12\x1a\n" +
+	"\blanguage\x18\x06 \x01(\tR\blanguage\x12\x1b\n" +
+	"\tnode_type\x18\a \x01(\tR\bnodeType\x12\x1d\n" +
+	"\n" +
+	"chunk_type\x18\b \x01(\tR\tchunkType\x12\x1a\n" +
+	"\bseverity\x18\t \x01(\tR\bseverity\x12\x19\n" +
+	"\brepo_url\x18\n" +
+	" \x01(\tR\arepoUrl\x129\n" +
+	"\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt*\x92\x01\n" +
+	"\x11OrchestrationMode\x12\"\n" +
+	"\x1eORCHESTRATION_MODE_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19ORCHESTRATION_MODE_SINGLE\x10\x01\x12\x1b\n" +
+	"\x17ORCHESTRATION_MODE_AUTO\x10\x02\x12\x1d\n" +
+	"\x19ORCHESTRATION_MODE_MANUAL\x10\x03*_\n" +
 	"\aBackend\x12\x17\n" +
 	"\x13BACKEND_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vBACKEND_POD\x10\x01\x12\x14\n" +
@@ -1322,7 +2082,11 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x18AGENT_RUN_EVENT_TYPE_LOG\x10\x02\x12\"\n" +
 	"\x1eAGENT_RUN_EVENT_TYPE_TOOL_CALL\x10\x03\x12*\n" +
 	"&AGENT_RUN_EVENT_TYPE_WAITING_FOR_INPUT\x10\x04\x12\"\n" +
-	"\x1eAGENT_RUN_EVENT_TYPE_COMPLETED\x10\x052\x82\x04\n" +
+	"\x1eAGENT_RUN_EVENT_TYPE_COMPLETED\x10\x05*V\n" +
+	"\fSourceFilter\x12\x15\n" +
+	"\x11SOURCE_FILTER_ALL\x10\x00\x12\x16\n" +
+	"\x12SOURCE_FILTER_CODE\x10\x01\x12\x17\n" +
+	"\x13SOURCE_FILTER_TRACE\x10\x022\xa0\x05\n" +
 	"\n" +
 	"AOTService\x12W\n" +
 	"\x0eCreateAgentRun\x12!.aot.api.v1.CreateAgentRunRequest\x1a\".aot.api.v1.CreateAgentRunResponse\x12C\n" +
@@ -1330,7 +2094,9 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\rListAgentRuns\x12 .aot.api.v1.ListAgentRunsRequest\x1a!.aot.api.v1.ListAgentRunsResponse\x12N\n" +
 	"\rWatchAgentRun\x12 .aot.api.v1.WatchAgentRunRequest\x1a\x19.aot.api.v1.AgentRunEvent0\x01\x12W\n" +
 	"\x0eCancelAgentRun\x12!.aot.api.v1.CancelAgentRunRequest\x1a\".aot.api.v1.CancelAgentRunResponse\x12W\n" +
-	"\x0eSendHumanInput\x12!.aot.api.v1.SendHumanInputRequest\x1a\".aot.api.v1.SendHumanInputResponseB-Z+github.com/uncworks/aot/gen/go/api/v1;apiv1b\x06proto3"
+	"\x0eSendHumanInput\x12!.aot.api.v1.SendHumanInputRequest\x1a\".aot.api.v1.SendHumanInputResponse\x12C\n" +
+	"\vGetRunGraph\x12\x1e.aot.api.v1.GetRunGraphRequest\x1a\x14.aot.api.v1.RunGraph\x12W\n" +
+	"\x0eSearchPastWork\x12!.aot.api.v1.SearchPastWorkRequest\x1a\".aot.api.v1.SearchPastWorkResponseB-Z+github.com/uncworks/aot/gen/go/api/v1;apiv1b\x06proto3"
 
 var (
 	file_aot_api_v1_api_proto_rawDescOnce sync.Once
@@ -1344,66 +2110,94 @@ func file_aot_api_v1_api_proto_rawDescGZIP() []byte {
 	return file_aot_api_v1_api_proto_rawDescData
 }
 
-var file_aot_api_v1_api_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_aot_api_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_aot_api_v1_api_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_aot_api_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_aot_api_v1_api_proto_goTypes = []any{
-	(Backend)(0),                   // 0: aot.api.v1.Backend
-	(AgentRunPhase)(0),             // 1: aot.api.v1.AgentRunPhase
-	(AgentRunEventType)(0),         // 2: aot.api.v1.AgentRunEventType
-	(*AgentRun)(nil),               // 3: aot.api.v1.AgentRun
-	(*Repository)(nil),             // 4: aot.api.v1.Repository
-	(*AgentRunSpec)(nil),           // 5: aot.api.v1.AgentRunSpec
-	(*AgentRunStatus)(nil),         // 6: aot.api.v1.AgentRunStatus
-	(*CreateAgentRunRequest)(nil),  // 7: aot.api.v1.CreateAgentRunRequest
-	(*CreateAgentRunResponse)(nil), // 8: aot.api.v1.CreateAgentRunResponse
-	(*GetAgentRunRequest)(nil),     // 9: aot.api.v1.GetAgentRunRequest
-	(*ListAgentRunsRequest)(nil),   // 10: aot.api.v1.ListAgentRunsRequest
-	(*ListAgentRunsResponse)(nil),  // 11: aot.api.v1.ListAgentRunsResponse
-	(*WatchAgentRunRequest)(nil),   // 12: aot.api.v1.WatchAgentRunRequest
-	(*AgentRunEvent)(nil),          // 13: aot.api.v1.AgentRunEvent
-	(*CancelAgentRunRequest)(nil),  // 14: aot.api.v1.CancelAgentRunRequest
-	(*CancelAgentRunResponse)(nil), // 15: aot.api.v1.CancelAgentRunResponse
-	(*SendHumanInputRequest)(nil),  // 16: aot.api.v1.SendHumanInputRequest
-	(*SendHumanInputResponse)(nil), // 17: aot.api.v1.SendHumanInputResponse
-	nil,                            // 18: aot.api.v1.AgentRunSpec.EnvVarsEntry
-	(*timestamppb.Timestamp)(nil),  // 19: google.protobuf.Timestamp
+	(OrchestrationMode)(0),         // 0: aot.api.v1.OrchestrationMode
+	(Backend)(0),                   // 1: aot.api.v1.Backend
+	(AgentRunPhase)(0),             // 2: aot.api.v1.AgentRunPhase
+	(AgentRunEventType)(0),         // 3: aot.api.v1.AgentRunEventType
+	(SourceFilter)(0),              // 4: aot.api.v1.SourceFilter
+	(*AgentRun)(nil),               // 5: aot.api.v1.AgentRun
+	(*Repository)(nil),             // 6: aot.api.v1.Repository
+	(*AgentRunSpec)(nil),           // 7: aot.api.v1.AgentRunSpec
+	(*OrchestrationTask)(nil),      // 8: aot.api.v1.OrchestrationTask
+	(*Orchestration)(nil),          // 9: aot.api.v1.Orchestration
+	(*AgentRunStatus)(nil),         // 10: aot.api.v1.AgentRunStatus
+	(*CreateAgentRunRequest)(nil),  // 11: aot.api.v1.CreateAgentRunRequest
+	(*CreateAgentRunResponse)(nil), // 12: aot.api.v1.CreateAgentRunResponse
+	(*GetAgentRunRequest)(nil),     // 13: aot.api.v1.GetAgentRunRequest
+	(*ListAgentRunsRequest)(nil),   // 14: aot.api.v1.ListAgentRunsRequest
+	(*ListAgentRunsResponse)(nil),  // 15: aot.api.v1.ListAgentRunsResponse
+	(*WatchAgentRunRequest)(nil),   // 16: aot.api.v1.WatchAgentRunRequest
+	(*AgentRunEvent)(nil),          // 17: aot.api.v1.AgentRunEvent
+	(*CancelAgentRunRequest)(nil),  // 18: aot.api.v1.CancelAgentRunRequest
+	(*CancelAgentRunResponse)(nil), // 19: aot.api.v1.CancelAgentRunResponse
+	(*SendHumanInputRequest)(nil),  // 20: aot.api.v1.SendHumanInputRequest
+	(*SendHumanInputResponse)(nil), // 21: aot.api.v1.SendHumanInputResponse
+	(*GetRunGraphRequest)(nil),     // 22: aot.api.v1.GetRunGraphRequest
+	(*RunGraphNode)(nil),           // 23: aot.api.v1.RunGraphNode
+	(*RunGraphEdge)(nil),           // 24: aot.api.v1.RunGraphEdge
+	(*RunGraph)(nil),               // 25: aot.api.v1.RunGraph
+	(*SearchPastWorkRequest)(nil),  // 26: aot.api.v1.SearchPastWorkRequest
+	(*SearchPastWorkResponse)(nil), // 27: aot.api.v1.SearchPastWorkResponse
+	(*PastWorkResult)(nil),         // 28: aot.api.v1.PastWorkResult
+	nil,                            // 29: aot.api.v1.AgentRunSpec.EnvVarsEntry
+	(*timestamppb.Timestamp)(nil),  // 30: google.protobuf.Timestamp
 }
 var file_aot_api_v1_api_proto_depIdxs = []int32{
-	5,  // 0: aot.api.v1.AgentRun.spec:type_name -> aot.api.v1.AgentRunSpec
-	6,  // 1: aot.api.v1.AgentRun.status:type_name -> aot.api.v1.AgentRunStatus
-	19, // 2: aot.api.v1.AgentRun.created_at:type_name -> google.protobuf.Timestamp
-	19, // 3: aot.api.v1.AgentRun.updated_at:type_name -> google.protobuf.Timestamp
-	0,  // 4: aot.api.v1.AgentRunSpec.backend:type_name -> aot.api.v1.Backend
-	4,  // 5: aot.api.v1.AgentRunSpec.repos:type_name -> aot.api.v1.Repository
-	18, // 6: aot.api.v1.AgentRunSpec.env_vars:type_name -> aot.api.v1.AgentRunSpec.EnvVarsEntry
-	1,  // 7: aot.api.v1.AgentRunStatus.phase:type_name -> aot.api.v1.AgentRunPhase
-	19, // 8: aot.api.v1.AgentRunStatus.started_at:type_name -> google.protobuf.Timestamp
-	19, // 9: aot.api.v1.AgentRunStatus.completed_at:type_name -> google.protobuf.Timestamp
-	19, // 10: aot.api.v1.AgentRunStatus.retain_until:type_name -> google.protobuf.Timestamp
-	5,  // 11: aot.api.v1.CreateAgentRunRequest.spec:type_name -> aot.api.v1.AgentRunSpec
-	3,  // 12: aot.api.v1.CreateAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
-	1,  // 13: aot.api.v1.ListAgentRunsRequest.phase_filter:type_name -> aot.api.v1.AgentRunPhase
-	3,  // 14: aot.api.v1.ListAgentRunsResponse.agent_runs:type_name -> aot.api.v1.AgentRun
-	2,  // 15: aot.api.v1.AgentRunEvent.type:type_name -> aot.api.v1.AgentRunEventType
-	19, // 16: aot.api.v1.AgentRunEvent.timestamp:type_name -> google.protobuf.Timestamp
-	3,  // 17: aot.api.v1.CancelAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
-	7,  // 18: aot.api.v1.AOTService.CreateAgentRun:input_type -> aot.api.v1.CreateAgentRunRequest
-	9,  // 19: aot.api.v1.AOTService.GetAgentRun:input_type -> aot.api.v1.GetAgentRunRequest
-	10, // 20: aot.api.v1.AOTService.ListAgentRuns:input_type -> aot.api.v1.ListAgentRunsRequest
-	12, // 21: aot.api.v1.AOTService.WatchAgentRun:input_type -> aot.api.v1.WatchAgentRunRequest
-	14, // 22: aot.api.v1.AOTService.CancelAgentRun:input_type -> aot.api.v1.CancelAgentRunRequest
-	16, // 23: aot.api.v1.AOTService.SendHumanInput:input_type -> aot.api.v1.SendHumanInputRequest
-	8,  // 24: aot.api.v1.AOTService.CreateAgentRun:output_type -> aot.api.v1.CreateAgentRunResponse
-	3,  // 25: aot.api.v1.AOTService.GetAgentRun:output_type -> aot.api.v1.AgentRun
-	11, // 26: aot.api.v1.AOTService.ListAgentRuns:output_type -> aot.api.v1.ListAgentRunsResponse
-	13, // 27: aot.api.v1.AOTService.WatchAgentRun:output_type -> aot.api.v1.AgentRunEvent
-	15, // 28: aot.api.v1.AOTService.CancelAgentRun:output_type -> aot.api.v1.CancelAgentRunResponse
-	17, // 29: aot.api.v1.AOTService.SendHumanInput:output_type -> aot.api.v1.SendHumanInputResponse
-	24, // [24:30] is the sub-list for method output_type
-	18, // [18:24] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	7,  // 0: aot.api.v1.AgentRun.spec:type_name -> aot.api.v1.AgentRunSpec
+	10, // 1: aot.api.v1.AgentRun.status:type_name -> aot.api.v1.AgentRunStatus
+	30, // 2: aot.api.v1.AgentRun.created_at:type_name -> google.protobuf.Timestamp
+	30, // 3: aot.api.v1.AgentRun.updated_at:type_name -> google.protobuf.Timestamp
+	1,  // 4: aot.api.v1.AgentRunSpec.backend:type_name -> aot.api.v1.Backend
+	6,  // 5: aot.api.v1.AgentRunSpec.repos:type_name -> aot.api.v1.Repository
+	29, // 6: aot.api.v1.AgentRunSpec.env_vars:type_name -> aot.api.v1.AgentRunSpec.EnvVarsEntry
+	0,  // 7: aot.api.v1.AgentRunSpec.orchestration_mode:type_name -> aot.api.v1.OrchestrationMode
+	9,  // 8: aot.api.v1.AgentRunSpec.orchestration:type_name -> aot.api.v1.Orchestration
+	8,  // 9: aot.api.v1.Orchestration.tasks:type_name -> aot.api.v1.OrchestrationTask
+	2,  // 10: aot.api.v1.AgentRunStatus.phase:type_name -> aot.api.v1.AgentRunPhase
+	30, // 11: aot.api.v1.AgentRunStatus.started_at:type_name -> google.protobuf.Timestamp
+	30, // 12: aot.api.v1.AgentRunStatus.completed_at:type_name -> google.protobuf.Timestamp
+	30, // 13: aot.api.v1.AgentRunStatus.retain_until:type_name -> google.protobuf.Timestamp
+	7,  // 14: aot.api.v1.CreateAgentRunRequest.spec:type_name -> aot.api.v1.AgentRunSpec
+	5,  // 15: aot.api.v1.CreateAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
+	2,  // 16: aot.api.v1.ListAgentRunsRequest.phase_filter:type_name -> aot.api.v1.AgentRunPhase
+	5,  // 17: aot.api.v1.ListAgentRunsResponse.agent_runs:type_name -> aot.api.v1.AgentRun
+	3,  // 18: aot.api.v1.AgentRunEvent.type:type_name -> aot.api.v1.AgentRunEventType
+	30, // 19: aot.api.v1.AgentRunEvent.timestamp:type_name -> google.protobuf.Timestamp
+	5,  // 20: aot.api.v1.CancelAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
+	2,  // 21: aot.api.v1.RunGraphNode.phase:type_name -> aot.api.v1.AgentRunPhase
+	30, // 22: aot.api.v1.RunGraphNode.started_at:type_name -> google.protobuf.Timestamp
+	30, // 23: aot.api.v1.RunGraphNode.completed_at:type_name -> google.protobuf.Timestamp
+	23, // 24: aot.api.v1.RunGraph.nodes:type_name -> aot.api.v1.RunGraphNode
+	24, // 25: aot.api.v1.RunGraph.edges:type_name -> aot.api.v1.RunGraphEdge
+	30, // 26: aot.api.v1.SearchPastWorkRequest.created_after:type_name -> google.protobuf.Timestamp
+	30, // 27: aot.api.v1.SearchPastWorkRequest.created_before:type_name -> google.protobuf.Timestamp
+	4,  // 28: aot.api.v1.SearchPastWorkRequest.source_filter:type_name -> aot.api.v1.SourceFilter
+	28, // 29: aot.api.v1.SearchPastWorkResponse.results:type_name -> aot.api.v1.PastWorkResult
+	30, // 30: aot.api.v1.PastWorkResult.created_at:type_name -> google.protobuf.Timestamp
+	11, // 31: aot.api.v1.AOTService.CreateAgentRun:input_type -> aot.api.v1.CreateAgentRunRequest
+	13, // 32: aot.api.v1.AOTService.GetAgentRun:input_type -> aot.api.v1.GetAgentRunRequest
+	14, // 33: aot.api.v1.AOTService.ListAgentRuns:input_type -> aot.api.v1.ListAgentRunsRequest
+	16, // 34: aot.api.v1.AOTService.WatchAgentRun:input_type -> aot.api.v1.WatchAgentRunRequest
+	18, // 35: aot.api.v1.AOTService.CancelAgentRun:input_type -> aot.api.v1.CancelAgentRunRequest
+	20, // 36: aot.api.v1.AOTService.SendHumanInput:input_type -> aot.api.v1.SendHumanInputRequest
+	22, // 37: aot.api.v1.AOTService.GetRunGraph:input_type -> aot.api.v1.GetRunGraphRequest
+	26, // 38: aot.api.v1.AOTService.SearchPastWork:input_type -> aot.api.v1.SearchPastWorkRequest
+	12, // 39: aot.api.v1.AOTService.CreateAgentRun:output_type -> aot.api.v1.CreateAgentRunResponse
+	5,  // 40: aot.api.v1.AOTService.GetAgentRun:output_type -> aot.api.v1.AgentRun
+	15, // 41: aot.api.v1.AOTService.ListAgentRuns:output_type -> aot.api.v1.ListAgentRunsResponse
+	17, // 42: aot.api.v1.AOTService.WatchAgentRun:output_type -> aot.api.v1.AgentRunEvent
+	19, // 43: aot.api.v1.AOTService.CancelAgentRun:output_type -> aot.api.v1.CancelAgentRunResponse
+	21, // 44: aot.api.v1.AOTService.SendHumanInput:output_type -> aot.api.v1.SendHumanInputResponse
+	25, // 45: aot.api.v1.AOTService.GetRunGraph:output_type -> aot.api.v1.RunGraph
+	27, // 46: aot.api.v1.AOTService.SearchPastWork:output_type -> aot.api.v1.SearchPastWorkResponse
+	39, // [39:47] is the sub-list for method output_type
+	31, // [31:39] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_aot_api_v1_api_proto_init() }
@@ -1416,8 +2210,8 @@ func file_aot_api_v1_api_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aot_api_v1_api_proto_rawDesc), len(file_aot_api_v1_api_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   16,
+			NumEnums:      5,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

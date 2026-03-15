@@ -54,6 +54,9 @@ const (
 	AOTServiceSendHumanInputProcedure = "/aot.api.v1.AOTService/SendHumanInput"
 	// AOTServiceGetRunGraphProcedure is the fully-qualified name of the AOTService's GetRunGraph RPC.
 	AOTServiceGetRunGraphProcedure = "/aot.api.v1.AOTService/GetRunGraph"
+	// AOTServiceSearchPastWorkProcedure is the fully-qualified name of the AOTService's SearchPastWork
+	// RPC.
+	AOTServiceSearchPastWorkProcedure = "/aot.api.v1.AOTService/SearchPastWork"
 )
 
 // AOTServiceClient is a client for the aot.api.v1.AOTService service.
@@ -70,6 +73,10 @@ type AOTServiceClient interface {
 	CancelAgentRun(context.Context, *connect.Request[v1.CancelAgentRunRequest]) (*connect.Response[v1.CancelAgentRunResponse], error)
 	// SendHumanInput provides human-in-the-loop input to a paused agent.
 	SendHumanInput(context.Context, *connect.Request[v1.SendHumanInputRequest]) (*connect.Response[v1.SendHumanInputResponse], error)
+	// GetRunGraph returns the tree of runs for a spec execution.
+	GetRunGraph(context.Context, *connect.Request[v1.GetRunGraphRequest]) (*connect.Response[v1.RunGraph], error)
+	// SearchPastWork searches the knowledge base for relevant past work using natural language.
+	SearchPastWork(context.Context, *connect.Request[v1.SearchPastWorkRequest]) (*connect.Response[v1.SearchPastWorkResponse], error)
 }
 
 // NewAOTServiceClient constructs a client for the aot.api.v1.AOTService service. By default, it
@@ -119,6 +126,18 @@ func NewAOTServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(aOTServiceMethods.ByName("SendHumanInput")),
 			connect.WithClientOptions(opts...),
 		),
+		getRunGraph: connect.NewClient[v1.GetRunGraphRequest, v1.RunGraph](
+			httpClient,
+			baseURL+AOTServiceGetRunGraphProcedure,
+			connect.WithSchema(aOTServiceMethods.ByName("GetRunGraph")),
+			connect.WithClientOptions(opts...),
+		),
+		searchPastWork: connect.NewClient[v1.SearchPastWorkRequest, v1.SearchPastWorkResponse](
+			httpClient,
+			baseURL+AOTServiceSearchPastWorkProcedure,
+			connect.WithSchema(aOTServiceMethods.ByName("SearchPastWork")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -130,6 +149,8 @@ type aOTServiceClient struct {
 	watchAgentRun  *connect.Client[v1.WatchAgentRunRequest, v1.AgentRunEvent]
 	cancelAgentRun *connect.Client[v1.CancelAgentRunRequest, v1.CancelAgentRunResponse]
 	sendHumanInput *connect.Client[v1.SendHumanInputRequest, v1.SendHumanInputResponse]
+	getRunGraph    *connect.Client[v1.GetRunGraphRequest, v1.RunGraph]
+	searchPastWork *connect.Client[v1.SearchPastWorkRequest, v1.SearchPastWorkResponse]
 }
 
 // CreateAgentRun calls aot.api.v1.AOTService.CreateAgentRun.
@@ -162,6 +183,16 @@ func (c *aOTServiceClient) SendHumanInput(ctx context.Context, req *connect.Requ
 	return c.sendHumanInput.CallUnary(ctx, req)
 }
 
+// GetRunGraph calls aot.api.v1.AOTService.GetRunGraph.
+func (c *aOTServiceClient) GetRunGraph(ctx context.Context, req *connect.Request[v1.GetRunGraphRequest]) (*connect.Response[v1.RunGraph], error) {
+	return c.getRunGraph.CallUnary(ctx, req)
+}
+
+// SearchPastWork calls aot.api.v1.AOTService.SearchPastWork.
+func (c *aOTServiceClient) SearchPastWork(ctx context.Context, req *connect.Request[v1.SearchPastWorkRequest]) (*connect.Response[v1.SearchPastWorkResponse], error) {
+	return c.searchPastWork.CallUnary(ctx, req)
+}
+
 // AOTServiceHandler is an implementation of the aot.api.v1.AOTService service.
 type AOTServiceHandler interface {
 	// CreateAgentRun submits a new agent run request.
@@ -178,6 +209,8 @@ type AOTServiceHandler interface {
 	SendHumanInput(context.Context, *connect.Request[v1.SendHumanInputRequest]) (*connect.Response[v1.SendHumanInputResponse], error)
 	// GetRunGraph returns the tree of runs for a spec execution.
 	GetRunGraph(context.Context, *connect.Request[v1.GetRunGraphRequest]) (*connect.Response[v1.RunGraph], error)
+	// SearchPastWork searches the knowledge base for relevant past work using natural language.
+	SearchPastWork(context.Context, *connect.Request[v1.SearchPastWorkRequest]) (*connect.Response[v1.SearchPastWorkResponse], error)
 }
 
 // NewAOTServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -229,6 +262,12 @@ func NewAOTServiceHandler(svc AOTServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(aOTServiceMethods.ByName("GetRunGraph")),
 		connect.WithHandlerOptions(opts...),
 	)
+	aOTServiceSearchPastWorkHandler := connect.NewUnaryHandler(
+		AOTServiceSearchPastWorkProcedure,
+		svc.SearchPastWork,
+		connect.WithSchema(aOTServiceMethods.ByName("SearchPastWork")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/aot.api.v1.AOTService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AOTServiceCreateAgentRunProcedure:
@@ -245,6 +284,8 @@ func NewAOTServiceHandler(svc AOTServiceHandler, opts ...connect.HandlerOption) 
 			aOTServiceSendHumanInputHandler.ServeHTTP(w, r)
 		case AOTServiceGetRunGraphProcedure:
 			aOTServiceGetRunGraphHandler.ServeHTTP(w, r)
+		case AOTServiceSearchPastWorkProcedure:
+			aOTServiceSearchPastWorkHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -280,4 +321,8 @@ func (UnimplementedAOTServiceHandler) SendHumanInput(context.Context, *connect.R
 
 func (UnimplementedAOTServiceHandler) GetRunGraph(context.Context, *connect.Request[v1.GetRunGraphRequest]) (*connect.Response[v1.RunGraph], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("aot.api.v1.AOTService.GetRunGraph is not implemented"))
+}
+
+func (UnimplementedAOTServiceHandler) SearchPastWork(context.Context, *connect.Request[v1.SearchPastWorkRequest]) (*connect.Response[v1.SearchPastWorkResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("aot.api.v1.AOTService.SearchPastWork is not implemented"))
 }

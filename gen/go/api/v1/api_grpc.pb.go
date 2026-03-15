@@ -27,6 +27,8 @@ const (
 	AOTService_WatchAgentRun_FullMethodName  = "/aot.api.v1.AOTService/WatchAgentRun"
 	AOTService_CancelAgentRun_FullMethodName = "/aot.api.v1.AOTService/CancelAgentRun"
 	AOTService_SendHumanInput_FullMethodName = "/aot.api.v1.AOTService/SendHumanInput"
+	AOTService_GetRunGraph_FullMethodName    = "/aot.api.v1.AOTService/GetRunGraph"
+	AOTService_SearchPastWork_FullMethodName = "/aot.api.v1.AOTService/SearchPastWork"
 )
 
 // AOTServiceClient is the client API for AOTService service.
@@ -47,6 +49,10 @@ type AOTServiceClient interface {
 	CancelAgentRun(ctx context.Context, in *CancelAgentRunRequest, opts ...grpc.CallOption) (*CancelAgentRunResponse, error)
 	// SendHumanInput provides human-in-the-loop input to a paused agent.
 	SendHumanInput(ctx context.Context, in *SendHumanInputRequest, opts ...grpc.CallOption) (*SendHumanInputResponse, error)
+	// GetRunGraph returns the tree of runs for a spec execution.
+	GetRunGraph(ctx context.Context, in *GetRunGraphRequest, opts ...grpc.CallOption) (*RunGraph, error)
+	// SearchPastWork searches the knowledge base for relevant past work using natural language.
+	SearchPastWork(ctx context.Context, in *SearchPastWorkRequest, opts ...grpc.CallOption) (*SearchPastWorkResponse, error)
 }
 
 type aOTServiceClient struct {
@@ -126,6 +132,26 @@ func (c *aOTServiceClient) SendHumanInput(ctx context.Context, in *SendHumanInpu
 	return out, nil
 }
 
+func (c *aOTServiceClient) GetRunGraph(ctx context.Context, in *GetRunGraphRequest, opts ...grpc.CallOption) (*RunGraph, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunGraph)
+	err := c.cc.Invoke(ctx, AOTService_GetRunGraph_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aOTServiceClient) SearchPastWork(ctx context.Context, in *SearchPastWorkRequest, opts ...grpc.CallOption) (*SearchPastWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchPastWorkResponse)
+	err := c.cc.Invoke(ctx, AOTService_SearchPastWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AOTServiceServer is the server API for AOTService service.
 // All implementations must embed UnimplementedAOTServiceServer
 // for forward compatibility.
@@ -144,6 +170,10 @@ type AOTServiceServer interface {
 	CancelAgentRun(context.Context, *CancelAgentRunRequest) (*CancelAgentRunResponse, error)
 	// SendHumanInput provides human-in-the-loop input to a paused agent.
 	SendHumanInput(context.Context, *SendHumanInputRequest) (*SendHumanInputResponse, error)
+	// GetRunGraph returns the tree of runs for a spec execution.
+	GetRunGraph(context.Context, *GetRunGraphRequest) (*RunGraph, error)
+	// SearchPastWork searches the knowledge base for relevant past work using natural language.
+	SearchPastWork(context.Context, *SearchPastWorkRequest) (*SearchPastWorkResponse, error)
 	mustEmbedUnimplementedAOTServiceServer()
 }
 
@@ -171,6 +201,12 @@ func (UnimplementedAOTServiceServer) CancelAgentRun(context.Context, *CancelAgen
 }
 func (UnimplementedAOTServiceServer) SendHumanInput(context.Context, *SendHumanInputRequest) (*SendHumanInputResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendHumanInput not implemented")
+}
+func (UnimplementedAOTServiceServer) GetRunGraph(context.Context, *GetRunGraphRequest) (*RunGraph, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRunGraph not implemented")
+}
+func (UnimplementedAOTServiceServer) SearchPastWork(context.Context, *SearchPastWorkRequest) (*SearchPastWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchPastWork not implemented")
 }
 func (UnimplementedAOTServiceServer) mustEmbedUnimplementedAOTServiceServer() {}
 func (UnimplementedAOTServiceServer) testEmbeddedByValue()                    {}
@@ -294,6 +330,42 @@ func _AOTService_SendHumanInput_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AOTService_GetRunGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRunGraphRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AOTServiceServer).GetRunGraph(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AOTService_GetRunGraph_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AOTServiceServer).GetRunGraph(ctx, req.(*GetRunGraphRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AOTService_SearchPastWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchPastWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AOTServiceServer).SearchPastWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AOTService_SearchPastWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AOTServiceServer).SearchPastWork(ctx, req.(*SearchPastWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AOTService_ServiceDesc is the grpc.ServiceDesc for AOTService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -320,6 +392,14 @@ var AOTService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendHumanInput",
 			Handler:    _AOTService_SendHumanInput_Handler,
+		},
+		{
+			MethodName: "GetRunGraph",
+			Handler:    _AOTService_GetRunGraph_Handler,
+		},
+		{
+			MethodName: "SearchPastWork",
+			Handler:    _AOTService_SearchPastWork_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
