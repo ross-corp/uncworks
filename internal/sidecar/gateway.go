@@ -171,7 +171,14 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 }
 
 func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
-	args := []string{"-p", req.Prompt, "--verbose"}
+	// Use --mode json so pi streams ALL events (tool calls, tool results,
+	// text responses) as JSONL to stdout. The old "-p" (print) mode only
+	// printed the final text and swallowed tool execution output, which
+	// meant commands like "ls" ran but their results never appeared in logs.
+	// --no-session avoids persisting session state in the ephemeral container.
+	// The prompt is passed as a positional argument (not -p, which is a
+	// separate print mode incompatible with --mode json).
+	args := []string{"--mode", "json", "--no-session", "--verbose", req.Prompt}
 	// Use model from env if configured
 	if model := os.Getenv("PI_MODEL"); model != "" {
 		args = append(args, "--model", model)
@@ -183,9 +190,9 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	}
 
 	// Inherit current environment and add request-specific vars on top.
-	// Set PI_LOG_LEVEL=debug so pi-coding-agent emits tool call and
-	// LLM response details to stdout where the sidecar can capture them.
-	cmd.Env = append(os.Environ(), "PI_LOG_LEVEL=debug")
+	// PI_LOG_LEVEL=debug: emit detailed tool call and LLM response info.
+	// PI_ACCEPT_TOS=1: skip interactive TOS prompt in headless mode.
+	cmd.Env = append(os.Environ(), "PI_LOG_LEVEL=debug", "PI_ACCEPT_TOS=1")
 	for k, v := range req.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -496,15 +503,36 @@ var stdoutToolCallPrefixes = []string{
 	"Running command:", // shell/bash tool
 }
 
+// piJSONEvent represents a JSON-mode event from pi-coding-agent.
+// Pi emits events like: {"type":"tool_call","name":"bash","input":{...}}
+// and {"type":"tool_result","name":"bash","output":"..."}.
+type piJSONEvent struct {
+	Type   string                 `json:"type"`
+	Name   string                 `json:"name,omitempty"`
+	Input  map[string]interface{} `json:"input,omitempty"`
+	Output string                 `json:"output,omitempty"`
+	Text   string                 `json:"text,omitempty"`
+	Error  string                 `json:"error,omitempty"`
+}
+
 // maybeCaptureStdoutSpan inspects a single stdout line and, if it looks like
-// a tool invocation, records a trace span. This is a fallback for when the
-// extension doesn't send NotifyEvent TOOL_CALL events.
+// a tool invocation or a pi JSON-mode event, records a trace span.
 func maybeCaptureStdoutSpan(line string) {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
 		return
 	}
 
+	// Try to parse as a pi JSON-mode event first (--mode json output).
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		var evt piJSONEvent
+		if err := json.Unmarshal([]byte(trimmed), &evt); err == nil && evt.Type != "" {
+			maybeCaptureJSONEvent(&evt, trimmed)
+			return
+		}
+	}
+
+	// Fall back to plain-text prefix matching (verbose/print mode output).
 	for _, prefix := range stdoutToolCallPrefixes {
 		if strings.HasPrefix(trimmed, prefix) {
 			toolInfo := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
@@ -533,6 +561,80 @@ func maybeCaptureStdoutSpan(line string) {
 			EndTime:   now,
 			Metadata:  map[string]interface{}{"source": "stdout", "raw": trimmed},
 		})
+	}
+}
+
+// maybeCaptureJSONEvent processes a parsed pi JSON-mode event and records
+// the appropriate trace span.
+func maybeCaptureJSONEvent(evt *piJSONEvent, raw string) {
+	now := time.Now()
+
+	switch evt.Type {
+	case "tool_call":
+		spanName := evt.Name
+		if spanName == "" {
+			spanName = "tool_call"
+		}
+		metadata := map[string]interface{}{
+			"source": "json",
+			"raw":    raw,
+		}
+		if evt.Input != nil {
+			metadata["input"] = evt.Input
+		}
+		appendTraceSpan(TraceSpan{
+			ID:        uuid.New().String(),
+			Name:      spanName,
+			Type:      "tool",
+			StartTime: now,
+			EndTime:   now,
+			Metadata:  metadata,
+		})
+
+	case "tool_result":
+		spanName := evt.Name
+		if spanName == "" {
+			spanName = "tool_result"
+		}
+		metadata := map[string]interface{}{
+			"source": "json",
+			"raw":    raw,
+		}
+		if evt.Output != "" {
+			metadata["output"] = evt.Output
+		}
+		if evt.Error != "" {
+			metadata["error"] = evt.Error
+		}
+		appendTraceSpan(TraceSpan{
+			ID:        uuid.New().String(),
+			Name:      spanName + "_result",
+			Type:      "tool_result",
+			StartTime: now,
+			EndTime:   now,
+			Metadata:  metadata,
+		})
+
+	case "assistant", "message":
+		// LLM text response
+		metadata := map[string]interface{}{
+			"source": "json",
+		}
+		if evt.Text != "" {
+			metadata["text"] = evt.Text
+		}
+		appendTraceSpan(TraceSpan{
+			ID:        uuid.New().String(),
+			Name:      "llm_response",
+			Type:      "llm",
+			StartTime: now,
+			EndTime:   now,
+			Metadata:  metadata,
+		})
+
+	default:
+		// Log other event types for debugging but don't create spans
+		log.Printf("pi JSON event: type=%s", evt.Type)
 	}
 }
 
