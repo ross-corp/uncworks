@@ -1,25 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { AgentRun, Repository } from "./types/agent-run";
 import { useClient, mapRun } from "./hooks/useClient";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import type { Workspace } from "./hooks/useWorkspaces";
 import { useRepoRegistry } from "./hooks/useRepoRegistry";
-import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
+import { useKeyboard } from "./hooks/useKeyboard";
+import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./components/Toast";
-import { ThemeToggle } from "./components/ThemeToggle";
-import FilterSidebar from "./components/FilterSidebar";
-import type { FilterState } from "./components/FilterSidebar";
-import { RunFeed } from "./components/RunFeed";
+import { RunList } from "./components/RunList";
+import { IconRail } from "./components/IconRail";
+import SplitPane from "./components/SplitPane";
+import CommandPalette from "./components/CommandPalette";
 import RunDetail from "./components/RunDetail";
 import AgentRunForm from "./components/AgentRunForm";
 import ConfirmDialog from "./components/ConfirmDialog";
 import WorkspaceEditor from "./components/WorkspaceEditor";
-import { Input } from "./components/ui/input";
 import SpecRunPage from "./pages/SpecRunPage";
 
 /**
- * useRoute — simple path-based routing without a router library.
- * Matches /specs/:specRunId and returns the param, or null for other paths.
+ * useRoute -- simple path-based routing without a router library.
  */
 function useRoute(): { specRunId: string | null } {
   const [path, setPath] = useState(window.location.pathname);
@@ -34,34 +33,43 @@ function useRoute(): { specRunId: string | null } {
   return { specRunId: match ? match[1] : null };
 }
 
+type StatusFilter = "all" | "active" | "succeeded" | "failed";
+
+const ACTIVE_PHASES = ["running", "waiting_for_input", "pending"];
+
 export default function App() {
   const { specRunId } = useRoute();
 
-  // If we're on /specs/:specRunId, render the SpecRunPage
   if (specRunId) {
     return <SpecRunPage specRunId={specRunId} />;
   }
+
+  return <Dashboard />;
+}
+
+function Dashboard() {
   const client = useClient();
   const { toast } = useToast();
+  const { toggleTheme } = useTheme();
+
+  // Data state
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // UI state
   const [showForm, setShowForm] = useState(false);
   const [cloneSource, setCloneSource] = useState<AgentRun | null>(null);
-  const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null | "new">(null);
-  const [filters, setFilters] = useState<FilterState>({
-    statuses: ["all"],
-    repos: [],
-    models: [],
-    workspaces: [],
-  });
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState(0);
 
   const { workspaces, addWorkspace, updateWorkspace, deleteWorkspace } = useWorkspaces();
 
-  // Derive unique repos from runs (across all repos in each run)
+  // Derive unique repos from runs
   const runDerivedRepos = [...new Set(runs.flatMap((r) => r.spec.repos.map((repo) => repo.url)).filter(Boolean))];
   const { repos } = useRepoRegistry(runDerivedRepos);
 
@@ -84,16 +92,74 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchRuns]);
 
-  // Keep selectedRun in sync with fetched data
-  useEffect(() => {
-    if (selectedRun) {
-      const updated = runs.find((r) => r.id === selectedRun.id);
-      if (updated) {
-        setSelectedRun(updated);
-      }
+  // Filter runs
+  const filtered = runs.filter((r) => {
+    if (statusFilter !== "all") {
+      if (statusFilter === "active" && !ACTIVE_PHASES.includes(r.status.phase)) return false;
+      if (statusFilter === "succeeded" && r.status.phase !== "succeeded") return false;
+      if (statusFilter === "failed" && r.status.phase !== "failed") return false;
     }
-  }, [runs]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    return true;
+  });
+
+  // Keep selected run in sync
+  const selectedRun = selectedId ? runs.find((r) => r.id === selectedId) ?? null : null;
+
+  function handleSelectRun(run: AgentRun) {
+    setSelectedId(run.id);
+  }
+
+  function handleDoubleClickRun(run: AgentRun) {
+    setSelectedId(run.id);
+    setDetailOpen(true);
+  }
+
+  // Keyboard system
+  useKeyboard({
+    runs: filtered,
+    selectedId,
+    setSelectedId,
+    detailOpen,
+    setDetailOpen,
+    paletteOpen: commandPaletteOpen,
+    setPaletteOpen: setCommandPaletteOpen,
+    openNewRun: () => setShowForm(true),
+    filter: statusFilter,
+    setFilter: (f: string) => setStatusFilter(f as StatusFilter),
+    activeTab,
+    setActiveTab,
+    tabCount: 5,
+  });
+
+  // Command palette handler
+  function handleCommand(cmd: string) {
+    switch (cmd) {
+      case "new-run":
+        setShowForm(true);
+        break;
+      case "toggle-theme":
+        toggleTheme();
+        break;
+      case "filter-all":
+        setStatusFilter("all");
+        break;
+      case "filter-active":
+        setStatusFilter("active");
+        break;
+      case "filter-succeeded":
+        setStatusFilter("succeeded");
+        break;
+      case "filter-failed":
+        setStatusFilter("failed");
+        break;
+    }
+  }
+
+  function handleCommandPaletteSelectRun(run: AgentRun) {
+    setSelectedId(run.id);
+    setDetailOpen(true);
+  }
 
   async function handleCancel(id: string) {
     try {
@@ -107,7 +173,6 @@ export default function App() {
   }
 
   function handleDelete(id: string) {
-    // Local-only for now (no delete API)
     setRuns((prev) => prev.filter((r) => r.id !== id));
     setRunToDelete(null);
   }
@@ -154,59 +219,6 @@ export default function App() {
     }
   }
 
-  // Active statuses for the "active" filter chip
-  const ACTIVE_PHASES = ["running", "waiting_for_input", "pending"];
-
-  // Filtering: sidebar filters -> search query (additive)
-  const filtered = runs.filter((r) => {
-    // Status filter
-    if (!filters.statuses.includes("all")) {
-      const matchesStatus = filters.statuses.some((s) => {
-        if (s === "active") return ACTIVE_PHASES.includes(r.status.phase);
-        return r.status.phase === s;
-      });
-      if (!matchesStatus) return false;
-    }
-
-    // Repo filter
-    if (filters.repos.length > 0) {
-      const hasMatchingRepo = r.spec.repos.some((repo) => filters.repos.includes(repo.url));
-      if (!hasMatchingRepo) return false;
-    }
-
-    // Model filter
-    if (filters.models.length > 0) {
-      if (!filters.models.includes(r.spec.modelTier)) return false;
-    }
-
-    // Workspace filter
-    if (filters.workspaces.length > 0) {
-      if (!r.spec.workspaceName || !filters.workspaces.includes(r.spec.workspaceName)) return false;
-    }
-
-    // Search filter (10.2, 10.3: additive with sidebar filters)
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      const repoUrls = r.spec.repos.map((repo) => repo.url).join(" ");
-      const haystack = [r.name, r.id, r.spec.prompt, r.status.message, repoUrls, r.spec.workspaceName ?? ""]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    return true;
-  });
-
-  // Keyboard navigation (j/k, Enter, Escape, /)
-  useKeyboardNavigation({
-    runs: filtered,
-    selectedRunId: selectedRun?.id ?? null,
-    setSelectedRunId: setSelectedRun,
-    isDetailOpen: selectedRun !== null,
-    closeDetail: () => setSelectedRun(null),
-    searchInputRef,
-  });
-
   function handleClone(run: AgentRun) {
     setCloneSource(run);
     setShowForm(true);
@@ -227,58 +239,66 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen flex-col fx-flicker">
-      {/* Header bar — full width (7.2) */}
-      <header className="flex items-center gap-4 border-b border-border px-5 py-3 bg-background shrink-0 h-14">
-        <h1 className="text-sm font-semibold tracking-widest whitespace-nowrap">
-          <span className="text-primary fx-glow">AOT</span>
-        </h1>
-        <div className="flex-1 flex justify-center">
-          <Input
-            ref={searchInputRef}
-            type="text"
-            data-testid="search-input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search runs..."
-            className="max-w-md text-sm"
+    <div className="flex h-screen" style={{ backgroundColor: "var(--color-bg)", color: "var(--color-fg)" }}>
+      {/* Icon Rail - 48px fixed left */}
+      <IconRail
+        activeFilter={statusFilter}
+        onFilterChange={setStatusFilter}
+        onNewRun={() => setShowForm(true)}
+      />
+
+      {/* Main content area */}
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+        {/* Header bar - 48px */}
+        <header
+          className="flex items-center justify-between px-4 shrink-0"
+          style={{
+            height: "48px",
+            borderBottom: "1px solid var(--color-border)",
+          }}
+        >
+          <span className="text-sm font-semibold" style={{ color: "var(--color-fg)" }}>AOT</span>
+          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+            Cmd+K search · j/k navigate · n new run
+          </span>
+        </header>
+
+        {/* Split pane: RunList + Detail */}
+        <SplitPane detailOpen={detailOpen && selectedRun !== null}>
+          {/* Left: RunList */}
+          <RunList
+            runs={filtered}
+            selectedId={selectedId}
+            onSelect={handleSelectRun}
+            onDoubleClick={handleDoubleClickRun}
+            loading={loading}
           />
-        </div>
-        <ThemeToggle />
-      </header>
 
-      {/* Body: sidebar + content (7.1, 7.4) */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* FilterSidebar — fixed 280px */}
-        <FilterSidebar
-          runs={runs}
-          filters={filters}
-          onFilterChange={setFilters}
-          onNewRun={() => setShowForm(true)}
-        />
-
-        {/* Content: RunFeed or RunDetail */}
-        <main className="flex-1 overflow-y-auto fx-scanlines p-4">
+          {/* Right: Detail pane */}
           {selectedRun ? (
             <RunDetail
               run={selectedRun}
-              onClose={() => setSelectedRun(null)}
+              onClose={() => setDetailOpen(false)}
               onCancel={handleCancel}
               onClone={handleClone}
               onSendInput={handleSendInput}
             />
           ) : (
-            <RunFeed
-              runs={filtered}
-              selectedRunId={null}
-              onSelectRun={setSelectedRun}
-              isLoading={loading}
-              onNewRun={() => setShowForm(true)}
-            />
+            <div />
           )}
-        </main>
+        </SplitPane>
       </div>
 
+      {/* Command Palette overlay */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        runs={runs}
+        onSelectRun={handleCommandPaletteSelectRun}
+        onCommand={handleCommand}
+      />
+
+      {/* Modals */}
       {showForm && (
         <AgentRunForm
           repos={repos}

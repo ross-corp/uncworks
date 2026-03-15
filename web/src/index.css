@@ -40,83 +40,80 @@
 }
 
 /* ============================================================
-   MU-TH-UR 6000 — Design Tokens
+   Clean UI — 10 Semantic Tokens
    ============================================================ */
 
 :root {
-  /* MU-TH-UR 6000 Terminal Base */
-  --background: oklch(0 0 0); /* Pure Black */
-  --foreground: oklch(0.85 0.15 75); /* Amber Phosphor */
-  --card: oklch(0.05 0 0);
-  --card-foreground: oklch(0.85 0.15 75);
-  --popover: oklch(0.05 0 0);
-  --popover-foreground: oklch(0.85 0.15 75);
-  --primary: oklch(0.85 0.15 75); /* Amber */
-  --primary-foreground: oklch(0 0 0);
-  --secondary: oklch(0.80 0.18 145); /* Nostromo Green */
-  --secondary-foreground: oklch(0 0 0);
-  --muted: oklch(0.15 0 0);
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.80 0.18 145); /* Green Accent */
-  --accent-foreground: oklch(0 0 0);
-  --destructive: oklch(0.55 0.22 25);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.3 0 0);
-  --input: oklch(0.1 0 0);
-  --ring: oklch(0.85 0.15 75);
+  --color-bg: #ffffff;
+  --color-fg: #171717;
+  --color-border: #e5e5e5;
+  --color-muted: #737373;
+  --color-accent: #171717;
+  --color-success: #16a34a;
+  --color-active: #2563eb;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-neutral: #a3a3a3;
+
+  /* Radix/shadcn primitives — mapped to clean tokens */
+  --background: var(--color-bg);
+  --foreground: var(--color-fg);
+  --card: var(--color-bg);
+  --card-foreground: var(--color-fg);
+  --popover: var(--color-bg);
+  --popover-foreground: var(--color-fg);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-border);
+  --secondary-foreground: var(--color-fg);
+  --muted: var(--color-border);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-border);
+  --accent-foreground: var(--color-fg);
+  --destructive: var(--color-error);
+  --destructive-foreground: var(--color-bg);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-accent);
   --radius: 0px;
 
   /* Effect tokens */
   --glow-primary: oklch(0.85 0.15 75 / 0.5);
   --glow-secondary: oklch(0.80 0.18 145 / 0.5);
-
-  /* Semantic color tokens — light mode */
-  --color-success: #16a34a;
-  --color-success-muted: #16a34a20;
-  --color-active: #2563eb;
-  --color-active-muted: #2563eb20;
-  --color-warning: #d97706;
-  --color-warning-muted: #d9770620;
-  --color-error: #dc2626;
-  --color-error-muted: #dc262620;
-  --color-neutral: #6b7280;
-  --color-neutral-muted: #6b728020;
-  --color-semantic-accent: #2563eb;
-  --color-semantic-accent-hover: #1d4ed8;
-
-  /* Surface tokens — light mode */
-  --color-bg-primary: #ffffff;
-  --color-bg-surface: #f9fafb;
-  --color-bg-elevated: #ffffff;
-  --color-text-primary: #111827;
-  --color-text-secondary: #374151;
-  --color-text-muted: #6b7280;
-  --color-border-subtle: #e5e7eb;
 }
 
 .dark {
-  /* Semantic color tokens — dark mode */
+  --color-bg: #0a0a0a;
+  --color-fg: #e5e5e5;
+  --color-border: #262626;
+  --color-muted: #737373;
+  --color-accent: #e5e5e5;
   --color-success: #4ade80;
-  --color-success-muted: #4ade8020;
   --color-active: #60a5fa;
-  --color-active-muted: #60a5fa20;
   --color-warning: #fbbf24;
-  --color-warning-muted: #fbbf2420;
   --color-error: #f87171;
-  --color-error-muted: #f8717120;
-  --color-neutral: #9ca3af;
-  --color-neutral-muted: #9ca3af20;
-  --color-semantic-accent: #60a5fa;
-  --color-semantic-accent-hover: #3b82f6;
+  --color-neutral: #6b7280;
 
-  /* Surface tokens — dark mode */
-  --color-bg-primary: #000000;
-  --color-bg-surface: oklch(0.05 0 0);
-  --color-bg-elevated: oklch(0.1 0 0);
-  --color-text-primary: oklch(0.85 0.15 75);
-  --color-text-secondary: oklch(0.7 0.05 75);
-  --color-text-muted: oklch(0.5 0 0);
-  --color-border-subtle: oklch(0.3 0 0);
+  /* Radix/shadcn primitives — dark overrides */
+  --background: var(--color-bg);
+  --foreground: var(--color-fg);
+  --card: #111111;
+  --card-foreground: var(--color-fg);
+  --popover: #111111;
+  --popover-foreground: var(--color-fg);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-border);
+  --secondary-foreground: var(--color-fg);
+  --muted: #1a1a1a;
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-border);
+  --accent-foreground: var(--color-fg);
+  --destructive: var(--color-error);
+  --destructive-foreground: var(--color-bg);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-accent);
 }
 
 /* ============================================================
@@ -162,9 +159,6 @@
   body {
     @apply bg-background text-foreground font-mono;
   }
-  h1, h2, h3, h4, h5, h6, label, legend {
-    @apply uppercase tracking-widest;
-  }
 }
 
 /* ============================================================
@@ -176,9 +170,7 @@
 }
 
 /* ============================================================
-   MUTHUR/9000 — Effects Layer
-   CRT scanlines, phosphor bloom, flicker (Nostromo/NERV)
-   Dark mode only — in light mode, effects are disabled.
+   Effects Layer — Dark mode only
    ============================================================ */
 @layer utilities {
   /* CRT scanline overlay — apply to panels/cards for terminal feel */
@@ -326,7 +318,7 @@
 }
 
 /* ============================================================
-   Custom Scrollbars — MU-TH-UR 6000 style
+   Custom Scrollbars
    ============================================================ */
 ::-webkit-scrollbar {
   width: 6px;

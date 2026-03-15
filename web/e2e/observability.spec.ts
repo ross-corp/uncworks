@@ -4,16 +4,16 @@ test.describe("Observability tabs", () => {
   test("Logs tab shows content for running run", async ({ page }) => {
     await page.goto("/");
 
-    // Find a running run in the feed.
-    const runningCard = page
-      .locator("[data-testid^='run-card-']")
+    // Find a running run in the list.
+    const runningRow = page
+      .locator("[data-testid^='run-row-']")
       .filter({ hasText: /running/i })
       .first();
-    const hasRunning = await runningCard.isVisible().catch(() => false);
+    const hasRunning = await runningRow.isVisible().catch(() => false);
     test.skip(!hasRunning, "No running runs available to test Logs tab");
 
-    // Click the running run to open detail view.
-    await runningCard.click();
+    // Double-click the running run to open detail view.
+    await runningRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Logs tab.
@@ -32,14 +32,14 @@ test.describe("Observability tabs", () => {
   test("Files tab shows tree for running run", async ({ page }) => {
     await page.goto("/");
 
-    const runningCard = page
-      .locator("[data-testid^='run-card-']")
+    const runningRow = page
+      .locator("[data-testid^='run-row-']")
       .filter({ hasText: /running/i })
       .first();
-    const hasRunning = await runningCard.isVisible().catch(() => false);
+    const hasRunning = await runningRow.isVisible().catch(() => false);
     test.skip(!hasRunning, "No running runs available to test Files tab");
 
-    await runningCard.click();
+    await runningRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Files tab.
@@ -58,14 +58,14 @@ test.describe("Observability tabs", () => {
   test("Shell tab shows terminal", async ({ page }) => {
     await page.goto("/");
 
-    const runningCard = page
-      .locator("[data-testid^='run-card-']")
+    const runningRow = page
+      .locator("[data-testid^='run-row-']")
       .filter({ hasText: /running/i })
       .first();
-    const hasRunning = await runningCard.isVisible().catch(() => false);
+    const hasRunning = await runningRow.isVisible().catch(() => false);
     test.skip(!hasRunning, "No running runs available to test Shell tab");
 
-    await runningCard.click();
+    await runningRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Shell tab.
@@ -95,14 +95,14 @@ test.describe("Observability tabs", () => {
     await page.goto("/");
 
     // Look for a completed run (Succeeded or Failed).
-    const completedCard = page
-      .locator("[data-testid^='run-card-']")
+    const completedRow = page
+      .locator("[data-testid^='run-row-']")
       .filter({ hasText: /succeeded|failed/i })
       .first();
-    const hasCompleted = await completedCard.isVisible().catch(() => false);
+    const hasCompleted = await completedRow.isVisible().catch(() => false);
     test.skip(!hasCompleted, "No completed runs available to test");
 
-    await completedCard.click();
+    await completedRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Switch to Shell tab — should show Debug Run button for completed runs.

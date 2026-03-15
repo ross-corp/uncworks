@@ -1,19 +1,17 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Persistent workspace", () => {
-  // ---------- 17.1: Completed run -> Logs tab -> log-viewer renders ----------
-
   test("completed run shows logs from disk", async ({ page }) => {
     await page.goto("/");
 
-    const completedCard = page
-      .locator("[data-testid^='run-card-']")
+    const completedRow = page
+      .locator("[data-testid^='run-row-']")
       .filter({ hasText: /succeeded|failed/i })
       .first();
-    const hasCompleted = await completedCard.isVisible().catch(() => false);
+    const hasCompleted = await completedRow.isVisible().catch(() => false);
     test.skip(!hasCompleted, "No completed runs available to test persistent logs");
 
-    await completedCard.click();
+    await completedRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Logs tab.
@@ -29,19 +27,17 @@ test.describe("Persistent workspace", () => {
     }).toPass({ timeout: 30000 });
   });
 
-  // ---------- 17.2: Completed run -> Files tab -> file tree renders ----------
-
   test("completed run shows file tree from disk", async ({ page }) => {
     await page.goto("/");
 
-    const completedCard = page
-      .locator("[data-testid^='run-card-']")
+    const completedRow = page
+      .locator("[data-testid^='run-row-']")
       .filter({ hasText: /succeeded|failed/i })
       .first();
-    const hasCompleted = await completedCard.isVisible().catch(() => false);
+    const hasCompleted = await completedRow.isVisible().catch(() => false);
     test.skip(!hasCompleted, "No completed runs available to test persistent files");
 
-    await completedCard.click();
+    await completedRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Files tab.
@@ -57,25 +53,23 @@ test.describe("Persistent workspace", () => {
     }).toPass({ timeout: 30000 });
   });
 
-  // ---------- 17.3: Completed run -> Shell tab -> "Debug Run" button ----------
-
   test("completed run shows Debug Run button", async ({ page }) => {
     await page.goto("/");
 
-    const completedCard = page
-      .locator("[data-testid^='run-card-']")
+    const completedRow = page
+      .locator("[data-testid^='run-row-']")
       .filter({ hasText: /succeeded|failed/i })
       .first();
-    const hasCompleted = await completedCard.isVisible().catch(() => false);
+    const hasCompleted = await completedRow.isVisible().catch(() => false);
     test.skip(!hasCompleted, "No completed runs available to test debug button");
 
-    await completedCard.click();
+    await completedRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Shell tab.
     await page.getByTestId("detail-tab-shell").click();
 
-    // "Debug Run" button should be visible for a completed run (Deployment replicas=0).
+    // "Debug Run" button should be visible for a completed run.
     const debugBtn = page.getByTestId("debug-run-btn");
     const hasDebugBtn = await debugBtn.isVisible().catch(() => false);
     test.skip(!hasDebugBtn, "Debug Run button not rendered (may not be implemented in UI yet)");
@@ -101,16 +95,14 @@ test.describe("Persistent workspace", () => {
     }
   });
 
-  // ---------- 17.4: Traces tab -> timeline renders ----------
-
   test("Traces tab renders timeline or empty state", async ({ page }) => {
     await page.goto("/");
 
-    const anyCard = page.locator("[data-testid^='run-card-']").first();
-    const hasRuns = await anyCard.isVisible().catch(() => false);
+    const anyRow = page.locator("[data-testid^='run-row-']").first();
+    const hasRuns = await anyRow.isVisible().catch(() => false);
     test.skip(!hasRuns, "No runs available to test Traces tab");
 
-    await anyCard.click();
+    await anyRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Traces tab.
@@ -130,19 +122,17 @@ test.describe("Persistent workspace", () => {
     }).toPass({ timeout: 15000 });
   });
 
-  // ---------- 17.5: Running run -> all tabs work ----------
-
   test("running run has all tabs functional", async ({ page }) => {
     await page.goto("/");
 
-    const runningCard = page
-      .locator("[data-testid^='run-card-']")
+    const runningRow = page
+      .locator("[data-testid^='run-row-']")
       .filter({ hasText: /running/i })
       .first();
-    const hasRunning = await runningCard.isVisible().catch(() => false);
+    const hasRunning = await runningRow.isVisible().catch(() => false);
     test.skip(!hasRunning, "No running runs available to test all tabs");
 
-    await runningCard.click();
+    await runningRow.dblclick();
     await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Logs tab.

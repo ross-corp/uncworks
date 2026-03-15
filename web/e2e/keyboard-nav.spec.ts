@@ -1,37 +1,37 @@
 import { test, expect } from "@playwright/test";
 
-test("j/k keyboard navigation moves selection through run cards", async ({ page }) => {
+test("j/k keyboard navigation moves selection through run rows", async ({ page }) => {
   await page.goto("/");
 
-  // Wait for run feed to load with cards
-  await expect(page.getByTestId("run-feed")).toBeVisible();
-  const cards = page.locator("[data-testid^='run-card-']");
-  const count = await cards.count();
+  // Wait for run list to load
+  await expect(page.getByTestId("run-list")).toBeVisible();
+  const rows = page.locator("[data-testid^='run-row-']");
+  const count = await rows.count();
   test.skip(count < 2, "Need at least 2 runs to test j/k navigation");
 
-  // Press 'j' to select the first card
+  // Press 'j' to select the first row
   await page.keyboard.press("j");
 
-  // The first card should now have a left border indicating selection
-  const firstCard = cards.first();
-  const firstBorderWidth = await firstCard.evaluate(
+  // The first row should now have a left border indicating selection
+  const firstRow = rows.first();
+  const firstBorderWidth = await firstRow.evaluate(
     (el) => getComputedStyle(el).borderLeftWidth
   );
   expect(parseInt(firstBorderWidth)).toBeGreaterThan(0);
 
-  // Press 'j' again to move to second card
+  // Press 'j' again to move to second row
   await page.keyboard.press("j");
 
-  // Second card should now be selected
-  const secondCard = cards.nth(1);
-  const secondBorderWidth = await secondCard.evaluate(
+  // Second row should now be selected
+  const secondRow = rows.nth(1);
+  const secondBorderWidth = await secondRow.evaluate(
     (el) => getComputedStyle(el).borderLeftWidth
   );
   expect(parseInt(secondBorderWidth)).toBeGreaterThan(0);
 
   // Press 'k' to go back to first
   await page.keyboard.press("k");
-  const firstBorderWidthAgain = await firstCard.evaluate(
+  const firstBorderWidthAgain = await firstRow.evaluate(
     (el) => getComputedStyle(el).borderLeftWidth
   );
   expect(parseInt(firstBorderWidthAgain)).toBeGreaterThan(0);
@@ -40,57 +40,63 @@ test("j/k keyboard navigation moves selection through run cards", async ({ page 
 test("Enter opens detail and Escape closes it", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByTestId("run-feed")).toBeVisible();
-  const cards = page.locator("[data-testid^='run-card-']");
-  const count = await cards.count();
+  await expect(page.getByTestId("run-list")).toBeVisible();
+  const rows = page.locator("[data-testid^='run-row-']");
+  const count = await rows.count();
   test.skip(count === 0, "No runs available to test Enter/Escape");
 
-  // Select first card with 'j'
+  // Select first row with 'j'
   await page.keyboard.press("j");
 
   // Press Enter to open detail
   await page.keyboard.press("Enter");
 
-  // RunDetail should now be visible (clicking the card opens it)
-  // Note: the keyboard Enter triggers click on the selected run
+  // RunDetail (DetailPane) should now be visible
   await expect(page.getByTestId("run-detail")).toBeVisible({ timeout: 5000 });
 
   // Press Escape to close
   await page.keyboard.press("Escape");
 
-  // Should be back to the feed
-  await expect(page.getByTestId("run-feed")).toBeVisible({ timeout: 5000 });
+  // Should be back to the list
+  await expect(page.getByTestId("run-list")).toBeVisible({ timeout: 5000 });
 });
 
-test("/ focuses search input", async ({ page }) => {
+test("command palette opens with Ctrl+K and closes with Escape", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByTestId("search-input")).toBeVisible();
+  // Open command palette with Ctrl+K
+  await page.keyboard.press("Control+k");
 
-  // Press '/' to focus search
-  await page.keyboard.press("/");
+  // Command palette should be visible
+  const palette = page.getByTestId("command-palette");
+  const hasPalette = await palette.isVisible().catch(() => false);
+  test.skip(!hasPalette, "Command palette not available");
 
-  // The search input should be focused
-  const isFocused = await page.getByTestId("search-input").evaluate(
-    (el) => document.activeElement === el
-  );
-  expect(isFocused).toBe(true);
+  // Type a query
+  await page.getByTestId("command-palette-input").fill("test");
+
+  // Verify results container exists
+  await expect(page.getByTestId("command-palette-results")).toBeVisible();
+
+  // Press Escape to close
+  await page.keyboard.press("Escape");
+  await expect(palette).not.toBeVisible();
 });
 
-test("keyboard shortcuts are disabled in inputs", async ({ page }) => {
+test("q closes detail and deselects", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByTestId("search-input")).toBeVisible();
+  await expect(page.getByTestId("run-list")).toBeVisible();
+  const rows = page.locator("[data-testid^='run-row-']");
+  const count = await rows.count();
+  test.skip(count === 0, "No runs available to test q shortcut");
 
-  // Focus the search input
-  await page.getByTestId("search-input").click();
+  // Select and open detail
+  await page.keyboard.press("j");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("run-detail")).toBeVisible({ timeout: 5000 });
 
-  // Type 'j' — should type into the input, not navigate
-  await page.keyboard.type("j");
-
-  // The search input should contain 'j'
-  await expect(page.getByTestId("search-input")).toHaveValue("j");
-
-  // Clean up
-  await page.getByTestId("search-input").fill("");
+  // Press 'q' to close detail and deselect
+  await page.keyboard.press("q");
+  await expect(page.getByTestId("run-list")).toBeVisible({ timeout: 5000 });
 });

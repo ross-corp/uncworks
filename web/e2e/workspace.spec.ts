@@ -22,7 +22,7 @@ test("workspace preset fills repos in create form", async ({ page }) => {
   await page.reload();
 
   // Open form
-  await page.getByTestId("sidebar-new-run").click();
+  await page.getByTestId("icon-rail-new-run").click();
   await expect(page.getByTestId("form-modal")).toBeVisible();
 
   // Click the workspace button

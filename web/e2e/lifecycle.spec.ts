@@ -1,12 +1,12 @@
 import { test, expect } from "@playwright/test";
 
-test("run status transitions in feed", async ({ page }) => {
+test("run status transitions in list", async ({ page }) => {
   await page.goto("/");
 
   const runName = `e2e-lifecycle-${Date.now()}`;
 
   // Create a run via the form
-  await page.getByTestId("sidebar-new-run").click();
+  await page.getByTestId("icon-rail-new-run").click();
   await page.getByTestId("form-name-input").fill(runName);
   await page.getByTestId("form-repo-row-0-url").fill("https://github.com/example/test-repo");
   await page.getByTestId("form-repo-row-0-branch").fill("main");
@@ -16,29 +16,29 @@ test("run status transitions in feed", async ({ page }) => {
   // Wait for form to close
   await expect(page.getByTestId("form-modal")).not.toBeVisible({ timeout: 10000 });
 
-  // Wait for the run to appear in the feed
+  // Wait for the run to appear in the list
   await expect(page.getByText(runName)).toBeVisible({ timeout: 15000 });
 
   // Wait for phase to transition from pending (generous timeout for real LLM)
   await expect(async () => {
-    const card = page.locator(`[data-testid^="run-card-"]`).filter({ hasText: runName });
-    const cardText = await card.textContent();
-    expect(cardText).not.toContain("Pending");
+    const row = page.locator(`[data-testid^="run-row-"]`).filter({ hasText: runName });
+    const rowText = await row.textContent();
+    expect(rowText).not.toContain("Pending");
   }).toPass({ timeout: 180000 });
 });
 
 test("detail view shows run data", async ({ page }) => {
   await page.goto("/");
 
-  // Wait for at least one run card to appear
-  const firstCard = page.locator("[data-testid^='run-card-']").first();
-  const hasRuns = await firstCard.isVisible().catch(() => false);
+  // Wait for at least one run row to appear
+  const firstRow = page.locator("[data-testid^='run-row-']").first();
+  const hasRuns = await firstRow.isVisible().catch(() => false);
   test.skip(!hasRuns, "No runs available to test detail view");
 
-  // Click the first card
-  await firstCard.click();
+  // Double-click the first row to open detail
+  await firstRow.dblclick();
 
-  // Verify RunDetail is visible
+  // Verify RunDetail (DetailPane) is visible
   await expect(page.getByTestId("run-detail")).toBeVisible();
   await expect(page.getByTestId("detail-name")).toHaveText(/.+/);
   await expect(page.getByTestId("detail-phase")).toBeVisible();
@@ -50,7 +50,7 @@ test("cancel running run", async ({ page }) => {
   const runName = `e2e-cancel-${Date.now()}`;
 
   // Create a run
-  await page.getByTestId("sidebar-new-run").click();
+  await page.getByTestId("icon-rail-new-run").click();
   await page.getByTestId("form-name-input").fill(runName);
   await page.getByTestId("form-repo-row-0-url").fill("https://github.com/example/test-repo");
   await page.getByTestId("form-repo-row-0-branch").fill("main");
@@ -58,9 +58,9 @@ test("cancel running run", async ({ page }) => {
   await page.getByTestId("form-submit").click();
   await expect(page.getByTestId("form-modal")).not.toBeVisible({ timeout: 10000 });
 
-  // Wait for run to appear and click it
+  // Wait for run to appear and double-click to open detail
   await expect(page.getByText(runName)).toBeVisible({ timeout: 15000 });
-  await page.getByText(runName).click();
+  await page.getByText(runName).dblclick();
 
   // Verify detail view opens
   await expect(page.getByTestId("run-detail")).toBeVisible();
@@ -81,15 +81,15 @@ test("HITL input flow", async ({ page }) => {
   await page.goto("/");
 
   // Look for a run in waiting_for_input state
-  const waitingCard = page.locator("[data-testid^='run-card-']").filter({
+  const waitingRow = page.locator("[data-testid^='run-row-']").filter({
     hasText: /waiting/i,
   }).first();
 
-  const hasWaiting = await waitingCard.isVisible().catch(() => false);
+  const hasWaiting = await waitingRow.isVisible().catch(() => false);
   test.skip(!hasWaiting, "No run in waiting_for_input state available");
 
-  // Click the waiting run
-  await waitingCard.click();
+  // Double-click the waiting run
+  await waitingRow.dblclick();
   await expect(page.getByTestId("run-detail")).toBeVisible();
 
   // Type in HITL input
