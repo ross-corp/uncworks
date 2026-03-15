@@ -18,7 +18,7 @@ model_list:
   # --- Default-cloud tier: OpenRouter free models ---
   - model_name: "default-cloud"
     litellm_params:
-      model: "openrouter/meta-llama/llama-3.1-8b-instruct:free"
+      model: "openrouter/qwen/qwen3-coder:free"
       # OPENROUTER_API_KEY set via environment variable
     model_info:
       tier: "default-cloud"
