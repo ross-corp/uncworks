@@ -41,8 +41,11 @@ type Gateway struct {
 // agentLogDir is the directory for agent log files on the PVC.
 const agentLogDir = "/workspace/.aot/logs"
 
-// agentLogPath is the full path to the agent log file on the PVC.
+// agentLogPath is the full path to the human-readable agent log file on the PVC.
 const agentLogPath = agentLogDir + "/agent.log"
+
+// agentJSONLPath is the full path to the raw JSON lines log for machine parsing.
+const agentJSONLPath = agentLogDir + "/agent.jsonl"
 
 // traceDir is the directory for trace span files on the PVC.
 const traceDir = "/workspace/.aot/traces"
@@ -80,12 +83,15 @@ type AgentProcess struct {
 	stdout    io.ReadCloser
 	stderr    io.ReadCloser
 	logFile   *os.File
+	jsonlFile *os.File
 	state     agentv1.AgentProcessState
 	exitError string
 	startedAt time.Time
 	outputs   []chan *agentv1.AgentOutput
 	mu        sync.Mutex
 	readerWg  sync.WaitGroup
+	// textBuf accumulates text_delta fragments for the human-readable log.
+	textBuf strings.Builder
 }
 
 // NewGateway creates a new RPC Gateway sidecar.
@@ -227,9 +233,15 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open agent log: %w", err)
 	}
+	jsonlFile, err := os.OpenFile(agentJSONLPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("open agent jsonl: %w", err)
+	}
 
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
+		_ = jsonlFile.Close()
 		return nil, fmt.Errorf("start agent: %w", err)
 	}
 	devNull.Close()
@@ -239,6 +251,7 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 		stdout:    stdout,
 		stderr:    stderr,
 		logFile:   logFile,
+		jsonlFile: jsonlFile,
 		state:     agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
 		startedAt: time.Now(),
 	}, nil
@@ -259,16 +272,32 @@ func (proc *AgentProcess) startReaders() {
 			line := make([]byte, len(scanner.Bytes()))
 			copy(line, scanner.Bytes())
 
-			// Tee output to PVC log file
-			if proc.logFile != nil {
-				proc.mu.Lock()
-				_, _ = proc.logFile.Write(append(line, '\n'))
-				proc.mu.Unlock()
-			}
-
-			// Detect tool call lines from pi stdout and record trace spans
+			// For stdout: write raw JSON to agent.jsonl, formatted text to agent.log
 			if outputType == agentv1.OutputType_OUTPUT_TYPE_STDOUT {
+				// Always write raw line to JSONL file for machine parsing
+				if proc.jsonlFile != nil {
+					proc.mu.Lock()
+					_, _ = proc.jsonlFile.Write(append(line, '\n'))
+					proc.mu.Unlock()
+				}
+
+				// Format for human-readable log
+				formatted := proc.formatPiEvent(string(line))
+				if formatted != "" && proc.logFile != nil {
+					proc.mu.Lock()
+					_, _ = proc.logFile.Write([]byte(formatted))
+					proc.mu.Unlock()
+				}
+
+				// Detect tool call lines and record trace spans
 				maybeCaptureStdoutSpan(string(line))
+			} else if proc.logFile != nil {
+				// Stderr: write as-is to log file with timestamp
+				ts := time.Now().Format("15:04:05")
+				entry := fmt.Sprintf("[%s] STDERR: %s\n", ts, string(line))
+				proc.mu.Lock()
+				_, _ = proc.logFile.Write([]byte(entry))
+				proc.mu.Unlock()
 			}
 
 			output := &agentv1.AgentOutput{
@@ -322,9 +351,12 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 	// Wait for readers to drain all remaining pipe data
 	proc.readerWg.Wait()
 
-	// Close the log file after streams are drained
+	// Close log files after streams are drained
 	if proc.logFile != nil {
 		_ = proc.logFile.Close()
+	}
+	if proc.jsonlFile != nil {
+		_ = proc.jsonlFile.Close()
 	}
 
 	g.mu.Lock()
@@ -497,6 +529,170 @@ func (g *Gateway) StopAgent(_ context.Context, req *connect.Request[agentv1.Stop
 	}
 
 	return connect.NewResponse(&agentv1.StopAgentResponse{Stopped: true}), nil
+}
+
+// --- Pi JSON event formatting for human-readable logs ---
+
+// piEvent represents the nested structure of pi --mode json output.
+type piEvent struct {
+	Type              string          `json:"type"`
+	Message           json.RawMessage `json:"message,omitempty"`
+	AssistantMsgEvent json.RawMessage `json:"assistantMessageEvent,omitempty"`
+	ToolResults       json.RawMessage `json:"toolResults,omitempty"`
+}
+
+// piAssistantEvent is the inner event within assistantMessageEvent.
+type piAssistantEvent struct {
+	Type    string          `json:"type"`
+	Delta   string          `json:"delta,omitempty"`
+	Content string          `json:"content,omitempty"`
+	Tool    json.RawMessage `json:"tool,omitempty"`
+}
+
+// piToolInfo represents tool call information from pi events.
+type piToolInfo struct {
+	Name  string                 `json:"name"`
+	Input map[string]interface{} `json:"input,omitempty"`
+}
+
+// formatPiEvent takes a raw stdout line from pi and returns a formatted
+// human-readable string for the agent.log file. Returns empty string to skip.
+func (proc *AgentProcess) formatPiEvent(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return ""
+	}
+
+	// If not JSON, write as-is with timestamp
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		ts := time.Now().Format("15:04:05")
+		return fmt.Sprintf("[%s] %s\n", ts, trimmed)
+	}
+
+	var evt piEvent
+	if err := json.Unmarshal([]byte(trimmed), &evt); err != nil {
+		// Not valid JSON — write as-is with timestamp
+		ts := time.Now().Format("15:04:05")
+		return fmt.Sprintf("[%s] %s\n", ts, trimmed)
+	}
+
+	ts := time.Now().Format("15:04:05")
+
+	switch evt.Type {
+	case "message_start":
+		// Reset text accumulator for new message
+		proc.textBuf.Reset()
+		return ""
+
+	case "message_update":
+		if len(evt.AssistantMsgEvent) == 0 {
+			return ""
+		}
+		var ame piAssistantEvent
+		if err := json.Unmarshal(evt.AssistantMsgEvent, &ame); err != nil {
+			return ""
+		}
+
+		switch ame.Type {
+		case "text_delta":
+			// Accumulate text fragments; don't write yet
+			proc.textBuf.WriteString(ame.Delta)
+			return ""
+
+		case "text_end":
+			// Flush accumulated text (text_end has the full content too)
+			text := proc.textBuf.String()
+			if text == "" && ame.Content != "" {
+				text = ame.Content
+			}
+			proc.textBuf.Reset()
+			if text == "" {
+				return ""
+			}
+			return fmt.Sprintf("[%s] \U0001F916 %s\n", ts, text)
+
+		case "tool_use":
+			if len(ame.Tool) == 0 {
+				return fmt.Sprintf("[%s] \U0001F527 tool_use\n", ts)
+			}
+			var tool piToolInfo
+			if err := json.Unmarshal(ame.Tool, &tool); err != nil {
+				return fmt.Sprintf("[%s] \U0001F527 tool_use\n", ts)
+			}
+			summary := summarizeToolInput(tool.Input)
+			return fmt.Sprintf("[%s] \U0001F527 %s: %s\n", ts, tool.Name, summary)
+
+		default:
+			return ""
+		}
+
+	case "message_end":
+		// Flush any remaining accumulated text
+		text := proc.textBuf.String()
+		proc.textBuf.Reset()
+		if text != "" {
+			return fmt.Sprintf("[%s] \U0001F916 %s\n", ts, text)
+		}
+		return ""
+
+	case "turn_end":
+		// Format tool results if present
+		if len(evt.ToolResults) == 0 {
+			return fmt.Sprintf("[%s] ────────────────────\n", ts)
+		}
+		var results []map[string]interface{}
+		if err := json.Unmarshal(evt.ToolResults, &results); err != nil {
+			return fmt.Sprintf("[%s] ────────────────────\n", ts)
+		}
+		var sb strings.Builder
+		for _, r := range results {
+			output, _ := r["output"].(string)
+			if output == "" {
+				continue
+			}
+			// Indent tool output lines with vertical bar
+			for _, ol := range strings.Split(output, "\n") {
+				fmt.Fprintf(&sb, "  \u2502 %s\n", ol)
+			}
+		}
+		fmt.Fprintf(&sb, "[%s] \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n", ts)
+		return sb.String()
+
+	case "agent_end":
+		return fmt.Sprintf("[%s] Agent finished\n", ts)
+
+	default:
+		// Skip unrecognized event types
+		return ""
+	}
+}
+
+// summarizeToolInput creates a brief summary of tool input for logging.
+func summarizeToolInput(input map[string]interface{}) string {
+	if input == nil {
+		return ""
+	}
+	// Common case: bash tool with "command" field
+	if cmd, ok := input["command"].(string); ok {
+		if len(cmd) > 120 {
+			return cmd[:120] + "..."
+		}
+		return cmd
+	}
+	// File tools: show file_path
+	if fp, ok := input["file_path"].(string); ok {
+		return fp
+	}
+	// Generic: marshal keys
+	data, err := json.Marshal(input)
+	if err != nil {
+		return "<input>"
+	}
+	s := string(data)
+	if len(s) > 120 {
+		return s[:120] + "..."
+	}
+	return s
 }
 
 // --- Stdout-based span detection ---
