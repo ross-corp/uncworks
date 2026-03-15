@@ -22,6 +22,37 @@ export interface AgentRun {
   spec: AgentRunSpec;
   status: AgentRunStatus;
   createdAt: string;
+  children?: string[];
+}
+
+export interface RunGraphNode {
+  name: string;
+  phase: AgentRunPhase;
+  role: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface RunGraphEdge {
+  parent: string;
+  child: string;
+}
+
+export interface RunGraph {
+  nodes: RunGraphNode[];
+  edges: RunGraphEdge[];
+}
+
+export type OrchestrationMode = "single" | "auto" | "manual";
+
+export interface OrchestrationTask {
+  name: string;
+  prompt: string;
+  repoUrls?: string[];
+}
+
+export interface Orchestration {
+  tasks: OrchestrationTask[];
 }
 
 export interface AgentRunSpec {
@@ -35,6 +66,10 @@ export interface AgentRunSpec {
   modelTier: ModelTier;
   specContent?: string;
   specSource?: string;
+  parentRunId?: string;
+  orchestrationMode?: OrchestrationMode;
+  orchestration?: Orchestration;
+  specRunId?: string;
 }
 
 export interface AgentRunStatus {
@@ -75,6 +110,12 @@ export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string }[] = [
   { value: "default", label: "Default (Local)" },
   { value: "default-cloud", label: "Default (Cloud)" },
   { value: "premium", label: "Premium" },
+];
+
+export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string }[] = [
+  { value: "single", label: "Single" },
+  { value: "auto", label: "Auto" },
+  { value: "manual", label: "Manual" },
 ];
 
 /** A single trace span from an agent run. */

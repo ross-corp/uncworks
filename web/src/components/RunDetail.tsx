@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { AgentRun, TraceSpan } from "../types/agent-run";
+import type { AgentRun, TraceSpan, RunGraphNode, RunGraphEdge } from "../types/agent-run";
 import { PhaseBadge, BackendBadge, ModelTierBadge } from "./StatusBadge";
 import SpecEditor from "./SpecEditor";
 import LogViewer from "./LogViewer";
@@ -7,6 +7,7 @@ import FileExplorer from "./FileExplorer";
 import ShellTerminal from "./ShellTerminal";
 import TraceTimeline from "./TraceTimeline";
 import DiffViewer from "./DiffViewer";
+import RunGraph from "./RunGraph";
 import { useWatchRun } from "../hooks/useWatchRun";
 import { useTraces } from "../hooks/useTraces";
 import { Button } from "./ui/button";
@@ -45,6 +46,7 @@ export default function RunDetail({
 
   const isActive = run.status.phase === "running" || run.status.phase === "waiting_for_input";
   const hasPod = !!run.status.podName;
+  const hasOrchestration = (run.children && run.children.length > 0) || !!run.spec.parentRunId;
 
   const streamRunId = isActive ? run.id : null;
   const { logLines, isStreaming } = useWatchRun(streamRunId);
@@ -150,12 +152,17 @@ export default function RunDetail({
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === "info" && (
-          <InfoTab
-            run={run}
-            humanInput={humanInput}
-            setHumanInput={setHumanInput}
-            onSendInput={onSendInput}
-          />
+          <>
+            {hasOrchestration && (
+              <RunGraphSection run={run} />
+            )}
+            <InfoTab
+              run={run}
+              humanInput={humanInput}
+              setHumanInput={setHumanInput}
+              onSendInput={onSendInput}
+            />
+          </>
         )}
         {activeTab === "logs" && (
           <LogsTab run={run} logLines={logLines} isStreaming={isStreaming} hasPod={hasPod} />
@@ -637,6 +644,53 @@ function SpanMetadataView({ span }: { span: TraceSpan }) {
           </pre>
         </div>
       )}
+    </div>
+  );
+}
+
+/* -- RunGraphSection -- */
+
+function RunGraphSection({ run }: { run: AgentRun }) {
+  // Build a simple graph from the run's children and parent info
+  const nodes: RunGraphNode[] = [];
+  const edges: RunGraphEdge[] = [];
+
+  // Add this run as a node
+  const thisRole = run.spec.parentRunId ? "junior" : (run.children && run.children.length > 0 ? "senior" : "single");
+  nodes.push({
+    name: run.name,
+    phase: run.status.phase,
+    role: thisRole,
+    startedAt: run.status.startedAt,
+    completedAt: run.status.completedAt,
+  });
+
+  // Add parent edge if this is a junior
+  if (run.spec.parentRunId) {
+    edges.push({ parent: run.spec.parentRunId, child: run.name });
+    // Add parent node placeholder
+    nodes.push({
+      name: run.spec.parentRunId,
+      phase: "running", // We don't have the parent's actual phase
+      role: "senior",
+    });
+  }
+
+  // Add children
+  if (run.children) {
+    for (const childName of run.children) {
+      nodes.push({
+        name: childName,
+        phase: "pending",
+        role: "junior",
+      });
+      edges.push({ parent: run.name, child: childName });
+    }
+  }
+
+  return (
+    <div className="border-b border-border">
+      <RunGraph nodes={nodes} edges={edges} />
     </div>
   );
 }

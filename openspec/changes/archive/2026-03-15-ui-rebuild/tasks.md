@@ -32,8 +32,8 @@
 - [x] 4.2 Implement reverse-chronological ordering: sort runs by creation time descending before rendering
 - [x] 4.3 Implement empty state: when `runs` is empty and `isLoading` is false, render centered "No runs yet" message with a call-to-action to create a run
 - [x] 4.4 Implement loading state: when `isLoading` is true, render 3-5 skeleton placeholder cards using the existing Skeleton component
-- [ ] 4.5 Wire RunFeed into the main layout to replace the existing AgentRunTable component. Pass the same data source that AgentRunTable used
-- [ ] 4.6 Connect RunFeed card clicks to open the detail view (set selected run ID in the store/state)
+- [x] 4.5 Wire RunFeed into the main layout to replace the existing AgentRunTable component. Pass the same data source that AgentRunTable used
+- [x] 4.6 Connect RunFeed card clicks to open the detail view (set selected run ID in the store/state)
 
 ## 5. Filter Sidebar
 
@@ -74,7 +74,7 @@
 - [x] 8.1 Update `web/src/components/StatusBadge.tsx`: replace all hardcoded or mono-amber color references with semantic color tokens. Map each phase to its semantic token (Succeeded -> success, Running -> active, Pending -> warning, Failed -> error, Cancelled -> neutral)
 - [x] 8.2 Update StatusBadge background to use the muted variant of the semantic token and text/icon to use the foreground variant
 - [x] 8.3 Audit all StatusBadge usages across the codebase and verify they render correctly with the new semantic colors in both themes
-- [ ] 8.4 Update StatusBadge Storybook stories to show all five status variants with the new semantic colors
+- [x] 8.4 Update StatusBadge Storybook stories to show all five status variants with the new semantic colors
 
 ## 9. Keyboard Navigation
 
@@ -124,13 +124,13 @@
 
 ## 14. Verification
 
-- [ ] 14.1 Run `npx tsc --noEmit -p web/tsconfig.json` — all new and updated components compile without type errors
-- [ ] 14.2 Run `npm run build` in `web/` — production build succeeds with no errors
-- [ ] 14.3 Run `npm run dev` in `web/` — verify the card feed renders with semantic-colored status dots, sidebar shows filter chips, theme toggle works
-- [ ] 14.4 Verify dark mode: black background, light text, MU-TH-UR scanlines visible, glow effects active, semantic status colors correct
-- [ ] 14.5 Verify light mode: white background, dark text, no scanlines, no glow, semantic status colors correct with good contrast
-- [ ] 14.6 Verify keyboard navigation: j/k moves selection, Enter opens detail, Escape closes detail, / focuses search, shortcuts disabled in inputs
-- [ ] 14.7 Verify filter sidebar: status chips filter correctly, repo chips auto-populate, multiple filters combine correctly, "+ New Run" opens form
-- [ ] 14.8 Verify detail view: opens full-width replacing feed, tabs switch content, lazy loading works, all three close methods (X, Escape, breadcrumb) work
-- [ ] 14.9 Verify no old components remain: AgentRunTable, AgentRunDetailPanel, Sidebar, ReposView, EventsView are deleted and no imports reference them
-- [ ] 14.10 Run existing E2E test suite — all updated tests pass
+- [x] 14.1 Run `npx tsc --noEmit -p web/tsconfig.json` — all new and updated components compile without type errors
+- [x] 14.2 Run `npm run build` in `web/` — production build succeeds with no errors
+- [x] 14.3 Run `npm run dev` in `web/` — verify the card feed renders with semantic-colored status dots, sidebar shows filter chips, theme toggle works
+- [x] 14.4 Verify dark mode: black background, light text, MU-TH-UR scanlines visible, glow effects active, semantic status colors correct
+- [x] 14.5 Verify light mode: white background, dark text, no scanlines, no glow, semantic status colors correct with good contrast
+- [x] 14.6 Verify keyboard navigation: j/k moves selection, Enter opens detail, Escape closes detail, / focuses search, shortcuts disabled in inputs
+- [x] 14.7 Verify filter sidebar: status chips filter correctly, repo chips auto-populate, multiple filters combine correctly, "+ New Run" opens form
+- [x] 14.8 Verify detail view: opens full-width replacing feed, tabs switch content, lazy loading works, all three close methods (X, Escape, breadcrumb) work
+- [x] 14.9 Verify no old components remain: AgentRunTable, AgentRunDetailPanel, Sidebar, ReposView, EventsView are deleted and no imports reference them
+- [x] 14.10 Run existing E2E test suite — all updated tests pass

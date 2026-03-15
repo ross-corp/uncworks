@@ -52,6 +52,8 @@ const (
 	// AOTServiceSendHumanInputProcedure is the fully-qualified name of the AOTService's SendHumanInput
 	// RPC.
 	AOTServiceSendHumanInputProcedure = "/aot.api.v1.AOTService/SendHumanInput"
+	// AOTServiceGetRunGraphProcedure is the fully-qualified name of the AOTService's GetRunGraph RPC.
+	AOTServiceGetRunGraphProcedure = "/aot.api.v1.AOTService/GetRunGraph"
 )
 
 // AOTServiceClient is a client for the aot.api.v1.AOTService service.
@@ -174,6 +176,8 @@ type AOTServiceHandler interface {
 	CancelAgentRun(context.Context, *connect.Request[v1.CancelAgentRunRequest]) (*connect.Response[v1.CancelAgentRunResponse], error)
 	// SendHumanInput provides human-in-the-loop input to a paused agent.
 	SendHumanInput(context.Context, *connect.Request[v1.SendHumanInputRequest]) (*connect.Response[v1.SendHumanInputResponse], error)
+	// GetRunGraph returns the tree of runs for a spec execution.
+	GetRunGraph(context.Context, *connect.Request[v1.GetRunGraphRequest]) (*connect.Response[v1.RunGraph], error)
 }
 
 // NewAOTServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -219,6 +223,12 @@ func NewAOTServiceHandler(svc AOTServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(aOTServiceMethods.ByName("SendHumanInput")),
 		connect.WithHandlerOptions(opts...),
 	)
+	aOTServiceGetRunGraphHandler := connect.NewUnaryHandler(
+		AOTServiceGetRunGraphProcedure,
+		svc.GetRunGraph,
+		connect.WithSchema(aOTServiceMethods.ByName("GetRunGraph")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/aot.api.v1.AOTService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AOTServiceCreateAgentRunProcedure:
@@ -233,6 +243,8 @@ func NewAOTServiceHandler(svc AOTServiceHandler, opts ...connect.HandlerOption) 
 			aOTServiceCancelAgentRunHandler.ServeHTTP(w, r)
 		case AOTServiceSendHumanInputProcedure:
 			aOTServiceSendHumanInputHandler.ServeHTTP(w, r)
+		case AOTServiceGetRunGraphProcedure:
+			aOTServiceGetRunGraphHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -264,4 +276,8 @@ func (UnimplementedAOTServiceHandler) CancelAgentRun(context.Context, *connect.R
 
 func (UnimplementedAOTServiceHandler) SendHumanInput(context.Context, *connect.Request[v1.SendHumanInputRequest]) (*connect.Response[v1.SendHumanInputResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("aot.api.v1.AOTService.SendHumanInput is not implemented"))
+}
+
+func (UnimplementedAOTServiceHandler) GetRunGraph(context.Context, *connect.Request[v1.GetRunGraphRequest]) (*connect.Response[v1.RunGraph], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("aot.api.v1.AOTService.GetRunGraph is not implemented"))
 }
