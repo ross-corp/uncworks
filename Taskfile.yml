@@ -165,6 +165,15 @@ tasks:
       - rm /tmp/aot-images.tar
       - echo "Images imported into k0s. Set AOT_*_IMAGE env vars to use local images."
 
+  deploy:all:
+    desc: Build all images, import into k0s, restart all deployments
+    cmds:
+      - task: build:web
+      - task: k0s:images
+      - kubectl rollout restart deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n aot
+      - kubectl rollout status deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n aot --timeout=60s
+      - echo "All deployments restarted and ready."
+
   build:web:
     desc: Build web dashboard
     dir: web
