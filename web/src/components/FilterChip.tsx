@@ -11,8 +11,8 @@ export default function FilterChip({ label, active, onToggle, onRemove }: Filter
       onClick={onToggle}
       className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium tracking-wider uppercase transition-colors border ${
         active
-          ? "bg-accent text-accent-foreground border-accent"
-          : "bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground"
+          ? "bg-primary text-primary-foreground border-primary"
+          : "bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground"
       }`}
     >
       <span>{label}</span>

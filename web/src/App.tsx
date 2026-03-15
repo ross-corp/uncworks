@@ -15,8 +15,32 @@ import AgentRunForm from "./components/AgentRunForm";
 import ConfirmDialog from "./components/ConfirmDialog";
 import WorkspaceEditor from "./components/WorkspaceEditor";
 import { Input } from "./components/ui/input";
+import SpecRunPage from "./pages/SpecRunPage";
+
+/**
+ * useRoute — simple path-based routing without a router library.
+ * Matches /specs/:specRunId and returns the param, or null for other paths.
+ */
+function useRoute(): { specRunId: string | null } {
+  const [path, setPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const match = path.match(/^\/specs\/([^/]+)\/?$/);
+  return { specRunId: match ? match[1] : null };
+}
 
 export default function App() {
+  const { specRunId } = useRoute();
+
+  // If we're on /specs/:specRunId, render the SpecRunPage
+  if (specRunId) {
+    return <SpecRunPage specRunId={specRunId} />;
+  }
   const client = useClient();
   const { toast } = useToast();
   const [runs, setRuns] = useState<AgentRun[]>([]);
@@ -205,7 +229,7 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col fx-flicker">
       {/* Header bar — full width (7.2) */}
-      <header className="flex items-center gap-4 border-b border-border px-4 py-2 bg-background shrink-0">
+      <header className="flex items-center gap-4 border-b border-border px-5 py-3 bg-background shrink-0 h-14">
         <h1 className="text-sm font-semibold tracking-widest whitespace-nowrap">
           <span className="text-primary fx-glow">AOT</span>
         </h1>
@@ -234,7 +258,7 @@ export default function App() {
         />
 
         {/* Content: RunFeed or RunDetail */}
-        <main className="flex-1 overflow-y-auto fx-scanlines">
+        <main className="flex-1 overflow-y-auto fx-scanlines p-4">
           {selectedRun ? (
             <RunDetail
               run={selectedRun}
