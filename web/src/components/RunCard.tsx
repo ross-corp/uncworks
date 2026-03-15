@@ -34,28 +34,31 @@ export function RunCard({ run, selected = false, onClick }: RunCardProps) {
     <div
       data-testid={`run-card-${run.id}`}
       onClick={() => onClick?.(run)}
-      className="cursor-pointer border-b transition-colors"
+      className="cursor-pointer transition-colors"
       style={{
         borderLeftWidth: selected ? "3px" : "0px",
         borderLeftColor: selected ? "var(--color-semantic-accent)" : "transparent",
-        borderBottomColor: "var(--color-border-subtle)",
-        backgroundColor: selected ? "var(--color-bg-elevated)" : undefined,
+        border: "1px solid var(--color-border-subtle)",
+        marginBottom: "8px",
+        backgroundColor: selected ? "var(--color-bg-elevated)" : "var(--color-bg-surface)",
       }}
       onMouseEnter={(e) => {
         if (!selected) {
-          e.currentTarget.style.backgroundColor = "var(--color-bg-surface)";
+          e.currentTarget.style.backgroundColor = "var(--color-bg-elevated)";
+          e.currentTarget.style.borderColor = "var(--color-text-muted)";
         }
       }}
       onMouseLeave={(e) => {
         if (!selected) {
-          e.currentTarget.style.backgroundColor = "";
+          e.currentTarget.style.backgroundColor = "var(--color-bg-surface)";
+          e.currentTarget.style.borderColor = "var(--color-border-subtle)";
         }
       }}
     >
       <div className="flex items-start gap-3 px-4 py-3">
         {/* Status dot */}
         <div
-          className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
           style={{
             backgroundColor: statusColors.color,
             animation: isRunning ? "status-pulse 2s ease-in-out infinite" : undefined,

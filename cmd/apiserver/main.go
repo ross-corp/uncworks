@@ -89,6 +89,10 @@ func main() {
 	traceHandler := server.NewTraceHandler(k8sClient, restConfig, namespace)
 	traceHandler.RegisterTraceHandlers(mux)
 
+	// Register SSE endpoints for real-time graph and trace updates
+	sseHandler := server.NewSSEHandler(k8sClient, bus, namespace)
+	sseHandler.RegisterSSEHandlers(mux)
+
 	// Register interactive shell WebSocket endpoint
 	execHandler := server.NewExecHandler(k8sClient, restConfig, namespace)
 	execHandler.RegisterExecHandlers(mux)

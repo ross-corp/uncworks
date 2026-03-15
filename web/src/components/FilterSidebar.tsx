@@ -1,6 +1,5 @@
 import type { AgentRun } from "../types/agent-run";
 import FilterChipGroup from "./FilterChipGroup";
-import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
 
 export interface FilterState {
@@ -153,10 +152,6 @@ export default function FilterSidebar({
         )}
       </div>
 
-      {/* ThemeToggle at bottom */}
-      <div className="flex items-center justify-center border-t border-border px-4 py-3">
-        <ThemeToggle />
-      </div>
     </aside>
   );
 }

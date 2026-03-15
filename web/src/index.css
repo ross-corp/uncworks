@@ -160,7 +160,10 @@
     @apply border-border outline-ring/50 rounded-none!;
   }
   body {
-    @apply bg-background text-foreground uppercase tracking-widest font-mono;
+    @apply bg-background text-foreground font-mono;
+  }
+  h1, h2, h3, h4, h5, h6, label, legend {
+    @apply uppercase tracking-widest;
   }
 }
 
