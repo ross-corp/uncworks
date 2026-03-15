@@ -4,7 +4,7 @@ test("Monaco loads on spec tab", async ({ page }) => {
   await page.goto("/");
 
   // Open form
-  await page.getByTestId("new-run-button").click();
+  await page.getByTestId("sidebar-new-run").click();
   await expect(page.getByTestId("form-modal")).toBeVisible();
 
   // Switch to spec tab
@@ -21,7 +21,7 @@ test("GitHub Load modal", async ({ page }) => {
   await page.goto("/");
 
   // Open form and switch to spec tab
-  await page.getByTestId("new-run-button").click();
+  await page.getByTestId("sidebar-new-run").click();
   await page.getByTestId("form-tab-spec").click();
   await expect(page.getByTestId("spec-editor")).toBeVisible({ timeout: 10000 });
 

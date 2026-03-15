@@ -69,6 +69,54 @@
   /* Effect tokens */
   --glow-primary: oklch(0.85 0.15 75 / 0.5);
   --glow-secondary: oklch(0.80 0.18 145 / 0.5);
+
+  /* Semantic color tokens — light mode */
+  --color-success: #16a34a;
+  --color-success-muted: #16a34a20;
+  --color-active: #2563eb;
+  --color-active-muted: #2563eb20;
+  --color-warning: #d97706;
+  --color-warning-muted: #d9770620;
+  --color-error: #dc2626;
+  --color-error-muted: #dc262620;
+  --color-neutral: #6b7280;
+  --color-neutral-muted: #6b728020;
+  --color-semantic-accent: #2563eb;
+  --color-semantic-accent-hover: #1d4ed8;
+
+  /* Surface tokens — light mode */
+  --color-bg-primary: #ffffff;
+  --color-bg-surface: #f9fafb;
+  --color-bg-elevated: #ffffff;
+  --color-text-primary: #111827;
+  --color-text-secondary: #374151;
+  --color-text-muted: #6b7280;
+  --color-border-subtle: #e5e7eb;
+}
+
+.dark {
+  /* Semantic color tokens — dark mode */
+  --color-success: #4ade80;
+  --color-success-muted: #4ade8020;
+  --color-active: #60a5fa;
+  --color-active-muted: #60a5fa20;
+  --color-warning: #fbbf24;
+  --color-warning-muted: #fbbf2420;
+  --color-error: #f87171;
+  --color-error-muted: #f8717120;
+  --color-neutral: #9ca3af;
+  --color-neutral-muted: #9ca3af20;
+  --color-semantic-accent: #60a5fa;
+  --color-semantic-accent-hover: #3b82f6;
+
+  /* Surface tokens — dark mode */
+  --color-bg-primary: #000000;
+  --color-bg-surface: oklch(0.05 0 0);
+  --color-bg-elevated: oklch(0.1 0 0);
+  --color-text-primary: oklch(0.85 0.15 75);
+  --color-text-secondary: oklch(0.7 0.05 75);
+  --color-text-muted: oklch(0.5 0 0);
+  --color-border-subtle: oklch(0.3 0 0);
 }
 
 /* ============================================================
@@ -117,15 +165,24 @@
 }
 
 /* ============================================================
+   Semantic Animations
+   ============================================================ */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ============================================================
    MUTHUR/9000 — Effects Layer
    CRT scanlines, phosphor bloom, flicker (Nostromo/NERV)
+   Dark mode only — in light mode, effects are disabled.
    ============================================================ */
 @layer utilities {
   /* CRT scanline overlay — apply to panels/cards for terminal feel */
   .fx-scanlines {
     position: relative;
   }
-  .fx-scanlines::after {
+  .dark .fx-scanlines::after {
     content: "";
     pointer-events: none;
     position: absolute;
@@ -146,7 +203,7 @@
   .fx-noise {
     position: relative;
   }
-  .fx-noise::before {
+  .dark .fx-noise::before {
     content: "";
     pointer-events: none;
     position: absolute;
@@ -159,35 +216,35 @@
     border-radius: inherit;
   }
 
-  /* Phosphor bloom glow on text — subtle */
-  .fx-glow {
+  /* Phosphor bloom glow on text — subtle (dark only) */
+  .dark .fx-glow {
     text-shadow: 0 0 3px var(--glow-primary);
   }
 
-  /* Amber phosphor glow — subtle */
-  .fx-glow-amber {
+  /* Amber phosphor glow — subtle (dark only) */
+  .dark .fx-glow-amber {
     text-shadow: 0 0 3px var(--glow-primary);
   }
 
-  /* Danger glow — subtle */
-  .fx-glow-danger {
+  /* Danger glow — subtle (dark only) */
+  .dark .fx-glow-danger {
     text-shadow: 0 0 3px oklch(0.55 0.22 25 / 0.4);
   }
 
-  /* Box glow effects */
-  .fx-box-glow {
+  /* Box glow effects (dark only) */
+  .dark .fx-box-glow {
     box-shadow:
       0 0 0 1px oklch(0.5 0 0 / 0.10),
       0 0 16px var(--glow-primary);
   }
 
-  .fx-box-glow-warning {
+  .dark .fx-box-glow-warning {
     box-shadow:
       0 0 0 1px oklch(0.5 0 0 / 0.10),
       0 0 16px var(--glow-primary);
   }
 
-  .fx-box-glow-danger {
+  .dark .fx-box-glow-danger {
     box-shadow:
       0 0 0 1px oklch(0.5 0 0 / 0.10),
       0 0 16px oklch(0.55 0.22 25 / 0.5);
@@ -215,7 +272,7 @@
     96% { opacity: 1; }
   }
 
-  .fx-flicker {
+  .dark .fx-flicker {
     animation: fx-flicker 6s infinite;
   }
 
@@ -228,7 +285,7 @@
     96% { transform: translate(-1px, 0) skew(-0.3deg); }
   }
 
-  .fx-glitch {
+  .dark .fx-glitch {
     animation: fx-glitch 4s infinite;
   }
 
@@ -238,7 +295,7 @@
     50% { box-shadow: 0 0 20px var(--glow-primary), 0 0 40px var(--glow-primary); }
   }
 
-  .fx-pulse {
+  .dark .fx-pulse {
     animation: fx-pulse-glow 3s ease-in-out infinite;
   }
 
@@ -248,7 +305,7 @@
     50% { border-color: var(--destructive); box-shadow: 0 0 12px oklch(0.55 0.22 25 / 0.5); }
   }
 
-  .fx-border-flash {
+  .dark .fx-border-flash {
     animation: fx-border-flash 1s steps(2) infinite;
   }
 
@@ -260,7 +317,7 @@
     25% { opacity: 0.95; }
   }
 
-  .fx-text-flicker {
+  .dark .fx-text-flicker {
     animation: fx-text-flicker 0.1s infinite;
   }
 }

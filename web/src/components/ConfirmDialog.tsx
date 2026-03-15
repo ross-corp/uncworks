@@ -24,7 +24,7 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[10vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-background/80 backdrop-blur-sm pt-[10vh]"
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
