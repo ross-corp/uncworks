@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import type { AgentRun } from "../types/agent-run";
 import { PhaseBadge, BackendBadge, ModelTierBadge } from "./StatusBadge";
 import { SkeletonRow } from "./Skeleton";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 
 function ActionMenu({
   run,
@@ -34,25 +36,29 @@ function ActionMenu({
       onClick={(e) => e.stopPropagation()}
     >
       {isActive && (
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => onCancel(run.id)}
-          className="btn-ghost whitespace-nowrap px-2 py-1 text-xs text-danger opacity-0 group-hover:opacity-100"
+          className="whitespace-nowrap text-xs text-destructive opacity-0 group-hover:opacity-100"
         >
           Cancel
-        </button>
+        </Button>
       )}
       <div className="relative" ref={menuRef}>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setMenuOpen(!menuOpen)}
-          className="btn-ghost px-2 py-1 text-xs opacity-0 group-hover:opacity-100"
+          className="text-xs opacity-0 group-hover:opacity-100"
           aria-label="More options"
         >
           &middot;&middot;&middot;
-        </button>
+        </Button>
         {menuOpen && (
-          <div className="absolute right-0 bottom-full z-10 mb-1 w-36 rounded border border-edge bg-surface-1 py-1 shadow-lg">
+          <div className="absolute right-0 bottom-full z-10 mb-1 w-36 border border-border bg-card py-1 shadow-lg">
             <button
-              className="w-full px-3 py-1.5 text-left text-sm text-txt-secondary hover:bg-surface-2 hover:text-txt-primary"
+              className="w-full px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
               onClick={() => {
                 navigator.clipboard.writeText(run.id);
                 setMenuOpen(false);
@@ -62,7 +68,7 @@ function ActionMenu({
             </button>
             {run.status.traceID && (
               <button
-                className="w-full px-3 py-1.5 text-left text-sm text-txt-secondary hover:bg-surface-2 hover:text-txt-primary"
+                className="w-full px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                 onClick={() => {
                   navigator.clipboard.writeText(run.status.traceID);
                   setMenuOpen(false);
@@ -72,7 +78,7 @@ function ActionMenu({
               </button>
             )}
             <button
-              className="w-full px-3 py-1.5 text-left text-sm text-txt-secondary hover:bg-surface-2 hover:text-txt-primary"
+              className="w-full px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
               onClick={() => {
                 onClone(run);
                 setMenuOpen(false);
@@ -81,7 +87,7 @@ function ActionMenu({
               Clone Run
             </button>
             <button
-              className="w-full px-3 py-1.5 text-left text-sm text-danger hover:bg-danger/10"
+              className="w-full px-3 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10"
               onClick={() => {
                 onDelete(run.id);
                 setMenuOpen(false);
@@ -170,7 +176,7 @@ export default function AgentRunTable({
     return (
       <div
         onMouseDown={(e) => startResize(col, e)}
-        className="absolute top-0 -right-px bottom-0 z-10 w-[3px] cursor-col-resize bg-edge hover:bg-txt-secondary transition-colors"
+        className="absolute top-0 -right-px bottom-0 z-10 w-[3px] cursor-col-resize bg-border hover:bg-muted-foreground transition-colors"
       />
     );
   }
@@ -211,7 +217,7 @@ export default function AgentRunTable({
             <col />
           </colgroup>
           <thead>
-            <tr className="border-b border-edge text-left text-xs font-medium text-txt-tertiary">
+            <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground/60">
               {COLUMNS.map((c) => (
                 <th key={c.key} className="relative px-4 py-2">{c.label}</th>
               ))}
@@ -231,11 +237,11 @@ export default function AgentRunTable({
   if (runs.length === 0) {
     return (
       <div className="px-6 py-12 text-center">
-        <p className="text-sm text-txt-tertiary">No agent runs match the current filters.</p>
+        <p className="text-sm text-muted-foreground/60">No agent runs match the current filters.</p>
         {onNewRun && (
-          <button onClick={onNewRun} className="btn-primary mt-3 text-sm">
+          <Button onClick={onNewRun} className="mt-3 text-sm">
             + Create Agent Run
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -251,7 +257,7 @@ export default function AgentRunTable({
           <col />
         </colgroup>
         <thead>
-          <tr className="border-b border-edge text-left text-xs font-medium text-txt-tertiary">
+          <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground/60">
             {COLUMNS.map((c) => (
               <th key={c.key} className="relative px-4 py-2">
                 {c.label}
@@ -269,21 +275,21 @@ export default function AgentRunTable({
                 key={run.id}
                 data-testid={`table-row-${run.id}`}
                 onClick={() => onSelect?.(run)}
-                className={`group border-b border-edge transition-colors cursor-pointer ${
+                className={`group border-b border-border transition-colors cursor-pointer ${
                   isSelected
-                    ? "bg-surface-2"
-                    : "hover:bg-surface-1"
+                    ? "bg-muted"
+                    : "hover:bg-card"
                 }`}
               >
                 <td className="px-4 py-2.5 overflow-hidden text-ellipsis whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium">{run.name}</span>
                     {run.spec.specContent && (
-                      <span data-testid={`table-row-${run.id}-spec`} className="inline-flex items-center rounded bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-medium text-purple-400">
+                      <Badge data-testid={`table-row-${run.id}-spec`} variant="outline" className="border-secondary/30 text-secondary text-[10px] px-1.5 py-0.5">
                         spec
-                      </span>
+                      </Badge>
                     )}
-                    <span className="text-xs text-txt-tertiary">{timeAgo(run.createdAt)}</span>
+                    <span className="text-xs text-muted-foreground/60">{timeAgo(run.createdAt)}</span>
                   </div>
                 </td>
                 <td className="px-4 py-2.5 overflow-hidden whitespace-nowrap" data-testid={`table-row-${run.id}-phase`}>
@@ -296,13 +302,13 @@ export default function AgentRunTable({
                   <ModelTierBadge tier={run.spec.modelTier} />
                 </td>
                 <td
-                  className="px-4 py-2.5 font-mono text-xs text-txt-secondary overflow-hidden text-ellipsis whitespace-nowrap"
+                  className="px-4 py-2.5 font-mono text-xs text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap"
                   title={reposSummary(run).title}
                 >
                   {reposSummary(run).text}
                 </td>
-                <td className="px-4 py-2.5 text-xs text-txt-secondary overflow-hidden text-ellipsis whitespace-nowrap">
-                  {run.status.message || <span className="text-txt-tertiary">&mdash;</span>}
+                <td className="px-4 py-2.5 text-xs text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+                  {run.status.message || <span className="text-muted-foreground/60">&mdash;</span>}
                 </td>
                 <td className="px-4 py-2.5 overflow-hidden whitespace-nowrap">
                   <ActionMenu

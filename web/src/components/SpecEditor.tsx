@@ -16,12 +16,12 @@ export default function SpecEditor({
   return (
     <div
       data-testid="spec-editor"
-      className="overflow-hidden rounded border border-edge bg-surface-1"
+      className="overflow-hidden border border-border bg-card"
       style={{ height }}
     >
       <Suspense
         fallback={
-          <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
             Loading editor...
           </div>
         }
@@ -39,7 +39,7 @@ export default function SpecEditor({
             lineNumbers: "on",
             scrollBeyondLastLine: false,
             fontSize: 13,
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "'IoskeleyMono', monospace",
             padding: { top: 8 },
           }}
         />

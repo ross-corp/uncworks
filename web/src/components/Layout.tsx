@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 export default function Layout({
   sidebar,
@@ -22,30 +24,30 @@ export default function Layout({
       {sidebar}
       <div className="flex flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="flex items-center gap-3 border-b border-edge px-6 py-3">
+          <header className="flex items-center gap-3 border-b border-border px-6 py-3">
             {activeView === "repos" ? (
-              <h2 className="text-sm font-semibold text-txt-primary">Repositories</h2>
+              <h2 className="text-sm font-semibold text-foreground fx-glow">Repositories</h2>
             ) : activeView === "events" ? (
-              <h2 className="text-sm font-semibold text-txt-primary">Events</h2>
+              <h2 className="text-sm font-semibold text-foreground fx-glow">Events</h2>
             ) : (
               <>
                 {onSearchChange != null && (
-                  <input
+                  <Input
                     type="text"
                     data-testid="search-input"
                     value={searchQuery ?? ""}
                     onChange={(e) => onSearchChange(e.target.value)}
                     placeholder="Search agent runs..."
-                    className="input-field flex-1 text-sm"
+                    className="flex-1 text-sm"
                   />
                 )}
-                <button data-testid="new-run-button" onClick={onNewRun} className="btn-primary ml-auto">
+                <Button data-testid="new-run-button" onClick={onNewRun} className="ml-auto">
                   + New Agent Run
-                </button>
+                </Button>
               </>
             )}
           </header>
-          <main className="flex-1 overflow-y-auto scrollbar-hidden">{children}</main>
+          <main className="flex-1 overflow-y-auto fx-scanlines">{children}</main>
         </div>
         <div
           className={`shrink-0 overflow-hidden transition-all duration-200 ${

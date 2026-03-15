@@ -107,13 +107,13 @@ export default function FileTree({
 
   if (error) {
     return (
-      <div className="p-3 text-sm text-red-400">{error}</div>
+      <div className="p-3 text-sm text-destructive">{error}</div>
     );
   }
 
   if (roots === null) {
     return (
-      <div className="p-3 text-sm text-txt-tertiary">Loading...</div>
+      <div className="p-3 text-sm text-muted-foreground/60">Loading...</div>
     );
   }
 
@@ -151,20 +151,20 @@ function TreeNodeRow({
   return (
     <>
       <button
-        className="flex w-full items-center gap-1 px-2 py-0.5 text-left text-txt-secondary hover:bg-surface-2 transition-colors"
+        className="flex w-full items-center gap-1 px-2 py-0.5 text-left text-muted-foreground hover:bg-muted transition-colors"
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={() => onClick(node)}
       >
-        <span className="w-3 text-center text-txt-tertiary">{icon}</span>
+        <span className="w-3 text-center text-muted-foreground/60">{icon}</span>
         <span>{folderIcon}</span>
         <span className="truncate">{node.entry.name}</span>
         {!isDir && node.entry.size > 0 && (
-          <span className="ml-auto text-txt-tertiary">
+          <span className="ml-auto text-muted-foreground/60">
             {formatSize(node.entry.size)}
           </span>
         )}
         {node.loading && (
-          <span className="ml-auto text-txt-tertiary">...</span>
+          <span className="ml-auto text-muted-foreground/60">...</span>
         )}
       </button>
       {node.expanded && node.children?.map((child) => (

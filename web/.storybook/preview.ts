@@ -9,7 +9,12 @@ const preview: Preview = {
        date: /Date$/i,
       },
     },
-
+    backgrounds: {
+      default: 'mu-th-ur',
+      values: [
+        { name: 'mu-th-ur', value: '#000000' },
+      ],
+    },
     a11y: {
       // 'todo' - show a11y violations in the test UI only
       // 'error' - fail CI on a11y violations

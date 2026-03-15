@@ -28,24 +28,24 @@ export default function FileExplorer({ runId }: { runId: string }) {
   return (
     <div className="flex h-full">
       {/* File tree */}
-      <div className="w-[250px] shrink-0 overflow-y-auto border-r border-edge bg-surface-0">
+      <div className="w-[250px] shrink-0 overflow-y-auto border-r border-border bg-background">
         <FileTree runId={runId} onSelectFile={handleSelectFile} />
       </div>
 
       {/* File preview */}
-      <div className="flex-1 overflow-hidden bg-surface-1">
+      <div className="flex-1 overflow-hidden bg-card">
         {loadingFile ? (
-          <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
             Loading file...
           </div>
         ) : fileError ? (
-          <div className="flex h-full items-center justify-center text-sm text-red-400">
+          <div className="flex h-full items-center justify-center text-sm text-destructive">
             {fileError}
           </div>
         ) : selectedPath && fileContent !== null ? (
           <FilePreview path={selectedPath} content={fileContent} />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-txt-tertiary">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
             Select a file to preview
           </div>
         )}

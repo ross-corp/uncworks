@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 function repoName(url: string): string {
   const parts = url.replace(/\.git$/, "").split("/");
@@ -26,10 +28,10 @@ export default function ReposView({
   return (
     <div className="overflow-x-auto">
       {/* Add Repository */}
-      <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
-        <input
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+        <Input
           data-testid="repos-add-input"
-          className="input-field flex-1"
+          className="flex-1"
           value={newUrl}
           onChange={(e) => setNewUrl(e.target.value)}
           onKeyDown={(e) => {
@@ -40,14 +42,14 @@ export default function ReposView({
           }}
           placeholder="https://github.com/org/repo"
         />
-        <button
+        <Button
           data-testid="repos-add-button"
           onClick={handleAdd}
           disabled={!newUrl.trim()}
-          className="btn-primary text-sm disabled:opacity-40"
+          className="text-sm disabled:opacity-40"
         >
           Add
-        </button>
+        </Button>
       </div>
 
       <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
@@ -57,7 +59,7 @@ export default function ReposView({
           <col style={{ width: 80 }} />
         </colgroup>
         <thead>
-          <tr className="border-b border-edge text-left text-xs font-medium text-txt-tertiary">
+          <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground/60">
             <th className="px-4 py-2">Name</th>
             <th className="px-4 py-2">URL</th>
             <th className="px-4 py-2" />
@@ -68,22 +70,24 @@ export default function ReposView({
             <tr
               key={url}
               data-testid={`repos-row-${index}`}
-              className="group border-b border-edge transition-colors hover:bg-surface-1"
+              className="group border-b border-border transition-colors hover:bg-card"
             >
-              <td className="px-4 py-2.5 font-medium text-txt-primary">
+              <td className="px-4 py-2.5 font-medium text-foreground">
                 {repoName(url)}
               </td>
-              <td className="px-4 py-2.5 font-mono text-xs text-txt-secondary overflow-hidden text-ellipsis whitespace-nowrap">
+              <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
                 {url}
               </td>
               <td className="px-4 py-2.5 text-right">
-                <button
+                <Button
                   data-testid={`repos-remove-${index}`}
+                  variant="ghost"
+                  size="sm"
                   onClick={() => onRemoveRepo(url)}
-                  className="btn-ghost px-2 py-1 text-xs text-danger opacity-0 group-hover:opacity-100"
+                  className="text-xs text-destructive opacity-0 group-hover:opacity-100"
                 >
                   Remove
-                </button>
+                </Button>
               </td>
             </tr>
           ))}
@@ -91,7 +95,7 @@ export default function ReposView({
       </table>
 
       {repos.length === 0 && (
-        <div className="px-6 py-12 text-center text-sm text-txt-tertiary">
+        <div className="px-6 py-12 text-center text-sm text-muted-foreground/60">
           No repositories registered. Add one above or create an agent run.
         </div>
       )}

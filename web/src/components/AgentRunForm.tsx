@@ -5,6 +5,8 @@ import type { Workspace } from "../hooks/useWorkspaces";
 import { useGitHub } from "../hooks/useGitHub";
 import GitHubModal from "./GitHubModal";
 import SpecEditor from "./SpecEditor";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 type InputMode = "prompt" | "spec";
 
@@ -111,30 +113,30 @@ export default function AgentRunForm({
       <form
         data-testid="form-modal"
         onSubmit={handleSubmit}
-        className={`w-full rounded-lg border border-edge bg-surface-1 shadow-2xl ${
+        className={`w-full border border-border bg-card shadow-2xl ${
           inputMode === "spec" ? "max-w-4xl" : "max-w-lg"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-edge px-5 py-3">
-          <h2 className="text-sm font-semibold">New Agent Run</h2>
-          <button
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h2 className="text-sm font-semibold fx-glow">New Agent Run</h2>
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onCancel}
-            className="btn-ghost px-2"
             aria-label="Close"
           >
             &times;
-          </button>
+          </Button>
         </div>
 
         <div className="flex flex-col gap-4 p-5 max-h-[80vh] overflow-y-auto">
           <div>
-            <label className="mb-1 block text-xs font-medium text-txt-secondary">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Name
             </label>
-            <input
+            <Input
               data-testid="form-name-input"
-              className="input-field"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="fix-auth-middleware"
@@ -145,17 +147,17 @@ export default function AgentRunForm({
           {/* Workspace Selector */}
           {workspaces.length > 0 && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-txt-secondary">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 Workspace
               </label>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => selectWorkspace(null)}
-                  className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                  className={`px-3 py-1 text-xs font-medium transition-colors ${
                     selectedWorkspaceId === null
-                      ? "bg-surface-2 text-txt-primary"
-                      : "text-txt-tertiary hover:text-txt-secondary"
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground/60 hover:text-muted-foreground"
                   }`}
                 >
                   Custom repos
@@ -166,10 +168,10 @@ export default function AgentRunForm({
                     type="button"
                     data-testid={`form-workspace-${ws.name}`}
                     onClick={() => selectWorkspace(ws.id)}
-                    className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                    className={`px-3 py-1 text-xs font-medium transition-colors ${
                       selectedWorkspaceId === ws.id
-                        ? "bg-surface-2 text-txt-primary"
-                        : "text-txt-tertiary hover:text-txt-secondary"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground/60 hover:text-muted-foreground"
                     }`}
                   >
                     {ws.name}
@@ -181,39 +183,39 @@ export default function AgentRunForm({
 
           {/* Multi-Repo List */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-txt-secondary">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Repositories
             </label>
             <div className="space-y-2">
               {runRepos.map((repo, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <div className="flex-1">
-                    <input
+                    <Input
                       data-testid={`form-repo-row-${i}-url`}
                       list="known-repos"
-                      className="input-field"
                       value={repo.url}
                       onChange={(e) => updateRepo(i, "url", e.target.value)}
                       placeholder="https://github.com/org/repo"
                     />
                   </div>
                   <div className="w-24">
-                    <input
+                    <Input
                       data-testid={`form-repo-row-${i}-branch`}
-                      className="input-field"
                       value={repo.branch}
                       onChange={(e) => updateRepo(i, "branch", e.target.value)}
                       placeholder="main"
                     />
                   </div>
                   {runRepos.length > 1 && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => removeRepo(i)}
-                      className="btn-ghost px-2 text-xs text-danger"
+                      className="text-xs text-destructive"
                     >
                       &times;
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
@@ -223,24 +225,26 @@ export default function AgentRunForm({
                 <option key={url} value={url} />
               ))}
             </datalist>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               data-testid="form-add-repo"
               onClick={addRepo}
-              className="btn-ghost mt-2 text-xs"
+              className="mt-2 text-xs"
             >
               + Add repo
-            </button>
+            </Button>
           </div>
 
           <div className="flex gap-3">
             <div className="w-24">
-              <label className="mb-1 block text-xs font-medium text-txt-secondary">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 TTL (sec)
               </label>
-              <input
+              <Input
                 type="number"
-                className="input-field text-center"
+                className="text-center"
                 value={ttlSeconds}
                 onChange={(e) => setTtlSeconds(Number(e.target.value))}
                 min={300}
@@ -248,11 +252,11 @@ export default function AgentRunForm({
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-txt-secondary">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 Backend
               </label>
               <select
-                className="input-field"
+                className="w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary"
                 value={backend}
                 onChange={(e) => setBackend(e.target.value as Backend)}
               >
@@ -264,11 +268,11 @@ export default function AgentRunForm({
               </select>
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-txt-secondary">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 Model Tier
               </label>
               <select
-                className="input-field"
+                className="w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary"
                 value={modelTier}
                 onChange={(e) => setModelTier(e.target.value as ModelTier)}
               >
@@ -288,10 +292,10 @@ export default function AgentRunForm({
                 type="button"
                 data-testid="form-tab-prompt"
                 onClick={() => setInputMode("prompt")}
-                className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                className={`px-3 py-1 text-xs font-medium transition-colors ${
                   inputMode === "prompt"
-                    ? "bg-surface-2 text-txt-primary"
-                    : "text-txt-tertiary hover:text-txt-secondary"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground/60 hover:text-muted-foreground"
                 }`}
               >
                 Prompt
@@ -300,10 +304,10 @@ export default function AgentRunForm({
                 type="button"
                 data-testid="form-tab-spec"
                 onClick={() => setInputMode("spec")}
-                className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                className={`px-3 py-1 text-xs font-medium transition-colors ${
                   inputMode === "spec"
-                    ? "bg-surface-2 text-txt-primary"
-                    : "text-txt-tertiary hover:text-txt-secondary"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground/60 hover:text-muted-foreground"
                 }`}
               >
                 Spec
@@ -313,7 +317,7 @@ export default function AgentRunForm({
             {inputMode === "prompt" ? (
               <textarea
                 data-testid="form-prompt-input"
-                className="input-field min-h-[120px] resize-y"
+                className="w-full border border-input bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 outline-none transition-colors focus:border-primary min-h-[120px] resize-y"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe what the agent should do..."
@@ -331,36 +335,40 @@ export default function AgentRunForm({
                   height="400px"
                 />
                 <div className="mt-2 flex gap-2">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setGitHubModal("load")}
-                    className="btn-ghost text-xs"
+                    className="text-xs"
                   >
                     Load from GitHub
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setGitHubModal("push")}
-                    className="btn-ghost text-xs"
+                    className="text-xs"
                   >
                     Push to GitHub
-                  </button>
+                  </Button>
                 </div>
                 {githubError && (
-                  <p className="mt-1 text-xs text-danger">{githubError}</p>
+                  <p className="mt-1 text-xs text-destructive">{githubError}</p>
                 )}
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
-          <button type="button" onClick={onCancel} className="btn-ghost">
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+          <Button type="button" variant="ghost" onClick={onCancel}>
             Cancel
-          </button>
-          <button data-testid="form-submit" type="submit" className="btn-primary">
+          </Button>
+          <Button data-testid="form-submit" type="submit">
             Create Run
-          </button>
+          </Button>
         </div>
       </form>
 

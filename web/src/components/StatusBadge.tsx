@@ -1,12 +1,22 @@
 import type { AgentRunPhase, Backend, ModelTier } from "../types/agent-run";
+import { Badge } from "./ui/badge";
 
-const PHASE_STYLES: Record<AgentRunPhase, string> = {
-  pending: "bg-amber-500/15 text-amber-400",
-  running: "bg-blue-500/15 text-blue-400 animate-pulse",
-  waiting_for_input: "bg-purple-500/15 text-purple-400",
-  succeeded: "bg-green-500/15 text-green-400",
-  failed: "bg-red-500/15 text-red-400",
-  cancelled: "bg-stone-700/50 text-stone-300",
+const PHASE_VARIANT: Record<AgentRunPhase, "default" | "secondary" | "destructive" | "outline"> = {
+  pending: "outline",
+  running: "secondary",
+  waiting_for_input: "outline",
+  succeeded: "default",
+  failed: "destructive",
+  cancelled: "secondary",
+};
+
+const PHASE_EXTRA: Record<AgentRunPhase, string> = {
+  pending: "border-primary/30 text-primary",
+  running: "animate-pulse",
+  waiting_for_input: "border-secondary/30 text-secondary",
+  succeeded: "bg-secondary/15 text-secondary border-secondary/30",
+  failed: "fx-glitch",
+  cancelled: "opacity-50",
 };
 
 const PHASE_LABELS: Record<AgentRunPhase, string> = {
@@ -20,18 +30,22 @@ const PHASE_LABELS: Record<AgentRunPhase, string> = {
 
 export function PhaseBadge({ phase }: { phase: AgentRunPhase }) {
   return (
-    <span
-      className={`inline-flex items-center rounded px-2 py-0.5 font-mono text-xs ${PHASE_STYLES[phase]}`}
-    >
+    <Badge variant={PHASE_VARIANT[phase]} className={`font-mono text-xs ${PHASE_EXTRA[phase]}`}>
       {PHASE_LABELS[phase]}
-    </span>
+    </Badge>
   );
 }
 
-const BACKEND_STYLES: Record<Backend, string> = {
-  pod: "bg-blue-500/15 text-blue-400",
-  kubevirt: "bg-violet-500/15 text-violet-400",
-  external: "bg-teal-500/15 text-teal-400",
+const BACKEND_VARIANT: Record<Backend, "default" | "secondary" | "outline"> = {
+  pod: "secondary",
+  kubevirt: "outline",
+  external: "outline",
+};
+
+const BACKEND_EXTRA: Record<Backend, string> = {
+  pod: "",
+  kubevirt: "border-secondary/30 text-secondary",
+  external: "border-primary/30 text-primary",
 };
 
 const BACKEND_LABELS: Record<Backend, string> = {
@@ -42,18 +56,22 @@ const BACKEND_LABELS: Record<Backend, string> = {
 
 export function BackendBadge({ backend }: { backend: Backend }) {
   return (
-    <span
-      className={`inline-flex items-center rounded px-2 py-0.5 font-mono text-xs ${BACKEND_STYLES[backend]}`}
-    >
+    <Badge variant={BACKEND_VARIANT[backend]} className={`font-mono text-xs ${BACKEND_EXTRA[backend]}`}>
       {BACKEND_LABELS[backend]}
-    </span>
+    </Badge>
   );
 }
 
-const TIER_STYLES: Record<ModelTier, string> = {
-  default: "bg-stone-700/50 text-stone-300",
-  "default-cloud": "bg-sky-500/15 text-sky-400",
-  premium: "bg-amber-500/15 text-amber-400",
+const TIER_VARIANT: Record<ModelTier, "default" | "secondary" | "outline"> = {
+  default: "secondary",
+  "default-cloud": "outline",
+  premium: "outline",
+};
+
+const TIER_EXTRA: Record<ModelTier, string> = {
+  default: "opacity-70",
+  "default-cloud": "border-secondary/30 text-secondary",
+  premium: "border-primary/30 text-primary",
 };
 
 const TIER_LABELS: Record<ModelTier, string> = {
@@ -64,10 +82,8 @@ const TIER_LABELS: Record<ModelTier, string> = {
 
 export function ModelTierBadge({ tier }: { tier: ModelTier }) {
   return (
-    <span
-      className={`inline-flex items-center rounded px-2 py-0.5 font-mono text-xs ${TIER_STYLES[tier]}`}
-    >
+    <Badge variant={TIER_VARIANT[tier]} className={`font-mono text-xs ${TIER_EXTRA[tier]}`}>
       {TIER_LABELS[tier]}
-    </span>
+    </Badge>
   );
 }

@@ -1,12 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ToastProvider, useToast } from "./Toast";
+import { Button } from "./ui/button";
 
 function ToastDemo({ type, message }: { type: "success" | "error" | "info"; message: string }) {
   const { toast } = useToast();
   return (
-    <button onClick={() => toast(message, type)} className="btn-primary text-sm">
+    <Button onClick={() => toast(message, type)} size="sm">
       Show {type} toast
-    </button>
+    </Button>
   );
 }
 
