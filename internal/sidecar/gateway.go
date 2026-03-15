@@ -85,6 +85,7 @@ type AgentProcess struct {
 	startedAt time.Time
 	outputs   []chan *agentv1.AgentOutput
 	mu        sync.Mutex
+	readerWg  sync.WaitGroup
 }
 
 // NewGateway creates a new RPC Gateway sidecar.
@@ -164,8 +165,13 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 		Metadata:  map[string]interface{}{"prompt": req.Msg.Prompt, "agentRunId": req.Msg.AgentRunId},
 	})
 
-	// Monitor process in background
-	go g.monitorProcess(req.Msg.AgentRunId)
+	// CRITICAL: Start pipe readers NOW, before releasing the mutex.
+	// monitorProcess uses RLock which would block until this Lock is released,
+	// but pi may finish in < 5s, closing stdout before the scanner starts.
+	// Solution: start scanning goroutines here under the write lock, then
+	// launch the wait/cleanup goroutine separately.
+	proc.startReaders()
+	go g.waitForProcess(req.Msg.AgentRunId)
 
 	return connect.NewResponse(&agentv1.StartAgentResponse{Started: true}), nil
 }
@@ -238,38 +244,29 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	}, nil
 }
 
-func (g *Gateway) monitorProcess(agentRunID string) {
-	g.mu.RLock()
-	proc := g.process
-	g.mu.RUnlock()
-
-	if proc == nil {
-		return
-	}
-
-	// Stream stdout to watchers
-	var wg sync.WaitGroup
-	wg.Add(2)
+// startReaders begins scanning stdout/stderr pipes immediately.
+// MUST be called while the pipe is still open (before the process exits).
+func (proc *AgentProcess) startReaders() {
+	proc.readerWg.Add(2)
 
 	streamPipe := func(reader io.ReadCloser, outputType agentv1.OutputType) {
-		defer wg.Done()
+		defer proc.readerWg.Done()
 		defer func() { _ = reader.Close() }()
 		scanner := bufio.NewScanner(reader)
-		// Allow up to 256KB per line for verbose tool output.
+		// Allow up to 256KB per line for verbose JSON output from pi.
 		scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
 		for scanner.Scan() {
 			line := make([]byte, len(scanner.Bytes()))
 			copy(line, scanner.Bytes())
 
-			// Tee output to PVC log file (5.1)
+			// Tee output to PVC log file
 			if proc.logFile != nil {
 				proc.mu.Lock()
 				_, _ = proc.logFile.Write(append(line, '\n'))
 				proc.mu.Unlock()
 			}
 
-			// Heuristic: detect tool call lines from pi-coding-agent stdout
-			// and record trace spans even if the extension doesn't notify us.
+			// Detect tool call lines from pi stdout and record trace spans
 			if outputType == agentv1.OutputType_OUTPUT_TYPE_STDOUT {
 				maybeCaptureStdoutSpan(string(line))
 			}
@@ -289,18 +286,30 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 			}
 			proc.mu.Unlock()
 		}
+		if err := scanner.Err(); err != nil {
+			log.Printf("Scanner error on %s: %v", outputType, err)
+		}
 	}
 
 	go streamPipe(proc.stdout, agentv1.OutputType_OUTPUT_TYPE_STDOUT)
 	go streamPipe(proc.stderr, agentv1.OutputType_OUTPUT_TYPE_STDERR)
+}
 
-	// Wait for readers to drain before waiting on process
+func (g *Gateway) waitForProcess(agentRunID string) {
+	g.mu.RLock()
+	proc := g.process
+	g.mu.RUnlock()
+
+	if proc == nil {
+		return
+	}
+
+	// Wait for process to exit
 	done := make(chan error, 1)
 	go func() {
 		done <- proc.cmd.Wait()
 	}()
 
-	// Wait for process with timeout
 	var err error
 	select {
 	case err = <-done:
@@ -310,7 +319,8 @@ func (g *Gateway) monitorProcess(agentRunID string) {
 		err = <-done
 	}
 
-	wg.Wait()
+	// Wait for readers to drain all remaining pipe data
+	proc.readerWg.Wait()
 
 	// Close the log file after streams are drained
 	if proc.logFile != nil {
