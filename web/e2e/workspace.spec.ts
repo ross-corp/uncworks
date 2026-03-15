@@ -1,34 +1,15 @@
 import { test, expect } from "@playwright/test";
 
-test("create workspace appears in sidebar", async ({ page }) => {
-  await page.goto("/");
-
+test("workspace preset fills repos in create form", async ({ page }) => {
+  // Inject a workspace into localStorage before loading
   const wsName = `e2e-ws-${Date.now()}`;
-
-  // Click new workspace
-  await page.getByTestId("sidebar-new-workspace").click();
-
-  // Fill workspace editor
-  await expect(page.getByTestId("workspace-editor")).toBeVisible();
-  await page.getByTestId("workspace-editor-name").fill(wsName);
-  await page.getByTestId("workspace-editor-repo-0-url").fill("https://github.com/example/ws-repo");
-  await page.getByTestId("workspace-editor-repo-0-branch").fill("main");
-
-  // Save
-  await page.getByTestId("workspace-editor-save").click();
-
-  // Verify workspace appears in sidebar
-  await expect(page.getByTestId(`sidebar-workspace-${wsName}`)).toBeVisible();
-});
-
-test("delete workspace", async ({ page }) => {
-  // First create a workspace via localStorage
-  const wsName = `e2e-ws-del-${Date.now()}`;
   const workspace = {
-    id: `ws-del-${Date.now()}`,
+    id: `ws-${Date.now()}`,
     name: wsName,
-    description: "To be deleted",
-    repos: [{ url: "https://github.com/example/repo", branch: "main" }],
+    description: "Test workspace",
+    repos: [
+      { url: "https://github.com/preset/repo-one", branch: "develop" },
+    ],
     createdAt: new Date().toISOString(),
   };
 
@@ -36,21 +17,18 @@ test("delete workspace", async ({ page }) => {
   await page.evaluate((ws) => {
     localStorage.setItem("aot-workspaces", JSON.stringify([ws]));
   }, workspace);
+
+  // Reload so the workspace is picked up
   await page.reload();
 
-  // Verify workspace is in sidebar
-  await expect(page.getByTestId(`sidebar-workspace-${wsName}`)).toBeVisible();
+  // Open form
+  await page.getByTestId("sidebar-new-run").click();
+  await expect(page.getByTestId("form-modal")).toBeVisible();
 
-  // Right-click to open editor (contextmenu)
-  await page.getByTestId(`sidebar-workspace-${wsName}`).click({ button: "right" });
-  await expect(page.getByTestId("workspace-editor")).toBeVisible();
+  // Click the workspace button
+  await page.getByTestId(`form-workspace-${wsName}`).click();
 
-  // Click delete (first click shows confirmation)
-  await page.getByTestId("workspace-editor-delete").click();
-
-  // Confirm delete
-  await page.getByTestId("workspace-editor-delete-confirm").click();
-
-  // Verify removed from sidebar
-  await expect(page.getByTestId(`sidebar-workspace-${wsName}`)).not.toBeVisible();
+  // Verify repo fields are pre-filled
+  await expect(page.getByTestId("form-repo-row-0-url")).toHaveValue("https://github.com/preset/repo-one");
+  await expect(page.getByTestId("form-repo-row-0-branch")).toHaveValue("develop");
 });

@@ -1,20 +1,20 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Persistent workspace", () => {
-  // ---------- 17.1: Completed run → Logs tab → log-viewer renders ----------
+  // ---------- 17.1: Completed run -> Logs tab -> log-viewer renders ----------
 
   test("completed run shows logs from disk", async ({ page }) => {
     await page.goto("/");
 
-    const completedRow = page
-      .locator("tr[data-testid^='table-row-']")
+    const completedCard = page
+      .locator("[data-testid^='run-card-']")
       .filter({ hasText: /succeeded|failed/i })
       .first();
-    const hasCompleted = await completedRow.isVisible().catch(() => false);
+    const hasCompleted = await completedCard.isVisible().catch(() => false);
     test.skip(!hasCompleted, "No completed runs available to test persistent logs");
 
-    await completedRow.click();
-    await expect(page.getByTestId("detail-panel")).toBeVisible();
+    await completedCard.click();
+    await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Logs tab.
     await page.getByTestId("detail-tab-logs").click();
@@ -29,20 +29,20 @@ test.describe("Persistent workspace", () => {
     }).toPass({ timeout: 30000 });
   });
 
-  // ---------- 17.2: Completed run → Files tab → file tree renders ----------
+  // ---------- 17.2: Completed run -> Files tab -> file tree renders ----------
 
   test("completed run shows file tree from disk", async ({ page }) => {
     await page.goto("/");
 
-    const completedRow = page
-      .locator("tr[data-testid^='table-row-']")
+    const completedCard = page
+      .locator("[data-testid^='run-card-']")
       .filter({ hasText: /succeeded|failed/i })
       .first();
-    const hasCompleted = await completedRow.isVisible().catch(() => false);
+    const hasCompleted = await completedCard.isVisible().catch(() => false);
     test.skip(!hasCompleted, "No completed runs available to test persistent files");
 
-    await completedRow.click();
-    await expect(page.getByTestId("detail-panel")).toBeVisible();
+    await completedCard.click();
+    await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Files tab.
     await page.getByTestId("detail-tab-files").click();
@@ -57,20 +57,20 @@ test.describe("Persistent workspace", () => {
     }).toPass({ timeout: 30000 });
   });
 
-  // ---------- 17.3: Completed run → Shell tab → "Debug Run" button ----------
+  // ---------- 17.3: Completed run -> Shell tab -> "Debug Run" button ----------
 
   test("completed run shows Debug Run button", async ({ page }) => {
     await page.goto("/");
 
-    const completedRow = page
-      .locator("tr[data-testid^='table-row-']")
+    const completedCard = page
+      .locator("[data-testid^='run-card-']")
       .filter({ hasText: /succeeded|failed/i })
       .first();
-    const hasCompleted = await completedRow.isVisible().catch(() => false);
+    const hasCompleted = await completedCard.isVisible().catch(() => false);
     test.skip(!hasCompleted, "No completed runs available to test debug button");
 
-    await completedRow.click();
-    await expect(page.getByTestId("detail-panel")).toBeVisible();
+    await completedCard.click();
+    await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Shell tab.
     await page.getByTestId("detail-tab-shell").click();
@@ -86,7 +86,6 @@ test.describe("Persistent workspace", () => {
     await debugBtn.click();
 
     // After clicking, the button text should change or a terminal should appear.
-    // Wait briefly for the UI to react.
     await page.waitForTimeout(3000);
 
     // Verify either a terminal appears or the button changes to "Stop Debug".
@@ -98,22 +97,21 @@ test.describe("Persistent workspace", () => {
     if (terminalVisible) {
       expect(terminalVisible).toBe(true);
     } else if (btnText) {
-      // Button may have changed text to indicate debug is active.
       expect(btnText.toLowerCase()).toMatch(/stop|active|debug/i);
     }
   });
 
-  // ---------- 17.4: Traces tab → timeline renders ----------
+  // ---------- 17.4: Traces tab -> timeline renders ----------
 
   test("Traces tab renders timeline or empty state", async ({ page }) => {
     await page.goto("/");
 
-    const anyRow = page.locator("tr[data-testid^='table-row-']").first();
-    const hasRuns = await anyRow.isVisible().catch(() => false);
+    const anyCard = page.locator("[data-testid^='run-card-']").first();
+    const hasRuns = await anyCard.isVisible().catch(() => false);
     test.skip(!hasRuns, "No runs available to test Traces tab");
 
-    await anyRow.click();
-    await expect(page.getByTestId("detail-panel")).toBeVisible();
+    await anyCard.click();
+    await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Click the Traces tab.
     const tracesTab = page.getByTestId("detail-tab-traces");
@@ -132,20 +130,20 @@ test.describe("Persistent workspace", () => {
     }).toPass({ timeout: 15000 });
   });
 
-  // ---------- 17.5: Running run → all tabs work ----------
+  // ---------- 17.5: Running run -> all tabs work ----------
 
   test("running run has all tabs functional", async ({ page }) => {
     await page.goto("/");
 
-    const runningRow = page
-      .locator("tr[data-testid^='table-row-']")
+    const runningCard = page
+      .locator("[data-testid^='run-card-']")
       .filter({ hasText: /running/i })
       .first();
-    const hasRunning = await runningRow.isVisible().catch(() => false);
+    const hasRunning = await runningCard.isVisible().catch(() => false);
     test.skip(!hasRunning, "No running runs available to test all tabs");
 
-    await runningRow.click();
-    await expect(page.getByTestId("detail-panel")).toBeVisible();
+    await runningCard.click();
+    await expect(page.getByTestId("run-detail")).toBeVisible();
 
     // Logs tab.
     await page.getByTestId("detail-tab-logs").click();

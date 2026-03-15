@@ -1,23 +1,6 @@
 import type { AgentRunPhase, Backend, ModelTier } from "../types/agent-run";
 import { Badge } from "./ui/badge";
-
-const PHASE_VARIANT: Record<AgentRunPhase, "default" | "secondary" | "destructive" | "outline"> = {
-  pending: "outline",
-  running: "secondary",
-  waiting_for_input: "outline",
-  succeeded: "default",
-  failed: "destructive",
-  cancelled: "secondary",
-};
-
-const PHASE_EXTRA: Record<AgentRunPhase, string> = {
-  pending: "border-primary/30 text-primary",
-  running: "animate-pulse",
-  waiting_for_input: "border-secondary/30 text-secondary",
-  succeeded: "bg-secondary/15 text-secondary border-secondary/30",
-  failed: "fx-glitch",
-  cancelled: "opacity-50",
-};
+import { getStatusColors } from "../lib/statusColors";
 
 const PHASE_LABELS: Record<AgentRunPhase, string> = {
   pending: "Pending",
@@ -29,8 +12,20 @@ const PHASE_LABELS: Record<AgentRunPhase, string> = {
 };
 
 export function PhaseBadge({ phase }: { phase: AgentRunPhase }) {
+  const { color, mutedColor } = getStatusColors(phase);
+  const isRunning = phase === "running";
+
   return (
-    <Badge variant={PHASE_VARIANT[phase]} className={`font-mono text-xs ${PHASE_EXTRA[phase]}`}>
+    <Badge
+      variant="outline"
+      className="font-mono text-xs border-transparent"
+      style={{
+        backgroundColor: mutedColor,
+        color: color,
+        borderColor: "transparent",
+        animation: isRunning ? "status-pulse 2s ease-in-out infinite" : undefined,
+      }}
+    >
       {PHASE_LABELS[phase]}
     </Badge>
   );

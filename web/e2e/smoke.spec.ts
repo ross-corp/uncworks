@@ -1,11 +1,11 @@
 import { test, expect } from "@playwright/test";
 
-test("dashboard renders with sidebar and table", async ({ page }) => {
+test("dashboard renders with sidebar and run feed", async ({ page }) => {
   await page.goto("/");
-  // Sidebar should be visible
-  await expect(page.getByTestId("sidebar-phase-all")).toBeVisible();
-  // New run button should be visible
-  await expect(page.getByTestId("new-run-button")).toBeVisible();
+  // Sidebar new-run button should be visible
+  await expect(page.getByTestId("sidebar-new-run")).toBeVisible();
   // Search input should be visible
   await expect(page.getByTestId("search-input")).toBeVisible();
+  // Run feed should be visible
+  await expect(page.getByTestId("run-feed")).toBeVisible();
 });
