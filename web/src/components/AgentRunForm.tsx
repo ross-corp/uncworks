@@ -269,7 +269,7 @@ export default function AgentRunForm({
             </div>
             <div className="flex-1">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Model Tier
+                Model
               </label>
               <select
                 className="w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary"
@@ -278,7 +278,7 @@ export default function AgentRunForm({
               >
                 {MODEL_TIER_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {opt.label} · {opt.description}
                   </option>
                 ))}
               </select>

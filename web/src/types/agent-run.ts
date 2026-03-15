@@ -8,7 +8,7 @@ export type AgentRunPhase =
 
 export type Backend = "pod" | "kubevirt" | "external";
 
-export type ModelTier = "default" | "default-cloud" | "premium";
+export type ModelTier = "default" | "default-cloud" | "premium" | string;
 
 export interface Repository {
   url: string;
@@ -107,10 +107,11 @@ export const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
   { value: "external", label: "External" },
 ];
 
-export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string }[] = [
-  { value: "default", label: "Default (Local)" },
-  { value: "default-cloud", label: "Default (Cloud)" },
-  { value: "premium", label: "Premium" },
+export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string; description: string }[] = [
+  { value: "qwen2.5:0.5b", label: "qwen2.5:0.5b", description: "Local · Ollama · 397MB" },
+  { value: "qwen3-coder", label: "qwen3-coder", description: "Cloud · OpenRouter · Free" },
+  { value: "mistral-small", label: "mistral-small-3.1-24b", description: "Cloud · OpenRouter · Free" },
+  { value: "gemma-3-4b", label: "gemma-3-4b", description: "Cloud · OpenRouter · Free" },
 ];
 
 export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string }[] = [
