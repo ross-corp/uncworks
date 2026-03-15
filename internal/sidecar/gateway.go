@@ -176,9 +176,8 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	// printed the final text and swallowed tool execution output, which
 	// meant commands like "ls" ran but their results never appeared in logs.
 	// --no-session avoids persisting session state in the ephemeral container.
-	// The prompt is passed as a positional argument (not -p, which is a
-	// separate print mode incompatible with --mode json).
-	args := []string{"--mode", "json", "--no-session", "--verbose", req.Prompt}
+	// -p = non-interactive (process and exit), --mode json = stream JSON events
+	args := []string{"-p", "--mode", "json", "--no-session", req.Prompt}
 	// Use model from env if configured
 	if model := os.Getenv("PI_MODEL"); model != "" {
 		args = append(args, "--model", model)
