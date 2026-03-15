@@ -83,12 +83,12 @@ export default function DetailPane({
 
   // Phase color mapping using semantic tokens
   const phaseColorMap: Record<string, string> = {
-    running: "var(--color-accent, #3b82f6)",
-    pending: "var(--color-muted, #6b7280)",
-    waiting_for_input: "var(--color-warning, #f59e0b)",
-    succeeded: "var(--color-success, #22c55e)",
-    failed: "var(--color-error, #ef4444)",
-    cancelled: "var(--color-neutral, #6b7280)",
+    running: "var(--unc-accent, #3b82f6)",
+    pending: "var(--unc-muted, #6b7280)",
+    waiting_for_input: "var(--unc-warning, #f59e0b)",
+    succeeded: "var(--unc-success, #22c55e)",
+    failed: "var(--unc-error, #ef4444)",
+    cancelled: "var(--unc-neutral, #6b7280)",
   };
 
   return (
@@ -96,12 +96,12 @@ export default function DetailPane({
       {/* Header: run name, phase, close X, clone/cancel */}
       <div
         className="flex items-center justify-between border-b px-4 py-2"
-        style={{ borderColor: "var(--color-border, hsl(var(--border)))" }}
+        style={{ borderColor: "var(--unc-border, hsl(var(--border)))" }}
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-sm font-bold truncate">{getRunLabel(run)}</span>
           {run.spec.displayName && (
-            <span className="text-xs font-mono truncate" style={{ color: "var(--color-muted)" }}>{run.name}</span>
+            <span className="text-xs font-mono truncate" style={{ color: "var(--unc-muted)" }}>{run.name}</span>
           )}
           <span
             className="text-xs font-medium"
@@ -146,7 +146,7 @@ export default function DetailPane({
       {/* Tab bar — simple text tabs with accent bottom border on active */}
       <div
         className="flex items-center gap-0 border-b px-2"
-        style={{ borderColor: "var(--color-border, hsl(var(--border)))" }}
+        style={{ borderColor: "var(--unc-border, hsl(var(--border)))" }}
       >
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
@@ -165,7 +165,7 @@ export default function DetailPane({
               {active && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-0.5"
-                  style={{ backgroundColor: "var(--color-accent, hsl(var(--primary)))" }}
+                  style={{ backgroundColor: "var(--unc-accent, hsl(var(--primary)))" }}
                 />
               )}
             </button>

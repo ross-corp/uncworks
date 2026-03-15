@@ -96,7 +96,7 @@ export default function SplitPane({ detailOpen, children }: SplitPaneProps) {
                 backgroundColor: "transparent",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-border)";
+                (e.currentTarget as HTMLElement).style.backgroundColor = "var(--unc-border)";
               }}
               onMouseLeave={(e) => {
                 if (!dragging.current) {
@@ -112,7 +112,7 @@ export default function SplitPane({ detailOpen, children }: SplitPaneProps) {
       <div
         className="overflow-hidden min-w-0"
         style={{
-          borderLeft: detailOpen ? "1px solid var(--color-border)" : "none",
+          borderLeft: detailOpen ? "1px solid var(--unc-border)" : "none",
         }}
       >
         {children[1]}

@@ -244,7 +244,7 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 		_ = jsonlFile.Close()
 		return nil, fmt.Errorf("start agent: %w", err)
 	}
-	devNull.Close()
+	_ = devNull.Close()
 
 	return &AgentProcess{
 		cmd:       cmd,
@@ -324,6 +324,21 @@ func (proc *AgentProcess) startReaders() {
 	go streamPipe(proc.stderr, agentv1.OutputType_OUTPUT_TYPE_STDERR)
 }
 
+// maxRateLimitRetries is the number of times to retry the agent process on rate limit errors.
+const maxRateLimitRetries = 3
+
+// rateLimitRetryDelay is the delay before retrying after a rate limit error.
+const rateLimitRetryDelay = 10 * time.Second
+
+// isRateLimitError checks if the process stderr output indicates a rate limit error.
+func isRateLimitError(stderrOutput string) bool {
+	lower := strings.ToLower(stderrOutput)
+	return strings.Contains(lower, "429") ||
+		strings.Contains(lower, "ratelimiterror") ||
+		strings.Contains(lower, "rate limit") ||
+		strings.Contains(lower, "rate_limit")
+}
+
 func (g *Gateway) waitForProcess(agentRunID string) {
 	g.mu.RLock()
 	proc := g.process
@@ -333,7 +348,69 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 		return
 	}
 
-	// Wait for process to exit
+	err := g.waitForSingleProcess(proc)
+
+	// Check if this is a rate limit error and retry if so.
+	// We read the log file to check for rate limit indicators in stderr output.
+	if err != nil && isRateLimitError(proc.exitError+err.Error()) {
+		for attempt := 1; attempt <= maxRateLimitRetries; attempt++ {
+			log.Printf("Agent process hit rate limit (attempt %d/%d), retrying in %v: %s",
+				attempt, maxRateLimitRetries, rateLimitRetryDelay, agentRunID)
+
+			time.Sleep(rateLimitRetryDelay)
+
+			// Re-read the original request args from the process to rebuild the command.
+			newProc, startErr := restartAgentProcess(proc.cmd)
+			if startErr != nil {
+				log.Printf("Failed to restart agent process (attempt %d): %v", attempt, startErr)
+				continue
+			}
+
+			g.mu.Lock()
+			g.process = newProc
+			g.mu.Unlock()
+
+			newProc.startReaders()
+			err = g.waitForSingleProcess(newProc)
+			proc = newProc
+
+			if err == nil || !isRateLimitError(newProc.exitError+err.Error()) {
+				break
+			}
+		}
+
+		// If all retries exhausted and still failing, set a clear message.
+		if err != nil {
+			g.mu.Lock()
+			proc.exitError = fmt.Sprintf("Rate limited after %d retries: %s", maxRateLimitRetries, proc.exitError)
+			g.mu.Unlock()
+		}
+	}
+
+	g.mu.Lock()
+	if err != nil {
+		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_FAILED
+		if proc.exitError == "" {
+			proc.exitError = err.Error()
+		}
+	} else {
+		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_COMPLETED
+	}
+	// Close all output channels
+	proc.mu.Lock()
+	for _, ch := range proc.outputs {
+		close(ch)
+	}
+	proc.outputs = nil
+	proc.mu.Unlock()
+	g.mu.Unlock()
+
+	log.Printf("Agent process finished: %s (state=%v)", agentRunID, proc.state)
+}
+
+// waitForSingleProcess waits for a single agent process to complete, drains its
+// pipes, and closes its log files. Returns the process exit error (nil on success).
+func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 	done := make(chan error, 1)
 	go func() {
 		done <- proc.cmd.Wait()
@@ -343,7 +420,7 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 	select {
 	case err = <-done:
 	case <-time.After(24 * time.Hour):
-		log.Printf("Agent process timed out after 24h, killing: %s", agentRunID)
+		log.Printf("Agent process timed out after 24h, killing")
 		_ = proc.cmd.Process.Kill()
 		err = <-done
 	}
@@ -359,23 +436,64 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 		_ = proc.jsonlFile.Close()
 	}
 
-	g.mu.Lock()
 	if err != nil {
-		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_FAILED
 		proc.exitError = err.Error()
-	} else {
-		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_COMPLETED
 	}
-	// Close all output channels
-	proc.mu.Lock()
-	for _, ch := range proc.outputs {
-		close(ch)
-	}
-	proc.outputs = nil
-	proc.mu.Unlock()
-	g.mu.Unlock()
 
-	log.Printf("Agent process finished: %s (state=%v)", agentRunID, proc.state)
+	return err
+}
+
+// restartAgentProcess creates a new agent process using the same command arguments
+// as the original process.
+func restartAgentProcess(origCmd *exec.Cmd) (*AgentProcess, error) {
+	cmd := exec.Command(origCmd.Path, origCmd.Args[1:]...)
+	cmd.Dir = origCmd.Dir
+	cmd.Env = origCmd.Env
+
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		return nil, fmt.Errorf("open /dev/null: %w", err)
+	}
+	cmd.Stdin = devNull
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stderr pipe: %w", err)
+	}
+
+	if err := os.MkdirAll(agentLogDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create log dir: %w", err)
+	}
+	logFile, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open agent log: %w", err)
+	}
+	jsonlFile, err := os.OpenFile(agentJSONLPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("open agent jsonl: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		_ = logFile.Close()
+		_ = jsonlFile.Close()
+		return nil, fmt.Errorf("start agent: %w", err)
+	}
+	_ = devNull.Close()
+
+	return &AgentProcess{
+		cmd:       cmd,
+		stdout:    stdout,
+		stderr:    stderr,
+		logFile:   logFile,
+		jsonlFile: jsonlFile,
+		state:     agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
+		startedAt: time.Now(),
+	}, nil
 }
 
 func (g *Gateway) StreamOutput(_ context.Context, _ *connect.Request[agentv1.StreamOutputRequest], stream *connect.ServerStream[agentv1.AgentOutput]) error {

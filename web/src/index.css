@@ -44,37 +44,37 @@
    ============================================================ */
 
 :root {
-  --color-bg: #ffffff;
-  --color-fg: #171717;
-  --color-border: #e5e5e5;
-  --color-muted: #737373;
-  --color-accent: #171717;
-  --color-success: #16a34a;
-  --color-active: #2563eb;
-  --color-warning: #d97706;
-  --color-error: #dc2626;
-  --color-neutral: #a3a3a3;
+  --unc-bg: #ffffff;
+  --unc-fg: #171717;
+  --unc-border: #e5e5e5;
+  --unc-muted: #737373;
+  --unc-accent: #171717;
+  --unc-success: #16a34a;
+  --unc-active: #2563eb;
+  --unc-warning: #d97706;
+  --unc-error: #dc2626;
+  --unc-neutral: #a3a3a3;
 
   /* Radix/shadcn primitives — mapped to clean tokens */
-  --background: var(--color-bg);
-  --foreground: var(--color-fg);
-  --card: var(--color-bg);
-  --card-foreground: var(--color-fg);
-  --popover: var(--color-bg);
-  --popover-foreground: var(--color-fg);
-  --primary: var(--color-accent);
-  --primary-foreground: var(--color-bg);
-  --secondary: var(--color-border);
-  --secondary-foreground: var(--color-fg);
-  --muted: var(--color-border);
-  --muted-foreground: var(--color-muted);
-  --accent: var(--color-border);
-  --accent-foreground: var(--color-fg);
-  --destructive: var(--color-error);
-  --destructive-foreground: var(--color-bg);
-  --border: var(--color-border);
-  --input: var(--color-border);
-  --ring: var(--color-accent);
+  --background: var(--unc-bg);
+  --foreground: var(--unc-fg);
+  --card: var(--unc-bg);
+  --card-foreground: var(--unc-fg);
+  --popover: var(--unc-bg);
+  --popover-foreground: var(--unc-fg);
+  --primary: var(--unc-accent);
+  --primary-foreground: var(--unc-bg);
+  --secondary: var(--unc-border);
+  --secondary-foreground: var(--unc-fg);
+  --muted: var(--unc-border);
+  --muted-foreground: var(--unc-muted);
+  --accent: var(--unc-border);
+  --accent-foreground: var(--unc-fg);
+  --destructive: var(--unc-error);
+  --destructive-foreground: var(--unc-bg);
+  --border: var(--unc-border);
+  --input: var(--unc-border);
+  --ring: var(--unc-accent);
   --radius: 0px;
 
   /* Effect tokens */
@@ -83,37 +83,37 @@
 }
 
 .dark {
-  --color-bg: #0a0a0a;
-  --color-fg: #e5e5e5;
-  --color-border: #262626;
-  --color-muted: #737373;
-  --color-accent: #e5e5e5;
-  --color-success: #4ade80;
-  --color-active: #60a5fa;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
-  --color-neutral: #6b7280;
+  --unc-bg: #0a0a0a;
+  --unc-fg: #e5e5e5;
+  --unc-border: #262626;
+  --unc-muted: #737373;
+  --unc-accent: #e5e5e5;
+  --unc-success: #4ade80;
+  --unc-active: #60a5fa;
+  --unc-warning: #fbbf24;
+  --unc-error: #f87171;
+  --unc-neutral: #6b7280;
 
   /* Radix/shadcn primitives — dark overrides */
-  --background: var(--color-bg);
-  --foreground: var(--color-fg);
+  --background: var(--unc-bg);
+  --foreground: var(--unc-fg);
   --card: #111111;
-  --card-foreground: var(--color-fg);
+  --card-foreground: var(--unc-fg);
   --popover: #111111;
-  --popover-foreground: var(--color-fg);
-  --primary: var(--color-accent);
-  --primary-foreground: var(--color-bg);
-  --secondary: var(--color-border);
-  --secondary-foreground: var(--color-fg);
+  --popover-foreground: var(--unc-fg);
+  --primary: var(--unc-accent);
+  --primary-foreground: var(--unc-bg);
+  --secondary: var(--unc-border);
+  --secondary-foreground: var(--unc-fg);
   --muted: #1a1a1a;
-  --muted-foreground: var(--color-muted);
-  --accent: var(--color-border);
-  --accent-foreground: var(--color-fg);
-  --destructive: var(--color-error);
-  --destructive-foreground: var(--color-bg);
-  --border: var(--color-border);
-  --input: var(--color-border);
-  --ring: var(--color-accent);
+  --muted-foreground: var(--unc-muted);
+  --accent: var(--unc-border);
+  --accent-foreground: var(--unc-fg);
+  --destructive: var(--unc-error);
+  --destructive-foreground: var(--unc-bg);
+  --border: var(--unc-border);
+  --input: var(--unc-border);
+  --ring: var(--unc-accent);
 }
 
 /* ============================================================
@@ -133,13 +133,13 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
+  --unc-muted: var(--muted);
+  --unc-muted-foreground: var(--muted-foreground);
+  --unc-accent: var(--accent);
+  --unc-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
+  --unc-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --radius-sm: 0px;
