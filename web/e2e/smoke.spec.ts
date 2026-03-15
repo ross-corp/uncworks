@@ -1,11 +1,9 @@
 import { test, expect } from "@playwright/test";
 
-test("dashboard renders with sidebar and run feed", async ({ page }) => {
+test("dashboard renders with icon rail and run list", async ({ page }) => {
   await page.goto("/");
-  // Sidebar new-run button should be visible
-  await expect(page.getByTestId("sidebar-new-run")).toBeVisible();
-  // Search input should be visible
-  await expect(page.getByTestId("search-input")).toBeVisible();
-  // Run feed should be visible
-  await expect(page.getByTestId("run-feed")).toBeVisible();
+  // Icon rail new-run button should be visible
+  await expect(page.getByTestId("icon-rail-new-run")).toBeVisible();
+  // Run list (dense table) should be visible
+  await expect(page.getByTestId("run-list")).toBeVisible();
 });
