@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import type { AgentRun } from "../types/agent-run";
+import { getRunLabel } from "../lib/runLabel";
 
 type ResultType = "run" | "command" | "filter";
 
@@ -200,7 +201,7 @@ function buildResults(query: string, runs: AgentRun[]): PaletteResult[] {
         mruResults.push({
           id: `run-${run.id}`,
           type: "run",
-          label: run.spec.displayName || run.name || run.id,
+          label: getRunLabel(run),
           detail: run.spec.prompt.slice(0, 60),
           value: run.id,
         });
@@ -211,7 +212,7 @@ function buildResults(query: string, runs: AgentRun[]): PaletteResult[] {
     const recentRuns: PaletteResult[] = runs.slice(0, 5).map((r) => ({
       id: `run-${r.id}`,
       type: "run" as ResultType,
-      label: r.spec.displayName || r.name || r.id,
+      label: getRunLabel(r),
       detail: r.spec.prompt.slice(0, 60),
       value: r.id,
     }));
@@ -238,7 +239,7 @@ function buildResults(query: string, runs: AgentRun[]): PaletteResult[] {
       results.push({
         id: `run-${run.id}`,
         type: "run",
-        label: run.spec.displayName || run.name || run.id,
+        label: getRunLabel(run),
         detail: run.spec.prompt.slice(0, 60),
         value: run.id,
       });

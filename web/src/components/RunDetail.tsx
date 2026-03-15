@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { AgentRun, TraceSpan, RunGraphNode, RunGraphEdge } from "../types/agent-run";
+import { getRunLabel } from "../lib/runLabel";
 import { PhaseBadge, BackendBadge, ModelTierBadge } from "./StatusBadge";
 import SpecEditor from "./SpecEditor";
 import LogViewer from "./LogViewer";
@@ -80,7 +81,7 @@ export default function RunDetail({
           </button>
           <span className="text-xs text-muted-foreground/40">/</span>
           <span className="text-sm font-semibold text-foreground truncate fx-glow">
-            {run.name}
+            {getRunLabel(run)}
           </span>
           <span className="ml-2" data-testid="detail-phase">
             <PhaseBadge phase={run.status.phase} />
@@ -226,7 +227,7 @@ function InfoTab({
   return (
     <div className="flex-1 overflow-y-auto p-6">
       {/* Name & badges */}
-      <h2 data-testid="detail-name" className="mb-2 text-lg font-semibold fx-glow">{run.name}</h2>
+      <h2 data-testid="detail-name" className="mb-2 text-lg font-semibold fx-glow">{getRunLabel(run)}</h2>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <PhaseBadge phase={run.status.phase} />
         <BackendBadge backend={run.spec.backend} />
