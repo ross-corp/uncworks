@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import type { AgentRun, TraceSpan } from "../types/agent-run";
-import { getRunLabel } from "../lib/runLabel";
 import { PhaseBadge } from "./StatusBadge";
 import LogViewer from "./LogViewer";
 import FileExplorer from "./FileExplorer";
@@ -99,9 +98,9 @@ export default function DetailPane({
         style={{ borderColor: "var(--unc-border, hsl(var(--border)))" }}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <span className="text-sm font-bold truncate">{getRunLabel(run)}</span>
+          <span className="text-sm font-bold font-mono">{run.name}</span>
           {run.spec.displayName && (
-            <span className="text-xs font-mono truncate" style={{ color: "var(--unc-muted)" }}>{run.name}</span>
+            <span className="text-xs truncate max-w-[200px]" style={{ color: "var(--unc-muted)" }}>{run.spec.displayName}</span>
           )}
           <span
             className="text-xs font-medium"
@@ -234,7 +233,12 @@ function InfoTab({
   return (
     <div className="overflow-y-auto p-4 space-y-4">
       {/* Run ID + full prompt + repo + phase + timestamps */}
-      <div data-testid="detail-name" className="text-sm font-semibold">{getRunLabel(run)}</div>
+      <div data-testid="detail-name" className="text-sm font-semibold">
+        <span className="font-mono">{run.name}</span>
+        {run.spec.displayName && (
+          <span className="ml-2 text-xs text-muted-foreground font-sans">{run.spec.displayName}</span>
+        )}
+      </div>
 
       <div className="space-y-2 text-xs">
         <MetaRow label="Run ID" value={run.id} mono />

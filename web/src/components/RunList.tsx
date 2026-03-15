@@ -122,15 +122,11 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                     fontFamily: "monospace",
                   }}
                 >
-                  {run.spec.displayName ? (
-                    <>
-                      <span style={{ fontSize: "13px" }}>{run.spec.displayName}</span>
-                      <span style={{ fontSize: "11px", color: "var(--unc-muted)", marginLeft: "6px" }}>
-                        {run.name}
-                      </span>
-                    </>
-                  ) : (
-                    <span style={{ fontSize: "13px" }}>{run.name}</span>
+                  <span style={{ fontSize: "13px" }}>{run.name}</span>
+                  {run.spec.displayName && (
+                    <span style={{ fontSize: "11px", color: "var(--unc-muted)", marginLeft: "6px" }}>
+                      {run.spec.displayName}
+                    </span>
                   )}
                 </td>
                 <td
