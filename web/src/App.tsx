@@ -108,6 +108,7 @@ function Dashboard() {
 
   function handleSelectRun(run: AgentRun) {
     setSelectedId(run.id);
+    setDetailOpen(true);
   }
 
   function handleDoubleClickRun(run: AgentRun) {

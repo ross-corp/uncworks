@@ -1,9 +1,5 @@
 import type { AgentRun } from "../types/agent-run";
-
-/** Returns the display name for a run, falling back to the K8s name. */
-function runDisplayName(run: AgentRun): string {
-  return run.spec.displayName || run.name;
-}
+import { getRunLabel } from "../lib/runLabel";
 
 interface RunListProps {
   runs: AgentRun[];
@@ -126,7 +122,7 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                     whiteSpace: "nowrap",
                   }}
                 >
-                  <span style={{ fontSize: "13px" }}>{runDisplayName(run)}</span>
+                  <span style={{ fontSize: "13px" }}>{getRunLabel(run)}</span>
                   {run.spec.displayName && (
                     <span style={{ fontSize: "11px", color: "var(--color-muted)", marginLeft: "6px", fontFamily: "monospace" }}>
                       {run.id}
@@ -142,7 +138,7 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                   }}
                   title={run.spec.prompt}
                 >
-                  {run.name || run.spec.prompt}
+                  {run.spec.prompt.slice(0, 60)}{run.spec.prompt.length > 60 ? "..." : ""}
                 </td>
                 <td
                   style={{
