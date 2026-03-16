@@ -133,13 +133,13 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --unc-muted: var(--muted);
-  --unc-muted-foreground: var(--muted-foreground);
-  --unc-accent: var(--accent);
-  --unc-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  --unc-border: var(--border);
+  --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --radius-sm: 0px;
