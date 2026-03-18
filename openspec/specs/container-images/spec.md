@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+Define the container images that comprise the AOT platform, their contents, build process, and publication lifecycle.
+## Requirements
 ### Requirement: Controlplane image contains all server binaries
 The `aot-controlplane` image SHALL contain `apiserver`, `controller`, and `temporal-worker` binaries, selectable via container `command`.
 
@@ -35,3 +37,12 @@ All Dockerfiles SHALL live in the `docker/` directory of the main repo.
 #### Scenario: Web Dockerfile exists
 - **WHEN** `docker/Dockerfile.web` is built with `web/` as context after `npx vite build`
 - **THEN** it produces a working `aot-web` image
+
+### Requirement: Sidecar image includes agent tooling
+The `aot-sidecar` image SHALL contain the pi-coding-agent npm package, Node.js runtime, and the OpenSpec CLI, enabling the sidecar to run planning, execution, and verification agents with OpenSpec skill support.
+
+#### Scenario: OpenSpec CLI available in sidecar
+- **WHEN** a container runs `aot-sidecar`
+- **THEN** the `openspec` command is available in the container's PATH
+- **AND** `openspec --version` exits with code 0
+

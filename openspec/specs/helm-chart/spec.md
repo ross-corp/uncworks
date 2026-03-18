@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+Define the Helm chart packaging, configuration, and deployment requirements for the AOT platform on Kubernetes.
+## Requirements
 ### Requirement: Helm chart installs all AOT components
 The Helm chart SHALL deploy the CRD, controller, temporal-worker, API server, web dashboard, ServiceAccounts, and RBAC when installed.
 
@@ -59,3 +61,11 @@ The chart SHALL NOT include Temporal, Ollama, PostgreSQL, or any other external 
 #### Scenario: Chart contains only AOT
 - **WHEN** the chart is rendered with default values
 - **THEN** only AOT components (controller, worker, apiserver, web, CRD, RBAC) are produced
+
+### Requirement: Worker deployment configures pipeline settings
+The worker Helm template SHALL pass pipeline configuration (max retries, planning timeout, verification model) to the Temporal worker via environment variables.
+
+#### Scenario: Pipeline config passed to worker
+- **WHEN** the Helm chart is deployed with `pipeline.maxRetries=3` and `pipeline.planTimeout=120`
+- **THEN** the worker container has `AOT_PIPELINE_MAX_RETRIES=3` and `AOT_PIPELINE_PLAN_TIMEOUT=120` environment variables set
+

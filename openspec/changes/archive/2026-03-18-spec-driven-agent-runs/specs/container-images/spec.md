@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Sidecar image includes agent tooling
 The `aot-sidecar` image SHALL contain the pi-coding-agent npm package, Node.js runtime, and the OpenSpec CLI, enabling the sidecar to run planning, execution, and verification agents with OpenSpec skill support.

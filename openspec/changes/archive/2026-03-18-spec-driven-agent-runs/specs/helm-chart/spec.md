@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Worker deployment configures pipeline settings
 The worker Helm template SHALL pass pipeline configuration (max retries, planning timeout, verification model) to the Temporal worker via environment variables.
