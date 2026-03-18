@@ -6,13 +6,14 @@ import (
 )
 
 // OrchestrationMode specifies how an agent run handles decomposition.
-// +kubebuilder:validation:Enum=single;auto;manual
+// +kubebuilder:validation:Enum=single;auto;manual;spec-driven
 type OrchestrationMode string
 
 const (
-	OrchestrationModeSingle OrchestrationMode = "single"
-	OrchestrationModeAuto   OrchestrationMode = "auto"
-	OrchestrationModeManual OrchestrationMode = "manual"
+	OrchestrationModeSingle     OrchestrationMode = "single"
+	OrchestrationModeAuto       OrchestrationMode = "auto"
+	OrchestrationModeManual     OrchestrationMode = "manual"
+	OrchestrationModeSpecDriven OrchestrationMode = "spec-driven"
 )
 
 // OrchestrationTask defines a single sub-task in a manual orchestration.
@@ -218,6 +219,19 @@ type AgentRunStatus struct {
 	// DebugActive indicates whether a debug session is currently active.
 	// +optional
 	DebugActive bool `json:"debugActive,omitempty"`
+
+	// Stage is the current pipeline stage for spec-driven runs (planning, executing, verifying).
+	// Empty for non-spec-driven runs.
+	// +optional
+	Stage string `json:"stage,omitempty"`
+
+	// RetryCount is the number of execute→verify retry attempts completed.
+	// +optional
+	RetryCount int32 `json:"retryCount,omitempty"`
+
+	// VerificationResult is the JSON-encoded verdict from the verification stage.
+	// +optional
+	VerificationResult string `json:"verificationResult,omitempty"`
 }
 
 // +kubebuilder:object:root=true

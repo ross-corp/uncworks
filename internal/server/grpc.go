@@ -626,6 +626,8 @@ func protoOrchModeToCRD(m apiv1.OrchestrationMode) aotv1alpha1.OrchestrationMode
 		return aotv1alpha1.OrchestrationModeAuto
 	case apiv1.OrchestrationMode_ORCHESTRATION_MODE_MANUAL:
 		return aotv1alpha1.OrchestrationModeManual
+	case apiv1.OrchestrationMode_ORCHESTRATION_MODE_SPEC_DRIVEN:
+		return aotv1alpha1.OrchestrationModeSpecDriven
 	default:
 		return aotv1alpha1.OrchestrationModeSingle
 	}
@@ -639,6 +641,8 @@ func crdOrchModeToProto(m aotv1alpha1.OrchestrationMode) apiv1.OrchestrationMode
 		return apiv1.OrchestrationMode_ORCHESTRATION_MODE_MANUAL
 	case aotv1alpha1.OrchestrationModeSingle:
 		return apiv1.OrchestrationMode_ORCHESTRATION_MODE_SINGLE
+	case aotv1alpha1.OrchestrationModeSpecDriven:
+		return apiv1.OrchestrationMode_ORCHESTRATION_MODE_SPEC_DRIVEN
 	default:
 		return apiv1.OrchestrationMode_ORCHESTRATION_MODE_UNSPECIFIED
 	}
@@ -688,14 +692,17 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		Name: crd.Name,
 		Spec: protoSpec,
 		Status: &apiv1.AgentRunStatus{
-			Phase:          crdPhaseToProto(crd.Status.Phase),
-			Message:        crd.Status.Message,
-			PodName:        crd.Status.PodName,
-			TraceId:        crd.Status.TraceID,
-			WorktreePath:   crd.Status.WorktreePath,
-			LogOutput:      crd.Status.LogOutput,
-			DeploymentName: crd.Status.DeploymentName,
-			DebugActive:    crd.Status.DebugActive,
+			Phase:              crdPhaseToProto(crd.Status.Phase),
+			Message:            crd.Status.Message,
+			PodName:            crd.Status.PodName,
+			TraceId:            crd.Status.TraceID,
+			WorktreePath:       crd.Status.WorktreePath,
+			LogOutput:          crd.Status.LogOutput,
+			DeploymentName:     crd.Status.DeploymentName,
+			DebugActive:        crd.Status.DebugActive,
+			Stage:              crd.Status.Stage,
+			RetryCount:         crd.Status.RetryCount,
+			VerificationResult: crd.Status.VerificationResult,
 		},
 		CreatedAt: timestamppb.New(crd.CreationTimestamp.Time),
 	}

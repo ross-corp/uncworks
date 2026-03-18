@@ -57,9 +57,10 @@ type Repository struct {
 type OrchestrationMode string
 
 const (
-	OrchestrationModeSingle OrchestrationMode = "single"
-	OrchestrationModeAuto   OrchestrationMode = "auto"
-	OrchestrationModeManual OrchestrationMode = "manual"
+	OrchestrationModeSingle     OrchestrationMode = "single"
+	OrchestrationModeAuto       OrchestrationMode = "auto"
+	OrchestrationModeManual     OrchestrationMode = "manual"
+	OrchestrationModeSpecDriven OrchestrationMode = "spec-driven"
 )
 
 // OrchestrationTask defines a single sub-task in a manual orchestration.
@@ -153,11 +154,20 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 
 	// --- Step 0: Orchestration preamble ---
+	// Auto-upgrade to spec-driven if specContent is provided.
+	if input.SpecContent != "" && input.OrchestrationMode != OrchestrationModeSingle {
+		if input.OrchestrationMode == "" || input.OrchestrationMode == OrchestrationModeSingle {
+			input.OrchestrationMode = OrchestrationModeSpecDriven
+		}
+	}
+
 	switch input.OrchestrationMode {
 	case OrchestrationModeManual:
 		return runManualOrchestration(ctx, input)
 	case OrchestrationModeAuto:
 		return runAutoOrchestration(ctx, input)
+	case OrchestrationModeSpecDriven:
+		return runSpecDrivenPipeline(ctx, input)
 	}
 	// OrchestrationModeSingle or unspecified: fall through to standard single-agent workflow.
 

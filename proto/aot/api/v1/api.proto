@@ -41,6 +41,7 @@ enum OrchestrationMode {
   ORCHESTRATION_MODE_SINGLE = 1;
   ORCHESTRATION_MODE_AUTO = 2;
   ORCHESTRATION_MODE_MANUAL = 3;
+  ORCHESTRATION_MODE_SPEC_DRIVEN = 4;
 }
 
 // Backend specifies the execution backend for an agent run.
@@ -143,6 +144,12 @@ message AgentRunStatus {
   string deployment_name = 10;
   // DebugActive indicates whether a debug session is currently active.
   bool debug_active = 11;
+  // Stage is the current pipeline stage for spec-driven runs.
+  string stage = 12;
+  // RetryCount is the number of execute→verify retry attempts.
+  int32 retry_count = 13;
+  // VerificationResult is the JSON-encoded verdict from the verification stage.
+  string verification_result = 14;
 }
 
 message CreateAgentRunRequest {
