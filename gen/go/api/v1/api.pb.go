@@ -488,9 +488,11 @@ type AgentRunSpec struct {
 	// SpecRunID groups all runs from a single spec execution.
 	SpecRunId string `protobuf:"bytes,18,opt,name=spec_run_id,json=specRunId,proto3" json:"spec_run_id,omitempty"`
 	// DisplayName is a human-readable name generated from the prompt by the LLM.
-	DisplayName   string `protobuf:"bytes,19,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DisplayName string `protobuf:"bytes,19,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// PipelineConfig provides per-stage configuration for spec-driven runs.
+	PipelineConfig *PipelineConfig `protobuf:"bytes,20,opt,name=pipeline_config,json=pipelineConfig,proto3" json:"pipeline_config,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AgentRunSpec) Reset() {
@@ -642,6 +644,143 @@ func (x *AgentRunSpec) GetDisplayName() string {
 	return ""
 }
 
+func (x *AgentRunSpec) GetPipelineConfig() *PipelineConfig {
+	if x != nil {
+		return x.PipelineConfig
+	}
+	return nil
+}
+
+// PipelineConfig provides per-stage configuration for the spec-driven pipeline.
+type PipelineConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Plan          *StageConfig           `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"`
+	Execute       *StageConfig           `protobuf:"bytes,2,opt,name=execute,proto3" json:"execute,omitempty"`
+	Verify        *StageConfig           `protobuf:"bytes,3,opt,name=verify,proto3" json:"verify,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PipelineConfig) Reset() {
+	*x = PipelineConfig{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PipelineConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PipelineConfig) ProtoMessage() {}
+
+func (x *PipelineConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PipelineConfig.ProtoReflect.Descriptor instead.
+func (*PipelineConfig) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PipelineConfig) GetPlan() *StageConfig {
+	if x != nil {
+		return x.Plan
+	}
+	return nil
+}
+
+func (x *PipelineConfig) GetExecute() *StageConfig {
+	if x != nil {
+		return x.Execute
+	}
+	return nil
+}
+
+func (x *PipelineConfig) GetVerify() *StageConfig {
+	if x != nil {
+		return x.Verify
+	}
+	return nil
+}
+
+// StageConfig configures a single pipeline stage.
+type StageConfig struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Model          string                 `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	TimeoutSeconds int32                  `protobuf:"varint,2,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	MaxRetries     int32                  `protobuf:"varint,3,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
+	OnFailure      string                 `protobuf:"bytes,4,opt,name=on_failure,json=onFailure,proto3" json:"on_failure,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StageConfig) Reset() {
+	*x = StageConfig{}
+	mi := &file_aot_api_v1_api_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StageConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StageConfig) ProtoMessage() {}
+
+func (x *StageConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_api_v1_api_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StageConfig.ProtoReflect.Descriptor instead.
+func (*StageConfig) Descriptor() ([]byte, []int) {
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *StageConfig) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *StageConfig) GetTimeoutSeconds() int32 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+func (x *StageConfig) GetMaxRetries() int32 {
+	if x != nil {
+		return x.MaxRetries
+	}
+	return 0
+}
+
+func (x *StageConfig) GetOnFailure() string {
+	if x != nil {
+		return x.OnFailure
+	}
+	return ""
+}
+
 // OrchestrationTask defines a single sub-task in a manual orchestration.
 type OrchestrationTask struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -654,7 +793,7 @@ type OrchestrationTask struct {
 
 func (x *OrchestrationTask) Reset() {
 	*x = OrchestrationTask{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[3]
+	mi := &file_aot_api_v1_api_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -666,7 +805,7 @@ func (x *OrchestrationTask) String() string {
 func (*OrchestrationTask) ProtoMessage() {}
 
 func (x *OrchestrationTask) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[3]
+	mi := &file_aot_api_v1_api_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -679,7 +818,7 @@ func (x *OrchestrationTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrchestrationTask.ProtoReflect.Descriptor instead.
 func (*OrchestrationTask) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{3}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *OrchestrationTask) GetName() string {
@@ -713,7 +852,7 @@ type Orchestration struct {
 
 func (x *Orchestration) Reset() {
 	*x = Orchestration{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[4]
+	mi := &file_aot_api_v1_api_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -725,7 +864,7 @@ func (x *Orchestration) String() string {
 func (*Orchestration) ProtoMessage() {}
 
 func (x *Orchestration) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[4]
+	mi := &file_aot_api_v1_api_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -738,7 +877,7 @@ func (x *Orchestration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Orchestration.ProtoReflect.Descriptor instead.
 func (*Orchestration) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{4}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Orchestration) GetTasks() []*OrchestrationTask {
@@ -778,7 +917,7 @@ type AgentRunStatus struct {
 
 func (x *AgentRunStatus) Reset() {
 	*x = AgentRunStatus{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[5]
+	mi := &file_aot_api_v1_api_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -790,7 +929,7 @@ func (x *AgentRunStatus) String() string {
 func (*AgentRunStatus) ProtoMessage() {}
 
 func (x *AgentRunStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[5]
+	mi := &file_aot_api_v1_api_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -803,7 +942,7 @@ func (x *AgentRunStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunStatus.ProtoReflect.Descriptor instead.
 func (*AgentRunStatus) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{5}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AgentRunStatus) GetPhase() AgentRunPhase {
@@ -913,7 +1052,7 @@ type CreateAgentRunRequest struct {
 
 func (x *CreateAgentRunRequest) Reset() {
 	*x = CreateAgentRunRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[6]
+	mi := &file_aot_api_v1_api_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -925,7 +1064,7 @@ func (x *CreateAgentRunRequest) String() string {
 func (*CreateAgentRunRequest) ProtoMessage() {}
 
 func (x *CreateAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[6]
+	mi := &file_aot_api_v1_api_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -938,7 +1077,7 @@ func (x *CreateAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*CreateAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{6}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CreateAgentRunRequest) GetSpec() *AgentRunSpec {
@@ -957,7 +1096,7 @@ type CreateAgentRunResponse struct {
 
 func (x *CreateAgentRunResponse) Reset() {
 	*x = CreateAgentRunResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[7]
+	mi := &file_aot_api_v1_api_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -969,7 +1108,7 @@ func (x *CreateAgentRunResponse) String() string {
 func (*CreateAgentRunResponse) ProtoMessage() {}
 
 func (x *CreateAgentRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[7]
+	mi := &file_aot_api_v1_api_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -982,7 +1121,7 @@ func (x *CreateAgentRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAgentRunResponse.ProtoReflect.Descriptor instead.
 func (*CreateAgentRunResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{7}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CreateAgentRunResponse) GetAgentRun() *AgentRun {
@@ -1001,7 +1140,7 @@ type GetAgentRunRequest struct {
 
 func (x *GetAgentRunRequest) Reset() {
 	*x = GetAgentRunRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[8]
+	mi := &file_aot_api_v1_api_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1013,7 +1152,7 @@ func (x *GetAgentRunRequest) String() string {
 func (*GetAgentRunRequest) ProtoMessage() {}
 
 func (x *GetAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[8]
+	mi := &file_aot_api_v1_api_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1026,7 +1165,7 @@ func (x *GetAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{8}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetAgentRunRequest) GetId() string {
@@ -1053,7 +1192,7 @@ type ListAgentRunsRequest struct {
 
 func (x *ListAgentRunsRequest) Reset() {
 	*x = ListAgentRunsRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[9]
+	mi := &file_aot_api_v1_api_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1065,7 +1204,7 @@ func (x *ListAgentRunsRequest) String() string {
 func (*ListAgentRunsRequest) ProtoMessage() {}
 
 func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[9]
+	mi := &file_aot_api_v1_api_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1078,7 +1217,7 @@ func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentRunsRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{9}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListAgentRunsRequest) GetPhaseFilter() AgentRunPhase {
@@ -1133,7 +1272,7 @@ type ListAgentRunsResponse struct {
 
 func (x *ListAgentRunsResponse) Reset() {
 	*x = ListAgentRunsResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[10]
+	mi := &file_aot_api_v1_api_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1145,7 +1284,7 @@ func (x *ListAgentRunsResponse) String() string {
 func (*ListAgentRunsResponse) ProtoMessage() {}
 
 func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[10]
+	mi := &file_aot_api_v1_api_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1158,7 +1297,7 @@ func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentRunsResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{10}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListAgentRunsResponse) GetAgentRuns() []*AgentRun {
@@ -1184,7 +1323,7 @@ type WatchAgentRunRequest struct {
 
 func (x *WatchAgentRunRequest) Reset() {
 	*x = WatchAgentRunRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[11]
+	mi := &file_aot_api_v1_api_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1196,7 +1335,7 @@ func (x *WatchAgentRunRequest) String() string {
 func (*WatchAgentRunRequest) ProtoMessage() {}
 
 func (x *WatchAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[11]
+	mi := &file_aot_api_v1_api_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1209,7 +1348,7 @@ func (x *WatchAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*WatchAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{11}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *WatchAgentRunRequest) GetId() string {
@@ -1231,7 +1370,7 @@ type AgentRunEvent struct {
 
 func (x *AgentRunEvent) Reset() {
 	*x = AgentRunEvent{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[12]
+	mi := &file_aot_api_v1_api_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1243,7 +1382,7 @@ func (x *AgentRunEvent) String() string {
 func (*AgentRunEvent) ProtoMessage() {}
 
 func (x *AgentRunEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[12]
+	mi := &file_aot_api_v1_api_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1256,7 +1395,7 @@ func (x *AgentRunEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunEvent.ProtoReflect.Descriptor instead.
 func (*AgentRunEvent) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{12}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AgentRunEvent) GetAgentRunId() string {
@@ -1296,7 +1435,7 @@ type CancelAgentRunRequest struct {
 
 func (x *CancelAgentRunRequest) Reset() {
 	*x = CancelAgentRunRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[13]
+	mi := &file_aot_api_v1_api_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1308,7 +1447,7 @@ func (x *CancelAgentRunRequest) String() string {
 func (*CancelAgentRunRequest) ProtoMessage() {}
 
 func (x *CancelAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[13]
+	mi := &file_aot_api_v1_api_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1321,7 +1460,7 @@ func (x *CancelAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*CancelAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{13}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CancelAgentRunRequest) GetId() string {
@@ -1340,7 +1479,7 @@ type CancelAgentRunResponse struct {
 
 func (x *CancelAgentRunResponse) Reset() {
 	*x = CancelAgentRunResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[14]
+	mi := &file_aot_api_v1_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1352,7 +1491,7 @@ func (x *CancelAgentRunResponse) String() string {
 func (*CancelAgentRunResponse) ProtoMessage() {}
 
 func (x *CancelAgentRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[14]
+	mi := &file_aot_api_v1_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1365,7 +1504,7 @@ func (x *CancelAgentRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelAgentRunResponse.ProtoReflect.Descriptor instead.
 func (*CancelAgentRunResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{14}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *CancelAgentRunResponse) GetAgentRun() *AgentRun {
@@ -1385,7 +1524,7 @@ type SendHumanInputRequest struct {
 
 func (x *SendHumanInputRequest) Reset() {
 	*x = SendHumanInputRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[15]
+	mi := &file_aot_api_v1_api_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1397,7 +1536,7 @@ func (x *SendHumanInputRequest) String() string {
 func (*SendHumanInputRequest) ProtoMessage() {}
 
 func (x *SendHumanInputRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[15]
+	mi := &file_aot_api_v1_api_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1410,7 +1549,7 @@ func (x *SendHumanInputRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendHumanInputRequest.ProtoReflect.Descriptor instead.
 func (*SendHumanInputRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{15}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SendHumanInputRequest) GetAgentRunId() string {
@@ -1436,7 +1575,7 @@ type SendHumanInputResponse struct {
 
 func (x *SendHumanInputResponse) Reset() {
 	*x = SendHumanInputResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[16]
+	mi := &file_aot_api_v1_api_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1448,7 +1587,7 @@ func (x *SendHumanInputResponse) String() string {
 func (*SendHumanInputResponse) ProtoMessage() {}
 
 func (x *SendHumanInputResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[16]
+	mi := &file_aot_api_v1_api_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1461,7 +1600,7 @@ func (x *SendHumanInputResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendHumanInputResponse.ProtoReflect.Descriptor instead.
 func (*SendHumanInputResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{16}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SendHumanInputResponse) GetAccepted() bool {
@@ -1480,7 +1619,7 @@ type GetRunGraphRequest struct {
 
 func (x *GetRunGraphRequest) Reset() {
 	*x = GetRunGraphRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[17]
+	mi := &file_aot_api_v1_api_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1492,7 +1631,7 @@ func (x *GetRunGraphRequest) String() string {
 func (*GetRunGraphRequest) ProtoMessage() {}
 
 func (x *GetRunGraphRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[17]
+	mi := &file_aot_api_v1_api_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1505,7 +1644,7 @@ func (x *GetRunGraphRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunGraphRequest.ProtoReflect.Descriptor instead.
 func (*GetRunGraphRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{17}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetRunGraphRequest) GetId() string {
@@ -1528,7 +1667,7 @@ type RunGraphNode struct {
 
 func (x *RunGraphNode) Reset() {
 	*x = RunGraphNode{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[18]
+	mi := &file_aot_api_v1_api_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1540,7 +1679,7 @@ func (x *RunGraphNode) String() string {
 func (*RunGraphNode) ProtoMessage() {}
 
 func (x *RunGraphNode) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[18]
+	mi := &file_aot_api_v1_api_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1553,7 +1692,7 @@ func (x *RunGraphNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunGraphNode.ProtoReflect.Descriptor instead.
 func (*RunGraphNode) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{18}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RunGraphNode) GetName() string {
@@ -1601,7 +1740,7 @@ type RunGraphEdge struct {
 
 func (x *RunGraphEdge) Reset() {
 	*x = RunGraphEdge{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[19]
+	mi := &file_aot_api_v1_api_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1613,7 +1752,7 @@ func (x *RunGraphEdge) String() string {
 func (*RunGraphEdge) ProtoMessage() {}
 
 func (x *RunGraphEdge) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[19]
+	mi := &file_aot_api_v1_api_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1626,7 +1765,7 @@ func (x *RunGraphEdge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunGraphEdge.ProtoReflect.Descriptor instead.
 func (*RunGraphEdge) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{19}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RunGraphEdge) GetParent() string {
@@ -1653,7 +1792,7 @@ type RunGraph struct {
 
 func (x *RunGraph) Reset() {
 	*x = RunGraph{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[20]
+	mi := &file_aot_api_v1_api_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1665,7 +1804,7 @@ func (x *RunGraph) String() string {
 func (*RunGraph) ProtoMessage() {}
 
 func (x *RunGraph) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[20]
+	mi := &file_aot_api_v1_api_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1678,7 +1817,7 @@ func (x *RunGraph) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunGraph.ProtoReflect.Descriptor instead.
 func (*RunGraph) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{20}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RunGraph) GetNodes() []*RunGraphNode {
@@ -1715,7 +1854,7 @@ type SearchPastWorkRequest struct {
 
 func (x *SearchPastWorkRequest) Reset() {
 	*x = SearchPastWorkRequest{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[21]
+	mi := &file_aot_api_v1_api_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1727,7 +1866,7 @@ func (x *SearchPastWorkRequest) String() string {
 func (*SearchPastWorkRequest) ProtoMessage() {}
 
 func (x *SearchPastWorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[21]
+	mi := &file_aot_api_v1_api_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1740,7 +1879,7 @@ func (x *SearchPastWorkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchPastWorkRequest.ProtoReflect.Descriptor instead.
 func (*SearchPastWorkRequest) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{21}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SearchPastWorkRequest) GetQuery() string {
@@ -1794,7 +1933,7 @@ type SearchPastWorkResponse struct {
 
 func (x *SearchPastWorkResponse) Reset() {
 	*x = SearchPastWorkResponse{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[22]
+	mi := &file_aot_api_v1_api_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1806,7 +1945,7 @@ func (x *SearchPastWorkResponse) String() string {
 func (*SearchPastWorkResponse) ProtoMessage() {}
 
 func (x *SearchPastWorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[22]
+	mi := &file_aot_api_v1_api_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1819,7 +1958,7 @@ func (x *SearchPastWorkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchPastWorkResponse.ProtoReflect.Descriptor instead.
 func (*SearchPastWorkResponse) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{22}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SearchPastWorkResponse) GetResults() []*PastWorkResult {
@@ -1848,7 +1987,7 @@ type PastWorkResult struct {
 
 func (x *PastWorkResult) Reset() {
 	*x = PastWorkResult{}
-	mi := &file_aot_api_v1_api_proto_msgTypes[23]
+	mi := &file_aot_api_v1_api_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1860,7 +1999,7 @@ func (x *PastWorkResult) String() string {
 func (*PastWorkResult) ProtoMessage() {}
 
 func (x *PastWorkResult) ProtoReflect() protoreflect.Message {
-	mi := &file_aot_api_v1_api_proto_msgTypes[23]
+	mi := &file_aot_api_v1_api_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1873,7 +2012,7 @@ func (x *PastWorkResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PastWorkResult.ProtoReflect.Descriptor instead.
 func (*PastWorkResult) Descriptor() ([]byte, []int) {
-	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{23}
+	return file_aot_api_v1_api_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *PastWorkResult) GetChunkText() string {
@@ -1973,7 +2112,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"Repository\x12\x1a\n" +
 	"\x03url\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\x03url\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\"\x9f\x06\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"\xe4\x06\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x126\n" +
 	"\x05repos\x18\x02 \x03(\v2\x16.aot.api.v1.RepositoryB\b\xbaH\x05\x92\x01\x02\b\x01R\x05repos\x12\x16\n" +
@@ -1996,10 +2135,22 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x12orchestration_mode\x18\x10 \x01(\x0e2\x1d.aot.api.v1.OrchestrationModeR\x11orchestrationMode\x12?\n" +
 	"\rorchestration\x18\x11 \x01(\v2\x19.aot.api.v1.OrchestrationR\rorchestration\x12\x1e\n" +
 	"\vspec_run_id\x18\x12 \x01(\tR\tspecRunId\x12!\n" +
-	"\fdisplay_name\x18\x13 \x01(\tR\vdisplayName\x1a:\n" +
+	"\fdisplay_name\x18\x13 \x01(\tR\vdisplayName\x12C\n" +
+	"\x0fpipeline_config\x18\x14 \x01(\v2\x1a.aot.api.v1.PipelineConfigR\x0epipelineConfig\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0e\x10\x0f\"\\\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0e\x10\x0f\"\xa1\x01\n" +
+	"\x0ePipelineConfig\x12+\n" +
+	"\x04plan\x18\x01 \x01(\v2\x17.aot.api.v1.StageConfigR\x04plan\x121\n" +
+	"\aexecute\x18\x02 \x01(\v2\x17.aot.api.v1.StageConfigR\aexecute\x12/\n" +
+	"\x06verify\x18\x03 \x01(\v2\x17.aot.api.v1.StageConfigR\x06verify\"\x8c\x01\n" +
+	"\vStageConfig\x12\x14\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model\x12'\n" +
+	"\x0ftimeout_seconds\x18\x02 \x01(\x05R\x0etimeoutSeconds\x12\x1f\n" +
+	"\vmax_retries\x18\x03 \x01(\x05R\n" +
+	"maxRetries\x12\x1d\n" +
+	"\n" +
+	"on_failure\x18\x04 \x01(\tR\tonFailure\"\\\n" +
 	"\x11OrchestrationTask\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x12\x1b\n" +
@@ -2156,7 +2307,7 @@ func file_aot_api_v1_api_proto_rawDescGZIP() []byte {
 }
 
 var file_aot_api_v1_api_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_aot_api_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_aot_api_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_aot_api_v1_api_proto_goTypes = []any{
 	(OrchestrationMode)(0),         // 0: aot.api.v1.OrchestrationMode
 	(Backend)(0),                   // 1: aot.api.v1.Backend
@@ -2166,83 +2317,89 @@ var file_aot_api_v1_api_proto_goTypes = []any{
 	(*AgentRun)(nil),               // 5: aot.api.v1.AgentRun
 	(*Repository)(nil),             // 6: aot.api.v1.Repository
 	(*AgentRunSpec)(nil),           // 7: aot.api.v1.AgentRunSpec
-	(*OrchestrationTask)(nil),      // 8: aot.api.v1.OrchestrationTask
-	(*Orchestration)(nil),          // 9: aot.api.v1.Orchestration
-	(*AgentRunStatus)(nil),         // 10: aot.api.v1.AgentRunStatus
-	(*CreateAgentRunRequest)(nil),  // 11: aot.api.v1.CreateAgentRunRequest
-	(*CreateAgentRunResponse)(nil), // 12: aot.api.v1.CreateAgentRunResponse
-	(*GetAgentRunRequest)(nil),     // 13: aot.api.v1.GetAgentRunRequest
-	(*ListAgentRunsRequest)(nil),   // 14: aot.api.v1.ListAgentRunsRequest
-	(*ListAgentRunsResponse)(nil),  // 15: aot.api.v1.ListAgentRunsResponse
-	(*WatchAgentRunRequest)(nil),   // 16: aot.api.v1.WatchAgentRunRequest
-	(*AgentRunEvent)(nil),          // 17: aot.api.v1.AgentRunEvent
-	(*CancelAgentRunRequest)(nil),  // 18: aot.api.v1.CancelAgentRunRequest
-	(*CancelAgentRunResponse)(nil), // 19: aot.api.v1.CancelAgentRunResponse
-	(*SendHumanInputRequest)(nil),  // 20: aot.api.v1.SendHumanInputRequest
-	(*SendHumanInputResponse)(nil), // 21: aot.api.v1.SendHumanInputResponse
-	(*GetRunGraphRequest)(nil),     // 22: aot.api.v1.GetRunGraphRequest
-	(*RunGraphNode)(nil),           // 23: aot.api.v1.RunGraphNode
-	(*RunGraphEdge)(nil),           // 24: aot.api.v1.RunGraphEdge
-	(*RunGraph)(nil),               // 25: aot.api.v1.RunGraph
-	(*SearchPastWorkRequest)(nil),  // 26: aot.api.v1.SearchPastWorkRequest
-	(*SearchPastWorkResponse)(nil), // 27: aot.api.v1.SearchPastWorkResponse
-	(*PastWorkResult)(nil),         // 28: aot.api.v1.PastWorkResult
-	nil,                            // 29: aot.api.v1.AgentRunSpec.EnvVarsEntry
-	(*timestamppb.Timestamp)(nil),  // 30: google.protobuf.Timestamp
+	(*PipelineConfig)(nil),         // 8: aot.api.v1.PipelineConfig
+	(*StageConfig)(nil),            // 9: aot.api.v1.StageConfig
+	(*OrchestrationTask)(nil),      // 10: aot.api.v1.OrchestrationTask
+	(*Orchestration)(nil),          // 11: aot.api.v1.Orchestration
+	(*AgentRunStatus)(nil),         // 12: aot.api.v1.AgentRunStatus
+	(*CreateAgentRunRequest)(nil),  // 13: aot.api.v1.CreateAgentRunRequest
+	(*CreateAgentRunResponse)(nil), // 14: aot.api.v1.CreateAgentRunResponse
+	(*GetAgentRunRequest)(nil),     // 15: aot.api.v1.GetAgentRunRequest
+	(*ListAgentRunsRequest)(nil),   // 16: aot.api.v1.ListAgentRunsRequest
+	(*ListAgentRunsResponse)(nil),  // 17: aot.api.v1.ListAgentRunsResponse
+	(*WatchAgentRunRequest)(nil),   // 18: aot.api.v1.WatchAgentRunRequest
+	(*AgentRunEvent)(nil),          // 19: aot.api.v1.AgentRunEvent
+	(*CancelAgentRunRequest)(nil),  // 20: aot.api.v1.CancelAgentRunRequest
+	(*CancelAgentRunResponse)(nil), // 21: aot.api.v1.CancelAgentRunResponse
+	(*SendHumanInputRequest)(nil),  // 22: aot.api.v1.SendHumanInputRequest
+	(*SendHumanInputResponse)(nil), // 23: aot.api.v1.SendHumanInputResponse
+	(*GetRunGraphRequest)(nil),     // 24: aot.api.v1.GetRunGraphRequest
+	(*RunGraphNode)(nil),           // 25: aot.api.v1.RunGraphNode
+	(*RunGraphEdge)(nil),           // 26: aot.api.v1.RunGraphEdge
+	(*RunGraph)(nil),               // 27: aot.api.v1.RunGraph
+	(*SearchPastWorkRequest)(nil),  // 28: aot.api.v1.SearchPastWorkRequest
+	(*SearchPastWorkResponse)(nil), // 29: aot.api.v1.SearchPastWorkResponse
+	(*PastWorkResult)(nil),         // 30: aot.api.v1.PastWorkResult
+	nil,                            // 31: aot.api.v1.AgentRunSpec.EnvVarsEntry
+	(*timestamppb.Timestamp)(nil),  // 32: google.protobuf.Timestamp
 }
 var file_aot_api_v1_api_proto_depIdxs = []int32{
 	7,  // 0: aot.api.v1.AgentRun.spec:type_name -> aot.api.v1.AgentRunSpec
-	10, // 1: aot.api.v1.AgentRun.status:type_name -> aot.api.v1.AgentRunStatus
-	30, // 2: aot.api.v1.AgentRun.created_at:type_name -> google.protobuf.Timestamp
-	30, // 3: aot.api.v1.AgentRun.updated_at:type_name -> google.protobuf.Timestamp
+	12, // 1: aot.api.v1.AgentRun.status:type_name -> aot.api.v1.AgentRunStatus
+	32, // 2: aot.api.v1.AgentRun.created_at:type_name -> google.protobuf.Timestamp
+	32, // 3: aot.api.v1.AgentRun.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 4: aot.api.v1.AgentRunSpec.backend:type_name -> aot.api.v1.Backend
 	6,  // 5: aot.api.v1.AgentRunSpec.repos:type_name -> aot.api.v1.Repository
-	29, // 6: aot.api.v1.AgentRunSpec.env_vars:type_name -> aot.api.v1.AgentRunSpec.EnvVarsEntry
+	31, // 6: aot.api.v1.AgentRunSpec.env_vars:type_name -> aot.api.v1.AgentRunSpec.EnvVarsEntry
 	0,  // 7: aot.api.v1.AgentRunSpec.orchestration_mode:type_name -> aot.api.v1.OrchestrationMode
-	9,  // 8: aot.api.v1.AgentRunSpec.orchestration:type_name -> aot.api.v1.Orchestration
-	8,  // 9: aot.api.v1.Orchestration.tasks:type_name -> aot.api.v1.OrchestrationTask
-	2,  // 10: aot.api.v1.AgentRunStatus.phase:type_name -> aot.api.v1.AgentRunPhase
-	30, // 11: aot.api.v1.AgentRunStatus.started_at:type_name -> google.protobuf.Timestamp
-	30, // 12: aot.api.v1.AgentRunStatus.completed_at:type_name -> google.protobuf.Timestamp
-	30, // 13: aot.api.v1.AgentRunStatus.retain_until:type_name -> google.protobuf.Timestamp
-	7,  // 14: aot.api.v1.CreateAgentRunRequest.spec:type_name -> aot.api.v1.AgentRunSpec
-	5,  // 15: aot.api.v1.CreateAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
-	2,  // 16: aot.api.v1.ListAgentRunsRequest.phase_filter:type_name -> aot.api.v1.AgentRunPhase
-	5,  // 17: aot.api.v1.ListAgentRunsResponse.agent_runs:type_name -> aot.api.v1.AgentRun
-	3,  // 18: aot.api.v1.AgentRunEvent.type:type_name -> aot.api.v1.AgentRunEventType
-	30, // 19: aot.api.v1.AgentRunEvent.timestamp:type_name -> google.protobuf.Timestamp
-	5,  // 20: aot.api.v1.CancelAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
-	2,  // 21: aot.api.v1.RunGraphNode.phase:type_name -> aot.api.v1.AgentRunPhase
-	30, // 22: aot.api.v1.RunGraphNode.started_at:type_name -> google.protobuf.Timestamp
-	30, // 23: aot.api.v1.RunGraphNode.completed_at:type_name -> google.protobuf.Timestamp
-	23, // 24: aot.api.v1.RunGraph.nodes:type_name -> aot.api.v1.RunGraphNode
-	24, // 25: aot.api.v1.RunGraph.edges:type_name -> aot.api.v1.RunGraphEdge
-	30, // 26: aot.api.v1.SearchPastWorkRequest.created_after:type_name -> google.protobuf.Timestamp
-	30, // 27: aot.api.v1.SearchPastWorkRequest.created_before:type_name -> google.protobuf.Timestamp
-	4,  // 28: aot.api.v1.SearchPastWorkRequest.source_filter:type_name -> aot.api.v1.SourceFilter
-	28, // 29: aot.api.v1.SearchPastWorkResponse.results:type_name -> aot.api.v1.PastWorkResult
-	30, // 30: aot.api.v1.PastWorkResult.created_at:type_name -> google.protobuf.Timestamp
-	11, // 31: aot.api.v1.AOTService.CreateAgentRun:input_type -> aot.api.v1.CreateAgentRunRequest
-	13, // 32: aot.api.v1.AOTService.GetAgentRun:input_type -> aot.api.v1.GetAgentRunRequest
-	14, // 33: aot.api.v1.AOTService.ListAgentRuns:input_type -> aot.api.v1.ListAgentRunsRequest
-	16, // 34: aot.api.v1.AOTService.WatchAgentRun:input_type -> aot.api.v1.WatchAgentRunRequest
-	18, // 35: aot.api.v1.AOTService.CancelAgentRun:input_type -> aot.api.v1.CancelAgentRunRequest
-	20, // 36: aot.api.v1.AOTService.SendHumanInput:input_type -> aot.api.v1.SendHumanInputRequest
-	22, // 37: aot.api.v1.AOTService.GetRunGraph:input_type -> aot.api.v1.GetRunGraphRequest
-	26, // 38: aot.api.v1.AOTService.SearchPastWork:input_type -> aot.api.v1.SearchPastWorkRequest
-	12, // 39: aot.api.v1.AOTService.CreateAgentRun:output_type -> aot.api.v1.CreateAgentRunResponse
-	5,  // 40: aot.api.v1.AOTService.GetAgentRun:output_type -> aot.api.v1.AgentRun
-	15, // 41: aot.api.v1.AOTService.ListAgentRuns:output_type -> aot.api.v1.ListAgentRunsResponse
-	17, // 42: aot.api.v1.AOTService.WatchAgentRun:output_type -> aot.api.v1.AgentRunEvent
-	19, // 43: aot.api.v1.AOTService.CancelAgentRun:output_type -> aot.api.v1.CancelAgentRunResponse
-	21, // 44: aot.api.v1.AOTService.SendHumanInput:output_type -> aot.api.v1.SendHumanInputResponse
-	25, // 45: aot.api.v1.AOTService.GetRunGraph:output_type -> aot.api.v1.RunGraph
-	27, // 46: aot.api.v1.AOTService.SearchPastWork:output_type -> aot.api.v1.SearchPastWorkResponse
-	39, // [39:47] is the sub-list for method output_type
-	31, // [31:39] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	11, // 8: aot.api.v1.AgentRunSpec.orchestration:type_name -> aot.api.v1.Orchestration
+	8,  // 9: aot.api.v1.AgentRunSpec.pipeline_config:type_name -> aot.api.v1.PipelineConfig
+	9,  // 10: aot.api.v1.PipelineConfig.plan:type_name -> aot.api.v1.StageConfig
+	9,  // 11: aot.api.v1.PipelineConfig.execute:type_name -> aot.api.v1.StageConfig
+	9,  // 12: aot.api.v1.PipelineConfig.verify:type_name -> aot.api.v1.StageConfig
+	10, // 13: aot.api.v1.Orchestration.tasks:type_name -> aot.api.v1.OrchestrationTask
+	2,  // 14: aot.api.v1.AgentRunStatus.phase:type_name -> aot.api.v1.AgentRunPhase
+	32, // 15: aot.api.v1.AgentRunStatus.started_at:type_name -> google.protobuf.Timestamp
+	32, // 16: aot.api.v1.AgentRunStatus.completed_at:type_name -> google.protobuf.Timestamp
+	32, // 17: aot.api.v1.AgentRunStatus.retain_until:type_name -> google.protobuf.Timestamp
+	7,  // 18: aot.api.v1.CreateAgentRunRequest.spec:type_name -> aot.api.v1.AgentRunSpec
+	5,  // 19: aot.api.v1.CreateAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
+	2,  // 20: aot.api.v1.ListAgentRunsRequest.phase_filter:type_name -> aot.api.v1.AgentRunPhase
+	5,  // 21: aot.api.v1.ListAgentRunsResponse.agent_runs:type_name -> aot.api.v1.AgentRun
+	3,  // 22: aot.api.v1.AgentRunEvent.type:type_name -> aot.api.v1.AgentRunEventType
+	32, // 23: aot.api.v1.AgentRunEvent.timestamp:type_name -> google.protobuf.Timestamp
+	5,  // 24: aot.api.v1.CancelAgentRunResponse.agent_run:type_name -> aot.api.v1.AgentRun
+	2,  // 25: aot.api.v1.RunGraphNode.phase:type_name -> aot.api.v1.AgentRunPhase
+	32, // 26: aot.api.v1.RunGraphNode.started_at:type_name -> google.protobuf.Timestamp
+	32, // 27: aot.api.v1.RunGraphNode.completed_at:type_name -> google.protobuf.Timestamp
+	25, // 28: aot.api.v1.RunGraph.nodes:type_name -> aot.api.v1.RunGraphNode
+	26, // 29: aot.api.v1.RunGraph.edges:type_name -> aot.api.v1.RunGraphEdge
+	32, // 30: aot.api.v1.SearchPastWorkRequest.created_after:type_name -> google.protobuf.Timestamp
+	32, // 31: aot.api.v1.SearchPastWorkRequest.created_before:type_name -> google.protobuf.Timestamp
+	4,  // 32: aot.api.v1.SearchPastWorkRequest.source_filter:type_name -> aot.api.v1.SourceFilter
+	30, // 33: aot.api.v1.SearchPastWorkResponse.results:type_name -> aot.api.v1.PastWorkResult
+	32, // 34: aot.api.v1.PastWorkResult.created_at:type_name -> google.protobuf.Timestamp
+	13, // 35: aot.api.v1.AOTService.CreateAgentRun:input_type -> aot.api.v1.CreateAgentRunRequest
+	15, // 36: aot.api.v1.AOTService.GetAgentRun:input_type -> aot.api.v1.GetAgentRunRequest
+	16, // 37: aot.api.v1.AOTService.ListAgentRuns:input_type -> aot.api.v1.ListAgentRunsRequest
+	18, // 38: aot.api.v1.AOTService.WatchAgentRun:input_type -> aot.api.v1.WatchAgentRunRequest
+	20, // 39: aot.api.v1.AOTService.CancelAgentRun:input_type -> aot.api.v1.CancelAgentRunRequest
+	22, // 40: aot.api.v1.AOTService.SendHumanInput:input_type -> aot.api.v1.SendHumanInputRequest
+	24, // 41: aot.api.v1.AOTService.GetRunGraph:input_type -> aot.api.v1.GetRunGraphRequest
+	28, // 42: aot.api.v1.AOTService.SearchPastWork:input_type -> aot.api.v1.SearchPastWorkRequest
+	14, // 43: aot.api.v1.AOTService.CreateAgentRun:output_type -> aot.api.v1.CreateAgentRunResponse
+	5,  // 44: aot.api.v1.AOTService.GetAgentRun:output_type -> aot.api.v1.AgentRun
+	17, // 45: aot.api.v1.AOTService.ListAgentRuns:output_type -> aot.api.v1.ListAgentRunsResponse
+	19, // 46: aot.api.v1.AOTService.WatchAgentRun:output_type -> aot.api.v1.AgentRunEvent
+	21, // 47: aot.api.v1.AOTService.CancelAgentRun:output_type -> aot.api.v1.CancelAgentRunResponse
+	23, // 48: aot.api.v1.AOTService.SendHumanInput:output_type -> aot.api.v1.SendHumanInputResponse
+	27, // 49: aot.api.v1.AOTService.GetRunGraph:output_type -> aot.api.v1.RunGraph
+	29, // 50: aot.api.v1.AOTService.SearchPastWork:output_type -> aot.api.v1.SearchPastWorkResponse
+	43, // [43:51] is the sub-list for method output_type
+	35, // [35:43] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_aot_api_v1_api_proto_init() }
@@ -2256,7 +2413,7 @@ func file_aot_api_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aot_api_v1_api_proto_rawDesc), len(file_aot_api_v1_api_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   25,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

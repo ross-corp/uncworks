@@ -102,6 +102,22 @@ type WorkflowInput struct {
 	Orchestration     []OrchestrationTask
 	ParentRunID       string
 	SpecRunID         string
+	PipelineConfig    *PipelineConfigInput
+}
+
+// PipelineConfigInput contains per-stage configuration for spec-driven runs.
+type PipelineConfigInput struct {
+	Plan    StageConfigInput `json:"plan,omitempty"`
+	Execute StageConfigInput `json:"execute,omitempty"`
+	Verify  StageConfigInput `json:"verify,omitempty"`
+}
+
+// StageConfigInput configures a single pipeline stage.
+type StageConfigInput struct {
+	Model          string `json:"model,omitempty"`
+	TimeoutSeconds int32  `json:"timeoutSeconds,omitempty"`
+	MaxRetries     int32  `json:"maxRetries,omitempty"`
+	OnFailure      string `json:"onFailure,omitempty"` // "retry" | "fail" | "skip"
 }
 
 // WorkflowState represents the current state of the workflow, returned by queries.
