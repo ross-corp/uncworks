@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { Backend, ModelTier, Repository } from "../types/agent-run";
+import type { Backend, ModelTier, Repository, PipelineConfig } from "../types/agent-run";
 import { BACKEND_OPTIONS, MODEL_TIER_OPTIONS } from "../types/agent-run";
 import type { Workspace } from "../hooks/useWorkspaces";
 import { useGitHub } from "../hooks/useGitHub";
@@ -30,6 +30,8 @@ export default function AgentRunForm({
     ttlSeconds: number;
     specContent?: string;
     specSource?: string;
+    orchestrationMode?: string;
+    pipelineConfig?: PipelineConfig;
   }) => void;
   onCancel: () => void;
 }) {
@@ -58,6 +60,11 @@ export default function AgentRunForm({
   const [backend, setBackend] = useState<Backend>(cloneSource?.spec.backend ?? "pod");
   const [modelTier, setModelTier] = useState<ModelTier>(cloneSource?.spec.modelTier ?? "default-cloud");
   const [ttlSeconds, setTtlSeconds] = useState(cloneSource?.spec.ttlSeconds ?? 3600);
+  const [useSpecDriven, setUseSpecDriven] = useState(false);
+  const [pipelineExpanded, setPipelineExpanded] = useState(false);
+  const [planModel, setPlanModel] = useState("default-cloud");
+  const [execModel, setExecModel] = useState("default-cloud");
+  const [verifyModel, setVerifyModel] = useState("default-cloud");
 
   function selectWorkspace(id: string | null) {
     setSelectedWorkspaceId(id);
@@ -100,6 +107,12 @@ export default function AgentRunForm({
       ttlSeconds,
       specContent: inputMode === "spec" ? specContent : undefined,
       specSource: inputMode === "spec" ? specSource : undefined,
+      orchestrationMode: useSpecDriven ? "spec-driven" : undefined,
+      pipelineConfig: useSpecDriven ? {
+        plan: { model: planModel },
+        execute: { model: execModel },
+        verify: { model: verifyModel },
+      } : undefined,
     });
   }
 
@@ -362,9 +375,59 @@ export default function AgentRunForm({
               </div>
             )}
           </div>
+
+          {/* Spec-Driven Pipeline Toggle */}
+          <div>
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useSpecDriven}
+                onChange={(e) => setUseSpecDriven(e.target.checked)}
+                className="accent-primary"
+              />
+              Spec-driven mode (Plan → Execute → Verify)
+            </label>
+
+            {useSpecDriven && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setPipelineExpanded(!pipelineExpanded)}
+                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground"
+                >
+                  {pipelineExpanded ? "▼" : "▶"} Pipeline settings
+                </button>
+                {pipelineExpanded && (
+                  <div className="mt-2 space-y-2 pl-4 border-l border-border">
+                    {(["plan", "execute", "verify"] as const).map((stage) => {
+                      const model = stage === "plan" ? planModel : stage === "execute" ? execModel : verifyModel;
+                      const setModel = stage === "plan" ? setPlanModel : stage === "execute" ? setExecModel : setVerifyModel;
+                      return (
+                        <div key={stage} className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-muted-foreground w-16 capitalize">{stage}</span>
+                          <select
+                            className="flex-1 border border-input bg-background px-2 py-1 text-xs text-foreground outline-none"
+                            value={model}
+                            onChange={(e) => setModel(e.target.value)}
+                          >
+                            <option value="default-cloud">Default (qwen3-coder)</option>
+                            <option value="qwen3-coder">qwen3-coder</option>
+                            <option value="mistral-small">mistral-small</option>
+                            <option value="gemma-3-4b">gemma-3-4b</option>
+                            <option value="qwen2.5:0.5b">qwen2.5:0.5b (CI only)</option>
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+
           <Button type="button" variant="ghost" onClick={onCancel}>
             Cancel
           </Button>

@@ -34,10 +34,10 @@
 
 ## 5. Frontend: Pipeline Config UI
 
-- [ ] 5.1 Add `PipelineConfig` type to `web/src/types/agent-run.ts`
-- [ ] 5.2 Add collapsible "Pipeline Settings" section in `AgentRunForm.tsx` (shown when spec-driven mode selected)
-- [ ] 5.3 Pipeline settings: model dropdown per stage, timeout input, retries input
-- [ ] 5.4 Pass pipeline config through to `createAgentRun` API call
+- [x] 5.1 Add `PipelineConfig` type to `web/src/types/agent-run.ts`
+- [x] 5.2 Add collapsible "Pipeline Settings" section in `AgentRunForm.tsx` (shown when spec-driven mode selected)
+- [x] 5.3 Pipeline settings: model dropdown per stage, timeout input, retries input
+- [x] 5.4 Pass pipeline config through to `createAgentRun` API call
 
 ## 6. Build, Deploy, and Validate
 

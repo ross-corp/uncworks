@@ -55,6 +55,19 @@ export interface Orchestration {
   tasks: OrchestrationTask[];
 }
 
+export interface StageConfig {
+  model?: string;
+  timeoutSeconds?: number;
+  maxRetries?: number;
+  onFailure?: "retry" | "fail" | "skip";
+}
+
+export interface PipelineConfig {
+  plan?: StageConfig;
+  execute?: StageConfig;
+  verify?: StageConfig;
+}
+
 export interface AgentRunSpec {
   backend: Backend;
   repos: Repository[];
@@ -71,6 +84,7 @@ export interface AgentRunSpec {
   orchestration?: Orchestration;
   specRunId?: string;
   displayName?: string;
+  pipelineConfig?: PipelineConfig;
 }
 
 export interface AgentRunStatus {
