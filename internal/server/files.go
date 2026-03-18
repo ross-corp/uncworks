@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -46,6 +48,7 @@ func (f *FileHandler) RegisterFileHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/runs/{id}/files", f.handleListFiles)
 	mux.HandleFunc("GET /api/v1/runs/{id}/files/content", f.handleFileContent)
 	mux.HandleFunc("GET /api/v1/runs/{id}/logs", f.handleLogs)
+	mux.HandleFunc("GET /api/v1/runs/{id}/logs/structured", f.handleStructuredLogs)
 }
 
 // FileEntry represents a single entry in a directory listing.
@@ -537,4 +540,168 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+// AgentLogEntry is a structured log entry parsed from the agent's JSONL output.
+type AgentLogEntry struct {
+	Timestamp string `json:"timestamp"`
+	Type      string `json:"type"`    // user, assistant, tool_call, tool_result, system
+	Content   string `json:"content"` // text content
+	ToolName  string `json:"toolName,omitempty"`
+	ToolInput string `json:"toolInput,omitempty"`
+	Model     string `json:"model,omitempty"`
+}
+
+// handleStructuredLogs reads the agent's JSONL log file and returns parsed
+// conversation entries as a JSON array. This is the "what did the agent say and do"
+// view, not raw container stderr.
+func (f *FileHandler) handleStructuredLogs(w http.ResponseWriter, r *http.Request) {
+	runID := r.PathValue("id")
+	if runID == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing run id"})
+		return
+	}
+
+	// Always read from PVC host path (JSONL is written to disk, not container logs).
+	hostPath, err := f.getPVCHostPath(r.Context(), runID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("workspace not found for run %q: %v", runID, err)})
+		return
+	}
+
+	jsonlPath := filepath.Join(hostPath, ".aot", "logs", "agent.jsonl")
+	data, err := os.ReadFile(jsonlPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusOK, []AgentLogEntry{})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read agent log"})
+		return
+	}
+
+	entries := parseAgentJSONL(string(data))
+	writeJSON(w, http.StatusOK, entries)
+}
+
+// parseAgentJSONL parses the pi-coding-agent JSONL format into structured log entries.
+func parseAgentJSONL(raw string) []AgentLogEntry {
+	var entries []AgentLogEntry
+	var sessionTimestamp string
+
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		var event map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+
+		eventType, _ := event["type"].(string)
+
+		switch eventType {
+		case "session":
+			if ts, ok := event["timestamp"].(string); ok {
+				sessionTimestamp = ts
+			}
+
+		case "message_end":
+			msg, ok := event["message"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			role, _ := msg["role"].(string)
+			contents, _ := msg["content"].([]interface{})
+			ts := formatTimestamp(msg["timestamp"], sessionTimestamp)
+			model, _ := msg["model"].(string)
+
+			for _, c := range contents {
+				cm, ok := c.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				ctype, _ := cm["type"].(string)
+
+				switch ctype {
+				case "text":
+					text, _ := cm["text"].(string)
+					if text == "" {
+						continue
+					}
+					entries = append(entries, AgentLogEntry{
+						Timestamp: ts,
+						Type:      role,
+						Content:   text,
+						Model:     model,
+					})
+
+				case "toolCall":
+					name, _ := cm["name"].(string)
+					args, _ := cm["arguments"].(map[string]interface{})
+					argsJSON, _ := json.Marshal(args)
+					entries = append(entries, AgentLogEntry{
+						Timestamp: ts,
+						Type:      "tool_call",
+						ToolName:  name,
+						ToolInput: string(argsJSON),
+						Model:     model,
+					})
+
+				case "toolResult":
+					// Content can be a string or an array of content blocks
+					var resultText string
+					switch cv := cm["content"].(type) {
+					case string:
+						resultText = cv
+					case []interface{}:
+						for _, block := range cv {
+							if bm, ok := block.(map[string]interface{}); ok {
+								if text, ok := bm["text"].(string); ok {
+									resultText += text
+								}
+							}
+						}
+					}
+					toolName, _ := cm["toolName"].(string)
+					entries = append(entries, AgentLogEntry{
+						Timestamp: ts,
+						Type:      "tool_result",
+						Content:   resultText,
+						ToolName:  toolName,
+					})
+				}
+			}
+
+		case "agent_start":
+			entries = append(entries, AgentLogEntry{
+				Timestamp: sessionTimestamp,
+				Type:      "system",
+				Content:   "Agent started",
+			})
+
+		case "agent_end":
+			entries = append(entries, AgentLogEntry{
+				Timestamp: sessionTimestamp,
+				Type:      "system",
+				Content:   "Agent finished",
+			})
+		}
+	}
+
+	return entries
+}
+
+// formatTimestamp converts a pi-agent timestamp (Unix ms number or ISO string) to ISO format.
+func formatTimestamp(ts interface{}, fallback string) string {
+	switch v := ts.(type) {
+	case float64:
+		return time.Unix(int64(v)/1000, (int64(v)%1000)*1e6).UTC().Format(time.RFC3339)
+	case string:
+		return v
+	default:
+		return fallback
+	}
 }
