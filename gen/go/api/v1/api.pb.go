@@ -1116,6 +1116,13 @@ func (x *ListAgentRunsRequest) GetParentRunId() string {
 	return ""
 }
 
+func (x *ListAgentRunsRequest) GetStageFilter() string {
+	if x != nil {
+		return x.StageFilter
+	}
+	return ""
+}
+
 type ListAgentRunsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AgentRuns     []*AgentRun            `protobuf:"bytes,1,rep,name=agent_runs,json=agentRuns,proto3" json:"agent_runs,omitempty"`
