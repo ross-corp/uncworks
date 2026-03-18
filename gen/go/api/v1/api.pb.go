@@ -33,6 +33,7 @@ const (
 	OrchestrationMode_ORCHESTRATION_MODE_SINGLE      OrchestrationMode = 1
 	OrchestrationMode_ORCHESTRATION_MODE_AUTO        OrchestrationMode = 2
 	OrchestrationMode_ORCHESTRATION_MODE_MANUAL      OrchestrationMode = 3
+	OrchestrationMode_ORCHESTRATION_MODE_SPEC_DRIVEN OrchestrationMode = 4
 )
 
 // Enum value maps for OrchestrationMode.
@@ -42,12 +43,14 @@ var (
 		1: "ORCHESTRATION_MODE_SINGLE",
 		2: "ORCHESTRATION_MODE_AUTO",
 		3: "ORCHESTRATION_MODE_MANUAL",
+		4: "ORCHESTRATION_MODE_SPEC_DRIVEN",
 	}
 	OrchestrationMode_value = map[string]int32{
 		"ORCHESTRATION_MODE_UNSPECIFIED": 0,
 		"ORCHESTRATION_MODE_SINGLE":      1,
 		"ORCHESTRATION_MODE_AUTO":        2,
 		"ORCHESTRATION_MODE_MANUAL":      3,
+		"ORCHESTRATION_MODE_SPEC_DRIVEN": 4,
 	}
 )
 
@@ -762,9 +765,15 @@ type AgentRunStatus struct {
 	// DeploymentName is the name of the Deployment managing the agent pod.
 	DeploymentName string `protobuf:"bytes,10,opt,name=deployment_name,json=deploymentName,proto3" json:"deployment_name,omitempty"`
 	// DebugActive indicates whether a debug session is currently active.
-	DebugActive   bool `protobuf:"varint,11,opt,name=debug_active,json=debugActive,proto3" json:"debug_active,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DebugActive bool `protobuf:"varint,11,opt,name=debug_active,json=debugActive,proto3" json:"debug_active,omitempty"`
+	// Stage is the current pipeline stage for spec-driven runs.
+	Stage string `protobuf:"bytes,12,opt,name=stage,proto3" json:"stage,omitempty"`
+	// RetryCount is the number of execute→verify retry attempts.
+	RetryCount int32 `protobuf:"varint,13,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
+	// VerificationResult is the JSON-encoded verdict from the verification stage.
+	VerificationResult string `protobuf:"bytes,14,opt,name=verification_result,json=verificationResult,proto3" json:"verification_result,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *AgentRunStatus) Reset() {
@@ -872,6 +881,27 @@ func (x *AgentRunStatus) GetDebugActive() bool {
 		return x.DebugActive
 	}
 	return false
+}
+
+func (x *AgentRunStatus) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *AgentRunStatus) GetRetryCount() int32 {
+	if x != nil {
+		return x.RetryCount
+	}
+	return 0
+}
+
+func (x *AgentRunStatus) GetVerificationResult() string {
+	if x != nil {
+		return x.VerificationResult
+	}
+	return ""
 }
 
 type CreateAgentRunRequest struct {

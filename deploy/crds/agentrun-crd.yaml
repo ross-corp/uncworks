@@ -130,6 +130,7 @@ spec:
                     - single
                     - auto
                     - manual
+                    - spec-driven
                   default: single
                 orchestration:
                   type: object
@@ -200,6 +201,19 @@ spec:
                   type: string
                 debugActive:
                   type: boolean
+                stage:
+                  type: string
+                  enum:
+                    - planning
+                    - executing
+                    - verifying
+                    - ""
+                retryCount:
+                  type: integer
+                  format: int32
+                verificationResult:
+                  type: string
+                  maxLength: 1048576
                 conditions:
                   type: array
                   items:
