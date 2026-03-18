@@ -200,12 +200,14 @@ func (EventType) EnumDescriptor() ([]byte, []int) {
 }
 
 type StartAgentRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentRunId    string                 `protobuf:"bytes,1,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
-	Prompt        string                 `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	RepoPath      string                 `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
-	EnvVars       map[string]string      `protobuf:"bytes,4,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Stage         string                 `protobuf:"bytes,5,opt,name=stage,proto3" json:"stage,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	AgentRunId string                 `protobuf:"bytes,1,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
+	Prompt     string                 `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	RepoPath   string                 `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
+	EnvVars    map[string]string      `protobuf:"bytes,4,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Stage controls the agent's behavior in spec-driven pipelines.
+	// Values: "" (default/single), "plan", "execute", "verify".
+	Stage         string `protobuf:"bytes,5,opt,name=stage,proto3" json:"stage,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -851,13 +853,14 @@ var File_aot_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_aot_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x18aot/agent/v1/agent.proto\x12\faot.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x81\x02\n" +
+	"\x18aot/agent/v1/agent.proto\x12\faot.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x97\x02\n" +
 	"\x11StartAgentRequest\x12)\n" +
 	"\fagent_run_id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\n" +
 	"agentRunId\x12\x1f\n" +
 	"\x06prompt\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06prompt\x12\x1b\n" +
 	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x12G\n" +
-	"\benv_vars\x18\x04 \x03(\v2,.aot.agent.v1.StartAgentRequest.EnvVarsEntryR\aenvVars\x1a:\n" +
+	"\benv_vars\x18\x04 \x03(\v2,.aot.agent.v1.StartAgentRequest.EnvVarsEntryR\aenvVars\x12\x14\n" +
+	"\x05stage\x18\x05 \x01(\tR\x05stage\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +

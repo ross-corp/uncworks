@@ -5,7 +5,7 @@
 - [x] 1.3 Add `RetryCount` int32 field to `AgentRunStatus`
 - [x] 1.4 Add `VerificationResult` string field to `AgentRunStatus` (JSON-encoded verdict)
 - [x] 1.5 Update proto schema (`proto/aot/api/v1/api.proto`) with stage, retry_count, verification_result fields
-- [ ] 1.6 Regenerate Go and TypeScript proto code (`task proto:gen`) — requires devbox shell with buf
+- [x] 1.6 Regenerate Go and TypeScript proto code (`task proto:gen`)
 
 ## 2. Sidecar: Stage-Aware Agent Invocation
 
@@ -64,10 +64,10 @@
 
 ## 8. Testing & Validation
 
-- [ ] 8.1 E2E test: create spec-driven run with prompt, verify it plans (openspec status shows artifacts complete), executes, and verifies (openspec archive succeeds)
-- [ ] 8.2 E2E test: create spec-driven run that should fail verification (incomplete tasks), verify retry and eventual failure
-- [ ] 8.3 E2E test: create run with specContent, verify auto-upgrade to spec-driven mode
-- [ ] 8.4 E2E test: single-mode run still works unchanged (backward compat)
+- [x] 8.1 E2E test: create spec-driven run with prompt, verify it plans (openspec status shows artifacts complete), executes, and verifies (openspec archive succeeds)
+- [x] 8.2 E2E test: create spec-driven run that should fail verification (incomplete tasks), verify retry and eventual failure
+- [x] 8.3 E2E test: create run with specContent, verify auto-upgrade to spec-driven mode
+- [x] 8.4 E2E test: single-mode run still works unchanged (backward compat)
 - [x] 8.5 Playwright test: verify stage badges and verification results in UI
-- [ ] 8.6 Integration test: verify `openspec validate --json`, `openspec list --json`, and `openspec archive` work correctly inside sidecar container
+- [x] 8.6 Integration test: verify `openspec validate --json`, `openspec list --json`, and `openspec archive` work correctly inside sidecar container
 - [x] 8.7 Unit test: verification gate pipeline (mock each gate, test short-circuit behavior)
