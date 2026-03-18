@@ -189,7 +189,15 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	// meant commands like "ls" ran but their results never appeared in logs.
 	// --no-session avoids persisting session state in the ephemeral container.
 	// -p = non-interactive (process and exit), --mode json = stream JSON events
-	args := []string{"-p", "--mode", "json", "--no-session", req.Prompt}
+	args := []string{"-p", "--mode", "json", "--no-session"}
+
+	// Stage-specific system prompt for spec-driven pipeline.
+	if sp := stageSystemPrompt(req.GetStage()); sp != "" {
+		args = append(args, "--system-prompt", sp)
+	}
+
+	args = append(args, req.Prompt)
+
 	// Use model from env if configured
 	if model := os.Getenv("PI_MODEL"); model != "" {
 		args = append(args, "--model", model)
@@ -255,6 +263,50 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 		state:     agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
 		startedAt: time.Now(),
 	}, nil
+}
+
+// stageSystemPrompt returns a stage-specific system prompt for spec-driven pipelines.
+// Returns empty string for default/single mode (uses pi's built-in prompt).
+func stageSystemPrompt(stage string) string {
+	switch stage {
+	case "plan":
+		return `You are a planning agent. Your job is to create a structured OpenSpec change that defines what needs to be done.
+
+1. Run: openspec new change "<run-id>" (the run ID is in your prompt)
+2. Generate all required artifacts: proposal.md, specs/ (with WHEN/THEN scenarios), and tasks.md
+3. Each spec MUST include at least one machine-checkable scenario (command to run, file to check)
+4. Run: openspec validate --json to verify your output is well-formed
+5. Run: openspec status --change "<run-id>" --json to confirm all artifacts are complete
+
+Do NOT implement any code. Only create the spec artifacts. Be thorough in your acceptance criteria — they will be used to verify the implementation.`
+
+	case "execute":
+		return `You are an execution agent implementing a spec-driven change. Your work will be verified against the spec's acceptance criteria.
+
+1. Read the change artifacts in the openspec/changes/ directory to understand what to implement
+2. Read tasks.md for your implementation checklist
+3. Implement each task, marking them as [x] in tasks.md as you complete them
+4. Ensure your changes satisfy all WHEN/THEN scenarios in the spec files
+5. Run any test commands referenced in the specs to verify your work
+
+Focus on completing ALL tasks. Your work will be verified programmatically.`
+
+	case "verify":
+		return `You are a verification agent. Evaluate whether the implementation satisfies the spec's acceptance criteria.
+
+1. Read the spec files in the openspec/changes/ directory
+2. For each WHEN/THEN scenario, check if the implementation satisfies it
+3. Run any test/build commands referenced in the scenarios
+4. Check that all tasks in tasks.md are marked [x]
+5. Run: openspec validate --json to verify spec structure
+6. Run: openspec list --json to verify task completion
+
+Output a JSON verdict with this structure:
+{"pass": true/false, "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}`
+
+	default:
+		return ""
+	}
 }
 
 // startReaders begins scanning stdout/stderr pipes immediately.

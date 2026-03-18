@@ -38,6 +38,9 @@ message StartAgentRequest {
   string prompt = 2 [(buf.validate.field).string.min_len = 1];
   string repo_path = 3;
   map<string, string> env_vars = 4;
+  // Stage controls the agent's behavior in spec-driven pipelines.
+  // Values: "" (default/single), "plan", "execute", "verify".
+  string stage = 5;
 }
 
 message StartAgentResponse {

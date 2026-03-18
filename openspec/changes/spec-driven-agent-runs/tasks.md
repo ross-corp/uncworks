@@ -9,18 +9,18 @@
 
 ## 2. Sidecar: Stage-Aware Agent Invocation
 
-- [ ] 2.1 Add `stage` field to `StartAgentRequest` proto in `proto/aot/agent/v1/agent.proto`
-- [ ] 2.2 Update sidecar `StartAgent` handler to configure pi-coding-agent differently per stage (system prompt, tool restrictions)
-- [ ] 2.3 Install `openspec` CLI in sidecar Docker image (`docker/Dockerfile.sidecar`: `npm install -g openspec`)
-- [ ] 2.4 Plan stage: system prompt instructs OpenSpec change creation (`openspec new change`, then generate proposal/specs/tasks)
-- [ ] 2.5 Execute stage: system prompt instructs `/opsx:apply` implementation workflow, full tool set
-- [ ] 2.6 Verify stage: system prompt instructs evaluation against spec, read-only tools + exec for test commands
+- [x] 2.1 Add `stage` field to `StartAgentRequest` proto in `proto/aot/agent/v1/agent.proto`
+- [x] 2.2 Update sidecar `StartAgent` handler to configure pi-coding-agent differently per stage (system prompt, tool restrictions)
+- [x] 2.3 Install `openspec` CLI in sidecar Docker image (`docker/Dockerfile.sidecar`: `npm install -g openspec`)
+- [x] 2.4 Plan stage: system prompt instructs OpenSpec change creation (`openspec new change`, then generate proposal/specs/tasks)
+- [x] 2.5 Execute stage: system prompt instructs `/opsx:apply` implementation workflow, full tool set
+- [x] 2.6 Verify stage: system prompt instructs evaluation against spec, read-only tools + exec for test commands
 - [ ] 2.7 Write tests for stage-specific agent configuration
 
 ## 3. Temporal Workflow: Multi-Stage Pipeline
 
-- [ ] 3.1 Add `PlanRun` activity: invoke sidecar StartAgent with stage=plan, wait for completion, run `openspec validate --json` and `openspec status --change <id> --json` to confirm artifacts complete
-- [ ] 3.2 Add `VerifyRun` activity: run verification pipeline (openspec list → openspec validate → automated checks → LLM judge → openspec archive)
+- [x] 3.1 Add `PlanRun` activity: invoke sidecar StartAgent with stage=plan, wait for completion, run `openspec validate --json` and `openspec status --change <id> --json` to confirm artifacts complete
+- [x] 3.2 Add `VerifyRun` activity: run verification pipeline (openspec list → openspec validate → automated checks → LLM judge → openspec archive)
 - [x] 3.3 Refactor `AgentRunWorkflow` to detect `spec-driven` orchestration mode and route to `runSpecDrivenPipeline`
 - [x] 3.4 Implement `runSpecDrivenPipeline`: Plan → Execute → Verify loop with retry (max 3, configurable via env var)
 - [x] 3.5 Implement retry context injection: on verify failure, prepend structured failure report to execute agent prompt
@@ -29,13 +29,13 @@
 
 ## 4. Verification Activity: OpenSpec CLI Integration
 
-- [ ] 4.1 Implement task completion gate: exec `openspec list --json` in pod, parse JSON, check `completedTasks == totalTasks`
-- [ ] 4.2 Implement structural validation gate: exec `openspec validate --json` in pod, check `valid: true`
-- [ ] 4.3 Implement automated scenario checks: parse spec WHEN/THEN for command references, exec in workspace, check exit codes and output
-- [ ] 4.4 Implement file existence checks: parse spec WHEN/THEN for file path references, check `os.Stat` in workspace
-- [ ] 4.5 Implement LLM judge: build prompt from spec WHEN/THEN + git diff + agent log, invoke via LiteLLM, parse structured per-scenario verdict
-- [ ] 4.6 Implement archive gate: on all-pass, exec `openspec archive --yes` to seal the change
-- [ ] 4.7 Implement structured verdict output: write `verification-result.json` to change directory
+- [x] 4.1 Implement task completion gate: exec `openspec list --json` in pod, parse JSON, check `completedTasks == totalTasks`
+- [x] 4.2 Implement structural validation gate: exec `openspec validate --json` in pod, check `valid: true`
+- [x] 4.3 Implement automated scenario checks: parse spec WHEN/THEN for command references, exec in workspace, check exit codes and output
+- [ ] 4.4 Implement file existence checks: parse spec WHEN/THEN for file path references, check `os.Stat` in workspace — deferred to post-MVP
+- [x] 4.5 Implement LLM judge: build prompt from spec WHEN/THEN + git diff + agent log, invoke via LiteLLM, parse structured per-scenario verdict
+- [x] 4.6 Implement archive gate: on all-pass, exec `openspec archive --yes` to seal the change
+- [ ] 4.7 Implement structured verdict output: write `verification-result.json` to change directory — deferred to post-MVP
 - [ ] 4.8 Write tests for each verification gate (task completion, validation, automated checks, LLM judge, archive)
 
 ## 5. API & Proto Updates
