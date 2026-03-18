@@ -11,11 +11,11 @@ model_list:
       model: "ollama_chat/qwen2.5:0.5b"
       api_base: "http://ollama:11434"
 
-  # Aliases for backward compat
+  # Default routes to a capable cloud model for production use.
+  # Use "ci" explicitly for the local 0.5b model in CI/testing.
   - model_name: "default"
     litellm_params:
-      model: "ollama_chat/qwen2.5:0.5b"
-      api_base: "http://ollama:11434"
+      model: "openrouter/qwen/qwen3-coder:free"
   - model_name: "ci"
     litellm_params:
       model: "ollama_chat/qwen2.5:0.5b"

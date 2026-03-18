@@ -108,10 +108,11 @@ export const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
 ];
 
 export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string; description: string }[] = [
-  { value: "qwen2.5:0.5b", label: "qwen2.5:0.5b", description: "Local · Ollama · 397MB" },
+  { value: "default-cloud", label: "Default", description: "Cloud · qwen3-coder · Free" },
   { value: "qwen3-coder", label: "qwen3-coder", description: "Cloud · OpenRouter · Free" },
   { value: "mistral-small", label: "mistral-small-3.1-24b", description: "Cloud · OpenRouter · Free" },
   { value: "gemma-3-4b", label: "gemma-3-4b", description: "Cloud · OpenRouter · Free" },
+  { value: "qwen2.5:0.5b", label: "qwen2.5:0.5b", description: "Local · Ollama · CI only" },
 ];
 
 export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string }[] = [
