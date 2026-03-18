@@ -175,6 +175,13 @@ func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	relativePath = strings.TrimPrefix(relativePath, "/")
 	diskPath := filepath.Join(hostPath, relativePath)
 
+	// Prevent path traversal attacks: ensure resolved path stays within hostPath.
+	resolvedPath, err := filepath.Abs(diskPath)
+	if err != nil || !strings.HasPrefix(resolvedPath, hostPath) {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid path"})
+		return
+	}
+
 	dirEntries, err := os.ReadDir(diskPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -264,6 +271,13 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 
 	relativePath := strings.TrimPrefix(filePath, "/workspace/")
 	diskPath := filepath.Join(hostPath, relativePath)
+
+	// Prevent path traversal attacks: ensure resolved path stays within hostPath.
+	resolvedPath, err := filepath.Abs(diskPath)
+	if err != nil || !strings.HasPrefix(resolvedPath, hostPath) {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid path"})
+		return
+	}
 
 	data, err := os.ReadFile(diskPath)
 	if err != nil {

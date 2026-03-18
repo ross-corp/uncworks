@@ -45,8 +45,14 @@ func NewWebhookHandler(k8sClient client.Client, namespace string) *WebhookHandle
 			}
 		}
 	}
+
+	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
+	if secret == "" {
+		log.Println("WARNING: GITHUB_WEBHOOK_SECRET not set — webhook signature validation is disabled. Any POST to /api/v1/webhooks/github will be accepted. Set GITHUB_WEBHOOK_SECRET for production use.")
+	}
+
 	return &WebhookHandler{
-		secret:       os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		secret:       secret,
 		allowedRepos: repos,
 		githubToken:  os.Getenv("GITHUB_TOKEN"),
 		k8sClient:    k8sClient,
@@ -70,7 +76,8 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	// Limit body to 10 MB to prevent abuse.
+	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return

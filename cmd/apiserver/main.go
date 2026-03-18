@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpchealth"
@@ -40,6 +44,15 @@ func main() {
 	addr := envOrDefault("LISTEN_ADDR", ":50055")
 	namespace := envOrDefault("NAMESPACE", "default")
 
+	// Parse allowed CORS origins. Default to localhost dev URLs only.
+	allowedOrigins := parseAllowedOrigins(os.Getenv("AOT_ALLOWED_ORIGINS"))
+
+	// API key authentication (optional but strongly recommended for production).
+	apiKey := os.Getenv("AOT_API_KEY")
+	if apiKey == "" {
+		log.Println("WARNING: AOT_API_KEY not set — API server is unauthenticated. Set AOT_API_KEY for production use.")
+	}
+
 	// Initialize K8s client
 	restConfig := ctrl.GetConfigOrDie()
 	k8sClient, err := runtimeclient.New(restConfig, runtimeclient.Options{Scheme: scheme})
@@ -51,9 +64,11 @@ func main() {
 	bus := eventbus.NewChannelBus()
 	svc := server.NewAOTServiceHandler(k8sClient, bus, namespace)
 
-	// Connect to Temporal if configured
+	// Connect to Temporal (required for production)
 	temporalHost := os.Getenv("TEMPORAL_HOST")
-	if temporalHost != "" {
+	if temporalHost == "" {
+		log.Println("WARNING: TEMPORAL_HOST not set — agent run creation, cancellation, and human input will fail. Set TEMPORAL_HOST for production use.")
+	} else {
 		temporalNamespace := envOrDefault("TEMPORAL_NAMESPACE", "default")
 		tc, err := temporalclient.Dial(temporalclient.Options{
 			HostPort:  temporalHost,
@@ -72,6 +87,36 @@ func main() {
 	validateInterceptor := validate.NewInterceptor()
 
 	mux := http.NewServeMux()
+
+	// Health check endpoints (unauthenticated)
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
+		ready := true
+		checks := map[string]string{"k8s": "ok"}
+
+		if svc.TemporalClient == nil {
+			ready = false
+			checks["temporal"] = "not connected"
+		} else {
+			checks["temporal"] = "ok"
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if !ready {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+		status := "ok"
+		if !ready {
+			status = "degraded"
+		}
+		_ = writeJSONResponse(w, map[string]interface{}{"status": status, "checks": checks})
+	})
 
 	// Register GitHub integration REST endpoints
 	ghClient := server.NewGitHubClient()
@@ -94,10 +139,10 @@ func main() {
 	sseHandler.RegisterSSEHandlers(mux)
 
 	// Register interactive shell WebSocket endpoint
-	execHandler := server.NewExecHandler(k8sClient, restConfig, namespace)
+	execHandler := server.NewExecHandler(k8sClient, restConfig, namespace, allowedOrigins)
 	execHandler.RegisterExecHandlers(mux)
 
-	// Register GitHub webhook receiver
+	// Register GitHub webhook receiver (webhooks use their own HMAC auth, skip API key)
 	webhookHandler := server.NewWebhookHandler(k8sClient, namespace)
 	mux.Handle("/api/v1/webhooks/github", webhookHandler)
 
@@ -107,7 +152,7 @@ func main() {
 	)
 	mux.Handle(path, handler)
 
-	// Health check
+	// Health check (gRPC)
 	checker := grpchealth.NewStaticChecker(apiv1connect.AOTServiceName)
 	mux.Handle(grpchealth.NewHandler(checker))
 
@@ -116,9 +161,18 @@ func main() {
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
 
+	// Build middleware chain: CORS → Auth → Rate Limit → Handler
+	var finalHandler http.Handler = mux
+	finalHandler = withRateLimit(finalHandler)
+	finalHandler = withAuth(finalHandler, apiKey)
+	finalHandler = withCORS(finalHandler, allowedOrigins)
+
 	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: h2c.NewHandler(withCORS(mux), &http2.Server{}),
+		Addr:              addr,
+		Handler:           h2c.NewHandler(finalHandler, &http2.Server{}),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MB
 	}
 
 	go func() {
@@ -133,19 +187,55 @@ func main() {
 	<-sigCh
 
 	log.Println("Shutting down...")
-	if err := httpServer.Shutdown(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(ctx); err != nil {
 		log.Printf("Shutdown error: %v", err)
 	}
 }
 
-// withCORS wraps a handler to allow cross-origin requests from web UIs.
-func withCORS(h http.Handler) http.Handler {
+// parseAllowedOrigins parses a comma-separated list of allowed origins.
+// Returns a default set for local development if empty.
+func parseAllowedOrigins(raw string) []string {
+	if raw == "" {
+		return []string{
+			"http://localhost:3000",
+			"http://localhost:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:5173",
+		}
+	}
+	if raw == "*" {
+		return []string{"*"}
+	}
+	var origins []string
+	for _, o := range strings.Split(raw, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return origins
+}
+
+// isOriginAllowed checks whether an origin is in the allowed list.
+func isOriginAllowed(origin string, allowed []string) bool {
+	for _, a := range allowed {
+		if a == "*" || strings.EqualFold(a, origin) {
+			return true
+		}
+	}
+	return false
+}
+
+// withCORS wraps a handler to allow cross-origin requests from configured origins only.
+func withCORS(h http.Handler, allowedOrigins []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" {
+		if origin != "" && isOriginAllowed(origin, allowedOrigins) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout, X-Grpc-Web, X-User-Agent")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout, X-Grpc-Web, X-User-Agent")
 			w.Header().Set("Access-Control-Expose-Headers", "Grpc-Status, Grpc-Message, Grpc-Status-Details-Bin")
 			w.Header().Set("Access-Control-Max-Age", "7200")
 		}
@@ -155,6 +245,133 @@ func withCORS(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+// withAuth adds bearer token authentication to all non-exempt endpoints.
+func withAuth(h http.Handler, apiKey string) http.Handler {
+	if apiKey == "" {
+		return h // No auth configured — pass through.
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip auth for health checks, gRPC health, reflection, and webhooks (which use HMAC auth).
+		p := r.URL.Path
+		if p == "/healthz" || p == "/readyz" ||
+			strings.HasPrefix(p, "/grpc.health.") ||
+			strings.HasPrefix(p, "/grpc.reflection.") ||
+			p == "/api/v1/webhooks/github" {
+			h.ServeHTTP(w, r)
+			return
+		}
+
+		// Check Authorization header (or "token" query param for WebSocket).
+		auth := r.Header.Get("Authorization")
+		token := ""
+		if auth != "" {
+			token = strings.TrimPrefix(auth, "Bearer ")
+			if token == auth {
+				token = "" // Not a Bearer token
+			}
+		}
+		// Fallback: check query parameter (for WebSocket connections where
+		// browsers cannot set custom headers).
+		if token == "" {
+			token = r.URL.Query().Get("token")
+		}
+		if token != apiKey {
+			http.Error(w, `{"error":"invalid or missing API key"}`, http.StatusUnauthorized)
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
+// rateLimiter is a simple per-IP token bucket rate limiter.
+type rateLimiter struct {
+	mu      sync.Mutex
+	clients map[string]*tokenBucket
+}
+
+type tokenBucket struct {
+	tokens     float64
+	lastRefill time.Time
+}
+
+const (
+	rateLimit  = 60.0  // requests per second
+	burstLimit = 120.0 // max burst
+)
+
+func newRateLimiter() *rateLimiter {
+	rl := &rateLimiter{clients: make(map[string]*tokenBucket)}
+	// Clean up stale entries periodically.
+	go func() {
+		for range time.Tick(5 * time.Minute) {
+			rl.mu.Lock()
+			now := time.Now()
+			for ip, tb := range rl.clients {
+				if now.Sub(tb.lastRefill) > 10*time.Minute {
+					delete(rl.clients, ip)
+				}
+			}
+			rl.mu.Unlock()
+		}
+	}()
+	return rl
+}
+
+func (rl *rateLimiter) allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	tb, ok := rl.clients[ip]
+	if !ok {
+		tb = &tokenBucket{tokens: burstLimit, lastRefill: time.Now()}
+		rl.clients[ip] = tb
+	}
+
+	now := time.Now()
+	elapsed := now.Sub(tb.lastRefill).Seconds()
+	tb.tokens += elapsed * rateLimit
+	if tb.tokens > burstLimit {
+		tb.tokens = burstLimit
+	}
+	tb.lastRefill = now
+
+	if tb.tokens < 1 {
+		return false
+	}
+	tb.tokens--
+	return true
+}
+
+// withRateLimit applies per-IP rate limiting.
+func withRateLimit(h http.Handler) http.Handler {
+	rl := newRateLimiter()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip rate limiting for health checks.
+		if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
+			h.ServeHTTP(w, r)
+			return
+		}
+
+		ip := r.RemoteAddr
+		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+			ip = strings.SplitN(fwd, ",", 2)[0]
+		}
+		ip = strings.TrimSpace(ip)
+
+		if !rl.allow(ip) {
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+func writeJSONResponse(w http.ResponseWriter, v interface{}) error {
+	return json.NewEncoder(w).Encode(v)
 }
 
 func envOrDefault(key, defaultVal string) string {

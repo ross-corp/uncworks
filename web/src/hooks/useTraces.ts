@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { TraceSpan } from "../types/agent-run";
+import { apiFetch } from "./apiFetch";
 
 export function useTraces(runId: string) {
   const [spans, setSpans] = useState<TraceSpan[]>([]);
@@ -14,7 +15,7 @@ export function useTraces(runId: string) {
     let cancelled = false;
     setLoading(true);
 
-    fetch(`/api/v1/runs/${runId}/traces`)
+    apiFetch(`/api/v1/runs/${runId}/traces`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

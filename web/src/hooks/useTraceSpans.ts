@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { TraceSpan } from "../types/agent-run";
+import { apiFetch, apiSseUrl } from "./apiFetch";
 
 /**
  * Hook that fetches trace spans for a given run ID and subscribes
@@ -21,7 +22,7 @@ export function useTraceSpans(runId: string | null) {
     setLoading(true);
 
     // Fetch initial spans
-    fetch(`/api/v1/runs/${runId}/traces`)
+    apiFetch(`/api/v1/runs/${runId}/traces`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -40,7 +41,7 @@ export function useTraceSpans(runId: string | null) {
       });
 
     // Subscribe to real-time span updates
-    const eventSource = new EventSource(`/api/v1/runs/${runId}/traces/watch`);
+    const eventSource = new EventSource(apiSseUrl(`/api/v1/runs/${runId}/traces/watch`));
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (msg) => {

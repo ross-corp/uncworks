@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -20,26 +21,41 @@ import (
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 )
 
-var wsUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins; CORS is handled at the mux level.
-	},
-}
-
 // ExecHandler serves the interactive shell WebSocket endpoint.
 type ExecHandler struct {
-	k8sClient  runtimeclient.Client
-	restConfig *rest.Config
-	namespace  string
+	k8sClient      runtimeclient.Client
+	restConfig     *rest.Config
+	namespace      string
+	allowedOrigins []string
+	wsUpgrader     websocket.Upgrader
 }
 
-// NewExecHandler creates a new ExecHandler.
-func NewExecHandler(k8sClient runtimeclient.Client, restConfig *rest.Config, namespace string) *ExecHandler {
-	return &ExecHandler{
-		k8sClient:  k8sClient,
-		restConfig: restConfig,
-		namespace:  namespace,
+// NewExecHandler creates a new ExecHandler with origin validation.
+func NewExecHandler(k8sClient runtimeclient.Client, restConfig *rest.Config, namespace string, allowedOrigins []string) *ExecHandler {
+	h := &ExecHandler{
+		k8sClient:      k8sClient,
+		restConfig:     restConfig,
+		namespace:      namespace,
+		allowedOrigins: allowedOrigins,
 	}
+	h.wsUpgrader = websocket.Upgrader{
+		CheckOrigin: h.checkOrigin,
+	}
+	return h
+}
+
+// checkOrigin validates WebSocket upgrade requests against allowed origins.
+func (e *ExecHandler) checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // Non-browser clients (curl, etc.) don't send Origin.
+	}
+	for _, allowed := range e.allowedOrigins {
+		if allowed == "*" || strings.EqualFold(allowed, origin) {
+			return true
+		}
+	}
+	return false
 }
 
 // RegisterExecHandlers registers the exec WebSocket endpoint on the given mux.
@@ -133,7 +149,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Upgrade to WebSocket.
-	wsConn, err := wsUpgrader.Upgrade(w, r, nil)
+	wsConn, err := e.wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("websocket upgrade failed: %v", err)
 		return

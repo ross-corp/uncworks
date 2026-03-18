@@ -25,16 +25,31 @@ export interface AOTClientOptions {
   baseUrl: string;
   /** Optional custom transport (for testing or Node.js usage). */
   transport?: Transport;
+  /** Optional API key for authenticating with the AOT API server. */
+  apiKey?: string;
 }
 
 /** ConnectRPC client for the AOT API Service. */
 export class AOTClient {
   private client: Client<typeof AOTService>;
+  /** The API key, exposed so REST calls (file explorer, shell, etc.) can use it. */
+  readonly apiKey?: string;
 
   constructor(options: AOTClientOptions) {
+    this.apiKey = options.apiKey;
     const transport =
       options.transport ??
-      createConnectTransport({ baseUrl: options.baseUrl });
+      createConnectTransport({
+        baseUrl: options.baseUrl,
+        interceptors: options.apiKey
+          ? [
+              (next) => async (req) => {
+                req.header.set("Authorization", `Bearer ${options.apiKey}`);
+                return next(req);
+              },
+            ]
+          : [],
+      });
     this.client = createClient(AOTService, transport);
   }
 

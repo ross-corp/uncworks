@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { apiWsUrl } from "../hooks/apiFetch";
 import "@xterm/xterm/css/xterm.css";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -40,8 +41,7 @@ export default function ShellTerminalInner({ runId }: { runId: string }) {
     fitRef.current = fit;
 
     // Connect WebSocket
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/runs/${runId}/exec`;
+    const wsUrl = apiWsUrl(`/api/v1/runs/${runId}/exec`);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
