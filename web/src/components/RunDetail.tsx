@@ -4,6 +4,7 @@ import { PhaseBadge, BackendBadge, ModelTierBadge } from "./StatusBadge";
 import SpecEditor from "./SpecEditor";
 import LogViewer from "./LogViewer";
 import AgentLogView from "./AgentLogView";
+import VerificationPanel from "./VerificationPanel";
 import FileExplorer from "./FileExplorer";
 import ShellTerminal from "./ShellTerminal";
 import TraceTimeline from "./TraceTimeline";
@@ -342,6 +343,16 @@ function InfoTab({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Verification result */}
+          {run.status.verificationResult && (
+            <div>
+              <h3 className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground/60">
+                Verification
+              </h3>
+              <VerificationPanel runId={run.id} />
             </div>
           )}
 

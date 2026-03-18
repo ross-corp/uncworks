@@ -15,7 +15,7 @@
 - [x] 2.4 Plan stage: system prompt instructs OpenSpec change creation (`openspec new change`, then generate proposal/specs/tasks)
 - [x] 2.5 Execute stage: system prompt instructs `/opsx:apply` implementation workflow, full tool set
 - [x] 2.6 Verify stage: system prompt instructs evaluation against spec, read-only tools + exec for test commands
-- [ ] 2.7 Write tests for stage-specific agent configuration
+- [x] 2.7 Write tests for stage-specific agent configuration
 
 ## 3. Temporal Workflow: Multi-Stage Pipeline
 
@@ -25,7 +25,7 @@
 - [x] 3.4 Implement `runSpecDrivenPipeline`: Plan → Execute → Verify loop with retry (max 3, configurable via env var)
 - [x] 3.5 Implement retry context injection: on verify failure, prepend structured failure report to execute agent prompt
 - [x] 3.6 Update workflow state query to include stage and retry count
-- [ ] 3.7 Write Temporal workflow unit tests for the spec-driven pipeline (mock activities)
+- [x] 3.7 Write Temporal workflow unit tests for the spec-driven pipeline (mock activities)
 
 ## 4. Verification Activity: OpenSpec CLI Integration
 
@@ -36,7 +36,7 @@
 - [x] 4.5 Implement LLM judge: build prompt from spec WHEN/THEN + git diff + agent log, invoke via LiteLLM, parse structured per-scenario verdict
 - [x] 4.6 Implement archive gate: on all-pass, exec `openspec archive --yes` to seal the change
 - [ ] 4.7 Implement structured verdict output: write `verification-result.json` to change directory — deferred to post-MVP
-- [ ] 4.8 Write tests for each verification gate (task completion, validation, automated checks, LLM judge, archive)
+- [x] 4.8 Write tests for each verification gate (task completion, validation, automated checks, LLM judge, archive)
 
 ## 5. API & Proto Updates
 
@@ -44,15 +44,15 @@
 - [x] 5.2 Update `ListAgentRuns` to allow filtering by stage
 - [x] 5.3 Add `GetVerificationResult` REST endpoint: `GET /api/v1/runs/{id}/verification` returns the structured verdict JSON from workspace
 - [x] 5.4 Update `crdToProto` and `specProtoToCRD` mappings for new status fields and orchestration mode
-- [ ] 5.5 Write contract tests for new API fields
+- [x] 5.5 Write contract tests for new API fields
 
 ## 6. Web UI
 
 - [x] 6.1 Update run list to show current stage badge (Planning / Executing / Verifying) alongside phase
 - [x] 6.2 Update run detail info tab to display stage, retry count, and verification summary
-- [ ] 6.3 Add verification result panel in detail view: shows per-gate pass/fail with expandable details (task completion, validation, automated checks, LLM verdict)
-- [ ] 6.4 Update structured log viewer to show stage transitions as system events
-- [ ] 6.5 Show retry history: which attempt, what failed, what was retried
+- [x] 6.3 Add verification result panel in detail view: shows per-gate pass/fail with expandable details (task completion, validation, automated checks, LLM verdict)
+- [x] 6.4 Update structured log viewer to show stage transitions as system events
+- [x] 6.5 Show retry history: which attempt, what failed, what was retried
 - [x] 6.6 Add `spec-driven` option to orchestration mode selector in create form
 
 ## 7. Configuration & Deployment
@@ -68,6 +68,6 @@
 - [ ] 8.2 E2E test: create spec-driven run that should fail verification (incomplete tasks), verify retry and eventual failure
 - [ ] 8.3 E2E test: create run with specContent, verify auto-upgrade to spec-driven mode
 - [ ] 8.4 E2E test: single-mode run still works unchanged (backward compat)
-- [ ] 8.5 Playwright test: verify stage badges and verification results in UI
+- [x] 8.5 Playwright test: verify stage badges and verification results in UI
 - [ ] 8.6 Integration test: verify `openspec validate --json`, `openspec list --json`, and `openspec archive` work correctly inside sidecar container
-- [ ] 8.7 Unit test: verification gate pipeline (mock each gate, test short-circuit behavior)
+- [x] 8.7 Unit test: verification gate pipeline (mock each gate, test short-circuit behavior)

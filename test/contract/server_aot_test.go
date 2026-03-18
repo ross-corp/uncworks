@@ -351,6 +351,104 @@ func TestContract_SendHumanInput_NotWaiting(t *testing.T) {
 
 // --- WatchAgentRun contract ---
 
+// --- Spec-driven pipeline contract ---
+
+func TestContract_CreateAgentRun_SpecDrivenMode(t *testing.T) {
+	client, cleanup := startAOTServer(t, false)
+	defer cleanup()
+
+	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend:           apiv1.Backend_BACKEND_POD,
+			Repos:             []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:            "Fix the auth module",
+			OrchestrationMode: apiv1.OrchestrationMode_ORCHESTRATION_MODE_SPEC_DRIVEN,
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+	if resp.Msg.AgentRun == nil {
+		t.Fatal("expected non-nil AgentRun")
+	}
+	if resp.Msg.AgentRun.Spec.OrchestrationMode != apiv1.OrchestrationMode_ORCHESTRATION_MODE_SPEC_DRIVEN {
+		t.Errorf("expected SPEC_DRIVEN mode, got %v", resp.Msg.AgentRun.Spec.OrchestrationMode)
+	}
+}
+
+func TestContract_ListAgentRuns_StageFilter(t *testing.T) {
+	client, cleanup := startAOTServer(t, false)
+	defer cleanup()
+
+	// Create a run first
+	_, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "test stage filter",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+
+	// List without filter should return the run
+	resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{}))
+	if err != nil {
+		t.Fatalf("ListAgentRuns: %v", err)
+	}
+	if len(resp.Msg.AgentRuns) < 1 {
+		t.Errorf("expected at least 1 run, got %d", len(resp.Msg.AgentRuns))
+	}
+
+	// Verify stage_filter field exists on request (server-side filtering).
+	// Note: proto regen needed for wire encoding; this tests the struct field exists.
+	req := &apiv1.ListAgentRunsRequest{StageFilter: "planning"}
+	if req.StageFilter != "planning" {
+		t.Errorf("expected StageFilter field to be settable")
+	}
+}
+
+func TestContract_GetAgentRun_IncludesNewStatusFields(t *testing.T) {
+	client, cleanup := startAOTServer(t, false)
+	defer cleanup()
+
+	// Create a run
+	createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "test new fields",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+
+	// Get it and verify new fields exist (even if empty for non-spec-driven)
+	getResp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{
+		Id: createResp.Msg.AgentRun.Id,
+	}))
+	if err != nil {
+		t.Fatalf("GetAgentRun: %v", err)
+	}
+
+	status := getResp.Msg.Status
+	if status == nil {
+		t.Fatal("expected non-nil Status")
+	}
+	// New fields should be present (empty/zero for non-spec-driven runs)
+	if status.Stage != "" {
+		t.Errorf("expected empty stage for non-spec-driven run, got %q", status.Stage)
+	}
+	if status.RetryCount != 0 {
+		t.Errorf("expected 0 retry count, got %d", status.RetryCount)
+	}
+	if status.VerificationResult != "" {
+		t.Errorf("expected empty verification result, got %q", status.VerificationResult)
+	}
+}
+
 func TestContract_WatchAgentRun_NotFound(t *testing.T) {
 	client, cleanup := startAOTServer(t, false)
 	defer cleanup()

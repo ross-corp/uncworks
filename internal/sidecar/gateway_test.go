@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -64,6 +65,67 @@ func TestSendInput_NoProcess(t *testing.T) {
 	}))
 	if err == nil {
 		t.Fatal("expected error when no process running")
+	}
+}
+
+func TestStageSystemPrompt(t *testing.T) {
+	tests := []struct {
+		stage        string
+		wantNonEmpty bool
+		wantContains []string // at least one must match
+	}{
+		{
+			stage:        "plan",
+			wantNonEmpty: true,
+			wantContains: []string{"openspec", "OpenSpec"},
+		},
+		{
+			stage:        "execute",
+			wantNonEmpty: true,
+			wantContains: []string{"implement", "Implement", "apply", "Apply"},
+		},
+		{
+			stage:        "verify",
+			wantNonEmpty: true,
+			wantContains: []string{"evaluation", "Evaluation", "verify", "Verify", "verification", "Verification"},
+		},
+		{
+			stage:        "",
+			wantNonEmpty: false,
+		},
+		{
+			stage:        "unknown",
+			wantNonEmpty: false,
+		},
+	}
+
+	for _, tt := range tests {
+		name := tt.stage
+		if name == "" {
+			name = "empty"
+		}
+		t.Run(name, func(t *testing.T) {
+			got := stageSystemPrompt(tt.stage)
+			if tt.wantNonEmpty && got == "" {
+				t.Fatalf("stageSystemPrompt(%q) returned empty string, want non-empty", tt.stage)
+			}
+			if !tt.wantNonEmpty && got != "" {
+				t.Fatalf("stageSystemPrompt(%q) returned %q, want empty string", tt.stage, got)
+			}
+			if len(tt.wantContains) > 0 {
+				found := false
+				lower := strings.ToLower(got)
+				for _, substr := range tt.wantContains {
+					if strings.Contains(lower, strings.ToLower(substr)) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("stageSystemPrompt(%q) = %q\nwant it to contain one of %v", tt.stage, got, tt.wantContains)
+				}
+			}
+		})
 	}
 }
 
