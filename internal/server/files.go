@@ -49,6 +49,7 @@ func (f *FileHandler) RegisterFileHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/runs/{id}/files/content", f.handleFileContent)
 	mux.HandleFunc("GET /api/v1/runs/{id}/logs", f.handleLogs)
 	mux.HandleFunc("GET /api/v1/runs/{id}/logs/structured", f.handleStructuredLogs)
+	mux.HandleFunc("GET /api/v1/runs/{id}/verification", f.handleVerificationResult)
 }
 
 // FileEntry represents a single entry in a directory listing.
@@ -582,6 +583,51 @@ func (f *FileHandler) handleStructuredLogs(w http.ResponseWriter, r *http.Reques
 
 	entries := parseAgentJSONL(string(data))
 	writeJSON(w, http.StatusOK, entries)
+}
+
+// handleVerificationResult returns the verification-result.json from the workspace.
+func (f *FileHandler) handleVerificationResult(w http.ResponseWriter, r *http.Request) {
+	runID := r.PathValue("id")
+	if runID == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing run id"})
+		return
+	}
+
+	hostPath, err := f.getPVCHostPath(r.Context(), runID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("workspace not found for run %q: %v", runID, err)})
+		return
+	}
+
+	// Check multiple possible locations for the verification result.
+	candidates := []string{
+		filepath.Join(hostPath, ".openspec", "changes", runID, "verification-result.json"),
+		filepath.Join(hostPath, "openspec", "changes", runID, "verification-result.json"),
+	}
+
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(data)
+			return
+		}
+	}
+
+	// Also check the CRD status field as a fallback.
+	crd := &aotv1alpha1.AgentRun{}
+	if err := f.k8sClient.Get(r.Context(), runtimeclient.ObjectKey{
+		Namespace: f.namespace,
+		Name:      runID,
+	}, crd); err == nil && crd.Status.VerificationResult != "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(crd.Status.VerificationResult))
+		return
+	}
+
+	writeJSON(w, http.StatusNotFound, errorResponse{Error: "no verification result available for this run"})
 }
 
 // parseAgentJSONL parses the pi-coding-agent JSONL format into structured log entries.

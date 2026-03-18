@@ -250,6 +250,12 @@ function InfoTab({
           {/* Metadata */}
           <div className="space-y-2">
             <MetaRow label="Status" value={run.status.phase} />
+            {run.status.stage && (
+              <MetaRow label="Stage" value={run.status.stage} />
+            )}
+            {(run.status.retryCount ?? 0) > 0 && (
+              <MetaRow label="Retry" value={`Attempt ${run.status.retryCount}`} />
+            )}
             <MetaRow label="Duration" value={duration()} />
             <MetaRow label="Created" value={formatTime(run.createdAt)} />
             <MetaRow label="Started" value={formatTime(run.status.startedAt)} />

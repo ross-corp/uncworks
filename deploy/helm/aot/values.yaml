@@ -60,6 +60,15 @@ apiserver:
   # Set to "*" to allow all origins (not recommended for production).
   allowedOrigins: ""
 
+# -- Spec-driven pipeline configuration
+pipeline:
+  # -- Max retry attempts for execute→verify loop
+  maxRetries: 3
+  # -- Planning stage timeout in seconds
+  planTimeout: 120
+  # -- Model to use for the verification LLM judge (defaults to same as execution model)
+  verifyModel: ""
+
 # -- Web Dashboard configuration
 web:
   # -- Enable the web dashboard

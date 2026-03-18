@@ -1044,7 +1044,9 @@ type ListAgentRunsRequest struct {
 	// SpecRunID filters runs belonging to a specific spec execution.
 	SpecRunId string `protobuf:"bytes,4,opt,name=spec_run_id,json=specRunId,proto3" json:"spec_run_id,omitempty"`
 	// ParentRunID filters runs that are children of a specific parent.
-	ParentRunId   string `protobuf:"bytes,5,opt,name=parent_run_id,json=parentRunId,proto3" json:"parent_run_id,omitempty"`
+	ParentRunId string `protobuf:"bytes,5,opt,name=parent_run_id,json=parentRunId,proto3" json:"parent_run_id,omitempty"`
+	// StageFilter filters by pipeline stage.
+	StageFilter   string `protobuf:"bytes,6,opt,name=stage_filter,json=stageFilter,proto3" json:"stage_filter,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

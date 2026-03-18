@@ -43,6 +43,14 @@ spec:
             - name: LLM_API_KEY
               value: {{ .Values.llm.apiKey | quote }}
             {{- end }}
+            - name: AOT_PIPELINE_MAX_RETRIES
+              value: {{ .Values.pipeline.maxRetries | quote }}
+            - name: AOT_PIPELINE_PLAN_TIMEOUT
+              value: {{ .Values.pipeline.planTimeout | quote }}
+            {{- if .Values.pipeline.verifyModel }}
+            - name: AOT_PIPELINE_VERIFY_MODEL
+              value: {{ .Values.pipeline.verifyModel | quote }}
+            {{- end }}
           {{- with .Values.worker.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

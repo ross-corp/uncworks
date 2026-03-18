@@ -166,6 +166,11 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 			continue
 		}
 
+		// Apply stage filter
+		if req.Msg.StageFilter != "" && crd.Status.Stage != req.Msg.StageFilter {
+			continue
+		}
+
 		runs = append(runs, run)
 	}
 

@@ -41,25 +41,25 @@
 ## 5. API & Proto Updates
 
 - [x] 5.1 Update `GetAgentRun` to include stage, retry_count, and verification_result in response
-- [ ] 5.2 Update `ListAgentRuns` to allow filtering by stage
-- [ ] 5.3 Add `GetVerificationResult` REST endpoint: `GET /api/v1/runs/{id}/verification` returns the structured verdict JSON from workspace
+- [x] 5.2 Update `ListAgentRuns` to allow filtering by stage
+- [x] 5.3 Add `GetVerificationResult` REST endpoint: `GET /api/v1/runs/{id}/verification` returns the structured verdict JSON from workspace
 - [x] 5.4 Update `crdToProto` and `specProtoToCRD` mappings for new status fields and orchestration mode
 - [ ] 5.5 Write contract tests for new API fields
 
 ## 6. Web UI
 
-- [ ] 6.1 Update run list to show current stage badge (Planning / Executing / Verifying) alongside phase
-- [ ] 6.2 Update run detail info tab to display stage, retry count, and verification summary
+- [x] 6.1 Update run list to show current stage badge (Planning / Executing / Verifying) alongside phase
+- [x] 6.2 Update run detail info tab to display stage, retry count, and verification summary
 - [ ] 6.3 Add verification result panel in detail view: shows per-gate pass/fail with expandable details (task completion, validation, automated checks, LLM verdict)
 - [ ] 6.4 Update structured log viewer to show stage transitions as system events
 - [ ] 6.5 Show retry history: which attempt, what failed, what was retried
-- [ ] 6.6 Add `spec-driven` option to orchestration mode selector in create form
+- [x] 6.6 Add `spec-driven` option to orchestration mode selector in create form
 
 ## 7. Configuration & Deployment
 
-- [ ] 7.1 Add pipeline configuration to Helm values: `pipeline.maxRetries`, `pipeline.planTimeout`, `pipeline.verifyModel`
-- [ ] 7.2 Update worker Helm template to pass pipeline env vars (`AOT_PIPELINE_MAX_RETRIES`, `AOT_PIPELINE_PLAN_TIMEOUT`)
-- [ ] 7.3 Update `.env.example` with pipeline configuration documentation
+- [x] 7.1 Add pipeline configuration to Helm values: `pipeline.maxRetries`, `pipeline.planTimeout`, `pipeline.verifyModel`
+- [x] 7.2 Update worker Helm template to pass pipeline env vars (`AOT_PIPELINE_MAX_RETRIES`, `AOT_PIPELINE_PLAN_TIMEOUT`)
+- [x] 7.3 Update `.env.example` with pipeline configuration documentation
 - [x] 7.4 Update `deploy/crds/agentrun-crd.yaml` with new status fields and `spec-driven` orchestration mode enum
 
 ## 8. Testing & Validation

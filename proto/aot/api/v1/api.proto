@@ -172,6 +172,8 @@ message ListAgentRunsRequest {
   string spec_run_id = 4;
   // ParentRunID filters runs that are children of a specific parent.
   string parent_run_id = 5;
+  // StageFilter filters by pipeline stage (planning, executing, verifying).
+  string stage_filter = 6;
 }
 
 message ListAgentRunsResponse {
