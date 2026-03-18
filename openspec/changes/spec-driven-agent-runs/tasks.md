@@ -32,10 +32,10 @@
 - [x] 4.1 Implement task completion gate: exec `openspec list --json` in pod, parse JSON, check `completedTasks == totalTasks`
 - [x] 4.2 Implement structural validation gate: exec `openspec validate --json` in pod, check `valid: true`
 - [x] 4.3 Implement automated scenario checks: parse spec WHEN/THEN for command references, exec in workspace, check exit codes and output
-- [ ] 4.4 Implement file existence checks: parse spec WHEN/THEN for file path references, check `os.Stat` in workspace — deferred to post-MVP
+- [x] 4.4 Implement file existence checks: parse spec WHEN/THEN for file path references, check `os.Stat` in workspace
 - [x] 4.5 Implement LLM judge: build prompt from spec WHEN/THEN + git diff + agent log, invoke via LiteLLM, parse structured per-scenario verdict
 - [x] 4.6 Implement archive gate: on all-pass, exec `openspec archive --yes` to seal the change
-- [ ] 4.7 Implement structured verdict output: write `verification-result.json` to change directory — deferred to post-MVP
+- [x] 4.7 Implement structured verdict output: write `verification-result.json` to change directory
 - [x] 4.8 Write tests for each verification gate (task completion, validation, automated checks, LLM judge, archive)
 
 ## 5. API & Proto Updates

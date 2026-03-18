@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -74,6 +77,12 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		AutomatedChecks: []AutomatedCheck{},
 	}
 
+	// Always write verification-result.json on exit (success or failure).
+	defer func() {
+		result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
+		writeVerificationResult(input.RepoPath, input.ChangeName, result)
+	}()
+
 	// --- Gate 1: Task completion via openspec list --json ---
 	activity.RecordHeartbeat(ctx, "checking task completion")
 
@@ -83,7 +92,6 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	if err != nil {
 		result.Pass = false
 		result.FailureReport = fmt.Sprintf("Failed to check task completion: %v", err)
-		result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
 		return VerifyRunOutput{Result: result}, nil
 	}
 
@@ -106,7 +114,6 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 			Pass:   false,
 			Output: result.FailureReport,
 		})
-		result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
 		return VerifyRunOutput{Result: result}, nil
 	}
 
@@ -154,6 +161,29 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		Name: "spec_validation",
 		Pass: true,
 	})
+
+	// --- Gate 2b: File existence checks from spec scenarios ---
+	activity.RecordHeartbeat(ctx, "checking file existence")
+
+	fileChecks := extractFileChecks(input.RepoPath, input.ChangeName)
+	for _, fc := range fileChecks {
+		fullPath := filepath.Join(input.RepoPath, fc.Path)
+		_, statErr := os.Stat(fullPath)
+		check := AutomatedCheck{
+			Name: fmt.Sprintf("file_exists: %s", fc.Path),
+			Pass: statErr == nil,
+		}
+		if statErr != nil {
+			check.Output = fmt.Sprintf("File not found: %s (referenced in spec scenario: %s)", fc.Path, fc.Scenario)
+			result.AutomatedChecks = append(result.AutomatedChecks, check)
+			result.Pass = false
+			result.FailureReport = fmt.Sprintf("File existence check failed: %s does not exist", fc.Path)
+			result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
+			return VerifyRunOutput{Result: result}, nil
+		}
+		check.Output = "exists"
+		result.AutomatedChecks = append(result.AutomatedChecks, check)
+	}
 
 	// --- Gate 3: Automated scenario checks (test/build commands) ---
 	activity.RecordHeartbeat(ctx, "running automated checks")
@@ -204,7 +234,6 @@ Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...
 	if err != nil {
 		// LLM judge failure is non-fatal — pass with warning.
 		result.Pass = true
-		result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
 		return VerifyRunOutput{Result: result}, nil
 	}
 
@@ -219,6 +248,10 @@ Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...
 
 	result.Pass = true
 	result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
+
+	// Write verification-result.json to the change directory.
+	writeVerificationResult(input.RepoPath, input.ChangeName, result)
+
 	return VerifyRunOutput{Result: result}, nil
 }
 
@@ -233,6 +266,101 @@ func detectTestCommands(repoPath string) []TestCommand {
 	// These will be enhanced to parse spec scenarios for command references.
 	// For now, return empty — automated command checks are opt-in via spec scenarios.
 	return nil
+}
+
+// FileCheck represents a file existence check extracted from a spec scenario.
+type FileCheck struct {
+	Path     string // relative path to check
+	Scenario string // scenario that referenced it
+}
+
+// backtickPathRe matches backtick-wrapped file paths in spec scenarios.
+// Looks for patterns like `src/auth.ts`, `README.md`, `pkg/handler.go`.
+// backtickPathRe matches backtick-wrapped file paths. Must contain a dot or slash
+// to distinguish from command names. Matches: `src/auth.ts`, `.env`, `README.md`
+var backtickPathRe = regexp.MustCompile("`([a-zA-Z0-9_./-]*[./][a-zA-Z0-9_./-]*)`")
+
+// extractFileChecks parses spec files in the change directory for file path
+// references in WHEN/THEN scenarios and returns them as file existence checks.
+func extractFileChecks(repoPath, changeName string) []FileCheck {
+	var checks []FileCheck
+
+	// Look for spec files in common locations.
+	specDirs := []string{
+		filepath.Join(repoPath, "openspec", "changes", changeName, "specs"),
+		filepath.Join(repoPath, ".openspec", "changes", changeName, "specs"),
+	}
+
+	for _, dir := range specDirs {
+		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || filepath.Ext(path) != ".md" {
+				return nil
+			}
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+
+			content := string(data)
+			// Find THEN clauses that reference file paths.
+			lines := strings.Split(content, "\n")
+			var currentScenario string
+			for _, line := range lines {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "#### Scenario:") {
+					currentScenario = strings.TrimPrefix(trimmed, "#### Scenario:")
+					currentScenario = strings.TrimSpace(currentScenario)
+				}
+				// Look for THEN/AND lines with backtick-wrapped paths that mention "exist"
+				lower := strings.ToLower(trimmed)
+				hasThenOrAnd := strings.Contains(lower, "then") || strings.Contains(lower, "and")
+				if hasThenOrAnd && strings.Contains(lower, "exist") {
+					matches := backtickPathRe.FindAllStringSubmatch(trimmed, -1)
+					for _, m := range matches {
+						if len(m) > 1 {
+							checks = append(checks, FileCheck{
+								Path:     m[1],
+								Scenario: currentScenario,
+							})
+						}
+					}
+				}
+			}
+			return nil
+		})
+	}
+
+	return checks
+}
+
+// writeVerificationResult writes the verification result as JSON to the
+// change directory on the workspace PVC.
+func writeVerificationResult(repoPath, changeName string, result VerificationResult) {
+	// Try both possible locations for the change directory.
+	candidates := []string{
+		filepath.Join(repoPath, "openspec", "changes", changeName),
+		filepath.Join(repoPath, ".openspec", "changes", changeName),
+	}
+
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return
+	}
+
+	for _, dir := range candidates {
+		if _, err := os.Stat(dir); err == nil {
+			outPath := filepath.Join(dir, "verification-result.json")
+			_ = os.WriteFile(outPath, data, 0o644)
+			return
+		}
+	}
+
+	// If no change dir exists, write to a fallback location.
+	fallbackDir := filepath.Join(repoPath, ".aot", "verification")
+	_ = os.MkdirAll(fallbackDir, 0o755)
+	outPath := filepath.Join(fallbackDir, changeName+"-result.json")
+	_ = os.WriteFile(outPath, data, 0o644)
 }
 
 // execInSidecar runs a bash command via the sidecar's agent execution.
