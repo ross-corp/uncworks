@@ -17,8 +17,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 )
 
 // ExecHandler serves the interactive shell WebSocket endpoint.
@@ -293,40 +291,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 }
 
-// lookupPodName finds the actual running pod name for an AgentRun.
-// See FileHandler.lookupPodName for details on why we can't use
-// crd.Status.PodName directly.
+// lookupPodName delegates to the shared lookupRunningPod function.
 func (e *ExecHandler) lookupPodName(ctx context.Context, runID string) (string, error) {
-	crd := &aotv1alpha1.AgentRun{}
-	if err := e.k8sClient.Get(ctx, runtimeclient.ObjectKey{
-		Namespace: e.namespace,
-		Name:      runID,
-	}, crd); err != nil {
-		return "", err
-	}
-
-	deployName := crd.Status.PodName
-	if deployName == "" {
-		deployName = crd.Status.DeploymentName
-	}
-	if deployName == "" {
-		return "", nil
-	}
-
-	// Find the actual pod managed by this deployment via the agentrun label.
-	var podList corev1.PodList
-	if err := e.k8sClient.List(ctx, &podList,
-		runtimeclient.InNamespace(e.namespace),
-		runtimeclient.MatchingLabels{"aot.uncworks.io/agentrun": runID},
-	); err != nil {
-		return "", fmt.Errorf("list pods for run %s: %w", runID, err)
-	}
-
-	for _, pod := range podList.Items {
-		if pod.Status.Phase == corev1.PodRunning {
-			return pod.Name, nil
-		}
-	}
-
-	return deployName, nil
+	return lookupRunningPod(ctx, e.k8sClient, e.namespace, runID)
 }

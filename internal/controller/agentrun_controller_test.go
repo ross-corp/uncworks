@@ -79,7 +79,7 @@ func newAgentRun(name string, opts ...func(*aotv1alpha1.AgentRun)) *aotv1alpha1.
 // ---------------------------------------------------------------------------
 
 func TestBuildAgentPod_DefaultImage(t *testing.T) {
-	input := aottemporal.CreateAgentPodInput{
+	input := aottemporal.CreateAgentDeploymentInput{
 		Name:         "agentrun-test-build",
 		Namespace:    "default",
 		AgentRunName: "test-build",
@@ -127,7 +127,7 @@ func TestBuildAgentPod_DefaultImage(t *testing.T) {
 }
 
 func TestBuildAgentPod_CustomImage(t *testing.T) {
-	input := aottemporal.CreateAgentPodInput{
+	input := aottemporal.CreateAgentDeploymentInput{
 		Name:         "agentrun-custom",
 		Namespace:    "default",
 		AgentRunName: "custom",
@@ -143,7 +143,7 @@ func TestBuildAgentPod_CustomImage(t *testing.T) {
 }
 
 func TestBuildAgentPod_EnvVars(t *testing.T) {
-	input := aottemporal.CreateAgentPodInput{
+	input := aottemporal.CreateAgentDeploymentInput{
 		Name:         "agentrun-env",
 		Namespace:    "default",
 		AgentRunName: "env-test",
@@ -182,7 +182,7 @@ func TestBuildAgentPod_EnvVars(t *testing.T) {
 }
 
 func TestBuildAgentPod_LLMEnvVars(t *testing.T) {
-	input := aottemporal.CreateAgentPodInput{
+	input := aottemporal.CreateAgentDeploymentInput{
 		Name:           "agentrun-llm",
 		Namespace:      "default",
 		AgentRunName:   "llm-test",
@@ -230,7 +230,7 @@ func TestBuildAgentPod_LLMEnvVars(t *testing.T) {
 }
 
 func TestBuildAgentPod_NoLLMEnvVars(t *testing.T) {
-	input := aottemporal.CreateAgentPodInput{
+	input := aottemporal.CreateAgentDeploymentInput{
 		Name:         "agentrun-nollm",
 		Namespace:    "default",
 		AgentRunName: "nollm-test",

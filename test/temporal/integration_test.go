@@ -171,7 +171,7 @@ func TestIntegration_TTLExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	require.True(t, mock.stopCalled, "StopAgent should have been called on TTL expiry")
-	require.True(t, mock.cleanupCalled, "CleanupPod should have been called after TTL")
+	require.True(t, mock.cleanupCalled, "ScaleDownDeployment should have been called after TTL")
 	t.Log("Workflow completed via TTL expiry")
 }
 
@@ -182,8 +182,8 @@ func (m *mockActivities) ProvisionLLMKey(_ context.Context, _ aottemporal.Provis
 	return &aottemporal.ProvisionLLMKeyOutput{}, nil
 }
 
-func (m *mockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateAgentPodInput) (*aottemporal.CreateAgentPodOutput, error) {
-	return &aottemporal.CreateAgentPodOutput{PodName: "mock-pod"}, nil
+func (m *mockActivities) CreateAgentDeployment(_ context.Context, input aottemporal.CreateAgentDeploymentInput) (*aottemporal.CreateAgentDeploymentOutput, error) {
+	return &aottemporal.CreateAgentDeploymentOutput{DeploymentName: input.Name}, nil
 }
 
 func (m *mockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
@@ -206,8 +206,17 @@ func (m *mockActivities) StopAgent(_ context.Context, _ aottemporal.StopAgentInp
 	return nil
 }
 
-func (m *mockActivities) CleanupPod(_ context.Context, _ aottemporal.CleanupPodInput) error {
+func (m *mockActivities) ScaleDownDeployment(_ context.Context, _ aottemporal.ScaleDownDeploymentInput) error {
 	return nil
+}
+func (m *mockActivities) PersistRunData(_ context.Context, _ aottemporal.PersistRunDataInput) error {
+	return nil
+}
+func (m *mockActivities) EmbedRunData(_ context.Context, _ aottemporal.EmbedRunDataInput) error {
+	return nil
+}
+func (m *mockActivities) HydrateContext(_ context.Context, _ aottemporal.HydrateContextInput) (*aottemporal.HydrateContextOutput, error) {
+	return &aottemporal.HydrateContextOutput{}, nil
 }
 
 func (m *mockActivities) RevokeLLMKey(_ context.Context, _ aottemporal.RevokeLLMKeyInput) error {
@@ -223,8 +232,8 @@ type hitlMockActivities struct {
 func (m *hitlMockActivities) ProvisionLLMKey(_ context.Context, _ aottemporal.ProvisionLLMKeyInput) (*aottemporal.ProvisionLLMKeyOutput, error) {
 	return &aottemporal.ProvisionLLMKeyOutput{}, nil
 }
-func (m *hitlMockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateAgentPodInput) (*aottemporal.CreateAgentPodOutput, error) {
-	return &aottemporal.CreateAgentPodOutput{PodName: "mock-hitl-pod"}, nil
+func (m *hitlMockActivities) CreateAgentDeployment(_ context.Context, input aottemporal.CreateAgentDeploymentInput) (*aottemporal.CreateAgentDeploymentOutput, error) {
+	return &aottemporal.CreateAgentDeploymentOutput{DeploymentName: input.Name}, nil
 }
 func (m *hitlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
 	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.11", WorkspacePath: "/workspace/src/repo"}, nil
@@ -246,8 +255,17 @@ func (m *hitlMockActivities) ForwardHumanInput(_ context.Context, _ aottemporal.
 func (m *hitlMockActivities) StopAgent(_ context.Context, _ aottemporal.StopAgentInput) error {
 	return nil
 }
-func (m *hitlMockActivities) CleanupPod(_ context.Context, _ aottemporal.CleanupPodInput) error {
+func (m *hitlMockActivities) ScaleDownDeployment(_ context.Context, _ aottemporal.ScaleDownDeploymentInput) error {
 	return nil
+}
+func (m *hitlMockActivities) PersistRunData(_ context.Context, _ aottemporal.PersistRunDataInput) error {
+	return nil
+}
+func (m *hitlMockActivities) EmbedRunData(_ context.Context, _ aottemporal.EmbedRunDataInput) error {
+	return nil
+}
+func (m *hitlMockActivities) HydrateContext(_ context.Context, _ aottemporal.HydrateContextInput) (*aottemporal.HydrateContextOutput, error) {
+	return &aottemporal.HydrateContextOutput{}, nil
 }
 func (m *hitlMockActivities) RevokeLLMKey(_ context.Context, _ aottemporal.RevokeLLMKeyInput) error {
 	return nil
@@ -262,8 +280,8 @@ type ttlMockActivities struct {
 func (m *ttlMockActivities) ProvisionLLMKey(_ context.Context, _ aottemporal.ProvisionLLMKeyInput) (*aottemporal.ProvisionLLMKeyOutput, error) {
 	return &aottemporal.ProvisionLLMKeyOutput{}, nil
 }
-func (m *ttlMockActivities) CreateAgentPod(_ context.Context, _ aottemporal.CreateAgentPodInput) (*aottemporal.CreateAgentPodOutput, error) {
-	return &aottemporal.CreateAgentPodOutput{PodName: "mock-ttl-pod"}, nil
+func (m *ttlMockActivities) CreateAgentDeployment(_ context.Context, input aottemporal.CreateAgentDeploymentInput) (*aottemporal.CreateAgentDeploymentOutput, error) {
+	return &aottemporal.CreateAgentDeploymentOutput{DeploymentName: input.Name}, nil
 }
 func (m *ttlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
 	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.12", WorkspacePath: "/workspace/src/repo"}, nil
@@ -282,9 +300,18 @@ func (m *ttlMockActivities) StopAgent(_ context.Context, _ aottemporal.StopAgent
 	m.stopCalled = true
 	return nil
 }
-func (m *ttlMockActivities) CleanupPod(_ context.Context, _ aottemporal.CleanupPodInput) error {
+func (m *ttlMockActivities) ScaleDownDeployment(_ context.Context, _ aottemporal.ScaleDownDeploymentInput) error {
 	m.cleanupCalled = true
 	return nil
+}
+func (m *ttlMockActivities) PersistRunData(_ context.Context, _ aottemporal.PersistRunDataInput) error {
+	return nil
+}
+func (m *ttlMockActivities) EmbedRunData(_ context.Context, _ aottemporal.EmbedRunDataInput) error {
+	return nil
+}
+func (m *ttlMockActivities) HydrateContext(_ context.Context, _ aottemporal.HydrateContextInput) (*aottemporal.HydrateContextOutput, error) {
+	return &aottemporal.HydrateContextOutput{}, nil
 }
 func (m *ttlMockActivities) RevokeLLMKey(_ context.Context, _ aottemporal.RevokeLLMKeyInput) error {
 	return nil
