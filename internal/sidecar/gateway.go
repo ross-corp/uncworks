@@ -150,8 +150,26 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 		return connect.NewResponse(&agentv1.StartAgentResponse{Started: true}), nil
 	}
 
+	// If a previous agent is still running, stop it before starting a new one.
+	// This handles pipeline stage transitions and retry attempts where the
+	// previous agent may not have fully exited yet.
 	if g.process != nil && g.process.state == agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING {
-		return connect.NewResponse(&agentv1.StartAgentResponse{Started: false, Error: "agent already running"}), nil
+		log.Printf("Stopping previous agent before starting new one for run %s", req.Msg.AgentRunId)
+		if g.process.cmd.Process != nil {
+			_ = g.process.cmd.Process.Signal(os.Interrupt)
+			// Give it a moment to clean up, but don't block long.
+			done := make(chan struct{})
+			go func() {
+				_ = g.process.cmd.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				_ = g.process.cmd.Process.Kill()
+			}
+		}
+		g.process = nil
 	}
 
 	proc, err := startAgentProcess(req.Msg)
@@ -708,6 +726,10 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 	workDir := req.Msg.WorkingDir
 	if workDir == "" {
 		workDir = "/workspace"
+	}
+	// Fall back to current directory if the specified directory doesn't exist.
+	if _, err := os.Stat(workDir); err != nil {
+		workDir = "."
 	}
 
 	timeout := time.Duration(req.Msg.TimeoutSeconds) * time.Second
