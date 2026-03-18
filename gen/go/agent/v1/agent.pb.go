@@ -205,6 +205,7 @@ type StartAgentRequest struct {
 	Prompt        string                 `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	RepoPath      string                 `protobuf:"bytes,3,opt,name=repo_path,json=repoPath,proto3" json:"repo_path,omitempty"`
 	EnvVars       map[string]string      `protobuf:"bytes,4,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Stage         string                 `protobuf:"bytes,5,opt,name=stage,proto3" json:"stage,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -265,6 +266,13 @@ func (x *StartAgentRequest) GetEnvVars() map[string]string {
 		return x.EnvVars
 	}
 	return nil
+}
+
+func (x *StartAgentRequest) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
 }
 
 type StartAgentResponse struct {
