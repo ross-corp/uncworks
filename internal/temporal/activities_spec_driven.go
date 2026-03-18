@@ -363,31 +363,32 @@ func writeVerificationResult(repoPath, changeName string, result VerificationRes
 	_ = os.WriteFile(outPath, data, 0o644)
 }
 
-// execInSidecar runs a bash command via the sidecar's agent execution.
+// execInSidecar runs a bash command via the sidecar's ExecCommand RPC.
+// Returns stdout and any error. This is a lightweight direct execution,
+// not an agent invocation.
 func execInSidecar(ctx context.Context, client agentv1connect.AgentSidecarServiceClient, runID, repoPath, command string) (string, error) {
-	// Use the sidecar's StartAgent to exec a command.
-	// This is a lightweight invocation — just runs bash and exits.
-	_, err := client.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
-		AgentRunId: runID + "-exec",
-		Prompt:     fmt.Sprintf("Run this exact command and output ONLY the result, nothing else: %s", command),
-		RepoPath:   repoPath,
+	resp, err := client.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        command,
+		WorkingDir:     repoPath,
+		TimeoutSeconds: 60,
 	}))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("exec command: %w", err)
 	}
 
-	// Wait for completion.
-	if err := pollUntilAgentDone(ctx, client, runID+"-exec"); err != nil {
-		return "", err
+	if resp.Msg.ExitCode != 0 {
+		return resp.Msg.Stdout, fmt.Errorf("command exited with code %d: %s", resp.Msg.ExitCode, resp.Msg.Stderr)
 	}
 
-	// TODO: Capture stdout from the command execution.
-	// For now, return empty — the command was executed but output isn't captured.
-	return "", nil
+	return resp.Msg.Stdout, nil
 }
 
 // pollUntilAgentDone polls the sidecar until the agent process completes.
+// Handles UNSPECIFIED state (agent never started or crashed immediately).
 func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarServiceClient, runID string) error {
+	unspecifiedCount := 0
+	const maxUnspecified = 10 // give the agent 30s to start (10 * 3s poll)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -407,6 +408,15 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 			return nil
 		case agentv1.AgentProcessState_AGENT_PROCESS_STATE_FAILED:
 			return fmt.Errorf("agent failed: %s", status.Msg.Error)
+		case agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
+			agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT:
+			unspecifiedCount = 0 // agent is alive, reset counter
+		default:
+			// UNSPECIFIED — agent hasn't started or exited immediately
+			unspecifiedCount++
+			if unspecifiedCount >= maxUnspecified {
+				return fmt.Errorf("agent never started (UNSPECIFIED state after %d polls)", unspecifiedCount)
+			}
 		}
 
 		time.Sleep(3 * time.Second)

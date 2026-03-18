@@ -25,6 +25,10 @@ service AgentSidecarService {
 
   // StopAgent gracefully terminates the agent harness.
   rpc StopAgent(StopAgentRequest) returns (StopAgentResponse);
+
+  // ExecCommand runs a bash command in the workspace and returns the result.
+  // Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
+  rpc ExecCommand(ExecCommandRequest) returns (ExecCommandResponse);
 }
 
 // AgentNotificationService is called BY the sidecar back TO the Control Plane for async events.
@@ -123,4 +127,18 @@ enum EventType {
 
 message NotifyEventResponse {
   bool acknowledged = 1;
+}
+
+// ExecCommandRequest runs a bash command in the workspace.
+message ExecCommandRequest {
+  string command = 1;
+  string working_dir = 2;
+  int32 timeout_seconds = 3;
+}
+
+// ExecCommandResponse contains the command execution result.
+message ExecCommandResponse {
+  string stdout = 1;
+  string stderr = 2;
+  int32 exit_code = 3;
 }

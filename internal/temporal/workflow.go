@@ -203,6 +203,9 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		cleanupCtx, _ := workflow.NewDisconnectedContext(ctx)
 		cleanupCtx = workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
 			StartToCloseTimeout: 30 * time.Second,
+			RetryPolicy: &temporal.RetryPolicy{
+				MaximumAttempts: 5,
+			},
 		})
 
 		// Persist run data to PostgreSQL (knowledge system) before scale-down

@@ -26,6 +26,7 @@ const (
 	AgentSidecarService_SendInput_FullMethodName    = "/aot.agent.v1.AgentSidecarService/SendInput"
 	AgentSidecarService_GetStatus_FullMethodName    = "/aot.agent.v1.AgentSidecarService/GetStatus"
 	AgentSidecarService_StopAgent_FullMethodName    = "/aot.agent.v1.AgentSidecarService/StopAgent"
+	AgentSidecarService_ExecCommand_FullMethodName  = "/aot.agent.v1.AgentSidecarService/ExecCommand"
 )
 
 // AgentSidecarServiceClient is the client API for AgentSidecarService service.
@@ -45,6 +46,9 @@ type AgentSidecarServiceClient interface {
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*AgentStatus, error)
 	// StopAgent gracefully terminates the agent harness.
 	StopAgent(ctx context.Context, in *StopAgentRequest, opts ...grpc.CallOption) (*StopAgentResponse, error)
+	// ExecCommand runs a bash command in the workspace and returns the result.
+	// Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
+	ExecCommand(ctx context.Context, in *ExecCommandRequest, opts ...grpc.CallOption) (*ExecCommandResponse, error)
 }
 
 type agentSidecarServiceClient struct {
@@ -114,6 +118,16 @@ func (c *agentSidecarServiceClient) StopAgent(ctx context.Context, in *StopAgent
 	return out, nil
 }
 
+func (c *agentSidecarServiceClient) ExecCommand(ctx context.Context, in *ExecCommandRequest, opts ...grpc.CallOption) (*ExecCommandResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecCommandResponse)
+	err := c.cc.Invoke(ctx, AgentSidecarService_ExecCommand_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentSidecarServiceServer is the server API for AgentSidecarService service.
 // All implementations must embed UnimplementedAgentSidecarServiceServer
 // for forward compatibility.
@@ -131,6 +145,9 @@ type AgentSidecarServiceServer interface {
 	GetStatus(context.Context, *GetStatusRequest) (*AgentStatus, error)
 	// StopAgent gracefully terminates the agent harness.
 	StopAgent(context.Context, *StopAgentRequest) (*StopAgentResponse, error)
+	// ExecCommand runs a bash command in the workspace and returns the result.
+	// Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
+	ExecCommand(context.Context, *ExecCommandRequest) (*ExecCommandResponse, error)
 	mustEmbedUnimplementedAgentSidecarServiceServer()
 }
 
@@ -155,6 +172,9 @@ func (UnimplementedAgentSidecarServiceServer) GetStatus(context.Context, *GetSta
 }
 func (UnimplementedAgentSidecarServiceServer) StopAgent(context.Context, *StopAgentRequest) (*StopAgentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopAgent not implemented")
+}
+func (UnimplementedAgentSidecarServiceServer) ExecCommand(context.Context, *ExecCommandRequest) (*ExecCommandResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExecCommand not implemented")
 }
 func (UnimplementedAgentSidecarServiceServer) mustEmbedUnimplementedAgentSidecarServiceServer() {}
 func (UnimplementedAgentSidecarServiceServer) testEmbeddedByValue()                             {}
@@ -260,6 +280,24 @@ func _AgentSidecarService_StopAgent_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentSidecarService_ExecCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentSidecarServiceServer).ExecCommand(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentSidecarService_ExecCommand_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentSidecarServiceServer).ExecCommand(ctx, req.(*ExecCommandRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentSidecarService_ServiceDesc is the grpc.ServiceDesc for AgentSidecarService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -282,6 +320,10 @@ var AgentSidecarService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopAgent",
 			Handler:    _AgentSidecarService_StopAgent_Handler,
+		},
+		{
+			MethodName: "ExecCommand",
+			Handler:    _AgentSidecarService_ExecCommand_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -24,7 +24,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pi-coding-agent and openspec CLI globally
-RUN npm install -g @mariozechner/pi-coding-agent openspec
+RUN npm install -g @mariozechner/pi-coding-agent @fission-ai/openspec
 
 # Verify
 RUN pi --version && openspec --version
