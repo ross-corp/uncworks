@@ -6,16 +6,33 @@
 
 model_list:
   # --- Local models (Ollama) ---
+  - model_name: "qwen3:8b"
+    litellm_params:
+      model: "ollama_chat/qwen3:8b"
+      api_base: "http://ollama:11434"
+
+  - model_name: "llama3.1:8b"
+    litellm_params:
+      model: "ollama_chat/llama3.1:8b"
+      api_base: "http://ollama:11434"
+
   - model_name: "qwen2.5:0.5b"
     litellm_params:
       model: "ollama_chat/qwen2.5:0.5b"
       api_base: "http://ollama:11434"
 
-  # Default routes to a capable cloud model for production use.
-  # Use "ci" explicitly for the local 0.5b model in CI/testing.
+  # Default: best local model (no rate limits, fast, no API key needed)
   - model_name: "default"
     litellm_params:
+      model: "ollama_chat/qwen3:8b"
+      api_base: "http://ollama:11434"
+
+  # Default-cloud: capable cloud model (rate-limited on free tier)
+  - model_name: "default-cloud"
+    litellm_params:
       model: "openrouter/qwen/qwen3-coder:free"
+
+  # CI: tiny local model for testing only
   - model_name: "ci"
     litellm_params:
       model: "ollama_chat/qwen2.5:0.5b"
@@ -34,10 +51,7 @@ model_list:
     litellm_params:
       model: "openrouter/google/gemma-3-4b-it:free"
 
-  # Aliases for backward compat
-  - model_name: "default-cloud"
-    litellm_params:
-      model: "openrouter/qwen/qwen3-coder:free"
+  # Aliases
   - model_name: "premium"
     litellm_params:
       model: "openrouter/qwen/qwen3-coder:free"
@@ -45,9 +59,9 @@ model_list:
 litellm_settings:
   # Fallback: if primary model is rate-limited, try alternatives
   fallbacks:
-    - {"qwen3-coder": ["mistral-small", "gemma-3-4b", "default"]}
-    - {"mistral-small": ["qwen3-coder", "gemma-3-4b", "default"]}
-    - {"gemma-3-4b": ["qwen3-coder", "mistral-small", "default"]}
+    - {"qwen3-coder": ["mistral-small", "gemma-3-4b", "qwen3:8b"]}
+    - {"mistral-small": ["qwen3-coder", "gemma-3-4b", "qwen3:8b"]}
+    - {"default-cloud": ["qwen3:8b", "llama3.1:8b"]}
 
   # Retry settings
   num_retries: 3
