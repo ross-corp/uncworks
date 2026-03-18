@@ -182,8 +182,8 @@ func (m *mockActivities) ProvisionLLMKey(_ context.Context, _ aottemporal.Provis
 	return &aottemporal.ProvisionLLMKeyOutput{}, nil
 }
 
-func (m *mockActivities) CreateAgentPod(_ context.Context, input aottemporal.CreateAgentPodInput) (*aottemporal.CreateAgentPodOutput, error) {
-	return &aottemporal.CreateAgentPodOutput{PodName: input.Name}, nil
+func (m *mockActivities) CreateAgentDeployment(_ context.Context, input aottemporal.CreateAgentDeploymentInput) (*aottemporal.CreateAgentDeploymentOutput, error) {
+	return &aottemporal.CreateAgentDeploymentOutput{DeploymentName: input.Name}, nil
 }
 
 func (m *mockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
@@ -203,10 +203,6 @@ func (m *mockActivities) ForwardHumanInput(_ context.Context, _ aottemporal.Forw
 }
 
 func (m *mockActivities) StopAgent(_ context.Context, _ aottemporal.StopAgentInput) error {
-	return nil
-}
-
-func (m *mockActivities) CleanupPod(_ context.Context, _ aottemporal.CleanupPodInput) error {
 	return nil
 }
 

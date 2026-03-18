@@ -58,38 +58,6 @@ type Activities struct {
 	HTTPClient    *http.Client
 }
 
-// CreateAgentPodInput contains the parameters for creating an agent pod.
-type CreateAgentPodInput struct {
-	Name           string
-	Namespace      string
-	AgentRunName   string
-	Repos          []Repository
-	Prompt         string
-	DevboxConfig   string
-	Image          string
-	EnvVars        map[string]string
-	LLMKey         string
-	LiteLLMBaseURL string
-	ModelID        string
-	SpecContent    string
-}
-
-// CreateAgentPodOutput contains the result of creating an agent pod.
-type CreateAgentPodOutput struct {
-	PodName string
-}
-
-// Deprecated: CreateAgentPod creates a bare pod. Use CreateAgentDeployment instead.
-func (a *Activities) CreateAgentPod(ctx context.Context, input CreateAgentPodInput) (*CreateAgentPodOutput, error) {
-	pod := BuildAgentPod(input)
-
-	if err := a.K8sClient.Create(ctx, pod); err != nil {
-		return nil, fmt.Errorf("create agent pod: %w", err)
-	}
-
-	return &CreateAgentPodOutput{PodName: pod.Name}, nil
-}
-
 // WaitForHydrationInput contains the parameters for waiting on hydration.
 type WaitForHydrationInput struct {
 	PodName      string
@@ -270,64 +238,9 @@ func (a *Activities) StopAgent(ctx context.Context, input StopAgentInput) error 
 	return nil
 }
 
-// CleanupPodInput contains the parameters for deleting an agent pod.
-type CleanupPodInput struct {
-	PodName   string
-	Namespace string
-}
-
-// CollectLogsInput contains the parameters for collecting agent logs.
-type CollectLogsInput struct {
-	PodName   string
-	Namespace string
-}
-
-// CollectLogsOutput contains the collected log output.
-type CollectLogsOutput struct {
-	LogOutput string
-}
-
-// CollectLogs reads the rpc-gateway container logs from the pod.
-func (a *Activities) CollectLogs(ctx context.Context, input CollectLogsInput) (*CollectLogsOutput, error) {
-	var pod corev1.Pod
-	if err := a.K8sClient.Get(ctx, client.ObjectKey{
-		Name: input.PodName, Namespace: input.Namespace,
-	}, &pod); err != nil {
-		if errors.IsNotFound(err) {
-			return &CollectLogsOutput{}, nil
-		}
-		return nil, fmt.Errorf("get pod: %w", err)
-	}
-
-	// Read container logs via the K8s API
-	// We use the HTTPClient to call the kubelet logs endpoint directly
-	// since controller-runtime client doesn't support pod logs.
-	// For simplicity, exec `cat` on the sidecar's log buffer isn't needed —
-	// the sidecar logs to stdout which K8s captures.
-	return &CollectLogsOutput{LogOutput: fmt.Sprintf("[log collection from pod %s — container logs available via kubectl logs]", input.PodName)}, nil
-}
-
-// Deprecated: CleanupPod deletes a bare pod. Use ScaleDownDeployment instead.
-func (a *Activities) CleanupPod(ctx context.Context, input CleanupPodInput) error {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      input.PodName,
-			Namespace: input.Namespace,
-		},
-	}
-
-	if err := a.K8sClient.Delete(ctx, pod); err != nil {
-		if errors.IsNotFound(err) {
-			return nil // Already gone
-		}
-		return fmt.Errorf("delete pod: %w", err)
-	}
-	return nil
-}
-
-// BuildAgentPod creates a pod spec for an agent run. Used by both the deprecated
-// CreateAgentPod activity and the new CreateAgentDeployment (as a pod template source).
-func BuildAgentPod(input CreateAgentPodInput) *corev1.Pod {
+// BuildAgentPod creates a pod spec for an agent run.
+// Used by CreateAgentDeployment as the pod template source.
+func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
 	image := input.Image
 	if image == "" {
 		image = agentImage
@@ -610,21 +523,8 @@ func (a *Activities) CreateAgentDeployment(ctx context.Context, input CreateAgen
 		}
 	}
 
-	// Build the pod template from the same logic as BuildAgentPod
-	podTemplate := BuildAgentPod(CreateAgentPodInput{
-		Name:           deployName,
-		Namespace:      input.Namespace,
-		AgentRunName:   input.AgentRunName,
-		Repos:          input.Repos,
-		Prompt:         input.Prompt,
-		DevboxConfig:   input.DevboxConfig,
-		Image:          input.Image,
-		EnvVars:        input.EnvVars,
-		LLMKey:         input.LLMKey,
-		LiteLLMBaseURL: input.LiteLLMBaseURL,
-		ModelID:        input.ModelID,
-		SpecContent:    input.SpecContent,
-	})
+	// Build the pod template
+	podTemplate := BuildAgentPod(input)
 
 	// Override: use PVC instead of emptyDir for workspace volume
 	podTemplate.Spec.Volumes = []corev1.Volume{
@@ -745,17 +645,6 @@ func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndClea
 	}
 
 	return nil
-}
-
-// CollectJuniorResults collects git diff output from each junior's workspace.
-func (a *Activities) CollectJuniorResults(ctx context.Context, input CollectJuniorResultsInput) (*CollectJuniorResultsOutput, error) {
-	results := make(map[string]string)
-	for _, name := range input.JuniorNames {
-		// In a full implementation, this would exec into the junior's pod
-		// and run `git diff HEAD~1`. For now, record the junior name.
-		results[name] = fmt.Sprintf("[diff from %s — collection pending]", name)
-	}
-	return &CollectJuniorResultsOutput{Results: results}, nil
 }
 
 // sidecarClient creates a ConnectRPC client for the sidecar running in the given pod.

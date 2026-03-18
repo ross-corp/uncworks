@@ -122,21 +122,18 @@ type HumanInputSignal struct {
 const (
 	ActivityProvisionLLMKey   = "ProvisionLLMKey"
 	ActivityRevokeLLMKey      = "RevokeLLMKey"
-	ActivityCreateAgentPod    = "CreateAgentPod"
 	ActivityWaitForHydration  = "WaitForHydration"
 	ActivityStartAgent        = "StartAgent"
 	ActivityGetAgentStatus    = "GetAgentStatus"
 	ActivityForwardHumanInput = "ForwardHumanInput"
 	ActivityStopAgent         = "StopAgent"
-	ActivityCleanupPod        = "CleanupPod"  // Deprecated: use ScaleDownDeployment
-	ActivityCollectLogs       = "CollectLogs" // Deprecated: logs persist on PVC
 
-	// New deployment-based activities (persistent-workspace-architecture)
+	// Deployment-based activities
 	ActivityCreateAgentDeployment = "CreateAgentDeployment"
 	ActivityScaleDownDeployment   = "ScaleDownDeployment"
 	ActivityArchiveAndCleanup     = "ArchiveAndCleanup"
 
-	// Knowledge system activities (persistent-knowledge-system)
+	// Knowledge system activities
 	ActivityPersistRunData = "PersistRunData"
 	ActivityEmbedRunData   = "EmbedRunData"
 	ActivityHydrateContext = "HydrateContext"
@@ -752,19 +749,6 @@ func parseDecompositionPlan(output string) *DecompositionPlan {
 
 	return &plan
 }
-
-// CollectJuniorResultsInput contains parameters for collecting junior results.
-type CollectJuniorResultsInput struct {
-	JuniorNames []string
-	Namespace   string
-}
-
-// CollectJuniorResultsOutput contains the collected junior results.
-type CollectJuniorResultsOutput struct {
-	Results map[string]string // task name -> git diff output
-}
-
-const ActivityCollectJuniorResults = "CollectJuniorResults"
 
 // modelIDFromTier maps a model tier name to a pi-coding-agent model identifier.
 // LiteLLM exposes models as OpenAI-compatible, so we use the openai/ prefix.
