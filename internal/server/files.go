@@ -585,9 +585,13 @@ func (f *FileHandler) handleStructuredLogs(w http.ResponseWriter, r *http.Reques
 }
 
 // parseAgentJSONL parses the pi-coding-agent JSONL format into structured log entries.
+// It handles the full event lifecycle: message_start/end for complete messages,
+// turn_end for tool results, and agent_end for the final conversation summary.
 func parseAgentJSONL(raw string) []AgentLogEntry {
 	var entries []AgentLogEntry
 	var sessionTimestamp string
+	seenToolCalls := make(map[string]bool) // deduplicate tool calls
+	seenTexts := make(map[string]bool)     // deduplicate text messages
 
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -618,62 +622,75 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 			ts := formatTimestamp(msg["timestamp"], sessionTimestamp)
 			model, _ := msg["model"].(string)
 
-			for _, c := range contents {
-				cm, ok := c.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				ctype, _ := cm["type"].(string)
+			extractContentEntries(&entries, contents, role, ts, model, seenToolCalls, seenTexts)
 
-				switch ctype {
-				case "text":
-					text, _ := cm["text"].(string)
-					if text == "" {
-						continue
-					}
-					entries = append(entries, AgentLogEntry{
-						Timestamp: ts,
-						Type:      role,
-						Content:   text,
-						Model:     model,
-					})
-
-				case "toolCall":
-					name, _ := cm["name"].(string)
-					args, _ := cm["arguments"].(map[string]interface{})
-					argsJSON, _ := json.Marshal(args)
-					entries = append(entries, AgentLogEntry{
-						Timestamp: ts,
-						Type:      "tool_call",
-						ToolName:  name,
-						ToolInput: string(argsJSON),
-						Model:     model,
-					})
-
-				case "toolResult":
-					// Content can be a string or an array of content blocks
-					var resultText string
-					switch cv := cm["content"].(type) {
-					case string:
-						resultText = cv
-					case []interface{}:
-						for _, block := range cv {
-							if bm, ok := block.(map[string]interface{}); ok {
-								if text, ok := bm["text"].(string); ok {
-									resultText += text
-								}
-							}
-						}
-					}
-					toolName, _ := cm["toolName"].(string)
-					entries = append(entries, AgentLogEntry{
-						Timestamp: ts,
-						Type:      "tool_result",
-						Content:   resultText,
-						ToolName:  toolName,
-					})
+		case "turn_end":
+			// turn_end contains toolResults that aren't in message_end
+			ts := sessionTimestamp
+			if msg, ok := event["message"].(map[string]interface{}); ok {
+				ts = formatTimestamp(msg["timestamp"], sessionTimestamp)
+				// Also extract assistant content from turn_end message
+				model, _ := msg["model"].(string)
+				if contents, ok := msg["content"].([]interface{}); ok {
+					extractContentEntries(&entries, contents, "assistant", ts, model, seenToolCalls, seenTexts)
 				}
 			}
+			if results, ok := event["toolResults"].([]interface{}); ok {
+				for _, r := range results {
+					rm, ok := r.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					toolName, _ := rm["toolName"].(string)
+					resultText := extractResultContent(rm["content"])
+					if resultText != "" {
+						entries = append(entries, AgentLogEntry{
+							Timestamp: ts,
+							Type:      "tool_result",
+							Content:   resultText,
+							ToolName:  toolName,
+						})
+					}
+				}
+			}
+
+		case "agent_end":
+			// agent_end contains the full final conversation — use it to fill
+			// any gaps from auto-retry or compaction.
+			if messages, ok := event["messages"].([]interface{}); ok {
+				for _, m := range messages {
+					msg, ok := m.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					role, _ := msg["role"].(string)
+					ts := formatTimestamp(msg["timestamp"], sessionTimestamp)
+					model, _ := msg["model"].(string)
+
+					if role == "toolResult" {
+						toolName, _ := msg["toolName"].(string)
+						resultText := extractResultContent(msg["content"])
+						if resultText != "" {
+							entries = append(entries, AgentLogEntry{
+								Timestamp: ts,
+								Type:      "tool_result",
+								Content:   resultText,
+								ToolName:  toolName,
+							})
+						}
+						continue
+					}
+
+					if contents, ok := msg["content"].([]interface{}); ok {
+						extractContentEntries(&entries, contents, role, ts, model, seenToolCalls, seenTexts)
+					}
+				}
+			}
+			entries = append(entries, AgentLogEntry{
+				Timestamp: sessionTimestamp,
+				Type:      "system",
+				Content:   "Agent finished",
+			})
 
 		case "agent_start":
 			entries = append(entries, AgentLogEntry{
@@ -681,17 +698,93 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 				Type:      "system",
 				Content:   "Agent started",
 			})
-
-		case "agent_end":
-			entries = append(entries, AgentLogEntry{
-				Timestamp: sessionTimestamp,
-				Type:      "system",
-				Content:   "Agent finished",
-			})
 		}
 	}
 
 	return entries
+}
+
+// extractContentEntries parses content blocks and appends structured entries.
+func extractContentEntries(entries *[]AgentLogEntry, contents []interface{}, role, ts, model string, seenToolCalls, seenTexts map[string]bool) {
+	for _, c := range contents {
+		cm, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		ctype, _ := cm["type"].(string)
+
+		switch ctype {
+		case "text":
+			text, _ := cm["text"].(string)
+			text = strings.TrimSpace(text)
+			if text == "" {
+				continue
+			}
+			dedupeKey := role + ":" + text
+			if seenTexts[dedupeKey] {
+				continue
+			}
+			seenTexts[dedupeKey] = true
+			*entries = append(*entries, AgentLogEntry{
+				Timestamp: ts,
+				Type:      role,
+				Content:   text,
+				Model:     model,
+			})
+
+		case "toolCall":
+			name, _ := cm["name"].(string)
+			id, _ := cm["id"].(string)
+			if id != "" && seenToolCalls[id] {
+				continue // deduplicate
+			}
+			if id != "" {
+				seenToolCalls[id] = true
+			}
+			args, _ := cm["arguments"].(map[string]interface{})
+			argsJSON, _ := json.Marshal(args)
+			*entries = append(*entries, AgentLogEntry{
+				Timestamp: ts,
+				Type:      "tool_call",
+				ToolName:  name,
+				ToolInput: string(argsJSON),
+				Model:     model,
+			})
+
+		case "toolResult":
+			toolName, _ := cm["toolName"].(string)
+			resultText := extractResultContent(cm["content"])
+			if resultText != "" {
+				*entries = append(*entries, AgentLogEntry{
+					Timestamp: ts,
+					Type:      "tool_result",
+					Content:   resultText,
+					ToolName:  toolName,
+				})
+			}
+		}
+	}
+}
+
+// extractResultContent extracts text from a toolResult content field,
+// which can be a string or an array of content blocks.
+func extractResultContent(content interface{}) string {
+	switch cv := content.(type) {
+	case string:
+		return cv
+	case []interface{}:
+		var parts []string
+		for _, block := range cv {
+			if bm, ok := block.(map[string]interface{}); ok {
+				if text, ok := bm["text"].(string); ok {
+					parts = append(parts, text)
+				}
+			}
+		}
+		return strings.Join(parts, "\n")
+	default:
+		return ""
+	}
 }
 
 // formatTimestamp converts a pi-agent timestamp (Unix ms number or ISO string) to ISO format.
