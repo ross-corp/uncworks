@@ -44,7 +44,7 @@
 - [x] 6.1 Rebuild all Docker images and deploy to aot-local
 - [x] 6.2 Create spec-driven run with default config — Plan→Execute stages confirmed working
 - [x] 6.3 Create spec-driven run with custom pipeline config — model override passed through
-- [ ] 6.4 Verify single-mode run still works (retest after agent overlap fix)
+- [x] 6.4 Verify single-mode run still works — runs correctly, TTL enforced, no pipeline stages
 - [x] 6.5 Check web UI shows pipeline config and stage progression
 - [x] 6.6 All existing tests pass (`go test ./...`)
 - [x] 6.7 Fix sidecar to stop previous agent before starting new one (retry overlap issue)
