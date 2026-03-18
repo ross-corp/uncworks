@@ -309,11 +309,11 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	podIP := hydrationOutput.PodIP
 
 	// --- Handle cancel signal throughout pipeline ---
-	go func() {
-		cancelCh.Receive(ctx, nil)
+	workflow.Go(ctx, func(gCtx workflow.Context) {
+		cancelCh.Receive(gCtx, nil)
 		state.Phase = "Cancelled"
 		state.Message = "Cancelled by user"
-	}()
+	})
 
 	// =============================================
 	// STAGE 1: PLAN — Generate OpenSpec change
