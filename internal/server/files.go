@@ -590,8 +590,9 @@ func (f *FileHandler) handleStructuredLogs(w http.ResponseWriter, r *http.Reques
 func parseAgentJSONL(raw string) []AgentLogEntry {
 	var entries []AgentLogEntry
 	var sessionTimestamp string
-	seenToolCalls := make(map[string]bool) // deduplicate tool calls
-	seenTexts := make(map[string]bool)     // deduplicate text messages
+	seenToolCalls := make(map[string]bool)   // deduplicate tool calls
+	seenTexts := make(map[string]bool)       // deduplicate text messages
+	seenToolResults := make(map[string]bool) // deduplicate tool results
 
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -610,6 +611,52 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 		case "session":
 			if ts, ok := event["timestamp"].(string); ok {
 				sessionTimestamp = ts
+			}
+
+		case "tool_execution_start":
+			toolName, _ := event["toolName"].(string)
+			toolCallID, _ := event["toolCallId"].(string)
+			args, _ := event["args"].(map[string]interface{})
+			argsJSON, _ := json.Marshal(args)
+			dedupeKey := "tc:" + toolCallID
+			if toolCallID != "" && seenToolCalls[dedupeKey] {
+				continue
+			}
+			if toolCallID != "" {
+				seenToolCalls[dedupeKey] = true
+			}
+			entries = append(entries, AgentLogEntry{
+				Timestamp: sessionTimestamp,
+				Type:      "tool_call",
+				ToolName:  toolName,
+				ToolInput: string(argsJSON),
+			})
+
+		case "tool_execution_end":
+			toolName, _ := event["toolName"].(string)
+			toolCallID, _ := event["toolCallId"].(string)
+			isError, _ := event["isError"].(bool)
+			resultText := ""
+			if result, ok := event["result"].(map[string]interface{}); ok {
+				resultText = extractResultContent(result["content"])
+			}
+			if isError {
+				resultText = "[error] " + resultText
+			}
+			resultKey := "tr:" + toolCallID
+			if toolCallID != "" && seenToolResults[resultKey] {
+				continue
+			}
+			if toolCallID != "" {
+				seenToolResults[resultKey] = true
+			}
+			if resultText != "" {
+				entries = append(entries, AgentLogEntry{
+					Timestamp: sessionTimestamp,
+					Type:      "tool_result",
+					Content:   resultText,
+					ToolName:  toolName,
+				})
 			}
 
 		case "message_end":
@@ -754,14 +801,23 @@ func extractContentEntries(entries *[]AgentLogEntry, contents []interface{}, rol
 		case "toolResult":
 			toolName, _ := cm["toolName"].(string)
 			resultText := extractResultContent(cm["content"])
-			if resultText != "" {
-				*entries = append(*entries, AgentLogEntry{
-					Timestamp: ts,
-					Type:      "tool_result",
-					Content:   resultText,
-					ToolName:  toolName,
-				})
+			if resultText == "" {
+				continue
 			}
+			resultKey := "tool_result:" + toolName + ":" + resultText
+			if len(resultKey) > 200 {
+				resultKey = resultKey[:200]
+			}
+			if seenTexts[resultKey] {
+				continue
+			}
+			seenTexts[resultKey] = true
+			*entries = append(*entries, AgentLogEntry{
+				Timestamp: ts,
+				Type:      "tool_result",
+				Content:   resultText,
+				ToolName:  toolName,
+			})
 		}
 	}
 }
