@@ -58,7 +58,7 @@ export default function AgentRunForm({
   const [specContent, setSpecContent] = useState(cloneSource?.spec.specContent ?? "");
   const [inputMode, setInputMode] = useState<InputMode>(cloneSource?.spec.specContent ? "spec" : "prompt");
   const [backend, setBackend] = useState<Backend>(cloneSource?.spec.backend ?? "pod");
-  const [modelTier, setModelTier] = useState<ModelTier>(cloneSource?.spec.modelTier ?? "default-cloud");
+  const [modelTier, setModelTier] = useState<ModelTier>(cloneSource?.spec.modelTier ?? "default");
   const [ttlSeconds, setTtlSeconds] = useState(cloneSource?.spec.ttlSeconds ?? 3600);
   const [useSpecDriven, setUseSpecDriven] = useState(false);
   const [pipelineExpanded, setPipelineExpanded] = useState(false);
