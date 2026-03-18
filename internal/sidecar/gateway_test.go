@@ -144,3 +144,94 @@ func TestStreamOutput_NoProcess(t *testing.T) {
 		t.Fatal("expected error from stream")
 	}
 }
+
+func TestExecCommand_Success(t *testing.T) {
+	gw := &Gateway{}
+	mux := http.NewServeMux()
+	_, handler := agentv1connect.NewAgentSidecarServiceHandler(gw)
+	mux.Handle("/", handler)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := agentv1connect.NewAgentSidecarServiceClient(srv.Client(), srv.URL)
+	resp, err := client.ExecCommand(context.Background(), connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "echo hello",
+		TimeoutSeconds: 5,
+	}))
+	if err != nil {
+		t.Fatalf("ExecCommand: %v", err)
+	}
+	if resp.Msg.ExitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", resp.Msg.ExitCode)
+	}
+	if !strings.Contains(resp.Msg.Stdout, "hello") {
+		t.Errorf("expected stdout to contain 'hello', got %q", resp.Msg.Stdout)
+	}
+}
+
+func TestExecCommand_Failure(t *testing.T) {
+	gw := &Gateway{}
+	mux := http.NewServeMux()
+	_, handler := agentv1connect.NewAgentSidecarServiceHandler(gw)
+	mux.Handle("/", handler)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := agentv1connect.NewAgentSidecarServiceClient(srv.Client(), srv.URL)
+	resp, err := client.ExecCommand(context.Background(), connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "exit 42",
+		TimeoutSeconds: 5,
+	}))
+	if err != nil {
+		t.Fatalf("ExecCommand: %v", err)
+	}
+	if resp.Msg.ExitCode != 42 {
+		t.Errorf("expected exit code 42, got %d", resp.Msg.ExitCode)
+	}
+}
+
+func TestExecCommand_Timeout(t *testing.T) {
+	gw := &Gateway{}
+	mux := http.NewServeMux()
+	_, handler := agentv1connect.NewAgentSidecarServiceHandler(gw)
+	mux.Handle("/", handler)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := agentv1connect.NewAgentSidecarServiceClient(srv.Client(), srv.URL)
+	resp, err := client.ExecCommand(context.Background(), connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "sleep 30",
+		TimeoutSeconds: 1,
+	}))
+	if err != nil {
+		t.Fatalf("ExecCommand: %v", err)
+	}
+	// Should have been killed — non-zero exit code
+	if resp.Msg.ExitCode == 0 {
+		t.Error("expected non-zero exit code for timed-out command")
+	}
+}
+
+func TestExecCommand_CaptureStderr(t *testing.T) {
+	gw := &Gateway{}
+	mux := http.NewServeMux()
+	_, handler := agentv1connect.NewAgentSidecarServiceHandler(gw)
+	mux.Handle("/", handler)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := agentv1connect.NewAgentSidecarServiceClient(srv.Client(), srv.URL)
+	resp, err := client.ExecCommand(context.Background(), connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "echo error >&2 && exit 1",
+		TimeoutSeconds: 5,
+	}))
+	if err != nil {
+		t.Fatalf("ExecCommand: %v", err)
+	}
+	if resp.Msg.ExitCode != 1 {
+		t.Errorf("expected exit code 1, got %d", resp.Msg.ExitCode)
+	}
+	if !strings.Contains(resp.Msg.Stderr, "error") {
+		t.Errorf("expected stderr to contain 'error', got %q", resp.Msg.Stderr)
+	}
+}
