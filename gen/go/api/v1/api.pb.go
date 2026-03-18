@@ -1045,7 +1045,7 @@ type ListAgentRunsRequest struct {
 	SpecRunId string `protobuf:"bytes,4,opt,name=spec_run_id,json=specRunId,proto3" json:"spec_run_id,omitempty"`
 	// ParentRunID filters runs that are children of a specific parent.
 	ParentRunId string `protobuf:"bytes,5,opt,name=parent_run_id,json=parentRunId,proto3" json:"parent_run_id,omitempty"`
-	// StageFilter filters by pipeline stage.
+	// StageFilter filters by pipeline stage (planning, executing, verifying).
 	StageFilter   string `protobuf:"bytes,6,opt,name=stage_filter,json=stageFilter,proto3" json:"stage_filter,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2005,7 +2005,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x12\x1b\n" +
 	"\trepo_urls\x18\x03 \x03(\tR\brepoUrls\"D\n" +
 	"\rOrchestration\x123\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x1d.aot.api.v1.OrchestrationTaskR\x05tasks\"\xda\x03\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x1d.aot.api.v1.OrchestrationTaskR\x05tasks\"\xc2\x04\n" +
 	"\x0eAgentRunStatus\x12/\n" +
 	"\x05phase\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\x05phase\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
@@ -2020,19 +2020,24 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\fretain_until\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vretainUntil\x12'\n" +
 	"\x0fdeployment_name\x18\n" +
 	" \x01(\tR\x0edeploymentName\x12!\n" +
-	"\fdebug_active\x18\v \x01(\bR\vdebugActive\"E\n" +
+	"\fdebug_active\x18\v \x01(\bR\vdebugActive\x12\x14\n" +
+	"\x05stage\x18\f \x01(\tR\x05stage\x12\x1f\n" +
+	"\vretry_count\x18\r \x01(\x05R\n" +
+	"retryCount\x12/\n" +
+	"\x13verification_result\x18\x0e \x01(\tR\x12verificationResult\"E\n" +
 	"\x15CreateAgentRunRequest\x12,\n" +
 	"\x04spec\x18\x01 \x01(\v2\x18.aot.api.v1.AgentRunSpecR\x04spec\"K\n" +
 	"\x16CreateAgentRunResponse\x121\n" +
 	"\tagent_run\x18\x01 \x01(\v2\x14.aot.api.v1.AgentRunR\bagentRun\"$\n" +
 	"\x12GetAgentRunRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\xc6\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xe9\x01\n" +
 	"\x14ListAgentRunsRequest\x12<\n" +
 	"\fphase_filter\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\vphaseFilter\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06cursor\x18\x03 \x01(\tR\x06cursor\x12\x1e\n" +
 	"\vspec_run_id\x18\x04 \x01(\tR\tspecRunId\x12\"\n" +
-	"\rparent_run_id\x18\x05 \x01(\tR\vparentRunId\"m\n" +
+	"\rparent_run_id\x18\x05 \x01(\tR\vparentRunId\x12!\n" +
+	"\fstage_filter\x18\x06 \x01(\tR\vstageFilter\"m\n" +
 	"\x15ListAgentRunsResponse\x123\n" +
 	"\n" +
 	"agent_runs\x18\x01 \x03(\v2\x14.aot.api.v1.AgentRunR\tagentRuns\x12\x1f\n" +
@@ -2096,12 +2101,13 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\brepo_url\x18\n" +
 	" \x01(\tR\arepoUrl\x129\n" +
 	"\n" +
-	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt*\x92\x01\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt*\xb6\x01\n" +
 	"\x11OrchestrationMode\x12\"\n" +
 	"\x1eORCHESTRATION_MODE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19ORCHESTRATION_MODE_SINGLE\x10\x01\x12\x1b\n" +
 	"\x17ORCHESTRATION_MODE_AUTO\x10\x02\x12\x1d\n" +
-	"\x19ORCHESTRATION_MODE_MANUAL\x10\x03*_\n" +
+	"\x19ORCHESTRATION_MODE_MANUAL\x10\x03\x12\"\n" +
+	"\x1eORCHESTRATION_MODE_SPEC_DRIVEN\x10\x04*_\n" +
 	"\aBackend\x12\x17\n" +
 	"\x13BACKEND_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vBACKEND_POD\x10\x01\x12\x14\n" +
