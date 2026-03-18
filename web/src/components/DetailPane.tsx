@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { AgentRun, TraceSpan } from "../types/agent-run";
 import { PhaseBadge } from "./StatusBadge";
 import LogViewer from "./LogViewer";
+import AgentLogView from "./AgentLogView";
 import FileExplorer from "./FileExplorer";
 import ShellTerminal from "./ShellTerminal";
 import TraceTimeline from "./TraceTimeline";
@@ -335,6 +336,8 @@ function InfoTab({
 
 /* -- LogsTab -- */
 
+type LogView = "structured" | "raw";
+
 function LogsTab({
   run,
   logLines,
@@ -346,6 +349,7 @@ function LogsTab({
   isStreaming: boolean;
   hasPod: boolean;
 }) {
+  const [view, setView] = useState<LogView>("structured");
   const [fetchedLines, setFetchedLines] = useState<string[]>([]);
   const [fetching, setFetching] = useState(false);
 
@@ -368,29 +372,53 @@ function LogsTab({
   }, [run.id, hasPod, isStreaming, logLines.length]);
 
   const persistedLines = run.status.logOutput ? run.status.logOutput.split("\n") : [];
-  const lines =
+  const rawLines =
     logLines.length > 0 ? logLines : fetchedLines.length > 0 ? fetchedLines : persistedLines;
   const streaming = isStreaming && logLines.length > 0;
 
-  if (lines.length === 0 && !isStreaming && !fetching) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-muted-foreground/60">
-        No logs available
-      </div>
-    );
-  }
-
-  if (fetching && lines.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-muted-foreground/60">
-        Loading logs...
-      </div>
-    );
-  }
-
   return (
-    <div className="h-full p-2">
-      <LogViewer lines={lines} streaming={streaming} />
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-border shrink-0">
+        <button
+          onClick={() => setView("structured")}
+          className={`px-2 py-0.5 text-xs font-medium transition-colors ${
+            view === "structured"
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground/60 hover:text-muted-foreground"
+          }`}
+        >
+          Agent
+        </button>
+        <button
+          onClick={() => setView("raw")}
+          className={`px-2 py-0.5 text-xs font-medium transition-colors ${
+            view === "raw"
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground/60 hover:text-muted-foreground"
+          }`}
+        >
+          Raw
+        </button>
+      </div>
+      <div className="flex-1 min-h-0">
+        {view === "structured" ? (
+          <AgentLogView runId={run.id} />
+        ) : (
+          <div className="h-full p-2">
+            {rawLines.length === 0 && !streaming && !fetching ? (
+              <div className="flex h-full items-center justify-center text-xs text-muted-foreground/60">
+                No raw logs available
+              </div>
+            ) : fetching && rawLines.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-xs text-muted-foreground/60">
+                Loading logs...
+              </div>
+            ) : (
+              <LogViewer lines={rawLines} streaming={streaming} />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
