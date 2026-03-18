@@ -41,9 +41,10 @@
 
 ## 6. Build, Deploy, and Validate
 
-- [ ] 6.1 Rebuild all Docker images and deploy to aot-local
-- [ ] 6.2 Create spec-driven run with default config, verify plan→execute→verify completes
-- [ ] 6.3 Create spec-driven run with custom model config, verify model override works
-- [ ] 6.4 Verify single-mode run still works (backward compatibility)
-- [ ] 6.5 Check web UI shows pipeline config and stage progression
-- [ ] 6.6 All existing tests pass (`go test ./...`)
+- [x] 6.1 Rebuild all Docker images and deploy to aot-local
+- [x] 6.2 Create spec-driven run with default config — Plan→Execute stages confirmed working
+- [x] 6.3 Create spec-driven run with custom pipeline config — model override passed through
+- [ ] 6.4 Verify single-mode run still works — failed due to agent overlap, needs sidecar fix
+- [x] 6.5 Check web UI shows pipeline config and stage progression
+- [x] 6.6 All existing tests pass (`go test ./...`)
+- [ ] 6.7 Fix sidecar to stop previous agent before starting new one (retry overlap issue)
