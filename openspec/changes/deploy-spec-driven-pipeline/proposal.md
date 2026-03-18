@@ -1,33 +1,34 @@
 ## Why
 
-The spec-driven pipeline (Plan → Execute → Verify) is fully implemented in code but has never run end-to-end in the cluster. The sidecar image doesn't have `openspec` installed yet (Dockerfile was updated but never rebuilt/deployed). The `PlanRun` and `VerifyRun` activities haven't been exercised against real agents. Until this is deployed and validated, the entire spec-driven feature is theoretical. We need to build, deploy, run the first spec-driven agent, and fix whatever breaks.
+The spec-driven pipeline (Plan → Execute → Verify) is implemented but has never run end-to-end. The first live test revealed two critical problems: (1) the free cloud model is too slow/rate-limited, causing 10+ minute planning stages and execution timeouts, and (2) every pipeline stage uses the same hardcoded model, timeout, and retry config — there's no way to tune stage behavior without changing code. Production customers need to configure each stage independently: fast cheap models for planning, powerful models for execution, different timeouts, retry policies, and failure hooks per stage.
 
 ## What Changes
 
-- Rebuild sidecar Docker image with `openspec` CLI installed
-- Deploy all updated images to `aot-local` (k0s cluster)
-- Apply updated CRD with spec-driven orchestration mode and new status fields
-- Create a test spec-driven run and observe it through plan → execute → verify stages
-- Fix the `execInSidecar` function which currently spawns a full pi-agent just to run bash commands — replace with direct command execution via the sidecar's existing exec capability
-- Fix any runtime issues discovered during the first real spec-driven run (activity registration, stage transitions, verification gate failures)
-- Add a lightweight sidecar RPC for running arbitrary commands in the workspace (needed by verification gates)
-- Verify the web UI correctly displays stage badges, verification results, and retry history
+- **Stage configuration system**: Each pipeline stage (plan, execute, verify) gets its own configuration block with model, timeout, retries, and onFailure behavior. Configuration flows from CRD spec → Temporal workflow → sidecar agent invocation.
+- **`PipelineConfig` on AgentRunSpec**: New CRD/proto field that lets users (or the UI) specify per-stage settings when creating a run.
+- **Sensible defaults**: Plan uses fast model with 5min timeout, Execute uses capable model with 15min timeout and 3 retries, Verify uses fast model with 3min timeout.
+- **ExecCommand RPC** on the sidecar for lightweight bash execution (already implemented).
+- **Cleanup retry cap** at 5 attempts (already implemented — was infinite, flooded workers).
+- **`pollUntilAgentDone` timeout** handling for UNSPECIFIED agent state (already implemented).
+- Deploy everything to aot-local and validate end-to-end.
 
 ## Capabilities
 
 ### New Capabilities
-- `sidecar-exec`: A lightweight command execution RPC on the sidecar that runs bash commands directly in the workspace without spawning a full pi-agent. Used by verification gates to run `openspec` CLI commands, test suites, and file checks.
+- `sidecar-exec`: Lightweight command execution RPC on the sidecar (already implemented).
+- `pipeline-config`: Per-stage configuration for spec-driven runs — model, timeout, retries, onFailure hook per stage.
 
 ### Modified Capabilities
-
-None.
+- `run-pipeline`: Pipeline stages now read configuration from the run spec instead of hardcoded defaults.
 
 ## Impact
 
-- `docker/Dockerfile.sidecar` — Already updated (openspec install), needs rebuild
-- `internal/sidecar/gateway.go` — Add `ExecCommand` RPC handler for lightweight bash execution
-- `proto/aot/agent/v1/agent.proto` — Add `ExecCommand` RPC definition
-- `internal/temporal/activities_spec_driven.go` — Replace `execInSidecar` (agent-based) with direct `ExecCommand` RPC calls
-- `deploy/crds/agentrun-crd.yaml` — Already updated, needs `kubectl apply`
-- All control plane deployments — Need image update and rollout restart
-- `web/` — Already updated with stage badges and verification panel, needs rebuild
+- `api/v1alpha1/types.go` — Add `PipelineConfig` struct with `PlanConfig`, `ExecuteConfig`, `VerifyConfig` to AgentRunSpec
+- `deploy/crds/agentrun-crd.yaml` — Add `pipelineConfig` to spec schema
+- `proto/aot/api/v1/api.proto` — Add `PipelineConfig` message to `AgentRunSpec`
+- `internal/temporal/workflow_spec_driven.go` — Read stage config from WorkflowInput, pass to activities
+- `internal/temporal/activities_spec_driven.go` — Use per-stage model and timeout from config
+- `internal/sidecar/gateway.go` — StartAgent respects model override from env/config
+- `web/src/components/AgentRunForm.tsx` — Add pipeline config section for spec-driven mode (expandable advanced settings)
+- `web/src/types/agent-run.ts` — Add PipelineConfig types
+- All previously listed changes (ExecCommand, deploy, validate)

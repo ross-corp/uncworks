@@ -1,53 +1,74 @@
 ## Context
 
-The spec-driven pipeline was implemented across 50 tasks in the `spec-driven-agent-runs` change. The Go code compiles, unit tests pass, and proto code is generated. However, the Docker images haven't been rebuilt, the cluster hasn't been updated, and no real spec-driven run has ever executed. The current `execInSidecar` function spawns a full pi-coding-agent to run bash commands, which is slow and unreliable — it needs a lightweight alternative.
+The first live spec-driven run proved the pipeline architecture works (Plan → Execute transition succeeded) but exposed that free cloud models are too slow/rate-limited, and all stages share the same hardcoded config. The sidecar ExecCommand RPC, cleanup retry cap, and poll timeout fixes are already implemented and deployed.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- First successful spec-driven run end-to-end in aot-local
-- Lightweight command execution in the sidecar (replace agent-based exec)
-- All runtime issues fixed and verified
-- Web UI showing stage progression and verification results
+- Per-stage configuration (model, timeout, retries, onFailure) for spec-driven runs
+- Sensible defaults that work out of the box with the current model setup
+- First successful end-to-end spec-driven run in aot-local
+- Web UI shows stage config and allows basic customization
 
 **Non-Goals:**
-- Streaming stage output in real-time (future enhancement)
-- Full automated scenario command extraction from spec WHEN/THEN (works but basic)
-- Knowledge system integration (separate roadmap item)
+- Per-task config within a stage (all tasks in execute share the same model)
+- Dynamic model selection based on task complexity (future AI feature)
+- Streaming stage output in real-time
+- Knowledge system integration
 
 ## Decisions
 
-### Decision 1: Add ExecCommand RPC to sidecar
+### Decision 1: PipelineConfig as a nested struct on AgentRunSpec
 
-Add a new `ExecCommand` RPC to the `AgentSidecarService` proto that runs a bash command directly in the workspace and returns stdout/stderr/exit code. This replaces the current `execInSidecar` which spawns a full pi-agent.
-
-```proto
-rpc ExecCommand(ExecCommandRequest) returns (ExecCommandResponse);
-
-message ExecCommandRequest {
-  string command = 1;
-  string working_dir = 2;
-  int32 timeout_seconds = 3;
+```go
+type PipelineConfig struct {
+    Plan    StageConfig `json:"plan,omitempty"`
+    Execute StageConfig `json:"execute,omitempty"`
+    Verify  StageConfig `json:"verify,omitempty"`
 }
 
-message ExecCommandResponse {
-  string stdout = 1;
-  string stderr = 2;
-  int32 exit_code = 3;
+type StageConfig struct {
+    Model          string `json:"model,omitempty"`          // LiteLLM model name
+    TimeoutSeconds int32  `json:"timeoutSeconds,omitempty"` // stage timeout
+    MaxRetries     int32  `json:"maxRetries,omitempty"`     // max retries for this stage
+    OnFailure      string `json:"onFailure,omitempty"`      // "retry" | "fail" | "skip"
 }
 ```
 
-**Rationale:** The verification gates need to run `openspec validate --json`, `openspec list --json`, `openspec archive --yes`, and test commands. Spawning a full AI agent for each is a 10-30 second overhead per command. Direct exec is <1 second.
+**Defaults** (applied when fields are zero/empty):
+```
+Plan:    model=default-cloud, timeout=300s (5min), retries=2, onFailure=fail
+Execute: model=default-cloud, timeout=900s (15min), retries=3, onFailure=retry
+Verify:  model=default-cloud, timeout=180s (3min), retries=1, onFailure=fail
+```
 
-### Decision 2: Deploy-test-fix cycle, not big-bang
+**Rationale:** Nested struct keeps config close to where it's used. Zero values mean "use defaults" — you only configure what you need to override. The `onFailure` field controls what happens when a stage exhausts its retries: `retry` feeds failure context to the next attempt, `fail` marks the run as Failed, `skip` proceeds to the next stage (useful for verify in dev mode).
 
-Deploy first, create a test run, observe failures, fix, redeploy. Iterate rapidly rather than trying to predict all issues upfront.
+### Decision 2: Config flows through WorkflowInput to activities
 
-### Decision 3: Use default-cloud model for planning and verification agents
+```
+CreateAgentRun API
+  → specProtoToCRD maps PipelineConfig to CRD
+  → Controller passes it to Temporal WorkflowInput
+  → runSpecDrivenPipeline reads per-stage config
+  → PlanRun/StartAgent/VerifyRun use stage-specific model + timeout
+  → Sidecar uses PI_MODEL env var override per agent invocation
+```
 
-The plan and verify stages need capable models (not the 0.5b toy). Use the `default-cloud` (qwen3-coder) model for all spec-driven stages.
+The sidecar's `StartAgent` already supports a `PI_MODEL` env var. We pass the stage's model config as an env var in the `StartAgentRequest.env_vars` field — no proto change needed for the sidecar.
+
+### Decision 3: Longer defaults for spec-driven mode
+
+The current run TTL (from the user/UI) is separate from per-stage timeouts. The workflow TTL is the outer boundary; stage timeouts are inner boundaries. If a stage timeout fires, that stage fails — the workflow may retry or fail depending on onFailure. If the workflow TTL fires, everything stops.
+
+For spec-driven runs, the default TTL should be longer (15-20 min) since the pipeline has 3 stages each taking minutes.
+
+### Decision 4: ExecCommand RPC (already implemented)
+
+Already done in previous session. Lightweight bash exec replaces agent-spawning for CLI commands.
 
 ## Risks / Trade-offs
 
-- **ExecCommand is a shell injection surface** — mitigated by only calling it from Temporal activities (server-side), never from user input. The workspace is already an untrusted environment (agents run arbitrary code).
-- **First run will likely fail** — expected. The iteration cycle is: deploy → run → read logs → fix → repeat.
+- **Config complexity** — Users must understand stage config to tune performance. Mitigated by sensible defaults that work without any config.
+- **Model cost** — Separate models per stage could increase cost. Mitigated by defaulting to the same model; users opt into premium models explicitly.
+- **TTL interaction** — Workflow TTL and stage timeouts can conflict. Stage timeouts should always be shorter than the remaining workflow TTL.
