@@ -640,15 +640,17 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 			if result, ok := event["result"].(map[string]interface{}); ok {
 				resultText = extractResultContent(result["content"])
 			}
+			// Mark this tool call's result as seen (prevents dups from message_end/turn_end)
+			resultDedup := "tool_result:" + toolName + ":" + resultText
+			if len(resultDedup) > 200 {
+				resultDedup = resultDedup[:200]
+			}
+			seenTexts[resultDedup] = true
+			if toolCallID != "" {
+				seenToolResults["tr:"+toolCallID] = true
+			}
 			if isError {
 				resultText = "[error] " + resultText
-			}
-			resultKey := "tr:" + toolCallID
-			if toolCallID != "" && seenToolResults[resultKey] {
-				continue
-			}
-			if toolCallID != "" {
-				seenToolResults[resultKey] = true
 			}
 			if resultText != "" {
 				entries = append(entries, AgentLogEntry{
@@ -690,14 +692,23 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 					}
 					toolName, _ := rm["toolName"].(string)
 					resultText := extractResultContent(rm["content"])
-					if resultText != "" {
-						entries = append(entries, AgentLogEntry{
-							Timestamp: ts,
-							Type:      "tool_result",
-							Content:   resultText,
-							ToolName:  toolName,
-						})
+					if resultText == "" {
+						continue
 					}
+					resultKey := "tool_result:" + toolName + ":" + resultText
+					if len(resultKey) > 200 {
+						resultKey = resultKey[:200]
+					}
+					if seenTexts[resultKey] {
+						continue
+					}
+					seenTexts[resultKey] = true
+					entries = append(entries, AgentLogEntry{
+						Timestamp: ts,
+						Type:      "tool_result",
+						Content:   resultText,
+						ToolName:  toolName,
+					})
 				}
 			}
 
@@ -717,14 +728,23 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 					if role == "toolResult" {
 						toolName, _ := msg["toolName"].(string)
 						resultText := extractResultContent(msg["content"])
-						if resultText != "" {
-							entries = append(entries, AgentLogEntry{
-								Timestamp: ts,
-								Type:      "tool_result",
-								Content:   resultText,
-								ToolName:  toolName,
-							})
+						if resultText == "" {
+							continue
 						}
+						resultKey := "tool_result:" + toolName + ":" + resultText
+						if len(resultKey) > 200 {
+							resultKey = resultKey[:200]
+						}
+						if seenTexts[resultKey] {
+							continue
+						}
+						seenTexts[resultKey] = true
+						entries = append(entries, AgentLogEntry{
+							Timestamp: ts,
+							Type:      "tool_result",
+							Content:   resultText,
+							ToolName:  toolName,
+						})
 						continue
 					}
 
@@ -782,11 +802,12 @@ func extractContentEntries(entries *[]AgentLogEntry, contents []interface{}, rol
 		case "toolCall":
 			name, _ := cm["name"].(string)
 			id, _ := cm["id"].(string)
-			if id != "" && seenToolCalls[id] {
+			dedupeKey := "tc:" + id
+			if id != "" && seenToolCalls[dedupeKey] {
 				continue // deduplicate
 			}
 			if id != "" {
-				seenToolCalls[id] = true
+				seenToolCalls[dedupeKey] = true
 			}
 			args, _ := cm["arguments"].(map[string]interface{})
 			argsJSON, _ := json.Marshal(args)
