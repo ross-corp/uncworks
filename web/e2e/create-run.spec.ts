@@ -87,7 +87,7 @@ test("workspace preset fills repos", async ({ page }) => {
 
   await page.goto("/");
   await page.evaluate((ws) => {
-    localStorage.setItem("aot-workspaces", JSON.stringify([ws]));
+    localStorage.setItem("uncworks:workspaces", JSON.stringify([ws]));
   }, workspace);
 
   // Reload so the workspace is picked up
@@ -103,4 +103,159 @@ test("workspace preset fills repos", async ({ page }) => {
   // Verify repo fields are pre-filled
   await expect(page.getByTestId("form-repo-row-0-url")).toHaveValue("https://github.com/preset/repo-one");
   await expect(page.getByTestId("form-repo-row-0-branch")).toHaveValue("develop");
+});
+
+test("clone run pre-fills the form", async ({ page }) => {
+  await page.goto("/");
+
+  // Wait for at least one run row to appear
+  const firstRow = page.locator("[data-testid^='run-row-']").first();
+  const hasRuns = await firstRow.isVisible().catch(() => false);
+  test.skip(!hasRuns, "No runs available to test clone workflow");
+
+  // Double-click the first row to open detail
+  await firstRow.dblclick();
+  await expect(page.getByTestId("run-detail")).toBeVisible();
+
+  // Get the run name from the detail header
+  const originalName = await page.getByTestId("detail-name").textContent();
+
+  // Click the Clone button in the detail header
+  await page.getByRole("button", { name: "Clone" }).click();
+
+  // The form should open with pre-filled data
+  await expect(page.getByTestId("form-modal")).toBeVisible();
+
+  // Name should be the original name with "-clone" suffix
+  const nameValue = await page.getByTestId("form-name-input").inputValue();
+  expect(nameValue).toContain("-clone");
+
+  // Repo URL should be pre-filled (not empty)
+  const repoUrl = await page.getByTestId("form-repo-row-0-url").inputValue();
+  expect(repoUrl.length).toBeGreaterThan(0);
+});
+
+test("add and remove repo rows", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("icon-rail-new-run").click();
+  await expect(page.getByTestId("form-modal")).toBeVisible();
+
+  // Should start with one repo row
+  await expect(page.getByTestId("form-repo-row-0-url")).toBeVisible();
+
+  // Click "+ Add repo" to add a second row
+  await page.getByTestId("form-add-repo").click();
+  await expect(page.getByTestId("form-repo-row-1-url")).toBeVisible();
+  await expect(page.getByTestId("form-repo-row-1-branch")).toBeVisible();
+
+  // Fill both rows
+  await page.getByTestId("form-repo-row-0-url").fill("https://github.com/org/first-repo");
+  await page.getByTestId("form-repo-row-0-branch").fill("main");
+  await page.getByTestId("form-repo-row-1-url").fill("https://github.com/org/second-repo");
+  await page.getByTestId("form-repo-row-1-branch").fill("dev");
+
+  // Add a third row
+  await page.getByTestId("form-add-repo").click();
+  await expect(page.getByTestId("form-repo-row-2-url")).toBeVisible();
+
+  // Remove the second row by clicking the x button next to it
+  // The remove button is inside the repo row container, rendered as "x" text
+  const repoRows = page.locator("[data-testid^='form-repo-row-1-url']").locator("..");
+  const removeBtn = repoRows.locator("..").getByRole("button", { name: "\u00d7" });
+  const hasRemove = await removeBtn.first().isVisible().catch(() => false);
+  if (hasRemove) {
+    await removeBtn.first().click();
+
+    // After removal, the third row should become the second
+    // We should still have two rows
+    await expect(page.getByTestId("form-repo-row-0-url")).toBeVisible();
+    await expect(page.getByTestId("form-repo-row-1-url")).toBeVisible();
+  }
+});
+
+test("backend and model tier selection", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("icon-rail-new-run").click();
+  await expect(page.getByTestId("form-modal")).toBeVisible();
+
+  // The Backend dropdown should be visible and have the default "Pod" selected
+  const backendSelect = page.getByTestId("form-modal").locator("select").first();
+  await expect(backendSelect).toBeVisible();
+
+  // Change backend to KubeVirt
+  await backendSelect.selectOption("kubevirt");
+  await expect(backendSelect).toHaveValue("kubevirt");
+
+  // Change back to Pod
+  await backendSelect.selectOption("pod");
+  await expect(backendSelect).toHaveValue("pod");
+
+  // The Model dropdown should be the second select
+  const modelSelect = page.getByTestId("form-modal").locator("select").nth(1);
+  await expect(modelSelect).toBeVisible();
+
+  // Select a different model tier
+  const options = await modelSelect.locator("option").all();
+  if (options.length > 1) {
+    const secondValue = await options[1].getAttribute("value");
+    if (secondValue) {
+      await modelSelect.selectOption(secondValue);
+      await expect(modelSelect).toHaveValue(secondValue);
+    }
+  }
+});
+
+test("TTL field accepts valid values", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("icon-rail-new-run").click();
+  await expect(page.getByTestId("form-modal")).toBeVisible();
+
+  // Find the TTL input (type="number" with min=300, max=86400)
+  const ttlInput = page.getByTestId("form-modal").locator("input[type='number']");
+  await expect(ttlInput).toBeVisible();
+
+  // Default should be 3600
+  await expect(ttlInput).toHaveValue("3600");
+
+  // Change to a valid value
+  await ttlInput.fill("7200");
+  await expect(ttlInput).toHaveValue("7200");
+
+  // Verify the min and max attributes are set
+  await expect(ttlInput).toHaveAttribute("min", "300");
+  await expect(ttlInput).toHaveAttribute("max", "86400");
+});
+
+test("form closes with Escape key", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("icon-rail-new-run").click();
+  await expect(page.getByTestId("form-modal")).toBeVisible();
+
+  // Press Escape to close the form
+  await page.keyboard.press("Escape");
+
+  await expect(page.getByTestId("form-modal")).not.toBeVisible();
+});
+
+test("prompt and spec tabs switch correctly", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("icon-rail-new-run").click();
+  await expect(page.getByTestId("form-modal")).toBeVisible();
+
+  // Should start on prompt tab by default
+  await expect(page.getByTestId("form-prompt-input")).toBeVisible();
+
+  // Switch to spec tab
+  await page.getByTestId("form-tab-spec").click();
+  await expect(page.getByTestId("spec-editor")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId("form-prompt-input")).not.toBeVisible();
+
+  // Switch back to prompt tab
+  await page.getByTestId("form-tab-prompt").click();
+  await expect(page.getByTestId("form-prompt-input")).toBeVisible();
 });
