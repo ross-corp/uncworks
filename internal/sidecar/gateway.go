@@ -701,6 +701,49 @@ func (g *Gateway) StopAgent(_ context.Context, req *connect.Request[agentv1.Stop
 	return connect.NewResponse(&agentv1.StopAgentResponse{Stopped: true}), nil
 }
 
+// ExecCommand runs a bash command in the workspace and returns stdout/stderr/exit code.
+// This is a lightweight alternative to StartAgent for running CLI tools like openspec,
+// test suites, and file checks.
+func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.ExecCommandRequest]) (*connect.Response[agentv1.ExecCommandResponse], error) {
+	workDir := req.Msg.WorkingDir
+	if workDir == "" {
+		workDir = "/workspace"
+	}
+
+	timeout := time.Duration(req.Msg.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
+	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(cmdCtx, "bash", "-c", req.Msg.Command)
+	cmd.Dir = workDir
+	cmd.Env = os.Environ()
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	exitCode := 0
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			exitCode = -1
+		}
+	}
+
+	return connect.NewResponse(&agentv1.ExecCommandResponse{
+		Stdout:   stdout.String(),
+		Stderr:   stderr.String(),
+		ExitCode: int32(exitCode),
+	}), nil
+}
+
 // --- Pi JSON event formatting for human-readable logs ---
 
 // piEvent represents the nested structure of pi --mode json output.

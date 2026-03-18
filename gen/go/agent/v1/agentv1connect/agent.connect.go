@@ -52,6 +52,9 @@ const (
 	// AgentSidecarServiceStopAgentProcedure is the fully-qualified name of the AgentSidecarService's
 	// StopAgent RPC.
 	AgentSidecarServiceStopAgentProcedure = "/aot.agent.v1.AgentSidecarService/StopAgent"
+	// AgentSidecarServiceExecCommandProcedure is the fully-qualified name of the AgentSidecarService's
+	// ExecCommand RPC.
+	AgentSidecarServiceExecCommandProcedure = "/aot.agent.v1.AgentSidecarService/ExecCommand"
 	// AgentNotificationServiceNotifyEventProcedure is the fully-qualified name of the
 	// AgentNotificationService's NotifyEvent RPC.
 	AgentNotificationServiceNotifyEventProcedure = "/aot.agent.v1.AgentNotificationService/NotifyEvent"
@@ -69,6 +72,9 @@ type AgentSidecarServiceClient interface {
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.AgentStatus], error)
 	// StopAgent gracefully terminates the agent harness.
 	StopAgent(context.Context, *connect.Request[v1.StopAgentRequest]) (*connect.Response[v1.StopAgentResponse], error)
+	// ExecCommand runs a bash command in the workspace and returns the result.
+	// Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
+	ExecCommand(context.Context, *connect.Request[v1.ExecCommandRequest]) (*connect.Response[v1.ExecCommandResponse], error)
 }
 
 // NewAgentSidecarServiceClient constructs a client for the aot.agent.v1.AgentSidecarService
@@ -112,6 +118,12 @@ func NewAgentSidecarServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(agentSidecarServiceMethods.ByName("StopAgent")),
 			connect.WithClientOptions(opts...),
 		),
+		execCommand: connect.NewClient[v1.ExecCommandRequest, v1.ExecCommandResponse](
+			httpClient,
+			baseURL+AgentSidecarServiceExecCommandProcedure,
+			connect.WithSchema(agentSidecarServiceMethods.ByName("ExecCommand")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -122,6 +134,7 @@ type agentSidecarServiceClient struct {
 	sendInput    *connect.Client[v1.SendInputRequest, v1.SendInputResponse]
 	getStatus    *connect.Client[v1.GetStatusRequest, v1.AgentStatus]
 	stopAgent    *connect.Client[v1.StopAgentRequest, v1.StopAgentResponse]
+	execCommand  *connect.Client[v1.ExecCommandRequest, v1.ExecCommandResponse]
 }
 
 // StartAgent calls aot.agent.v1.AgentSidecarService.StartAgent.
@@ -149,6 +162,11 @@ func (c *agentSidecarServiceClient) StopAgent(ctx context.Context, req *connect.
 	return c.stopAgent.CallUnary(ctx, req)
 }
 
+// ExecCommand calls aot.agent.v1.AgentSidecarService.ExecCommand.
+func (c *agentSidecarServiceClient) ExecCommand(ctx context.Context, req *connect.Request[v1.ExecCommandRequest]) (*connect.Response[v1.ExecCommandResponse], error) {
+	return c.execCommand.CallUnary(ctx, req)
+}
+
 // AgentSidecarServiceHandler is an implementation of the aot.agent.v1.AgentSidecarService service.
 type AgentSidecarServiceHandler interface {
 	// StartAgent initializes the agent harness with a prompt and config.
@@ -161,6 +179,9 @@ type AgentSidecarServiceHandler interface {
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.AgentStatus], error)
 	// StopAgent gracefully terminates the agent harness.
 	StopAgent(context.Context, *connect.Request[v1.StopAgentRequest]) (*connect.Response[v1.StopAgentResponse], error)
+	// ExecCommand runs a bash command in the workspace and returns the result.
+	// Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
+	ExecCommand(context.Context, *connect.Request[v1.ExecCommandRequest]) (*connect.Response[v1.ExecCommandResponse], error)
 }
 
 // NewAgentSidecarServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -200,6 +221,12 @@ func NewAgentSidecarServiceHandler(svc AgentSidecarServiceHandler, opts ...conne
 		connect.WithSchema(agentSidecarServiceMethods.ByName("StopAgent")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentSidecarServiceExecCommandHandler := connect.NewUnaryHandler(
+		AgentSidecarServiceExecCommandProcedure,
+		svc.ExecCommand,
+		connect.WithSchema(agentSidecarServiceMethods.ByName("ExecCommand")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/aot.agent.v1.AgentSidecarService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentSidecarServiceStartAgentProcedure:
@@ -212,6 +239,8 @@ func NewAgentSidecarServiceHandler(svc AgentSidecarServiceHandler, opts ...conne
 			agentSidecarServiceGetStatusHandler.ServeHTTP(w, r)
 		case AgentSidecarServiceStopAgentProcedure:
 			agentSidecarServiceStopAgentHandler.ServeHTTP(w, r)
+		case AgentSidecarServiceExecCommandProcedure:
+			agentSidecarServiceExecCommandHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -239,6 +268,10 @@ func (UnimplementedAgentSidecarServiceHandler) GetStatus(context.Context, *conne
 
 func (UnimplementedAgentSidecarServiceHandler) StopAgent(context.Context, *connect.Request[v1.StopAgentRequest]) (*connect.Response[v1.StopAgentResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("aot.agent.v1.AgentSidecarService.StopAgent is not implemented"))
+}
+
+func (UnimplementedAgentSidecarServiceHandler) ExecCommand(context.Context, *connect.Request[v1.ExecCommandRequest]) (*connect.Response[v1.ExecCommandResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("aot.agent.v1.AgentSidecarService.ExecCommand is not implemented"))
 }
 
 // AgentNotificationServiceClient is a client for the aot.agent.v1.AgentNotificationService service.

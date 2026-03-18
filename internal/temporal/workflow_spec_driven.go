@@ -164,6 +164,9 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		cleanupCtx, _ := workflow.NewDisconnectedContext(ctx)
 		cleanupCtx = workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
 			StartToCloseTimeout: 30 * time.Second,
+			RetryPolicy: &temporal.RetryPolicy{
+				MaximumAttempts: 5,
+			},
 		})
 		if llmKey != "" {
 			_ = workflow.ExecuteActivity(cleanupCtx, ActivityRevokeLLMKey, RevokeLLMKeyInput{
