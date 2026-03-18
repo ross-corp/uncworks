@@ -2,6 +2,8 @@ package temporal
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -211,6 +213,160 @@ func TestPipelineStageConstants(t *testing.T) {
 		t.Run(tt.want, func(t *testing.T) {
 			if string(tt.stage) != tt.want {
 				t.Errorf("PipelineStage = %q, want %q", string(tt.stage), tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractFileChecks(t *testing.T) {
+	// Create a temp directory simulating a workspace with spec files.
+	dir := t.TempDir()
+	specDir := filepath.Join(dir, "openspec", "changes", "test-run", "specs", "my-feature")
+	if err := os.MkdirAll(specDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	specContent := `## ADDED Requirements
+
+### Requirement: Auth middleware exists
+The system SHALL have an auth middleware module.
+
+#### Scenario: Auth file created
+- **WHEN** the implementation is complete
+- **THEN** ` + "`src/middleware/auth.ts`" + ` exists
+- **AND** ` + "`src/middleware/auth.test.ts`" + ` exists
+
+#### Scenario: Config updated
+- **WHEN** the auth module is added
+- **THEN** the module is imported in ` + "`src/index.ts`" + `
+`
+
+	if err := os.WriteFile(filepath.Join(specDir, "spec.md"), []byte(specContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := extractFileChecks(dir, "test-run")
+
+	if len(checks) != 2 {
+		t.Fatalf("expected 2 file checks, got %d: %+v", len(checks), checks)
+	}
+
+	// Verify the extracted paths.
+	paths := map[string]bool{}
+	for _, c := range checks {
+		paths[c.Path] = true
+	}
+	if !paths["src/middleware/auth.ts"] {
+		t.Error("expected src/middleware/auth.ts in file checks")
+	}
+	if !paths["src/middleware/auth.test.ts"] {
+		t.Error("expected src/middleware/auth.test.ts in file checks")
+	}
+}
+
+func TestExtractFileChecks_NoSpecs(t *testing.T) {
+	dir := t.TempDir()
+	checks := extractFileChecks(dir, "nonexistent")
+	if len(checks) != 0 {
+		t.Errorf("expected 0 checks for missing specs, got %d", len(checks))
+	}
+}
+
+func TestWriteVerificationResult(t *testing.T) {
+	dir := t.TempDir()
+	changeDir := filepath.Join(dir, "openspec", "changes", "test-run")
+	if err := os.MkdirAll(changeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := VerificationResult{
+		Pass:            true,
+		TasksCompleted:  5,
+		TasksTotal:      5,
+		ValidationValid: true,
+		AutomatedChecks: []AutomatedCheck{
+			{Name: "file_exists: src/auth.ts", Pass: true, Output: "exists"},
+		},
+		ExecutionTimeMs: 1234,
+	}
+
+	writeVerificationResult(dir, "test-run", result)
+
+	// Read it back.
+	data, err := os.ReadFile(filepath.Join(changeDir, "verification-result.json"))
+	if err != nil {
+		t.Fatalf("failed to read verification-result.json: %v", err)
+	}
+
+	var readBack VerificationResult
+	if err := json.Unmarshal(data, &readBack); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if !readBack.Pass {
+		t.Error("expected pass=true")
+	}
+	if readBack.TasksCompleted != 5 {
+		t.Errorf("expected 5 tasks completed, got %d", readBack.TasksCompleted)
+	}
+	if len(readBack.AutomatedChecks) != 1 {
+		t.Errorf("expected 1 automated check, got %d", len(readBack.AutomatedChecks))
+	}
+}
+
+func TestWriteVerificationResult_FallbackLocation(t *testing.T) {
+	dir := t.TempDir()
+	// No change directory exists — should write to fallback.
+
+	result := VerificationResult{Pass: false, FailureReport: "something failed"}
+	writeVerificationResult(dir, "test-run", result)
+
+	fallbackPath := filepath.Join(dir, ".aot", "verification", "test-run-result.json")
+	data, err := os.ReadFile(fallbackPath)
+	if err != nil {
+		t.Fatalf("failed to read fallback result: %v", err)
+	}
+
+	var readBack VerificationResult
+	if err := json.Unmarshal(data, &readBack); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if readBack.Pass {
+		t.Error("expected pass=false")
+	}
+	if readBack.FailureReport != "something failed" {
+		t.Errorf("expected failure report preserved, got %q", readBack.FailureReport)
+	}
+}
+
+func TestBacktickPathRegex(t *testing.T) {
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"THEN `src/auth.ts` exists", []string{"src/auth.ts"}},
+		{"THEN `pkg/handler.go` and `pkg/handler_test.go` exist", []string{"pkg/handler.go", "pkg/handler_test.go"}},
+		{"no backticks here", nil},
+		{"THEN `README.md` exists", []string{"README.md"}},
+		{"THEN `.env` exists", []string{".env"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			matches := backtickPathRe.FindAllStringSubmatch(tt.input, -1)
+			var got []string
+			for _, m := range matches {
+				if len(m) > 1 {
+					got = append(got, m[1])
+				}
+			}
+			if len(got) != len(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("got[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
 			}
 		})
 	}
