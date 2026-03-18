@@ -256,6 +256,7 @@ export default function AgentRunForm({
                 Backend
               </label>
               <select
+                data-testid="form-backend-select"
                 className="w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary"
                 value={backend}
                 onChange={(e) => setBackend(e.target.value as Backend)}
@@ -272,6 +273,7 @@ export default function AgentRunForm({
                 Model
               </label>
               <select
+                data-testid="form-model-select"
                 className="w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary"
                 value={modelTier}
                 onChange={(e) => setModelTier(e.target.value as ModelTier)}

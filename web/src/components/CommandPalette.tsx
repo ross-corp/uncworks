@@ -148,6 +148,7 @@ export default function CommandPalette({
             {/* Search input */}
             <input
               ref={inputRef}
+              data-testid="command-palette-input"
               type="text"
               value={query}
               onChange={(e) => {
@@ -166,6 +167,7 @@ export default function CommandPalette({
             {/* Results list */}
             <div
               ref={listRef}
+              data-testid="command-palette-results"
               className="overflow-y-auto"
               style={{ maxHeight: "400px" }}
             >

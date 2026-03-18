@@ -118,7 +118,7 @@ export default function FileTree({
   }
 
   return (
-    <div className="overflow-y-auto font-mono text-xs">
+    <div data-testid="file-tree" className="overflow-y-auto font-mono text-xs">
       {roots.map((node) => (
         <TreeNodeRow
           key={node.path}
@@ -151,6 +151,7 @@ function TreeNodeRow({
   return (
     <>
       <button
+        data-testid={`file-entry-${node.entry.name}`}
         className="flex w-full items-center gap-1 px-2 py-0.5 text-left text-muted-foreground hover:bg-muted transition-colors"
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={() => onClick(node)}

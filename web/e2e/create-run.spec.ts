@@ -180,8 +180,8 @@ test("backend and model tier selection", async ({ page }) => {
   await page.getByTestId("icon-rail-new-run").click();
   await expect(page.getByTestId("form-modal")).toBeVisible();
 
-  // The Backend dropdown should be visible and have the default "Pod" selected
-  const backendSelect = page.getByTestId("form-modal").locator("select").first();
+  // The Backend dropdown should be visible and have the default "pod" selected
+  const backendSelect = page.getByTestId("form-backend-select");
   await expect(backendSelect).toBeVisible();
 
   // Change backend to KubeVirt
@@ -192,8 +192,8 @@ test("backend and model tier selection", async ({ page }) => {
   await backendSelect.selectOption("pod");
   await expect(backendSelect).toHaveValue("pod");
 
-  // The Model dropdown should be the second select
-  const modelSelect = page.getByTestId("form-modal").locator("select").nth(1);
+  // The Model dropdown should be visible
+  const modelSelect = page.getByTestId("form-model-select");
   await expect(modelSelect).toBeVisible();
 
   // Select a different model tier

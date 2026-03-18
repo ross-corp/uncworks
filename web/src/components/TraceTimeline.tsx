@@ -136,6 +136,7 @@ export default function TraceTimeline({
 
   return (
     <div
+      data-testid="trace-timeline"
       className="flex flex-col muthr-scanlines"
       style={{ background: "var(--muthr-bg)", fontFamily: "var(--muthr-font)" }}
     >

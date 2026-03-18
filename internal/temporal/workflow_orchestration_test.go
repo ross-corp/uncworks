@@ -4,42 +4,7 @@ import (
 	"testing"
 )
 
-func TestWorkflow_SingleMode(t *testing.T) {
-	// Verify that orchestration_mode=single (or unspecified) routes to the standard workflow.
-	input := WorkflowInput{
-		AgentRunName:      "test-single",
-		Namespace:         "default",
-		Prompt:            "do something",
-		OrchestrationMode: OrchestrationModeSingle,
-	}
-	if input.OrchestrationMode != OrchestrationModeSingle {
-		t.Fatalf("expected single mode, got %s", input.OrchestrationMode)
-	}
-}
-
-func TestWorkflow_ManualOrchestrationInput(t *testing.T) {
-	// Verify that manual orchestration input propagates correctly.
-	input := WorkflowInput{
-		AgentRunName:      "test-manual",
-		Namespace:         "default",
-		Prompt:            "manual orchestration",
-		OrchestrationMode: OrchestrationModeManual,
-		Orchestration: []OrchestrationTask{
-			{Name: "fix-auth", Prompt: "Fix the auth module"},
-			{Name: "update-tests", Prompt: "Update all tests"},
-			{Name: "fix-ci", Prompt: "Fix the CI pipeline"},
-		},
-	}
-
-	if len(input.Orchestration) != 3 {
-		t.Fatalf("expected 3 tasks, got %d", len(input.Orchestration))
-	}
-	if input.Orchestration[0].Name != "fix-auth" {
-		t.Fatalf("expected first task 'fix-auth', got %q", input.Orchestration[0].Name)
-	}
-}
-
-func TestWorkflow_AutoDecomposition_ParseValid(t *testing.T) {
+func TestParseDecompositionPlan_ValidJSON(t *testing.T) {
 	output := `Here is the decomposition plan:
 {
   "tasks": [
@@ -59,13 +24,19 @@ func TestWorkflow_AutoDecomposition_ParseValid(t *testing.T) {
 	if plan.Tasks[0].Name != "fix-auth" {
 		t.Fatalf("expected 'fix-auth', got %q", plan.Tasks[0].Name)
 	}
+	if len(plan.Tasks[0].Repos) != 1 || plan.Tasks[0].Repos[0] != "github.com/org/api" {
+		t.Fatalf("expected repos [github.com/org/api], got %v", plan.Tasks[0].Repos)
+	}
+	if plan.Tasks[1].Name != "update-tests" {
+		t.Fatalf("expected 'update-tests', got %q", plan.Tasks[1].Name)
+	}
 	if plan.IntegrationPrompt != "Review and integrate all changes" {
 		t.Fatalf("unexpected integration prompt: %q", plan.IntegrationPrompt)
 	}
 }
 
-func TestWorkflow_AutoDecomposition_Fallback(t *testing.T) {
-	// Malformed JSON should return nil (fallback to single run).
+func TestParseDecompositionPlan_Fallback(t *testing.T) {
+	// Non-JSON output should return nil (fallback to single run).
 	output := "I think this is a simple task, no decomposition needed."
 	plan := parseDecompositionPlan(output)
 	if plan != nil {
@@ -73,8 +44,8 @@ func TestWorkflow_AutoDecomposition_Fallback(t *testing.T) {
 	}
 }
 
-func TestWorkflow_AutoDecomposition_EmptyTasks(t *testing.T) {
-	// Empty tasks means "simple enough for one agent" - fallback.
+func TestParseDecompositionPlan_EmptyTasks(t *testing.T) {
+	// Empty tasks means "simple enough for one agent" — fallback.
 	output := `{"tasks": [], "integration_prompt": ""}`
 	plan := parseDecompositionPlan(output)
 	if plan != nil {
@@ -82,7 +53,7 @@ func TestWorkflow_AutoDecomposition_EmptyTasks(t *testing.T) {
 	}
 }
 
-func TestWorkflow_AutoDecomposition_TruncateTo7(t *testing.T) {
+func TestParseDecompositionPlan_TruncateTo7(t *testing.T) {
 	output := `{
   "tasks": [
     {"name": "t1", "prompt": "p1"},
@@ -106,22 +77,91 @@ func TestWorkflow_AutoDecomposition_TruncateTo7(t *testing.T) {
 	if len(plan.Tasks) != 7 {
 		t.Fatalf("expected 7 tasks (truncated from 10), got %d", len(plan.Tasks))
 	}
+	// Verify first and last tasks are correct after truncation
+	if plan.Tasks[0].Name != "t1" {
+		t.Fatalf("first task should be t1, got %q", plan.Tasks[0].Name)
+	}
+	if plan.Tasks[6].Name != "t7" {
+		t.Fatalf("last task should be t7, got %q", plan.Tasks[6].Name)
+	}
 }
 
-func TestSpawnJuniorInput_SpecRunID(t *testing.T) {
-	// Verify SpawnJuniorInput carries SpecRunID.
-	input := SpawnJuniorInput{
-		ParentRunName: "parent-run",
-		Namespace:     "default",
-		Task:          "fix something",
-		TaskName:      "fix-something",
-		SpecRunID:     "parent-run",
-		Blocking:      true,
+func TestParseDecompositionPlan_JSONWithSurroundingText(t *testing.T) {
+	// Ensure parser extracts JSON even with surrounding prose.
+	output := `Sure! Here's my analysis:
+
+{"tasks": [{"name": "single-task", "prompt": "Do the thing"}], "integration_prompt": ""}
+
+Let me know if you have questions.`
+
+	plan := parseDecompositionPlan(output)
+	if plan == nil {
+		t.Fatal("expected non-nil plan when JSON is embedded in text")
 	}
-	if input.SpecRunID != "parent-run" {
-		t.Fatalf("expected SpecRunID 'parent-run', got %q", input.SpecRunID)
+	if len(plan.Tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(plan.Tasks))
 	}
-	if input.TaskName != "fix-something" {
-		t.Fatalf("expected TaskName 'fix-something', got %q", input.TaskName)
+	if plan.Tasks[0].Name != "single-task" {
+		t.Fatalf("expected 'single-task', got %q", plan.Tasks[0].Name)
+	}
+}
+
+func TestParseDecompositionPlan_MalformedJSON(t *testing.T) {
+	output := `{"tasks": [{"name": "broken`
+	plan := parseDecompositionPlan(output)
+	if plan != nil {
+		t.Fatal("expected nil plan for malformed JSON")
+	}
+}
+
+func TestParseDecompositionPlan_NoBraces(t *testing.T) {
+	output := "no json at all"
+	plan := parseDecompositionPlan(output)
+	if plan != nil {
+		t.Fatal("expected nil plan for output without braces")
+	}
+}
+
+func TestRepoNameFromURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want string
+	}{
+		{"https://github.com/org/my-repo.git", "my-repo"},
+		{"https://github.com/org/my-repo", "my-repo"},
+		{"git@github.com:org/my-repo.git", "my-repo"},
+		{"https://github.com/org/repo-name.git", "repo-name"},
+		{"my-repo.git", "my-repo"},
+		{"my-repo", "my-repo"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			got := repoNameFromURL(tt.url)
+			if got != tt.want {
+				t.Errorf("repoNameFromURL(%q) = %q, want %q", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestModelIDFromTier(t *testing.T) {
+	tests := []struct {
+		tier string
+		want string
+	}{
+		{"", "litellm/default"},
+		{"default", "litellm/default"},
+		{"default-cloud", "litellm/default-cloud"},
+		{"premium", "litellm/premium"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tier, func(t *testing.T) {
+			got := modelIDFromTier(tt.tier)
+			if got != tt.want {
+				t.Errorf("modelIDFromTier(%q) = %q, want %q", tt.tier, got, tt.want)
+			}
+		})
 	}
 }
