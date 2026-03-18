@@ -611,6 +611,13 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 		SpecRunID:         spec.SpecRunId,
 		DisplayName:       spec.DisplayName,
 	}
+	if spec.PipelineConfig != nil {
+		crdSpec.PipelineConfig = &aotv1alpha1.PipelineConfig{
+			Plan:    protoStageConfigToCRD(spec.PipelineConfig.Plan),
+			Execute: protoStageConfigToCRD(spec.PipelineConfig.Execute),
+			Verify:  protoStageConfigToCRD(spec.PipelineConfig.Verify),
+		}
+	}
 	if spec.Orchestration != nil && len(spec.Orchestration.Tasks) > 0 {
 		orch := &aotv1alpha1.Orchestration{}
 		for _, t := range spec.Orchestration.Tasks {
@@ -623,6 +630,27 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 		crdSpec.Orchestration = orch
 	}
 	return crdSpec
+}
+
+func protoStageConfigToCRD(sc *apiv1.StageConfig) aotv1alpha1.StageConfig {
+	if sc == nil {
+		return aotv1alpha1.StageConfig{}
+	}
+	return aotv1alpha1.StageConfig{
+		Model:          sc.Model,
+		TimeoutSeconds: sc.TimeoutSeconds,
+		MaxRetries:     sc.MaxRetries,
+		OnFailure:      sc.OnFailure,
+	}
+}
+
+func crdStageConfigToProto(sc aotv1alpha1.StageConfig) *apiv1.StageConfig {
+	return &apiv1.StageConfig{
+		Model:          sc.Model,
+		TimeoutSeconds: sc.TimeoutSeconds,
+		MaxRetries:     sc.MaxRetries,
+		OnFailure:      sc.OnFailure,
+	}
 }
 
 func protoOrchModeToCRD(m apiv1.OrchestrationMode) aotv1alpha1.OrchestrationMode {
@@ -679,6 +707,13 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		OrchestrationMode: crdOrchModeToProto(crd.Spec.OrchestrationMode),
 		SpecRunId:         crd.Spec.SpecRunID,
 		DisplayName:       crd.Spec.DisplayName,
+	}
+	if crd.Spec.PipelineConfig != nil {
+		protoSpec.PipelineConfig = &apiv1.PipelineConfig{
+			Plan:    crdStageConfigToProto(crd.Spec.PipelineConfig.Plan),
+			Execute: crdStageConfigToProto(crd.Spec.PipelineConfig.Execute),
+			Verify:  crdStageConfigToProto(crd.Spec.PipelineConfig.Verify),
+		}
 	}
 	if crd.Spec.Orchestration != nil {
 		orch := &apiv1.Orchestration{}

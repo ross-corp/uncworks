@@ -91,6 +91,7 @@ type PlanRunInput struct {
 	Prompt       string
 	SpecContent  string
 	RepoPath     string
+	Model        string
 }
 
 // PlanRunOutput contains the result of the planning stage.
@@ -120,9 +121,49 @@ const (
 	ActivityVerifyRun = "VerifyRun"
 )
 
+// resolveStageConfig returns the stage config with defaults applied.
+func resolveStageConfig(cfg *PipelineConfigInput, stage string) StageConfigInput {
+	defaults := map[string]StageConfigInput{
+		"plan":    {Model: "default-cloud", TimeoutSeconds: 300, MaxRetries: 2, OnFailure: "fail"},
+		"execute": {Model: "default-cloud", TimeoutSeconds: 900, MaxRetries: 3, OnFailure: "retry"},
+		"verify":  {Model: "default-cloud", TimeoutSeconds: 180, MaxRetries: 1, OnFailure: "fail"},
+	}
+	def := defaults[stage]
+
+	var sc StageConfigInput
+	if cfg != nil {
+		switch stage {
+		case "plan":
+			sc = cfg.Plan
+		case "execute":
+			sc = cfg.Execute
+		case "verify":
+			sc = cfg.Verify
+		}
+	}
+
+	if sc.Model == "" {
+		sc.Model = def.Model
+	}
+	if sc.TimeoutSeconds == 0 {
+		sc.TimeoutSeconds = def.TimeoutSeconds
+	}
+	if sc.MaxRetries == 0 {
+		sc.MaxRetries = def.MaxRetries
+	}
+	if sc.OnFailure == "" {
+		sc.OnFailure = def.OnFailure
+	}
+	return sc
+}
+
 // runSpecDrivenPipeline executes the Plan → Execute → Verify pipeline
 // with retry on verification failure.
 func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
+	planCfg := resolveStageConfig(input.PipelineConfig, "plan")
+	execCfg := resolveStageConfig(input.PipelineConfig, "execute")
+	verifyCfg := resolveStageConfig(input.PipelineConfig, "verify")
+
 	state := &WorkflowState{
 		Phase:   "Running",
 		Message: "Spec-driven pipeline: starting",
@@ -136,13 +177,13 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 
 	cancelCh := workflow.GetSignalChannel(ctx, SignalCancel)
 
-	// Activity options for pipeline stages.
+	// Activity options driven by per-stage config.
 	planOpts := workflow.ActivityOptions{
-		StartToCloseTimeout: defaultPlanTimeout,
+		StartToCloseTimeout: time.Duration(planCfg.TimeoutSeconds) * time.Second,
 		HeartbeatTimeout:    30 * time.Second,
 	}
 	executeOpts := workflow.ActivityOptions{
-		StartToCloseTimeout: activityTimeout,
+		StartToCloseTimeout: time.Duration(execCfg.TimeoutSeconds) * time.Second,
 		HeartbeatTimeout:    heartbeatInterval * 3,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second,
@@ -152,7 +193,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		},
 	}
 	verifyOpts := workflow.ActivityOptions{
-		StartToCloseTimeout: 2 * time.Minute,
+		StartToCloseTimeout: time.Duration(verifyCfg.TimeoutSeconds) * time.Second,
 		HeartbeatTimeout:    30 * time.Second,
 	}
 
@@ -286,6 +327,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		PodIP:        podIP,
 		Prompt:       input.Prompt,
 		SpecContent:  input.SpecContent,
+		Model:        planCfg.Model,
 		RepoPath:     "/workspace",
 	}
 
@@ -305,7 +347,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	}
 
 	changeName := planOutput.ChangeName
-	maxRetries := defaultMaxRetries
+	maxRetries := int(execCfg.MaxRetries)
 
 	// =============================================
 	// STAGE 2 + 3: EXECUTE → VERIFY (with retry)
@@ -334,6 +376,8 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 				PodIP:     podIP,
 				Prompt:    prompt,
 				RepoPath:  "/workspace",
+				Model:     execCfg.Model,
+				Stage:     "execute",
 			},
 		).Get(ctx, nil); err != nil {
 			if temporal.IsCanceledError(err) {

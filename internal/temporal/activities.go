@@ -133,6 +133,8 @@ type StartAgentInput struct {
 	PodIP     string
 	Prompt    string
 	RepoPath  string
+	Model     string // LiteLLM model name override (passed as PI_MODEL env var)
+	Stage     string // Pipeline stage: "plan", "execute", "verify", or "" for single
 }
 
 // StartAgent calls the sidecar StartAgent RPC, retrying until the sidecar is ready.
@@ -144,9 +146,16 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 	for attempt := 0; attempt < 30; attempt++ {
 		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for sidecar readiness: attempt %d", attempt+1))
 
+		envVars := map[string]string{}
+		if input.Model != "" {
+			envVars["PI_MODEL"] = input.Model
+		}
+
 		resp, err := sc.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
 			Prompt:   input.Prompt,
 			RepoPath: input.RepoPath,
+			Stage:    input.Stage,
+			EnvVars:  envVars,
 		}))
 		if err == nil {
 			if !resp.Msg.Started {

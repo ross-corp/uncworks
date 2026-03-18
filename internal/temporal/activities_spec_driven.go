@@ -39,11 +39,17 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 			input.AgentRunName, prompt)
 	}
 
+	envVars := map[string]string{}
+	if input.Model != "" {
+		envVars["PI_MODEL"] = input.Model
+	}
+
 	_, err := sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
 		AgentRunId: input.AgentRunName,
 		Prompt:     prompt,
 		RepoPath:   input.RepoPath,
 		Stage:      "plan",
+		EnvVars:    envVars,
 	}))
 	if err != nil {
 		return PlanRunOutput{}, fmt.Errorf("start plan agent: %w", err)

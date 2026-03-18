@@ -15,7 +15,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file aot/api/v1/api.proto.
  */
 export const file_aot_api_v1_api: GenFile = /*@__PURE__*/
-  fileDesc("ChRhb3QvYXBpL3YxL2FwaS5wcm90bxIKYW90LmFwaS52MSLqAQoIQWdlbnRSdW4SCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRImCgRzcGVjGAMgASgLMhguYW90LmFwaS52MS5BZ2VudFJ1blNwZWMSKgoGc3RhdHVzGAQgASgLMhouYW90LmFwaS52MS5BZ2VudFJ1blN0YXR1cxIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghjaGlsZHJlbhgHIAMoCSJBCgpSZXBvc2l0b3J5EhUKA3VybBgBIAEoCUIIukgFcgOIAQESDgoGYnJhbmNoGAIgASgJEgwKBHBhdGgYAyABKAkizAQKDEFnZW50UnVuU3BlYxIuCgdiYWNrZW5kGAEgASgOMhMuYW90LmFwaS52MS5CYWNrZW5kQgi6SAWCAQIgABIvCgVyZXBvcxgCIAMoCzIWLmFvdC5hcGkudjEuUmVwb3NpdG9yeUIIukgFkgECCAESDgoGcHJvbXB0GAQgASgJEhUKDWRldmJveF9jb25maWcYBSABKAkSHAoLdHRsX3NlY29uZHMYBiABKAVCB7pIBBoCKAASNwoIZW52X3ZhcnMYByADKAsyJS5hb3QuYXBpLnYxLkFnZW50UnVuU3BlYy5FbnZWYXJzRW50cnkSEgoKbW9kZWxfdGllchgIIAEoCRINCgVpbWFnZRgJIAEoCRISCgptYXhfYnVkZ2V0GAogASgBEhQKDHNwZWNfY29udGVudBgLIAEoCRITCgtzcGVjX3NvdXJjZRgMIAEoCRIWCg53b3Jrc3BhY2VfbmFtZRgNIAEoCRIVCg1wYXJlbnRfcnVuX2lkGA8gASgJEjkKEm9yY2hlc3RyYXRpb25fbW9kZRgQIAEoDjIdLmFvdC5hcGkudjEuT3JjaGVzdHJhdGlvbk1vZGUSMAoNb3JjaGVzdHJhdGlvbhgRIAEoCzIZLmFvdC5hcGkudjEuT3JjaGVzdHJhdGlvbhITCgtzcGVjX3J1bl9pZBgSIAEoCRIUCgxkaXNwbGF5X25hbWUYEyABKAkaLgoMRW52VmFyc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAFKBAgOEA8iRAoRT3JjaGVzdHJhdGlvblRhc2sSDAoEbmFtZRgBIAEoCRIOCgZwcm9tcHQYAiABKAkSEQoJcmVwb191cmxzGAMgAygJIj0KDU9yY2hlc3RyYXRpb24SLAoFdGFza3MYASADKAsyHS5hb3QuYXBpLnYxLk9yY2hlc3RyYXRpb25UYXNrIp4DCg5BZ2VudFJ1blN0YXR1cxIoCgVwaGFzZRgBIAEoDjIZLmFvdC5hcGkudjEuQWdlbnRSdW5QaGFzZRIPCgdtZXNzYWdlGAIgASgJEhAKCHBvZF9uYW1lGAMgASgJEhAKCHRyYWNlX2lkGAQgASgJEi4KCnN0YXJ0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjAKDGNvbXBsZXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFQoNd29ya3RyZWVfcGF0aBgHIAEoCRISCgpsb2dfb3V0cHV0GAggASgJEjAKDHJldGFpbl91bnRpbBgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFwoPZGVwbG95bWVudF9uYW1lGAogASgJEhQKDGRlYnVnX2FjdGl2ZRgLIAEoCBINCgVzdGFnZRgMIAEoCRITCgtyZXRyeV9jb3VudBgNIAEoBRIbChN2ZXJpZmljYXRpb25fcmVzdWx0GA4gASgJIj8KFUNyZWF0ZUFnZW50UnVuUmVxdWVzdBImCgRzcGVjGAEgASgLMhguYW90LmFwaS52MS5BZ2VudFJ1blNwZWMiQQoWQ3JlYXRlQWdlbnRSdW5SZXNwb25zZRInCglhZ2VudF9ydW4YASABKAsyFC5hb3QuYXBpLnYxLkFnZW50UnVuIiAKEkdldEFnZW50UnVuUmVxdWVzdBIKCgJpZBgBIAEoCSKoAQoUTGlzdEFnZW50UnVuc1JlcXVlc3QSLwoMcGhhc2VfZmlsdGVyGAEgASgOMhkuYW90LmFwaS52MS5BZ2VudFJ1blBoYXNlEg0KBWxpbWl0GAIgASgFEg4KBmN1cnNvchgDIAEoCRITCgtzcGVjX3J1bl9pZBgEIAEoCRIVCg1wYXJlbnRfcnVuX2lkGAUgASgJEhQKDHN0YWdlX2ZpbHRlchgGIAEoCSJWChVMaXN0QWdlbnRSdW5zUmVzcG9uc2USKAoKYWdlbnRfcnVucxgBIAMoCzIULmFvdC5hcGkudjEuQWdlbnRSdW4SEwoLbmV4dF9jdXJzb3IYAiABKAkiIgoUV2F0Y2hBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkikgEKDUFnZW50UnVuRXZlbnQSFAoMYWdlbnRfcnVuX2lkGAEgASgJEisKBHR5cGUYAiABKA4yHS5hb3QuYXBpLnYxLkFnZW50UnVuRXZlbnRUeXBlEg8KB3BheWxvYWQYAyABKAkSLQoJdGltZXN0YW1wGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIjChVDYW5jZWxBZ2VudFJ1blJlcXVlc3QSCgoCaWQYASABKAkiQQoWQ2FuY2VsQWdlbnRSdW5SZXNwb25zZRInCglhZ2VudF9ydW4YASABKAsyFC5hb3QuYXBpLnYxLkFnZW50UnVuIjwKFVNlbmRIdW1hbklucHV0UmVxdWVzdBIUCgxhZ2VudF9ydW5faWQYASABKAkSDQoFaW5wdXQYAiABKAkiKgoWU2VuZEh1bWFuSW5wdXRSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoCCIgChJHZXRSdW5HcmFwaFJlcXVlc3QSCgoCaWQYASABKAkitgEKDFJ1bkdyYXBoTm9kZRIMCgRuYW1lGAEgASgJEigKBXBoYXNlGAIgASgOMhkuYW90LmFwaS52MS5BZ2VudFJ1blBoYXNlEgwKBHJvbGUYAyABKAkSLgoKc3RhcnRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMAoMY29tcGxldGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCItCgxSdW5HcmFwaEVkZ2USDgoGcGFyZW50GAEgASgJEg0KBWNoaWxkGAIgASgJIlwKCFJ1bkdyYXBoEicKBW5vZGVzGAEgAygLMhguYW90LmFwaS52MS5SdW5HcmFwaE5vZGUSJwoFZWRnZXMYAiADKAsyGC5hb3QuYXBpLnYxLlJ1bkdyYXBoRWRnZSLfAQoVU2VhcmNoUGFzdFdvcmtSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEhAKCHJlcG9fdXJsGAIgASgJEjEKDWNyZWF0ZWRfYWZ0ZXIYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjIKDmNyZWF0ZWRfYmVmb3JlGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIvCg1zb3VyY2VfZmlsdGVyGAUgASgOMhguYW90LmFwaS52MS5Tb3VyY2VGaWx0ZXISDQoFbGltaXQYBiABKAUiRQoWU2VhcmNoUGFzdFdvcmtSZXNwb25zZRIrCgdyZXN1bHRzGAEgAygLMhouYW90LmFwaS52MS5QYXN0V29ya1Jlc3VsdCKDAgoOUGFzdFdvcmtSZXN1bHQSEgoKY2h1bmtfdGV4dBgBIAEoCRITCgtzb3VyY2VfdHlwZRgCIAEoCRIYChBzaW1pbGFyaXR5X3Njb3JlGAMgASgBEg4KBnJ1bl9pZBgEIAEoCRIRCglmaWxlX3BhdGgYBSABKAkSEAoIbGFuZ3VhZ2UYBiABKAkSEQoJbm9kZV90eXBlGAcgASgJEhIKCmNodW5rX3R5cGUYCCABKAkSEAoIc2V2ZXJpdHkYCSABKAkSEAoIcmVwb191cmwYCiABKAkSLgoKY3JlYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAqtgEKEU9yY2hlc3RyYXRpb25Nb2RlEiIKHk9SQ0hFU1RSQVRJT05fTU9ERV9VTlNQRUNJRklFRBAAEh0KGU9SQ0hFU1RSQVRJT05fTU9ERV9TSU5HTEUQARIbChdPUkNIRVNUUkFUSU9OX01PREVfQVVUTxACEh0KGU9SQ0hFU1RSQVRJT05fTU9ERV9NQU5VQUwQAxIiCh5PUkNIRVNUUkFUSU9OX01PREVfU1BFQ19EUklWRU4QBCpfCgdCYWNrZW5kEhcKE0JBQ0tFTkRfVU5TUEVDSUZJRUQQABIPCgtCQUNLRU5EX1BPRBABEhQKEEJBQ0tFTkRfS1VCRVZJUlQQAhIUChBCQUNLRU5EX0VYVEVSTkFMEAMq6wEKDUFnZW50UnVuUGhhc2USHwobQUdFTlRfUlVOX1BIQVNFX1VOU1BFQ0lGSUVEEAASGwoXQUdFTlRfUlVOX1BIQVNFX1BFTkRJTkcQARIbChdBR0VOVF9SVU5fUEhBU0VfUlVOTklORxACEiUKIUFHRU5UX1JVTl9QSEFTRV9XQUlUSU5HX0ZPUl9JTlBVVBADEh0KGUFHRU5UX1JVTl9QSEFTRV9TVUNDRUVERUQQBBIaChZBR0VOVF9SVU5fUEhBU0VfRkFJTEVEEAUSHQoZQUdFTlRfUlVOX1BIQVNFX0NBTkNFTExFRBAGKvMBChFBZ2VudFJ1bkV2ZW50VHlwZRIkCiBBR0VOVF9SVU5fRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEiYKIkFHRU5UX1JVTl9FVkVOVF9UWVBFX1BIQVNFX0NIQU5HRUQQARIcChhBR0VOVF9SVU5fRVZFTlRfVFlQRV9MT0cQAhIiCh5BR0VOVF9SVU5fRVZFTlRfVFlQRV9UT09MX0NBTEwQAxIqCiZBR0VOVF9SVU5fRVZFTlRfVFlQRV9XQUlUSU5HX0ZPUl9JTlBVVBAEEiIKHkFHRU5UX1JVTl9FVkVOVF9UWVBFX0NPTVBMRVRFRBAFKlYKDFNvdXJjZUZpbHRlchIVChFTT1VSQ0VfRklMVEVSX0FMTBAAEhYKElNPVVJDRV9GSUxURVJfQ09ERRABEhcKE1NPVVJDRV9GSUxURVJfVFJBQ0UQAjKgBQoKQU9UU2VydmljZRJXCg5DcmVhdGVBZ2VudFJ1bhIhLmFvdC5hcGkudjEuQ3JlYXRlQWdlbnRSdW5SZXF1ZXN0GiIuYW90LmFwaS52MS5DcmVhdGVBZ2VudFJ1blJlc3BvbnNlEkMKC0dldEFnZW50UnVuEh4uYW90LmFwaS52MS5HZXRBZ2VudFJ1blJlcXVlc3QaFC5hb3QuYXBpLnYxLkFnZW50UnVuElQKDUxpc3RBZ2VudFJ1bnMSIC5hb3QuYXBpLnYxLkxpc3RBZ2VudFJ1bnNSZXF1ZXN0GiEuYW90LmFwaS52MS5MaXN0QWdlbnRSdW5zUmVzcG9uc2USTgoNV2F0Y2hBZ2VudFJ1bhIgLmFvdC5hcGkudjEuV2F0Y2hBZ2VudFJ1blJlcXVlc3QaGS5hb3QuYXBpLnYxLkFnZW50UnVuRXZlbnQwARJXCg5DYW5jZWxBZ2VudFJ1bhIhLmFvdC5hcGkudjEuQ2FuY2VsQWdlbnRSdW5SZXF1ZXN0GiIuYW90LmFwaS52MS5DYW5jZWxBZ2VudFJ1blJlc3BvbnNlElcKDlNlbmRIdW1hbklucHV0EiEuYW90LmFwaS52MS5TZW5kSHVtYW5JbnB1dFJlcXVlc3QaIi5hb3QuYXBpLnYxLlNlbmRIdW1hbklucHV0UmVzcG9uc2USQwoLR2V0UnVuR3JhcGgSHi5hb3QuYXBpLnYxLkdldFJ1bkdyYXBoUmVxdWVzdBoULmFvdC5hcGkudjEuUnVuR3JhcGgSVwoOU2VhcmNoUGFzdFdvcmsSIS5hb3QuYXBpLnYxLlNlYXJjaFBhc3RXb3JrUmVxdWVzdBoiLmFvdC5hcGkudjEuU2VhcmNoUGFzdFdvcmtSZXNwb25zZUItWitnaXRodWIuY29tL3VuY3dvcmtzL2FvdC9nZW4vZ28vYXBpL3YxO2FwaXYxYgZwcm90bzM", [file_buf_validate_validate, file_google_protobuf_timestamp]);
+  fileDesc("ChRhb3QvYXBpL3YxL2FwaS5wcm90bxIKYW90LmFwaS52MSLqAQoIQWdlbnRSdW4SCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRImCgRzcGVjGAMgASgLMhguYW90LmFwaS52MS5BZ2VudFJ1blNwZWMSKgoGc3RhdHVzGAQgASgLMhouYW90LmFwaS52MS5BZ2VudFJ1blN0YXR1cxIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghjaGlsZHJlbhgHIAMoCSJBCgpSZXBvc2l0b3J5EhUKA3VybBgBIAEoCUIIukgFcgOIAQESDgoGYnJhbmNoGAIgASgJEgwKBHBhdGgYAyABKAkigQUKDEFnZW50UnVuU3BlYxIuCgdiYWNrZW5kGAEgASgOMhMuYW90LmFwaS52MS5CYWNrZW5kQgi6SAWCAQIgABIvCgVyZXBvcxgCIAMoCzIWLmFvdC5hcGkudjEuUmVwb3NpdG9yeUIIukgFkgECCAESDgoGcHJvbXB0GAQgASgJEhUKDWRldmJveF9jb25maWcYBSABKAkSHAoLdHRsX3NlY29uZHMYBiABKAVCB7pIBBoCKAASNwoIZW52X3ZhcnMYByADKAsyJS5hb3QuYXBpLnYxLkFnZW50UnVuU3BlYy5FbnZWYXJzRW50cnkSEgoKbW9kZWxfdGllchgIIAEoCRINCgVpbWFnZRgJIAEoCRISCgptYXhfYnVkZ2V0GAogASgBEhQKDHNwZWNfY29udGVudBgLIAEoCRITCgtzcGVjX3NvdXJjZRgMIAEoCRIWCg53b3Jrc3BhY2VfbmFtZRgNIAEoCRIVCg1wYXJlbnRfcnVuX2lkGA8gASgJEjkKEm9yY2hlc3RyYXRpb25fbW9kZRgQIAEoDjIdLmFvdC5hcGkudjEuT3JjaGVzdHJhdGlvbk1vZGUSMAoNb3JjaGVzdHJhdGlvbhgRIAEoCzIZLmFvdC5hcGkudjEuT3JjaGVzdHJhdGlvbhITCgtzcGVjX3J1bl9pZBgSIAEoCRIUCgxkaXNwbGF5X25hbWUYEyABKAkSMwoPcGlwZWxpbmVfY29uZmlnGBQgASgLMhouYW90LmFwaS52MS5QaXBlbGluZUNvbmZpZxouCgxFbnZWYXJzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUoECA4QDyKKAQoOUGlwZWxpbmVDb25maWcSJQoEcGxhbhgBIAEoCzIXLmFvdC5hcGkudjEuU3RhZ2VDb25maWcSKAoHZXhlY3V0ZRgCIAEoCzIXLmFvdC5hcGkudjEuU3RhZ2VDb25maWcSJwoGdmVyaWZ5GAMgASgLMhcuYW90LmFwaS52MS5TdGFnZUNvbmZpZyJeCgtTdGFnZUNvbmZpZxINCgVtb2RlbBgBIAEoCRIXCg90aW1lb3V0X3NlY29uZHMYAiABKAUSEwoLbWF4X3JldHJpZXMYAyABKAUSEgoKb25fZmFpbHVyZRgEIAEoCSJEChFPcmNoZXN0cmF0aW9uVGFzaxIMCgRuYW1lGAEgASgJEg4KBnByb21wdBgCIAEoCRIRCglyZXBvX3VybHMYAyADKAkiPQoNT3JjaGVzdHJhdGlvbhIsCgV0YXNrcxgBIAMoCzIdLmFvdC5hcGkudjEuT3JjaGVzdHJhdGlvblRhc2singMKDkFnZW50UnVuU3RhdHVzEigKBXBoYXNlGAEgASgOMhkuYW90LmFwaS52MS5BZ2VudFJ1blBoYXNlEg8KB21lc3NhZ2UYAiABKAkSEAoIcG9kX25hbWUYAyABKAkSEAoIdHJhY2VfaWQYBCABKAkSLgoKc3RhcnRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMAoMY29tcGxldGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIVCg13b3JrdHJlZV9wYXRoGAcgASgJEhIKCmxvZ19vdXRwdXQYCCABKAkSMAoMcmV0YWluX3VudGlsGAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIXCg9kZXBsb3ltZW50X25hbWUYCiABKAkSFAoMZGVidWdfYWN0aXZlGAsgASgIEg0KBXN0YWdlGAwgASgJEhMKC3JldHJ5X2NvdW50GA0gASgFEhsKE3ZlcmlmaWNhdGlvbl9yZXN1bHQYDiABKAkiPwoVQ3JlYXRlQWdlbnRSdW5SZXF1ZXN0EiYKBHNwZWMYASABKAsyGC5hb3QuYXBpLnYxLkFnZW50UnVuU3BlYyJBChZDcmVhdGVBZ2VudFJ1blJlc3BvbnNlEicKCWFnZW50X3J1bhgBIAEoCzIULmFvdC5hcGkudjEuQWdlbnRSdW4iIAoSR2V0QWdlbnRSdW5SZXF1ZXN0EgoKAmlkGAEgASgJIqgBChRMaXN0QWdlbnRSdW5zUmVxdWVzdBIvCgxwaGFzZV9maWx0ZXIYASABKA4yGS5hb3QuYXBpLnYxLkFnZW50UnVuUGhhc2USDQoFbGltaXQYAiABKAUSDgoGY3Vyc29yGAMgASgJEhMKC3NwZWNfcnVuX2lkGAQgASgJEhUKDXBhcmVudF9ydW5faWQYBSABKAkSFAoMc3RhZ2VfZmlsdGVyGAYgASgJIlYKFUxpc3RBZ2VudFJ1bnNSZXNwb25zZRIoCgphZ2VudF9ydW5zGAEgAygLMhQuYW90LmFwaS52MS5BZ2VudFJ1bhITCgtuZXh0X2N1cnNvchgCIAEoCSIiChRXYXRjaEFnZW50UnVuUmVxdWVzdBIKCgJpZBgBIAEoCSKSAQoNQWdlbnRSdW5FdmVudBIUCgxhZ2VudF9ydW5faWQYASABKAkSKwoEdHlwZRgCIAEoDjIdLmFvdC5hcGkudjEuQWdlbnRSdW5FdmVudFR5cGUSDwoHcGF5bG9hZBgDIAEoCRItCgl0aW1lc3RhbXAYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIiMKFUNhbmNlbEFnZW50UnVuUmVxdWVzdBIKCgJpZBgBIAEoCSJBChZDYW5jZWxBZ2VudFJ1blJlc3BvbnNlEicKCWFnZW50X3J1bhgBIAEoCzIULmFvdC5hcGkudjEuQWdlbnRSdW4iPAoVU2VuZEh1bWFuSW5wdXRSZXF1ZXN0EhQKDGFnZW50X3J1bl9pZBgBIAEoCRINCgVpbnB1dBgCIAEoCSIqChZTZW5kSHVtYW5JbnB1dFJlc3BvbnNlEhAKCGFjY2VwdGVkGAEgASgIIiAKEkdldFJ1bkdyYXBoUmVxdWVzdBIKCgJpZBgBIAEoCSK2AQoMUnVuR3JhcGhOb2RlEgwKBG5hbWUYASABKAkSKAoFcGhhc2UYAiABKA4yGS5hb3QuYXBpLnYxLkFnZW50UnVuUGhhc2USDAoEcm9sZRgDIAEoCRIuCgpzdGFydGVkX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxjb21wbGV0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIi0KDFJ1bkdyYXBoRWRnZRIOCgZwYXJlbnQYASABKAkSDQoFY2hpbGQYAiABKAkiXAoIUnVuR3JhcGgSJwoFbm9kZXMYASADKAsyGC5hb3QuYXBpLnYxLlJ1bkdyYXBoTm9kZRInCgVlZGdlcxgCIAMoCzIYLmFvdC5hcGkudjEuUnVuR3JhcGhFZGdlIt8BChVTZWFyY2hQYXN0V29ya1JlcXVlc3QSDQoFcXVlcnkYASABKAkSEAoIcmVwb191cmwYAiABKAkSMQoNY3JlYXRlZF9hZnRlchgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMgoOY3JlYXRlZF9iZWZvcmUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KDXNvdXJjZV9maWx0ZXIYBSABKA4yGC5hb3QuYXBpLnYxLlNvdXJjZUZpbHRlchINCgVsaW1pdBgGIAEoBSJFChZTZWFyY2hQYXN0V29ya1Jlc3BvbnNlEisKB3Jlc3VsdHMYASADKAsyGi5hb3QuYXBpLnYxLlBhc3RXb3JrUmVzdWx0IoMCCg5QYXN0V29ya1Jlc3VsdBISCgpjaHVua190ZXh0GAEgASgJEhMKC3NvdXJjZV90eXBlGAIgASgJEhgKEHNpbWlsYXJpdHlfc2NvcmUYAyABKAESDgoGcnVuX2lkGAQgASgJEhEKCWZpbGVfcGF0aBgFIAEoCRIQCghsYW5ndWFnZRgGIAEoCRIRCglub2RlX3R5cGUYByABKAkSEgoKY2h1bmtfdHlwZRgIIAEoCRIQCghzZXZlcml0eRgJIAEoCRIQCghyZXBvX3VybBgKIAEoCRIuCgpjcmVhdGVkX2F0GAsgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCq2AQoRT3JjaGVzdHJhdGlvbk1vZGUSIgoeT1JDSEVTVFJBVElPTl9NT0RFX1VOU1BFQ0lGSUVEEAASHQoZT1JDSEVTVFJBVElPTl9NT0RFX1NJTkdMRRABEhsKF09SQ0hFU1RSQVRJT05fTU9ERV9BVVRPEAISHQoZT1JDSEVTVFJBVElPTl9NT0RFX01BTlVBTBADEiIKHk9SQ0hFU1RSQVRJT05fTU9ERV9TUEVDX0RSSVZFThAEKl8KB0JhY2tlbmQSFwoTQkFDS0VORF9VTlNQRUNJRklFRBAAEg8KC0JBQ0tFTkRfUE9EEAESFAoQQkFDS0VORF9LVUJFVklSVBACEhQKEEJBQ0tFTkRfRVhURVJOQUwQAyrrAQoNQWdlbnRSdW5QaGFzZRIfChtBR0VOVF9SVU5fUEhBU0VfVU5TUEVDSUZJRUQQABIbChdBR0VOVF9SVU5fUEhBU0VfUEVORElORxABEhsKF0FHRU5UX1JVTl9QSEFTRV9SVU5OSU5HEAISJQohQUdFTlRfUlVOX1BIQVNFX1dBSVRJTkdfRk9SX0lOUFVUEAMSHQoZQUdFTlRfUlVOX1BIQVNFX1NVQ0NFRURFRBAEEhoKFkFHRU5UX1JVTl9QSEFTRV9GQUlMRUQQBRIdChlBR0VOVF9SVU5fUEhBU0VfQ0FOQ0VMTEVEEAYq8wEKEUFnZW50UnVuRXZlbnRUeXBlEiQKIEFHRU5UX1JVTl9FVkVOVF9UWVBFX1VOU1BFQ0lGSUVEEAASJgoiQUdFTlRfUlVOX0VWRU5UX1RZUEVfUEhBU0VfQ0hBTkdFRBABEhwKGEFHRU5UX1JVTl9FVkVOVF9UWVBFX0xPRxACEiIKHkFHRU5UX1JVTl9FVkVOVF9UWVBFX1RPT0xfQ0FMTBADEioKJkFHRU5UX1JVTl9FVkVOVF9UWVBFX1dBSVRJTkdfRk9SX0lOUFVUEAQSIgoeQUdFTlRfUlVOX0VWRU5UX1RZUEVfQ09NUExFVEVEEAUqVgoMU291cmNlRmlsdGVyEhUKEVNPVVJDRV9GSUxURVJfQUxMEAASFgoSU09VUkNFX0ZJTFRFUl9DT0RFEAESFwoTU09VUkNFX0ZJTFRFUl9UUkFDRRACMqAFCgpBT1RTZXJ2aWNlElcKDkNyZWF0ZUFnZW50UnVuEiEuYW90LmFwaS52MS5DcmVhdGVBZ2VudFJ1blJlcXVlc3QaIi5hb3QuYXBpLnYxLkNyZWF0ZUFnZW50UnVuUmVzcG9uc2USQwoLR2V0QWdlbnRSdW4SHi5hb3QuYXBpLnYxLkdldEFnZW50UnVuUmVxdWVzdBoULmFvdC5hcGkudjEuQWdlbnRSdW4SVAoNTGlzdEFnZW50UnVucxIgLmFvdC5hcGkudjEuTGlzdEFnZW50UnVuc1JlcXVlc3QaIS5hb3QuYXBpLnYxLkxpc3RBZ2VudFJ1bnNSZXNwb25zZRJOCg1XYXRjaEFnZW50UnVuEiAuYW90LmFwaS52MS5XYXRjaEFnZW50UnVuUmVxdWVzdBoZLmFvdC5hcGkudjEuQWdlbnRSdW5FdmVudDABElcKDkNhbmNlbEFnZW50UnVuEiEuYW90LmFwaS52MS5DYW5jZWxBZ2VudFJ1blJlcXVlc3QaIi5hb3QuYXBpLnYxLkNhbmNlbEFnZW50UnVuUmVzcG9uc2USVwoOU2VuZEh1bWFuSW5wdXQSIS5hb3QuYXBpLnYxLlNlbmRIdW1hbklucHV0UmVxdWVzdBoiLmFvdC5hcGkudjEuU2VuZEh1bWFuSW5wdXRSZXNwb25zZRJDCgtHZXRSdW5HcmFwaBIeLmFvdC5hcGkudjEuR2V0UnVuR3JhcGhSZXF1ZXN0GhQuYW90LmFwaS52MS5SdW5HcmFwaBJXCg5TZWFyY2hQYXN0V29yaxIhLmFvdC5hcGkudjEuU2VhcmNoUGFzdFdvcmtSZXF1ZXN0GiIuYW90LmFwaS52MS5TZWFyY2hQYXN0V29ya1Jlc3BvbnNlQi1aK2dpdGh1Yi5jb20vdW5jd29ya3MvYW90L2dlbi9nby9hcGkvdjE7YXBpdjFiBnByb3RvMw", [file_buf_validate_validate, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message aot.api.v1.AgentRun
@@ -207,6 +207,13 @@ export type AgentRunSpec = Message<"aot.api.v1.AgentRunSpec"> & {
    * @generated from field: string display_name = 19;
    */
   displayName: string;
+
+  /**
+   * PipelineConfig provides per-stage configuration for spec-driven runs.
+   *
+   * @generated from field: aot.api.v1.PipelineConfig pipeline_config = 20;
+   */
+  pipelineConfig?: PipelineConfig;
 };
 
 /**
@@ -215,6 +222,69 @@ export type AgentRunSpec = Message<"aot.api.v1.AgentRunSpec"> & {
  */
 export const AgentRunSpecSchema: GenMessage<AgentRunSpec> = /*@__PURE__*/
   messageDesc(file_aot_api_v1_api, 2);
+
+/**
+ * PipelineConfig provides per-stage configuration for the spec-driven pipeline.
+ *
+ * @generated from message aot.api.v1.PipelineConfig
+ */
+export type PipelineConfig = Message<"aot.api.v1.PipelineConfig"> & {
+  /**
+   * @generated from field: aot.api.v1.StageConfig plan = 1;
+   */
+  plan?: StageConfig;
+
+  /**
+   * @generated from field: aot.api.v1.StageConfig execute = 2;
+   */
+  execute?: StageConfig;
+
+  /**
+   * @generated from field: aot.api.v1.StageConfig verify = 3;
+   */
+  verify?: StageConfig;
+};
+
+/**
+ * Describes the message aot.api.v1.PipelineConfig.
+ * Use `create(PipelineConfigSchema)` to create a new message.
+ */
+export const PipelineConfigSchema: GenMessage<PipelineConfig> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 3);
+
+/**
+ * StageConfig configures a single pipeline stage.
+ *
+ * @generated from message aot.api.v1.StageConfig
+ */
+export type StageConfig = Message<"aot.api.v1.StageConfig"> & {
+  /**
+   * @generated from field: string model = 1;
+   */
+  model: string;
+
+  /**
+   * @generated from field: int32 timeout_seconds = 2;
+   */
+  timeoutSeconds: number;
+
+  /**
+   * @generated from field: int32 max_retries = 3;
+   */
+  maxRetries: number;
+
+  /**
+   * @generated from field: string on_failure = 4;
+   */
+  onFailure: string;
+};
+
+/**
+ * Describes the message aot.api.v1.StageConfig.
+ * Use `create(StageConfigSchema)` to create a new message.
+ */
+export const StageConfigSchema: GenMessage<StageConfig> = /*@__PURE__*/
+  messageDesc(file_aot_api_v1_api, 4);
 
 /**
  * OrchestrationTask defines a single sub-task in a manual orchestration.
@@ -243,7 +313,7 @@ export type OrchestrationTask = Message<"aot.api.v1.OrchestrationTask"> & {
  * Use `create(OrchestrationTaskSchema)` to create a new message.
  */
 export const OrchestrationTaskSchema: GenMessage<OrchestrationTask> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 3);
+  messageDesc(file_aot_api_v1_api, 5);
 
 /**
  * Orchestration contains the task list for manual orchestration mode.
@@ -262,7 +332,7 @@ export type Orchestration = Message<"aot.api.v1.Orchestration"> & {
  * Use `create(OrchestrationSchema)` to create a new message.
  */
 export const OrchestrationSchema: GenMessage<Orchestration> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 4);
+  messageDesc(file_aot_api_v1_api, 6);
 
 /**
  * @generated from message aot.api.v1.AgentRunStatus
@@ -360,7 +430,7 @@ export type AgentRunStatus = Message<"aot.api.v1.AgentRunStatus"> & {
  * Use `create(AgentRunStatusSchema)` to create a new message.
  */
 export const AgentRunStatusSchema: GenMessage<AgentRunStatus> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 5);
+  messageDesc(file_aot_api_v1_api, 7);
 
 /**
  * @generated from message aot.api.v1.CreateAgentRunRequest
@@ -377,7 +447,7 @@ export type CreateAgentRunRequest = Message<"aot.api.v1.CreateAgentRunRequest"> 
  * Use `create(CreateAgentRunRequestSchema)` to create a new message.
  */
 export const CreateAgentRunRequestSchema: GenMessage<CreateAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 6);
+  messageDesc(file_aot_api_v1_api, 8);
 
 /**
  * @generated from message aot.api.v1.CreateAgentRunResponse
@@ -394,7 +464,7 @@ export type CreateAgentRunResponse = Message<"aot.api.v1.CreateAgentRunResponse"
  * Use `create(CreateAgentRunResponseSchema)` to create a new message.
  */
 export const CreateAgentRunResponseSchema: GenMessage<CreateAgentRunResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 7);
+  messageDesc(file_aot_api_v1_api, 9);
 
 /**
  * @generated from message aot.api.v1.GetAgentRunRequest
@@ -411,7 +481,7 @@ export type GetAgentRunRequest = Message<"aot.api.v1.GetAgentRunRequest"> & {
  * Use `create(GetAgentRunRequestSchema)` to create a new message.
  */
 export const GetAgentRunRequestSchema: GenMessage<GetAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 8);
+  messageDesc(file_aot_api_v1_api, 10);
 
 /**
  * @generated from message aot.api.v1.ListAgentRunsRequest
@@ -459,7 +529,7 @@ export type ListAgentRunsRequest = Message<"aot.api.v1.ListAgentRunsRequest"> & 
  * Use `create(ListAgentRunsRequestSchema)` to create a new message.
  */
 export const ListAgentRunsRequestSchema: GenMessage<ListAgentRunsRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 9);
+  messageDesc(file_aot_api_v1_api, 11);
 
 /**
  * @generated from message aot.api.v1.ListAgentRunsResponse
@@ -481,7 +551,7 @@ export type ListAgentRunsResponse = Message<"aot.api.v1.ListAgentRunsResponse"> 
  * Use `create(ListAgentRunsResponseSchema)` to create a new message.
  */
 export const ListAgentRunsResponseSchema: GenMessage<ListAgentRunsResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 10);
+  messageDesc(file_aot_api_v1_api, 12);
 
 /**
  * @generated from message aot.api.v1.WatchAgentRunRequest
@@ -498,7 +568,7 @@ export type WatchAgentRunRequest = Message<"aot.api.v1.WatchAgentRunRequest"> & 
  * Use `create(WatchAgentRunRequestSchema)` to create a new message.
  */
 export const WatchAgentRunRequestSchema: GenMessage<WatchAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 11);
+  messageDesc(file_aot_api_v1_api, 13);
 
 /**
  * @generated from message aot.api.v1.AgentRunEvent
@@ -530,7 +600,7 @@ export type AgentRunEvent = Message<"aot.api.v1.AgentRunEvent"> & {
  * Use `create(AgentRunEventSchema)` to create a new message.
  */
 export const AgentRunEventSchema: GenMessage<AgentRunEvent> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 12);
+  messageDesc(file_aot_api_v1_api, 14);
 
 /**
  * @generated from message aot.api.v1.CancelAgentRunRequest
@@ -547,7 +617,7 @@ export type CancelAgentRunRequest = Message<"aot.api.v1.CancelAgentRunRequest"> 
  * Use `create(CancelAgentRunRequestSchema)` to create a new message.
  */
 export const CancelAgentRunRequestSchema: GenMessage<CancelAgentRunRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 13);
+  messageDesc(file_aot_api_v1_api, 15);
 
 /**
  * @generated from message aot.api.v1.CancelAgentRunResponse
@@ -564,7 +634,7 @@ export type CancelAgentRunResponse = Message<"aot.api.v1.CancelAgentRunResponse"
  * Use `create(CancelAgentRunResponseSchema)` to create a new message.
  */
 export const CancelAgentRunResponseSchema: GenMessage<CancelAgentRunResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 14);
+  messageDesc(file_aot_api_v1_api, 16);
 
 /**
  * @generated from message aot.api.v1.SendHumanInputRequest
@@ -586,7 +656,7 @@ export type SendHumanInputRequest = Message<"aot.api.v1.SendHumanInputRequest"> 
  * Use `create(SendHumanInputRequestSchema)` to create a new message.
  */
 export const SendHumanInputRequestSchema: GenMessage<SendHumanInputRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 15);
+  messageDesc(file_aot_api_v1_api, 17);
 
 /**
  * @generated from message aot.api.v1.SendHumanInputResponse
@@ -603,7 +673,7 @@ export type SendHumanInputResponse = Message<"aot.api.v1.SendHumanInputResponse"
  * Use `create(SendHumanInputResponseSchema)` to create a new message.
  */
 export const SendHumanInputResponseSchema: GenMessage<SendHumanInputResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 16);
+  messageDesc(file_aot_api_v1_api, 18);
 
 /**
  * @generated from message aot.api.v1.GetRunGraphRequest
@@ -620,7 +690,7 @@ export type GetRunGraphRequest = Message<"aot.api.v1.GetRunGraphRequest"> & {
  * Use `create(GetRunGraphRequestSchema)` to create a new message.
  */
 export const GetRunGraphRequestSchema: GenMessage<GetRunGraphRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 17);
+  messageDesc(file_aot_api_v1_api, 19);
 
 /**
  * @generated from message aot.api.v1.RunGraphNode
@@ -657,7 +727,7 @@ export type RunGraphNode = Message<"aot.api.v1.RunGraphNode"> & {
  * Use `create(RunGraphNodeSchema)` to create a new message.
  */
 export const RunGraphNodeSchema: GenMessage<RunGraphNode> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 18);
+  messageDesc(file_aot_api_v1_api, 20);
 
 /**
  * @generated from message aot.api.v1.RunGraphEdge
@@ -679,7 +749,7 @@ export type RunGraphEdge = Message<"aot.api.v1.RunGraphEdge"> & {
  * Use `create(RunGraphEdgeSchema)` to create a new message.
  */
 export const RunGraphEdgeSchema: GenMessage<RunGraphEdge> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 19);
+  messageDesc(file_aot_api_v1_api, 21);
 
 /**
  * @generated from message aot.api.v1.RunGraph
@@ -701,7 +771,7 @@ export type RunGraph = Message<"aot.api.v1.RunGraph"> & {
  * Use `create(RunGraphSchema)` to create a new message.
  */
 export const RunGraphSchema: GenMessage<RunGraph> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 20);
+  messageDesc(file_aot_api_v1_api, 22);
 
 /**
  * @generated from message aot.api.v1.SearchPastWorkRequest
@@ -755,7 +825,7 @@ export type SearchPastWorkRequest = Message<"aot.api.v1.SearchPastWorkRequest"> 
  * Use `create(SearchPastWorkRequestSchema)` to create a new message.
  */
 export const SearchPastWorkRequestSchema: GenMessage<SearchPastWorkRequest> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 21);
+  messageDesc(file_aot_api_v1_api, 23);
 
 /**
  * @generated from message aot.api.v1.SearchPastWorkResponse
@@ -772,7 +842,7 @@ export type SearchPastWorkResponse = Message<"aot.api.v1.SearchPastWorkResponse"
  * Use `create(SearchPastWorkResponseSchema)` to create a new message.
  */
 export const SearchPastWorkResponseSchema: GenMessage<SearchPastWorkResponse> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 22);
+  messageDesc(file_aot_api_v1_api, 24);
 
 /**
  * @generated from message aot.api.v1.PastWorkResult
@@ -841,7 +911,7 @@ export type PastWorkResult = Message<"aot.api.v1.PastWorkResult"> & {
  * Use `create(PastWorkResultSchema)` to create a new message.
  */
 export const PastWorkResultSchema: GenMessage<PastWorkResult> = /*@__PURE__*/
-  messageDesc(file_aot_api_v1_api, 23);
+  messageDesc(file_aot_api_v1_api, 25);
 
 /**
  * OrchestrationMode specifies how an agent run handles decomposition.

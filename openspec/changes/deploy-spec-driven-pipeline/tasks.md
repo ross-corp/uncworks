@@ -20,17 +20,17 @@
 
 ## 4. Pipeline Stage Configuration
 
-- [ ] 4.1 Add `PipelineConfig` and `StageConfig` structs to `api/v1alpha1/types.go`
-- [ ] 4.2 Add `pipelineConfig` to CRD spec schema in `deploy/crds/agentrun-crd.yaml`
-- [ ] 4.3 Add `PipelineConfig` message to `proto/aot/api/v1/api.proto` and regenerate
-- [ ] 4.4 Update `specProtoToCRD` and `crdToProto` mappings in `internal/server/grpc.go`
-- [ ] 4.5 Add `PipelineConfig` to `WorkflowInput` in `internal/temporal/workflow.go`
-- [ ] 4.6 Update `runSpecDrivenPipeline` to read per-stage config (model, timeout, retries, onFailure)
-- [ ] 4.7 Apply default config values when fields are zero/empty
-- [ ] 4.8 Pass stage model to sidecar via `PI_MODEL` env var in `StartAgentRequest.env_vars`
-- [ ] 4.9 Update `PlanRun` activity to use plan stage config (timeout, model)
-- [ ] 4.10 Update `VerifyRun` activity to use verify stage config (timeout, model)
-- [ ] 4.11 Increase default TTL for spec-driven runs to 900s (15min)
+- [x] 4.1 Add `PipelineConfig` and `StageConfig` structs to `api/v1alpha1/types.go`
+- [x] 4.2 Add `pipelineConfig` to CRD spec schema in `deploy/crds/agentrun-crd.yaml`
+- [x] 4.3 Add `PipelineConfig` message to `proto/aot/api/v1/api.proto` and regenerate
+- [x] 4.4 Update `specProtoToCRD` and `crdToProto` mappings in `internal/server/grpc.go`
+- [x] 4.5 Add `PipelineConfig` to `WorkflowInput` in `internal/temporal/workflow.go`
+- [x] 4.6 Update `runSpecDrivenPipeline` to read per-stage config (model, timeout, retries, onFailure)
+- [x] 4.7 Apply default config values when fields are zero/empty (resolveStageConfig function)
+- [x] 4.8 Pass stage model to sidecar via `PI_MODEL` env var in `StartAgentRequest.env_vars`
+- [x] 4.9 Update `PlanRun` activity to use plan stage config (timeout, model)
+- [x] 4.10 Update `VerifyRun` activity to use verify stage config (timeout, model)
+- [x] 4.11 Default stage timeouts: plan=5min, execute=15min, verify=3min
 
 ## 5. Frontend: Pipeline Config UI
 

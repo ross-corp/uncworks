@@ -113,6 +113,23 @@ message AgentRunSpec {
   string spec_run_id = 18;
   // DisplayName is a human-readable name generated from the prompt by the LLM.
   string display_name = 19;
+  // PipelineConfig provides per-stage configuration for spec-driven runs.
+  PipelineConfig pipeline_config = 20;
+}
+
+// PipelineConfig provides per-stage configuration for the spec-driven pipeline.
+message PipelineConfig {
+  StageConfig plan = 1;
+  StageConfig execute = 2;
+  StageConfig verify = 3;
+}
+
+// StageConfig configures a single pipeline stage.
+message StageConfig {
+  string model = 1;
+  int32 timeout_seconds = 2;
+  int32 max_retries = 3;
+  string on_failure = 4;
 }
 
 // OrchestrationTask defines a single sub-task in a manual orchestration.

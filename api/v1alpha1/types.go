@@ -143,6 +143,39 @@ type AgentRunSpec struct {
 	// DisplayName is a human-readable name generated from the prompt by the LLM.
 	// +optional
 	DisplayName string `json:"displayName,omitempty"`
+
+	// PipelineConfig provides per-stage configuration for spec-driven runs.
+	// +optional
+	PipelineConfig *PipelineConfig `json:"pipelineConfig,omitempty"`
+}
+
+// PipelineConfig provides per-stage configuration for the spec-driven pipeline.
+type PipelineConfig struct {
+	// Plan configures the planning stage.
+	// +optional
+	Plan StageConfig `json:"plan,omitempty"`
+	// Execute configures the execution stage.
+	// +optional
+	Execute StageConfig `json:"execute,omitempty"`
+	// Verify configures the verification stage.
+	// +optional
+	Verify StageConfig `json:"verify,omitempty"`
+}
+
+// StageConfig configures a single pipeline stage.
+type StageConfig struct {
+	// Model is the LiteLLM model name for this stage.
+	// +optional
+	Model string `json:"model,omitempty"`
+	// TimeoutSeconds is the stage timeout.
+	// +optional
+	TimeoutSeconds int32 `json:"timeoutSeconds,omitempty"`
+	// MaxRetries is the max retries for this stage.
+	// +optional
+	MaxRetries int32 `json:"maxRetries,omitempty"`
+	// OnFailure controls behavior when retries are exhausted: "retry", "fail", or "skip".
+	// +optional
+	OnFailure string `json:"onFailure,omitempty"`
 }
 
 // ExternalBackendConfig holds configuration for the External (SSH/Lima) backend.
