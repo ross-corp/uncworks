@@ -159,6 +159,11 @@ export function RunList({ runs, selectedId, onSelect, onDoubleClick, loading }: 
                   }}
                 >
                   {run.status.phase}
+                  {run.status.stage && (
+                    <span style={{ marginLeft: "4px", opacity: 0.6, fontSize: "10px" }}>
+                      ({run.status.stage})
+                    </span>
+                  )}
                 </td>
                 <td
                   style={{

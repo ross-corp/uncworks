@@ -43,7 +43,7 @@ export interface RunGraph {
   edges: RunGraphEdge[];
 }
 
-export type OrchestrationMode = "single" | "auto" | "manual";
+export type OrchestrationMode = "single" | "auto" | "manual" | "spec-driven";
 
 export interface OrchestrationTask {
   name: string;
@@ -83,6 +83,9 @@ export interface AgentRunStatus {
   logOutput?: string;
   deploymentName?: string;
   debugActive?: boolean;
+  stage?: string;
+  retryCount?: number;
+  verificationResult?: string;
 }
 
 export interface AgentRunEvent {
@@ -117,6 +120,7 @@ export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string; description:
 
 export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string }[] = [
   { value: "single", label: "Single" },
+  { value: "spec-driven", label: "Spec-Driven" },
   { value: "auto", label: "Auto" },
   { value: "manual", label: "Manual" },
 ];

@@ -64,6 +64,9 @@ export interface AgentRunStatus {
   retainUntil?: string;
   deploymentName?: string;
   debugActive?: boolean;
+  stage?: string;
+  retryCount?: number;
+  verificationResult?: string;
 }
 
 /** Full AgentRun object. */
