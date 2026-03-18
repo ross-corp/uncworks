@@ -300,7 +300,10 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 	_, _ = w.Write(data)
 }
 
-// lookupPodName retrieves the pod name from the AgentRun CRD status.
+// lookupPodName finds the actual running pod name for an AgentRun.
+// The CRD status stores the deployment name (e.g. "agentrun-ar-xyz"),
+// but the actual pod has a ReplicaSet hash suffix. We find it by listing
+// pods matching the deployment's label selector.
 func (f *FileHandler) lookupPodName(ctx context.Context, runID string) (string, error) {
 	crd := &aotv1alpha1.AgentRun{}
 	if err := f.k8sClient.Get(ctx, runtimeclient.ObjectKey{
@@ -309,7 +312,32 @@ func (f *FileHandler) lookupPodName(ctx context.Context, runID string) (string, 
 	}, crd); err != nil {
 		return "", err
 	}
-	return crd.Status.PodName, nil
+
+	deployName := crd.Status.PodName
+	if deployName == "" {
+		deployName = crd.Status.DeploymentName
+	}
+	if deployName == "" {
+		return "", nil
+	}
+
+	// Find the actual pod managed by this deployment via the agentrun label.
+	var podList corev1.PodList
+	if err := f.k8sClient.List(ctx, &podList,
+		runtimeclient.InNamespace(f.namespace),
+		runtimeclient.MatchingLabels{"aot.uncworks.io/agentrun": runID},
+	); err != nil {
+		return "", fmt.Errorf("list pods for run %s: %w", runID, err)
+	}
+
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == corev1.PodRunning {
+			return pod.Name, nil
+		}
+	}
+
+	// Fallback: return the CRD value (may work if it's the actual pod name).
+	return deployName, nil
 }
 
 // execInPod runs a command in the rpc-gateway container and returns stdout/stderr.
