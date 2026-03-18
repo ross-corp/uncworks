@@ -18,7 +18,7 @@ export interface Repository {
 }
 
 /** Orchestration mode for an AgentRun. */
-export type OrchestrationMode = "single" | "auto" | "manual";
+export type OrchestrationMode = "single" | "auto" | "manual" | "spec-driven";
 
 /** A single task in a manual orchestration. */
 export interface OrchestrationTask {
@@ -50,6 +50,11 @@ export interface AgentRunSpec {
   orchestration?: Orchestration;
   specRunId?: string;
   displayName?: string;
+  pipelineConfig?: {
+    plan?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };
+    execute?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };
+    verify?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };
+  };
 }
 
 /** Status of an AgentRun. */
