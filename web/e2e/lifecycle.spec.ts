@@ -101,3 +101,100 @@ test("HITL input flow", async ({ page }) => {
   // Verify the phase transitions (input was sent)
   await expect(page.getByTestId("detail-hitl-input")).toHaveValue("");
 });
+
+test("detail view shows expected metadata fields", async ({ page }) => {
+  await page.goto("/");
+
+  const firstRow = page.locator("[data-testid^='run-row-']").first();
+  const hasRuns = await firstRow.isVisible().catch(() => false);
+  test.skip(!hasRuns, "No runs available to test detail metadata");
+
+  // Double-click the first row to open detail
+  await firstRow.dblclick();
+  await expect(page.getByTestId("run-detail")).toBeVisible();
+
+  // Verify the info tab is visible by default with key metadata
+  await expect(page.getByTestId("detail-name")).toBeVisible();
+  await expect(page.getByTestId("detail-name")).toHaveText(/.+/);
+  await expect(page.getByTestId("detail-phase")).toBeVisible();
+
+  // The info tab should show Status, Duration, Created labels
+  const detailPane = page.getByTestId("run-detail");
+  await expect(detailPane.getByText("Status")).toBeVisible();
+  await expect(detailPane.getByText("Created")).toBeVisible();
+
+  // Repositories section should be present
+  await expect(page.getByTestId("detail-repos")).toBeVisible();
+});
+
+test("tab switching in detail view", async ({ page }) => {
+  await page.goto("/");
+
+  const firstRow = page.locator("[data-testid^='run-row-']").first();
+  const hasRuns = await firstRow.isVisible().catch(() => false);
+  test.skip(!hasRuns, "No runs available to test tab switching");
+
+  await firstRow.dblclick();
+  await expect(page.getByTestId("run-detail")).toBeVisible();
+
+  // Info tab should be active by default
+  await expect(page.getByTestId("detail-tab-info")).toBeVisible();
+
+  // Switch to Logs tab
+  await page.getByTestId("detail-tab-logs").click();
+  // The log viewer or a "No logs" / "Loading logs" message should appear
+  await page.waitForTimeout(1000);
+
+  // Switch to Files tab
+  await page.getByTestId("detail-tab-files").click();
+  await page.waitForTimeout(1000);
+
+  // Switch to Shell tab
+  await page.getByTestId("detail-tab-shell").click();
+  await page.waitForTimeout(1000);
+
+  // Switch to Traces tab
+  const tracesTab = page.getByTestId("detail-tab-traces");
+  const hasTracesTab = await tracesTab.isVisible().catch(() => false);
+  if (hasTracesTab) {
+    await tracesTab.click();
+    await page.waitForTimeout(1000);
+  }
+
+  // Switch back to Info tab
+  await page.getByTestId("detail-tab-info").click();
+  await expect(page.getByTestId("detail-name")).toBeVisible();
+});
+
+test("close detail view with Escape key", async ({ page }) => {
+  await page.goto("/");
+
+  const firstRow = page.locator("[data-testid^='run-row-']").first();
+  const hasRuns = await firstRow.isVisible().catch(() => false);
+  test.skip(!hasRuns, "No runs available to test Escape close");
+
+  // Open detail
+  await firstRow.dblclick();
+  await expect(page.getByTestId("run-detail")).toBeVisible();
+
+  // Press Escape to close the detail view
+  await page.keyboard.press("Escape");
+
+  // The detail view should close and the run list should be visible
+  await expect(page.getByTestId("run-list")).toBeVisible({ timeout: 5000 });
+});
+
+test("detail view shows clone button", async ({ page }) => {
+  await page.goto("/");
+
+  const firstRow = page.locator("[data-testid^='run-row-']").first();
+  const hasRuns = await firstRow.isVisible().catch(() => false);
+  test.skip(!hasRuns, "No runs available to test clone button");
+
+  await firstRow.dblclick();
+  await expect(page.getByTestId("run-detail")).toBeVisible();
+
+  // Clone button should always be visible in the detail header
+  const cloneBtn = page.getByTestId("run-detail").getByRole("button", { name: "Clone" });
+  await expect(cloneBtn).toBeVisible();
+});

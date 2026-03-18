@@ -15,7 +15,7 @@ test("workspace preset fills repos in create form", async ({ page }) => {
 
   await page.goto("/");
   await page.evaluate((ws) => {
-    localStorage.setItem("aot-workspaces", JSON.stringify([ws]));
+    localStorage.setItem("uncworks:workspaces", JSON.stringify([ws]));
   }, workspace);
 
   // Reload so the workspace is picked up
