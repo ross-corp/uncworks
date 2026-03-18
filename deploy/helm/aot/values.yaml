@@ -53,6 +53,12 @@ apiserver:
   resources: {}
   service:
     type: ClusterIP
+  # -- API key for authenticating requests (strongly recommended for production)
+  apiKey: ""
+  # -- Comma-separated list of allowed CORS origins (e.g. "https://app.example.com")
+  # Defaults to localhost:3000,localhost:5173 for development.
+  # Set to "*" to allow all origins (not recommended for production).
+  allowedOrigins: ""
 
 # -- Web Dashboard configuration
 web:

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { graphStore } from "../stores/graph-store";
 import type { GraphNode, GraphEdge, GraphEvent } from "../types/graph";
+import { apiFetch, apiSseUrl } from "./apiFetch";
 
 /**
  * Hook that fetches the orchestration graph on mount and subscribes
@@ -21,7 +22,7 @@ export function useOrchestrationGraph(specRunId: string | null) {
     // Fetch initial graph
     async function fetchGraph() {
       try {
-        const res = await fetch(`/api/v1/specs/${specRunId}/graph`, {
+        const res = await apiFetch(`/api/v1/specs/${specRunId}/graph`, {
           signal: abort.signal,
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -36,7 +37,7 @@ export function useOrchestrationGraph(specRunId: string | null) {
 
     // Subscribe to SSE stream
     function connectSSE() {
-      const eventSource = new EventSource(`/api/v1/specs/${specRunId}/graph/watch`);
+      const eventSource = new EventSource(apiSseUrl(`/api/v1/specs/${specRunId}/graph/watch`));
 
       eventSource.onopen = () => {
         graphStore.setReconnecting(false);

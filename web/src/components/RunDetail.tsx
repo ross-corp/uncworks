@@ -10,6 +10,7 @@ import DiffViewer from "./DiffViewer";
 import RunGraph from "./RunGraph";
 import { useWatchRun } from "../hooks/useWatchRun";
 import { useTraces } from "../hooks/useTraces";
+import { apiFetch } from "../hooks/apiFetch";
 import { Button } from "./ui/button";
 
 type TabId = "info" | "logs" | "files" | "shell" | "traces";
@@ -420,7 +421,7 @@ function LogsTab({
     if (!hasPod || isStreaming || logLines.length > 0) return;
     let cancelled = false;
     setFetching(true);
-    fetch(`/api/v1/runs/${run.id}/logs`)
+    apiFetch(`/api/v1/runs/${run.id}/logs`)
       .then((r) => r.ok ? r.text() : "")
       .then((text) => {
         if (!cancelled && text) setFetchedLines(text.split("\n"));
@@ -477,7 +478,7 @@ function ShellTab({
   async function handleDebugStart() {
     setDebugLoading(true);
     try {
-      await fetch(`/api/v1/runs/${run.id}/debug`, { method: "POST" });
+      await apiFetch(`/api/v1/runs/${run.id}/debug`, { method: "POST" });
     } catch (err) {
       console.error("Failed to start debug:", err);
     } finally {
@@ -488,7 +489,7 @@ function ShellTab({
   async function handleDebugStop() {
     setDebugLoading(true);
     try {
-      await fetch(`/api/v1/runs/${run.id}/debug`, { method: "DELETE" });
+      await apiFetch(`/api/v1/runs/${run.id}/debug`, { method: "DELETE" });
     } catch (err) {
       console.error("Failed to stop debug:", err);
     } finally {

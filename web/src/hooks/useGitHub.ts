@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
+import { apiFetch } from "./apiFetch";
 
 export function useGitHub() {
   async function pullSpec(
@@ -6,8 +6,8 @@ export function useGitHub() {
     path: string,
   ): Promise<{ content: string; sha: string }> {
     const params = new URLSearchParams({ repo, path });
-    const res = await fetch(
-      `${API_BASE_URL}/api/v1/specs/pull?${params.toString()}`,
+    const res = await apiFetch(
+      `/api/v1/specs/pull?${params.toString()}`,
     );
     if (!res.ok) {
       const text = await res.text();
@@ -22,7 +22,7 @@ export function useGitHub() {
     content: string,
     message: string,
   ): Promise<{ sha: string }> {
-    const res = await fetch(`${API_BASE_URL}/api/v1/specs/push`, {
+    const res = await apiFetch(`/api/v1/specs/push`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ repo, path, content, message }),

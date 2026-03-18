@@ -7,8 +7,12 @@ import type {
 import type { AgentRun, AgentRunEvent, AgentRunPhase, Backend, ModelTier, Repository } from "../types/agent-run";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
+const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
-const defaultClient = new AOTClient({ baseUrl: API_BASE_URL });
+const defaultClient = new AOTClient({
+  baseUrl: API_BASE_URL,
+  apiKey: API_KEY || undefined,
+});
 
 export const ClientContext = createContext<AOTClient>(defaultClient);
 

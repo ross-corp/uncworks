@@ -48,6 +48,7 @@ spec:
                   default: Pod
                 repos:
                   type: array
+                  maxItems: 20
                   items:
                     type: object
                     required:
@@ -55,20 +56,31 @@ spec:
                     properties:
                       url:
                         type: string
+                        maxLength: 2048
                       branch:
                         type: string
+                        maxLength: 256
                       path:
                         type: string
+                        maxLength: 512
                 prompt:
                   type: string
+                  maxLength: 100000
+                displayName:
+                  type: string
+                  maxLength: 63
                 devboxConfig:
                   type: string
+                  maxLength: 512
                 ttlSeconds:
                   type: integer
                   format: int32
                   default: 3600
+                  minimum: 60
+                  maximum: 604800
                 image:
                   type: string
+                  maxLength: 512
                 envVars:
                   type: object
                   additionalProperties:
@@ -93,6 +105,7 @@ spec:
                 modelTier:
                   type: string
                   default: default
+                  maxLength: 64
                 kubeVirtConfig:
                   type: object
                   properties:
@@ -110,6 +123,7 @@ spec:
                       default: 20
                 parentRunID:
                   type: string
+                  maxLength: 63
                 orchestrationMode:
                   type: string
                   enum:
@@ -140,12 +154,16 @@ spec:
                               type: string
                 specRunID:
                   type: string
+                  maxLength: 63
                 specContent:
                   type: string
+                  maxLength: 500000
                 specSource:
                   type: string
+                  maxLength: 512
                 workspaceName:
                   type: string
+                  maxLength: 128
             status:
               type: object
               properties:
@@ -172,6 +190,16 @@ spec:
                 completedAt:
                   type: string
                   format: date-time
+                logOutput:
+                  type: string
+                  maxLength: 1048576
+                retainUntil:
+                  type: string
+                  format: date-time
+                deploymentName:
+                  type: string
+                debugActive:
+                  type: boolean
                 conditions:
                   type: array
                   items:

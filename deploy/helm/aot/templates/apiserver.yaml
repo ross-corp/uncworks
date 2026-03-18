@@ -38,6 +38,30 @@ spec:
               value: {{ .Values.temporal.host | quote }}
             - name: TEMPORAL_NAMESPACE
               value: {{ .Values.temporal.namespace | quote }}
+            {{- if .Values.apiserver.apiKey }}
+            - name: AOT_API_KEY
+              value: {{ .Values.apiserver.apiKey | quote }}
+            {{- end }}
+            {{- if .Values.apiserver.allowedOrigins }}
+            - name: AOT_ALLOWED_ORIGINS
+              value: {{ .Values.apiserver.allowedOrigins | quote }}
+            {{- end }}
+            {{- if .Values.llm.baseUrl }}
+            - name: LITELLM_BASE_URL
+              value: {{ .Values.llm.baseUrl | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.apiserver.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.apiserver.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
           volumeMounts:
             - name: pvc-data
               mountPath: /opt/local-path-provisioner
