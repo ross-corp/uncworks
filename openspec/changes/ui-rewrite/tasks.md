@@ -18,10 +18,10 @@
 
 - [x] 3.1 `ActivityFeed` — timestamped entry list (user, agent, tool, result, system types)
 - [x] 3.2 `ToolCallCard` — expandable tool call with name + JSON input + result (inline in ActivityFeed)
-- [ ] 3.3 `DiffBlock` — inline code diff (green/red lines) — deferred, write diffs shown as text for now
+- [x] 3.3 `DiffBlock` — inline code diff (green/red lines, syntax highlighted)
 - [x] 3.4 `StageProgress` — plan → execute → verify progress bar with status icons
-- [ ] 3.5 `CommandInput` — deferred, / filter is inline in RunListView, cmdk handles commands
-- [ ] 3.6 `ChatMessage` — deferred, chat refinement is a follow-up feature
+- [x] 3.5 `CommandInput` — `:` and `/` prefix command bar
+- [x] 3.6 `ChatMessage` — user/agent message with markdown rendering via react-markdown
 - [x] 3.7 `RunStatusBadge` — status dot + text (● running, ✓ ok, ✗ fail, etc.)
 
 ## 4. Run List View (/)
@@ -32,18 +32,18 @@
 - [x] 4.4 Implement quick filter keys (1=all, 2=active, 3=succeeded, 4=failed)
 - [x] 4.5 Wire enter → navigate to `/run/:id`
 - [x] 4.6 Wire n → navigate to `/new`
-- [ ] 4.7 Wire d → delete with confirmation, c → clone — deferred to post-ship
+- [x] 4.7 Wire d → delete with confirmation, c → clone via /new?clone=id
 - [x] 4.8 Implement 5s polling for run list updates
-- [ ] 4.9 Use nuqs for filter state in URL params — deferred to post-ship
+- [ ] 4.9 Use nuqs for filter state in URL params — deferred, / filter works inline
 
 ## 5. New Run View (/new)
 
 - [x] 5.1 Build prompt input with repo selector
 - [x] 5.2 Build collapsed config line (model · TTL · mode)
-- [ ] 5.3 Build Prompt/Spec tab toggle — deferred, Monaco loads slowly, prompt-first is fine
-- [ ] 5.4 Build "Refine with AI" chat panel — deferred, needs design for LLM proxy calls
+- [x] 5.3 Build Prompt/Spec tab toggle with spec textarea
+- [ ] 5.4 Build "Refine with AI" chat panel — deferred, needs LLM proxy design
 - [x] 5.5 Build "Run" button that creates the agent run via API
-- [ ] 5.6 Auto-switch to spec-driven mode when Spec tab is active — deferred with 5.3
+- [x] 5.6 Auto-switch to spec-driven mode when Spec tab is active
 - [x] 5.7 Navigate to `/run/:id` after successful creation
 
 ## 6. Run Detail View (/run/:id)
@@ -65,24 +65,24 @@
 - [x] 7.1 Set up cmdk with ⌘K trigger
 - [x] 7.2 Add run search (search by name, top 10 results)
 - [x] 7.3 Add navigation commands (go to runs, new run)
-- [ ] 7.4 Add action commands (cancel run, clone run, delete run) — deferred to post-ship
+- [x] 7.4 Add action commands (cancel run, clone run)
 - [x] 7.5 Add theme commands (switch theme, toggle dark mode)
 
 ## 8. Cleanup & Migration
 
-- [ ] 8.1 Remove old components: IconRail, SplitPane, custom CommandPalette, LogViewer, LogViewerInner — deferred, old code is dead (AppNew loaded)
-- [ ] 8.2 Remove old components: DetailPane, AgentRunForm (modal version), old App.tsx — deferred, keep as reference
+- [x] 8.1 Remove old components: IconRail, SplitPane, CommandPalette, LogViewer, LogViewerInner, AgentLogView, LogsTab
+- [x] 8.2 Remove old components: DetailPane, RunDetail, RunList, AgentRunForm, App.tsx, SpecRunPage, WorkspaceEditor, ConfirmDialog, GitHubModal, OrchestrationGraph, OrchestrationNode, CompletionSummary, DiffViewer, MonacoDiffEditor, DetailPanel, RunGraph, LiveIndicators
 - [x] 8.3 Remove CRT CSS: fx-* classes from index.css, delete styles/muthr.css
-- [ ] 8.4 Remove unused hooks: useKeyboard — deferred, doesn't affect new UI
+- [x] 8.4 Remove unused hooks: useKeyboard, useKeyboardNavigation, useWorkspaces, useRepoRegistry, useTheme, useWatchRun, useOrchestrationGraph, useGitHub
 - [x] 8.5 Update data-testid attributes on all new components
 - [x] 8.6 Verify TypeScript compiles with zero errors
 
 ## 9. Testing
 
-- [ ] 9.1 Update Playwright E2E tests for new navigation patterns — deferred to post-ship
-- [ ] 9.2 Update Playwright tests for new run creation flow — deferred to post-ship
-- [ ] 9.3 Update Playwright tests for run detail — deferred to post-ship
-- [ ] 9.4 Add Playwright test for theme switching — deferred to post-ship
-- [ ] 9.5 Add Playwright test for command palette — deferred to post-ship
-- [ ] 9.6 Add Storybook stories for new components — deferred to post-ship
-- [ ] 9.7 Verify all existing E2E tests pass or are updated — deferred to post-ship
+- [ ] 9.1 Update Playwright E2E tests for new navigation patterns
+- [ ] 9.2 Update Playwright tests for new run creation flow
+- [ ] 9.3 Update Playwright tests for run detail (activity feed, tabs)
+- [ ] 9.4 Add Playwright test for theme switching and persistence
+- [ ] 9.5 Add Playwright test for command palette (cmdk)
+- [ ] 9.6 Add Storybook stories for new components
+- [ ] 9.7 Verify all existing E2E tests pass or are updated

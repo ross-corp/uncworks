@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
+import { apiFetch } from "../hooks/apiFetch";
 import RunStatusBadge from "../components/RunStatusBadge";
 
 export default function RunListView() {
@@ -82,11 +83,25 @@ export default function RunListView() {
         case "4":
           setFilter("failed");
           break;
+        case "d":
+          if (filtered[selected]) {
+            const run = filtered[selected];
+            const name = run.spec.displayName || run.name;
+            if (window.confirm(`Delete run ${name}?`)) {
+              apiFetch(`/api/v1/runs/${run.id}`, { method: "DELETE" }).then(() => fetchRuns());
+            }
+          }
+          break;
+        case "c":
+          if (filtered[selected]) {
+            navigate(`/new?clone=${filtered[selected].id}`);
+          }
+          break;
       }
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [filtered, selected, filterMode, navigate]);
+  }, [filtered, selected, filterMode, navigate, fetchRuns]);
 
   // Keep selection in bounds
   useEffect(() => {
@@ -162,7 +177,7 @@ export default function RunListView() {
 
       {/* Footer shortcuts */}
       <div className="border-t px-4 py-1 text-xs text-muted-foreground">
-        j/k navigate · enter detail · n new · / filter · 1-4 quick filter
+        j/k navigate · enter detail · n new · d delete · c clone · / filter · 1-4 quick filter
       </div>
     </div>
   );
