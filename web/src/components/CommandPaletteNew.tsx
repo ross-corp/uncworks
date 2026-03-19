@@ -3,14 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { Command } from "cmdk";
 import type { AgentRun } from "../types/agent-run";
 import { useThemeNew, THEMES } from "../hooks/useThemeNew";
+import { apiFetch } from "../hooks/apiFetch";
 
 import "./command-palette.css";
 
 interface Props {
   runs: AgentRun[];
+  selectedRunId?: string;
 }
 
-export default function CommandPaletteNew({ runs }: Props) {
+export default function CommandPaletteNew({ runs, selectedRunId }: Props) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { setTheme, toggleMode, theme } = useThemeNew();
@@ -52,6 +54,31 @@ export default function CommandPaletteNew({ runs }: Props) {
             New Run
           </Command.Item>
         </Command.Group>
+
+        {/* Actions */}
+        {selectedRunId && (() => {
+          const selectedRun = runs.find((r) => r.id === selectedRunId);
+          return selectedRun ? (
+            <Command.Group heading="Actions">
+              {selectedRun.status.phase === "running" && (
+                <Command.Item
+                  onSelect={() =>
+                    runAction(() => {
+                      apiFetch(`/api/v1/runs/${selectedRunId}/cancel`, { method: "POST" });
+                    })
+                  }
+                >
+                  Cancel selected run
+                </Command.Item>
+              )}
+              <Command.Item
+                onSelect={() => runAction(() => navigate(`/new?clone=${selectedRunId}`))}
+              >
+                Clone run
+              </Command.Item>
+            </Command.Group>
+          ) : null;
+        })()}
 
         {/* Runs */}
         {runs.length > 0 && (
