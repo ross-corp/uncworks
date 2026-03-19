@@ -1,29 +1,44 @@
 ## Why
 
-The spec-driven pipeline claims to use OpenSpec for plan validation, task tracking, and verification — but an audit reveals the integration is mostly fake. PlanRun returns `SpecsValid: true` without calling any OpenSpec CLI commands. The verify gates run `openspec list` and `openspec validate` but swallow all errors with `2>/dev/null` and hardcode validation to pass on failure. The archive gate uses `|| true` so archive errors are invisible. The system works by accident (the agent happens to do the right thing) rather than by design (Temporal verifies each step programmatically). This needs to be fixed before production customers rely on it.
+A line-by-line audit of the spec-driven pipeline reveals 9 critical issues. The pipeline claims to use OpenSpec for plan validation, task tracking, and verification — but most of it is faked or broken:
+
+1. **PlanRun returns hardcoded `SpecsValid: true`** (line 68-71) without calling any OpenSpec CLI command
+2. **No `openspec init` in workspace** — the agent is told to use OpenSpec CLI but the workspace may not be initialized
+3. **No pre-execute artifact check** — nothing verifies the plan actually produced artifacts before starting execution
+4. **Verify Gate 1 silently passes on command failure** — if `openspec list` fails, TotalTasks=0 and the gate passes instead of failing
+5. **Verify Gate 2 unconditionally sets `ValidationValid = true`** (line 165) — this overwrites the actual validation check, meaning validation can NEVER fail
+6. **Verify Gate 3 is a stub** — `detectTestCommands()` returns nil, no test commands are ever extracted or run
+7. **Verify Gate 4 discards the LLM judge's output** — the agent runs and writes a JSON verdict but nobody reads it (`_ = pollUntilAgentDone`)
+8. **Verify Gate 5 swallows archive errors** — `|| true` means archive failure is invisible
+9. **All gates use `2>/dev/null` and python3 piped JSON parsing** — errors are hidden, parsing is fragile
+
+The net effect: the verify stage **always passes** unless OpenSpec list finds incomplete tasks (Gate 1) or a file referenced in a spec doesn't exist (Gate 2b). Gates 2, 3, 4, and 5 cannot cause failure. The pipeline succeeds by accident (the agent does good work) rather than by design (Temporal verifies programmatically).
 
 ## What Changes
 
-- **PlanRun**: After the planning agent completes, run `openspec validate --json` and `openspec status --change <id> --json` via ExecCommand. Only return `SpecsValid: true` if both pass. If validation fails, return the errors so the workflow can retry or fail.
-- **Pre-execute check**: Before starting the execute agent, verify the OpenSpec change directory exists and contains the expected artifacts (proposal.md, at least one spec file, tasks.md).
-- **Verify error handling**: Remove all `2>/dev/null` redirects. Parse JSON responses with proper error handling. If `openspec list` or `openspec validate` returns invalid JSON or errors, fail the gate with a clear error message.
-- **Verify validation gate**: Actually check `valid: true` in the response. Don't hardcode `result.ValidationValid = true` after the check.
-- **Archive gate**: Remove `|| true`. If `openspec archive` fails, include the error in the verification result instead of silently ignoring it.
-- **OpenSpec init in workspace**: Before the planning agent runs, execute `openspec init` in the workspace if `.openspec.yaml` doesn't exist, ensuring the OpenSpec CLI has a valid project context.
-- **Structured logging**: Log the actual openspec command output (stdout/stderr) so verification results are debuggable.
+- **Fix 1 (PlanRun validation)**: After agent completes, call `openspec validate --json` and `openspec status --json` via ExecCommand. Parse responses in Go. Only return SpecsValid=true when both pass.
+- **Fix 2 (OpenSpec init)**: Run `openspec init --tools pi --force` in workspace at start of PlanRun if no config exists.
+- **Fix 3 (Pre-execute check)**: Verify change directory, proposal.md, specs/, and tasks.md exist before starting execute agent.
+- **Fix 4 (Gate 1 error handling)**: Fail when `openspec list` command fails or returns no change data. Don't treat TotalTasks=0 as a pass.
+- **Fix 5 (Gate 2 validation bug)**: Remove the unconditional `result.ValidationValid = true` on line 165. Let the actual validation result stand.
+- **Fix 6 (Gate 3 test extraction)**: Parse spec WHEN/THEN scenarios for command references (backtick-wrapped commands with "run", "execute", "pass" keywords). Execute found commands.
+- **Fix 7 (Gate 4 LLM verdict)**: Read the verify agent's structured log output after it completes. Parse the JSON verdict from the JSONL file. Include per-scenario results in VerificationResult.
+- **Fix 8 (Gate 5 archive)**: Remove `|| true`. Check exit code. Include archive errors in failure report.
+- **Fix 9 (Error handling)**: Remove all `2>/dev/null`. Replace python3 inline JSON piping with Go-native JSON parsing. Create `parseOpenSpecJSON` helper that strips text prefixes and unmarshals.
 
 ## Capabilities
 
 ### New Capabilities
 
-None — this fixes existing capabilities that were implemented incorrectly.
+None.
 
 ### Modified Capabilities
-- `run-verification`: Fix error handling, remove hardcoded passes, fail on real errors.
-- `run-pipeline`: Add real plan validation and pre-execute artifact checks.
+- `run-pipeline`: Add openspec init, real plan validation, pre-execute artifact check.
+- `run-verification`: Fix all 5 gates to use real error handling, real validation, real test extraction, real LLM verdict parsing, real archive reporting.
 
 ## Impact
 
-- `internal/temporal/activities_spec_driven.go` — Fix PlanRun (add validation), fix VerifyRun (remove error swallowing, fix validation gate, fix archive gate)
-- `internal/temporal/workflow_spec_driven.go` — Add pre-execute artifact check between plan and execute stages
-- Tests updated to verify real error paths
+- `internal/temporal/activities_spec_driven.go` — Major rewrite of PlanRun and VerifyRun
+- `internal/temporal/workflow_spec_driven.go` — Add pre-execute artifact check
+- `internal/sidecar/gateway.go` — No changes needed (system prompts are already correct)
+- Tests for all 9 fixes
