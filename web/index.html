@@ -6,17 +6,14 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
     <title>AOT — UNCWERKS</title>
     <script>
-      // Anti-flash: apply theme before first paint
+      // Anti-flash: apply theme + mode before first paint
       (function() {
-        var theme = localStorage.getItem('aot-theme');
-        if (!theme) {
-          theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        }
-        if (theme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        var mode = localStorage.getItem('aot-theme-mode') || 'system';
+        var theme = localStorage.getItem('aot-theme-color') || 'zinc';
+        var isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+        if (theme !== 'zinc') document.documentElement.classList.add('theme-' + theme);
       })();
     </script>
   </head>
