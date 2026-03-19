@@ -286,11 +286,19 @@ func TestWorkflow_SpecDrivenPrompt(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
 	)
+	// Spec-driven mode calls PlanRun → Execute → Verify
+	env.OnActivity((*aottemporal.Activities).PlanRun, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.PlanRunOutput{ChangeName: "test-run", SpecsValid: true, TaskCount: 5}, nil,
+	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
 	)
+	env.OnActivity((*aottemporal.Activities).VerifyRun, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.VerifyRunOutput{Result: aottemporal.VerificationResult{Pass: true}}, nil,
+	)
 	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).RevokeLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
 
@@ -315,11 +323,18 @@ func TestWorkflow_SpecWithExplicitPrompt(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
 	)
+	env.OnActivity((*aottemporal.Activities).PlanRun, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.PlanRunOutput{ChangeName: "test-run", SpecsValid: true, TaskCount: 5}, nil,
+	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
 	)
+	env.OnActivity((*aottemporal.Activities).VerifyRun, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.VerifyRunOutput{Result: aottemporal.VerificationResult{Pass: true}}, nil,
+	)
 	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).RevokeLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
 
