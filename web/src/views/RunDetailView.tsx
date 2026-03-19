@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
+import { useToast } from "../components/Toast";
 import RunStatusBadge from "../components/RunStatusBadge";
 import ActivityFeed from "../components/ActivityFeed";
 import StageProgress from "../components/StageProgress";
@@ -25,9 +26,23 @@ export default function RunDetailView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const client = useClient();
+  const { toast } = useToast();
   const [run, setRun] = useState<AgentRun | null>(null);
   const [tab, setTab] = useState<Tab>("activity");
+  const [showInfo, setShowInfo] = useState(false);
+  const [hitlInput, setHitlInput] = useState("");
   const { spans } = useTraces(id || "");
+
+  const sendHitl = useCallback(async () => {
+    if (!id || !hitlInput.trim()) return;
+    try {
+      await client.sendHumanInput(id, hitlInput.trim());
+      setHitlInput("");
+      toast("Input sent", "success");
+    } catch {
+      toast("Failed to send input", "error");
+    }
+  }, [id, hitlInput, client, toast]);
 
   // Fetch run and poll
   useEffect(() => {
@@ -63,7 +78,7 @@ export default function RunDetailView() {
         setTab(TABS[num - 1].key);
       }
       if (e.key === "i") {
-        // TODO: toggle info overlay
+        setShowInfo((s) => !s);
       }
     }
     window.addEventListener("keydown", handleKey);
@@ -133,9 +148,49 @@ export default function RunDetailView() {
         {tab === "verify" && <VerificationPanel runId={run.id} />}
       </div>
 
+      {/* HITL overlay */}
+      {run.status.phase === "waiting_for_input" && (
+        <div className="border-t bg-yellow-500/10 px-4 py-2">
+          <div className="text-xs text-yellow-500 mb-1">Agent is waiting for input</div>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 border bg-background px-2 py-1 text-sm outline-none focus:border-primary"
+              value={hitlInput}
+              onChange={(e) => setHitlInput(e.target.value)}
+              placeholder="Type your response..."
+              onKeyDown={(e) => { if (e.key === "Enter") sendHitl(); }}
+              autoFocus
+            />
+            <button
+              onClick={sendHitl}
+              className="px-3 py-1 text-xs bg-primary text-primary-foreground"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Info overlay */}
+      {showInfo && (
+        <div className="border-t bg-muted/50 px-4 py-3 text-xs space-y-1">
+          <div className="flex gap-8">
+            <div><span className="text-muted-foreground">ID</span> <span>{run.id}</span></div>
+            <div><span className="text-muted-foreground">Created</span> <span>{run.createdAt ? new Date(run.createdAt).toLocaleString() : "—"}</span></div>
+            <div><span className="text-muted-foreground">Model</span> <span>{run.spec.modelTier || "default"}</span></div>
+          </div>
+          <div className="flex gap-8">
+            <div><span className="text-muted-foreground">Repo</span> <span>{run.spec.repos?.[0]?.url || "—"}</span></div>
+            <div><span className="text-muted-foreground">Mode</span> <span>{run.spec.orchestrationMode || "single"}</span></div>
+            {run.status.stage && <div><span className="text-muted-foreground">Stage</span> <span>{run.status.stage} (attempt {(run.status.retryCount ?? 0) + 1})</span></div>}
+          </div>
+          <div className="text-muted-foreground truncate">Prompt: {run.spec.prompt}</div>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="border-t px-4 py-1 text-xs text-muted-foreground">
-        1 activity · 2 files · 3 shell · 4 traces · 5 verify · esc back
+        1 activity · 2 files · 3 shell · 4 traces · 5 verify · i info · esc back
       </div>
     </div>
   );
