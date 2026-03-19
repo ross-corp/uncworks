@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,18 +19,26 @@ import (
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 )
 
-// Activities for the spec-driven pipeline are methods on the existing Activities struct.
-// They are registered alongside the other activities in the worker.
+// ======================================================================
+// PlanRun — Fix 1 (real validation), Fix 2 (openspec init), Fix 3 (partial)
+// ======================================================================
 
-// PlanRun invokes the sidecar with stage=plan to generate an OpenSpec change,
-// then validates the output via the OpenSpec CLI.
 func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOutput, error) {
-	activity.RecordHeartbeat(ctx, "starting plan agent")
+	activity.RecordHeartbeat(ctx, "starting plan stage")
 
 	sidecarURL := fmt.Sprintf("http://%s:%d", input.PodIP, sidecarPort)
 	sidecarClient := agentv1connect.NewAgentSidecarServiceClient(http.DefaultClient, sidecarURL)
 
-	// Start the planning agent.
+	// Fix 2: OpenSpec init — ensure workspace has openspec configured
+	activity.RecordHeartbeat(ctx, "initializing openspec in workspace")
+	initOut, initErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		"test -f openspec/config.yaml || openspec init --tools pi --force")
+	if initErr != nil {
+		log.Printf("openspec init warning (non-fatal): %v stdout=%q", initErr, initOut)
+		// Non-fatal — agent may still create the change manually
+	}
+
+	// Start the planning agent
 	prompt := input.Prompt
 	if input.SpecContent != "" {
 		prompt = fmt.Sprintf("User-provided specification:\n\n%s\n\n---\n\nCreate an OpenSpec change named \"%s\" based on the above. Generate proposal.md, specs/ with WHEN/THEN scenarios, and tasks.md.",
@@ -55,23 +64,63 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 		return PlanRunOutput{}, fmt.Errorf("start plan agent: %w", err)
 	}
 
-	// Poll for agent completion.
 	if err := pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName); err != nil {
 		return PlanRunOutput{}, fmt.Errorf("plan agent: %w", err)
 	}
 
-	activity.RecordHeartbeat(ctx, "plan agent complete, validating")
+	// Fix 1: REAL validation via openspec CLI (was hardcoded SpecsValid: true)
+	activity.RecordHeartbeat(ctx, "validating openspec change")
 
-	// Validate the generated change via openspec CLI (exec in pod).
-	// For now, we trust the agent produced valid output. The workflow
-	// can add validation as a separate check if needed.
-	return PlanRunOutput{
-		ChangeName: input.AgentRunName,
-		SpecsValid: true,
-	}, nil
+	output := PlanRunOutput{ChangeName: input.AgentRunName}
+
+	// Validate the change structure
+	validateOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		fmt.Sprintf("openspec validate \"%s\" --json", input.AgentRunName))
+	if err != nil {
+		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("openspec validate failed: %v (stderr: %s)", err, validateOut))
+		return output, nil
+	}
+
+	valResp, err := parseOpenSpecValidateResponse(validateOut)
+	if err != nil {
+		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("failed to parse validate response: %v", err))
+		return output, nil
+	}
+	if len(valResp.Items) > 0 && !valResp.Items[0].Valid {
+		for _, issue := range valResp.Items[0].Issues {
+			output.ValidationErrors = append(output.ValidationErrors, issue.Message)
+		}
+		return output, nil
+	}
+
+	// Check artifact completion status
+	statusOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		fmt.Sprintf("openspec status --change \"%s\" --json", input.AgentRunName))
+	if err != nil {
+		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("openspec status failed: %v", err))
+		return output, nil
+	}
+
+	statusResp, err := parseOpenSpecStatusResponse(statusOut)
+	if err != nil {
+		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("failed to parse status response: %v", err))
+		return output, nil
+	}
+	if !statusResp.AllArtifactsDone() {
+		missing := statusResp.MissingArtifacts()
+		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("incomplete artifacts: %v", missing))
+		return output, nil
+	}
+
+	output.SpecsValid = true
+	output.TaskCount = len(statusResp.Artifacts)
+	return output, nil
 }
 
-// VerifyRun runs the verification pipeline: openspec list → validate → automated checks → LLM judge → archive.
+// ======================================================================
+// VerifyRun — Fix 4-9
+// ======================================================================
+
 func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (VerifyRunOutput, error) {
 	startTime := time.Now()
 	activity.RecordHeartbeat(ctx, "starting verification")
@@ -83,119 +132,147 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		AutomatedChecks: []AutomatedCheck{},
 	}
 
-	// Always write verification-result.json on exit (success or failure).
 	defer func() {
 		result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
 		writeVerificationResult(input.RepoPath, input.ChangeName, result)
 	}()
 
-	// --- Gate 1: Task completion via openspec list --json ---
+	// ── Gate 1: Task completion (Fix 4: fail on errors, not pass) ──
 	activity.RecordHeartbeat(ctx, "checking task completion")
 
-	taskCheck, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
-		fmt.Sprintf("openspec list --json 2>/dev/null | python3 -c \"import sys,json; raw=sys.stdin.read(); start=raw.index('{'); d=json.loads(raw[start:]); c=[x for x in d.get('changes',[]) if x['name']=='%s']; print(json.dumps(c[0]) if c else '{}')\"",
-			input.ChangeName))
+	listOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		"openspec list --json")
 	if err != nil {
 		result.Pass = false
-		result.FailureReport = fmt.Sprintf("Failed to check task completion: %v", err)
+		result.FailureReport = fmt.Sprintf("openspec list failed: %v (output: %s)", err, listOut)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "task_completion", Pass: false, Output: result.FailureReport,
+		})
 		return VerifyRunOutput{Result: result}, nil
 	}
 
-	var changeInfo struct {
-		CompletedTasks int    `json:"completedTasks"`
-		TotalTasks     int    `json:"totalTasks"`
-		Status         string `json:"status"`
-	}
-	if err := json.Unmarshal([]byte(taskCheck), &changeInfo); err == nil {
-		result.TasksCompleted = changeInfo.CompletedTasks
-		result.TasksTotal = changeInfo.TotalTasks
+	listResp, err := parseOpenSpecListResponse(listOut)
+	if err != nil {
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("failed to parse openspec list: %v", err)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "task_completion", Pass: false, Output: result.FailureReport,
+		})
+		return VerifyRunOutput{Result: result}, nil
 	}
 
-	if changeInfo.TotalTasks > 0 && changeInfo.CompletedTasks < changeInfo.TotalTasks {
+	changeInfo := listResp.FindChange(input.ChangeName)
+	if changeInfo == nil {
+		// Fix 4: no change found = FAIL (was silently passing with TotalTasks=0)
 		result.Pass = false
-		result.FailureReport = fmt.Sprintf("Task completion: %d/%d tasks complete. Incomplete tasks must be finished before verification passes.",
+		result.FailureReport = fmt.Sprintf("change %q not found in openspec list output", input.ChangeName)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "task_completion", Pass: false, Output: result.FailureReport,
+		})
+		return VerifyRunOutput{Result: result}, nil
+	}
+
+	result.TasksCompleted = changeInfo.CompletedTasks
+	result.TasksTotal = changeInfo.TotalTasks
+
+	if changeInfo.TotalTasks == 0 {
+		// Fix 4: TotalTasks=0 = FAIL (means no tasks were created)
+		result.Pass = false
+		result.FailureReport = "no tasks found in change — planning agent may not have created tasks.md"
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "task_completion", Pass: false, Output: result.FailureReport,
+		})
+		return VerifyRunOutput{Result: result}, nil
+	}
+
+	if changeInfo.CompletedTasks < changeInfo.TotalTasks {
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("task completion: %d/%d tasks complete",
 			changeInfo.CompletedTasks, changeInfo.TotalTasks)
 		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
-			Name:   "task_completion",
-			Pass:   false,
-			Output: result.FailureReport,
+			Name: "task_completion", Pass: false, Output: result.FailureReport,
 		})
 		return VerifyRunOutput{Result: result}, nil
 	}
 
 	result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
-		Name:   "task_completion",
-		Pass:   true,
+		Name: "task_completion", Pass: true,
 		Output: fmt.Sprintf("%d/%d tasks complete", changeInfo.CompletedTasks, changeInfo.TotalTasks),
 	})
 
-	// --- Gate 2: Structural validation via openspec validate --json ---
+	// ── Gate 2: Structural validation (Fix 5: remove hardcoded true, Fix 6.2-6.5) ──
 	activity.RecordHeartbeat(ctx, "validating spec structure")
 
-	validateCheck, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
-		fmt.Sprintf("openspec validate \"%s\" --json 2>/dev/null | tail -1", input.ChangeName))
-	if err == nil {
-		var valResult struct {
-			Items []struct {
-				Valid  bool `json:"valid"`
-				Issues []struct {
-					Message string `json:"message"`
-				} `json:"issues"`
-			} `json:"items"`
-		}
-		if json.Unmarshal([]byte(validateCheck), &valResult) == nil && len(valResult.Items) > 0 {
-			result.ValidationValid = valResult.Items[0].Valid
-			if !valResult.Items[0].Valid {
-				var issues []string
-				for _, issue := range valResult.Items[0].Issues {
-					issues = append(issues, issue.Message)
-				}
-				result.Pass = false
-				result.FailureReport = fmt.Sprintf("Spec validation failed: %s", strings.Join(issues, "; "))
-				result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
-					Name:   "spec_validation",
-					Pass:   false,
-					Output: result.FailureReport,
-				})
-				result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
-				return VerifyRunOutput{Result: result}, nil
-			}
-		}
+	valOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		fmt.Sprintf("openspec validate \"%s\" --json", input.ChangeName))
+	if err != nil {
+		// Fix 6.4: ExecCommand failure = gate FAIL (was skipped)
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("openspec validate failed: %v (output: %s)", err, valOut)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "spec_validation", Pass: false, Output: result.FailureReport,
+		})
+		return VerifyRunOutput{Result: result}, nil
 	}
+
+	valResp, err := parseOpenSpecValidateResponse(valOut)
+	if err != nil {
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("failed to parse validate response: %v", err)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "spec_validation", Pass: false, Output: result.FailureReport,
+		})
+		return VerifyRunOutput{Result: result}, nil
+	}
+
+	if len(valResp.Items) > 0 && !valResp.Items[0].Valid {
+		var issues []string
+		for _, issue := range valResp.Items[0].Issues {
+			issues = append(issues, issue.Message)
+		}
+		result.ValidationValid = false
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("spec validation failed: %s", strings.Join(issues, "; "))
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "spec_validation", Pass: false, Output: result.FailureReport,
+		})
+		return VerifyRunOutput{Result: result}, nil
+	}
+
+	// Fix 5: only set true when validation actually passes (was unconditional on line 165)
 	result.ValidationValid = true
 	result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
-		Name: "spec_validation",
-		Pass: true,
+		Name: "spec_validation", Pass: true,
 	})
 
-	// --- Gate 2b: File existence checks from spec scenarios ---
+	// ── Gate 2b: File existence checks ──
 	activity.RecordHeartbeat(ctx, "checking file existence")
 
+	// Fix 11: use ExecCommand for file checks (was os.Stat on worker)
 	fileChecks := extractFileChecks(input.RepoPath, input.ChangeName)
 	for _, fc := range fileChecks {
-		fullPath := filepath.Join(input.RepoPath, fc.Path)
-		_, statErr := os.Stat(fullPath)
+		checkOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+			fmt.Sprintf("test -f %q && echo exists || echo missing", fc.Path))
 		check := AutomatedCheck{
 			Name: fmt.Sprintf("file_exists: %s", fc.Path),
-			Pass: statErr == nil,
 		}
-		if statErr != nil {
-			check.Output = fmt.Sprintf("File not found: %s (referenced in spec scenario: %s)", fc.Path, fc.Scenario)
+		if err != nil || strings.TrimSpace(checkOut) != "exists" {
+			check.Pass = false
+			check.Output = fmt.Sprintf("file not found: %s (spec scenario: %s)", fc.Path, fc.Scenario)
 			result.AutomatedChecks = append(result.AutomatedChecks, check)
 			result.Pass = false
-			result.FailureReport = fmt.Sprintf("File existence check failed: %s does not exist", fc.Path)
-			result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
+			result.FailureReport = check.Output
 			return VerifyRunOutput{Result: result}, nil
 		}
+		check.Pass = true
 		check.Output = "exists"
 		result.AutomatedChecks = append(result.AutomatedChecks, check)
 	}
 
-	// --- Gate 3: Automated scenario checks (test/build commands) ---
+	// ── Gate 3: Test command extraction and execution (Fix 6: was stub) ──
 	activity.RecordHeartbeat(ctx, "running automated checks")
 
-	// Check if common test commands exist and run them.
-	testCommands := detectTestCommands(input.RepoPath)
+	testCommands := detectTestCommands(input.RepoPath, input.ChangeName)
 	for _, tc := range testCommands {
 		output, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath, tc.Command)
 		check := AutomatedCheck{
@@ -204,26 +281,23 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		}
 		if err != nil {
 			check.Pass = false
-			check.Output = fmt.Sprintf("Command failed: %v\n%s", err, output)
+			check.Output = fmt.Sprintf("command failed: %v\n%s", err, output)
 			result.AutomatedChecks = append(result.AutomatedChecks, check)
 			result.Pass = false
-			result.FailureReport = fmt.Sprintf("Automated check '%s' failed: %s", tc.Name, check.Output)
-			result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
+			result.FailureReport = fmt.Sprintf("automated check '%s' failed: %s", tc.Name, check.Output)
 			return VerifyRunOutput{Result: result}, nil
 		}
 		check.Pass = true
-		check.Output = output
+		check.Output = truncate(output, 500)
 		result.AutomatedChecks = append(result.AutomatedChecks, check)
 	}
 
-	// --- Gate 4: LLM judge for semantic criteria ---
+	// ── Gate 4: LLM judge (Fix 7: parse verdict instead of discarding) ──
 	activity.RecordHeartbeat(ctx, "running LLM evaluation")
 
-	// Get git diff for the LLM judge.
 	gitDiff, _ := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
-		"cd /workspace/src/* 2>/dev/null && git diff HEAD~1 --stat 2>/dev/null || echo 'no git diff available'")
+		"cd /workspace/src/* 2>/dev/null && git diff HEAD~1 --stat || echo 'no git diff available'")
 
-	// Invoke LLM judge as a verify-stage agent.
 	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
 		AgentRunId: input.AgentRunName + "-verify",
 		Prompt: fmt.Sprintf(`Evaluate whether the implementation satisfies the spec.
@@ -238,60 +312,128 @@ Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...
 		Stage:    "verify",
 	}))
 	if err != nil {
-		// LLM judge failure is non-fatal — pass with warning.
-		result.Pass = true
-		return VerifyRunOutput{Result: result}, nil
+		// LLM judge start failure is non-fatal
+		log.Printf("LLM judge failed to start: %v", err)
+	} else {
+		if pollErr := pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName+"-verify"); pollErr != nil {
+			log.Printf("LLM judge failed: %v", pollErr)
+		} else {
+			// Fix 7: actually parse the LLM verdict from JSONL logs
+			activity.RecordHeartbeat(ctx, "parsing LLM verdict")
+			verdictJSON, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+				"cat .aot/logs/agent.jsonl 2>/dev/null | tail -50")
+			if err == nil {
+				verdict := parseLLMVerdict(verdictJSON)
+				if verdict != nil {
+					result.LLMVerdict = verdict
+					if !verdict.Pass {
+						var failedCriteria []string
+						for _, c := range verdict.Criteria {
+							if !c.Pass {
+								failedCriteria = append(failedCriteria, fmt.Sprintf("%s: %s", c.Scenario, c.Explanation))
+							}
+						}
+						result.Pass = false
+						result.FailureReport = fmt.Sprintf("LLM judge failed: %s", strings.Join(failedCriteria, "; "))
+						return VerifyRunOutput{Result: result}, nil
+					}
+				}
+			}
+		}
 	}
 
-	// Wait for verify agent to complete.
-	_ = pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName+"-verify")
-
-	// --- Gate 5: Archive on success ---
+	// ── Gate 5: Archive (Fix 8: no more || true) ──
 	activity.RecordHeartbeat(ctx, "archiving change")
 
-	_, _ = execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
-		fmt.Sprintf("openspec archive \"%s\" --yes 2>&1 || true", input.ChangeName))
+	archiveOut, archiveErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		fmt.Sprintf("openspec archive \"%s\" --yes", input.ChangeName))
+	if archiveErr != nil {
+		// Fix 8: report archive errors (was swallowed with || true)
+		// Archive failure is informational, not a gate blocker
+		log.Printf("openspec archive warning: %v (output: %s)", archiveErr, archiveOut)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "archive", Pass: false, Output: fmt.Sprintf("archive failed: %v", archiveErr),
+		})
+	} else {
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "archive", Pass: true, Output: "change archived successfully",
+		})
+	}
 
 	result.Pass = true
-	result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
-
-	// Write verification-result.json to the change directory.
-	writeVerificationResult(input.RepoPath, input.ChangeName, result)
-
 	return VerifyRunOutput{Result: result}, nil
 }
 
-// TestCommand is a test/build command detected from the workspace.
+// ======================================================================
+// parseLLMVerdict extracts a JSON verdict from JSONL agent log content.
+// ======================================================================
+func parseLLMVerdict(jsonlContent string) *LLMVerdict {
+	// Look for the last assistant message containing a JSON verdict
+	lines := strings.Split(jsonlContent, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		var event struct {
+			Type    string `json:"type"`
+			Message *struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		}
+		if json.Unmarshal([]byte(line), &event) != nil {
+			continue
+		}
+		if event.Type != "message_end" || event.Message == nil || event.Message.Role != "assistant" {
+			continue
+		}
+
+		// Try to find JSON verdict in content blocks
+		var contentBlocks []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(event.Message.Content, &contentBlocks) != nil {
+			continue
+		}
+		for _, block := range contentBlocks {
+			if block.Type != "text" {
+				continue
+			}
+			// Extract JSON from the text
+			jsonBytes, err := parseOpenSpecJSON(block.Text)
+			if err != nil {
+				continue
+			}
+			var verdict LLMVerdict
+			if json.Unmarshal(jsonBytes, &verdict) == nil && len(verdict.Criteria) > 0 {
+				return &verdict
+			}
+		}
+	}
+	return nil
+}
+
+// ======================================================================
+// detectTestCommands — Fix 6: actually extract commands (was stub)
+// ======================================================================
+
 type TestCommand struct {
 	Name    string
 	Command string
 }
 
-// detectTestCommands looks for common test commands in the workspace.
-func detectTestCommands(repoPath string) []TestCommand {
-	// These will be enhanced to parse spec scenarios for command references.
-	// For now, return empty — automated command checks are opt-in via spec scenarios.
-	return nil
-}
+// commandKeywords are words that indicate a WHEN/THEN line references a command.
+var commandKeywords = []string{"run", "execute", "pass", "exit", "build", "test", "compile", "lint"}
 
-// FileCheck represents a file existence check extracted from a spec scenario.
-type FileCheck struct {
-	Path     string // relative path to check
-	Scenario string // scenario that referenced it
-}
+// backtickCommandRe matches backtick-wrapped commands (contain spaces, indicating a command not a path).
+var backtickCommandRe = regexp.MustCompile("`([^`]+\\s[^`]+)`")
 
-// backtickPathRe matches backtick-wrapped file paths in spec scenarios.
-// Looks for patterns like `src/auth.ts`, `README.md`, `pkg/handler.go`.
-// backtickPathRe matches backtick-wrapped file paths. Must contain a dot or slash
-// to distinguish from command names. Matches: `src/auth.ts`, `.env`, `README.md`
-var backtickPathRe = regexp.MustCompile("`([a-zA-Z0-9_./-]*[./][a-zA-Z0-9_./-]*)`")
+func detectTestCommands(repoPath, changeName string) []TestCommand {
+	var commands []TestCommand
+	seen := make(map[string]bool)
 
-// extractFileChecks parses spec files in the change directory for file path
-// references in WHEN/THEN scenarios and returns them as file existence checks.
-func extractFileChecks(repoPath, changeName string) []FileCheck {
-	var checks []FileCheck
-
-	// Look for spec files in common locations.
 	specDirs := []string{
 		filepath.Join(repoPath, "openspec", "changes", changeName, "specs"),
 		filepath.Join(repoPath, ".openspec", "changes", changeName, "specs"),
@@ -302,33 +444,100 @@ func extractFileChecks(repoPath, changeName string) []FileCheck {
 			if err != nil || info.IsDir() || filepath.Ext(path) != ".md" {
 				return nil
 			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil
+			}
 
+			for _, line := range strings.Split(string(data), "\n") {
+				trimmed := strings.TrimSpace(line)
+				lower := strings.ToLower(trimmed)
+
+				// Only look at WHEN/THEN/AND lines
+				if !strings.Contains(lower, "when") && !strings.Contains(lower, "then") && !strings.Contains(lower, "and") {
+					continue
+				}
+
+				// Check for command keywords
+				hasKeyword := false
+				for _, kw := range commandKeywords {
+					if strings.Contains(lower, kw) {
+						hasKeyword = true
+						break
+					}
+				}
+				if !hasKeyword {
+					continue
+				}
+
+				// Extract backtick-wrapped commands (must contain spaces)
+				matches := backtickCommandRe.FindAllStringSubmatch(trimmed, -1)
+				for _, m := range matches {
+					if len(m) < 2 {
+						continue
+					}
+					cmd := strings.TrimSpace(m[1])
+					if seen[cmd] {
+						continue
+					}
+					seen[cmd] = true
+					commands = append(commands, TestCommand{
+						Name:    fmt.Sprintf("spec_command: %s", truncate(cmd, 40)),
+						Command: cmd,
+					})
+				}
+			}
+			return nil
+		})
+	}
+
+	return commands
+}
+
+// ======================================================================
+// File existence checks — uses spec parsing
+// ======================================================================
+
+type FileCheck struct {
+	Path     string
+	Scenario string
+}
+
+var backtickPathRe = regexp.MustCompile("`([a-zA-Z0-9_./-]*[./][a-zA-Z0-9_./-]*)`")
+
+func extractFileChecks(repoPath, changeName string) []FileCheck {
+	var checks []FileCheck
+
+	specDirs := []string{
+		filepath.Join(repoPath, "openspec", "changes", changeName, "specs"),
+		filepath.Join(repoPath, ".openspec", "changes", changeName, "specs"),
+	}
+
+	for _, dir := range specDirs {
+		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || filepath.Ext(path) != ".md" {
+				return nil
+			}
 			data, err := os.ReadFile(path)
 			if err != nil {
 				return nil
 			}
 
 			content := string(data)
-			// Find THEN clauses that reference file paths.
 			lines := strings.Split(content, "\n")
 			var currentScenario string
 			for _, line := range lines {
 				trimmed := strings.TrimSpace(line)
 				if strings.HasPrefix(trimmed, "#### Scenario:") {
-					currentScenario = strings.TrimPrefix(trimmed, "#### Scenario:")
-					currentScenario = strings.TrimSpace(currentScenario)
+					currentScenario = strings.TrimSpace(strings.TrimPrefix(trimmed, "#### Scenario:"))
 				}
-				// Look for THEN/AND lines with backtick-wrapped paths that mention "exist"
 				lower := strings.ToLower(trimmed)
 				hasThenOrAnd := strings.Contains(lower, "then") || strings.Contains(lower, "and")
 				if hasThenOrAnd && strings.Contains(lower, "exist") {
 					matches := backtickPathRe.FindAllStringSubmatch(trimmed, -1)
 					for _, m := range matches {
 						if len(m) > 1 {
-							checks = append(checks, FileCheck{
-								Path:     m[1],
-								Scenario: currentScenario,
-							})
+							checks = append(checks, FileCheck{Path: m[1], Scenario: currentScenario})
 						}
 					}
 				}
@@ -340,10 +549,11 @@ func extractFileChecks(repoPath, changeName string) []FileCheck {
 	return checks
 }
 
-// writeVerificationResult writes the verification result as JSON to the
-// change directory on the workspace PVC.
+// ======================================================================
+// Helpers
+// ======================================================================
+
 func writeVerificationResult(repoPath, changeName string, result VerificationResult) {
-	// Try both possible locations for the change directory.
 	candidates := []string{
 		filepath.Join(repoPath, "openspec", "changes", changeName),
 		filepath.Join(repoPath, ".openspec", "changes", changeName),
@@ -356,22 +566,18 @@ func writeVerificationResult(repoPath, changeName string, result VerificationRes
 
 	for _, dir := range candidates {
 		if _, err := os.Stat(dir); err == nil {
-			outPath := filepath.Join(dir, "verification-result.json")
-			_ = os.WriteFile(outPath, data, 0o644)
+			_ = os.WriteFile(filepath.Join(dir, "verification-result.json"), data, 0o644)
 			return
 		}
 	}
 
-	// If no change dir exists, write to a fallback location.
 	fallbackDir := filepath.Join(repoPath, ".aot", "verification")
 	_ = os.MkdirAll(fallbackDir, 0o755)
-	outPath := filepath.Join(fallbackDir, changeName+"-result.json")
-	_ = os.WriteFile(outPath, data, 0o644)
+	_ = os.WriteFile(filepath.Join(fallbackDir, changeName+"-result.json"), data, 0o644)
 }
 
 // execInSidecar runs a bash command via the sidecar's ExecCommand RPC.
-// Returns stdout and any error. This is a lightweight direct execution,
-// not an agent invocation.
+// Fix 9: returns stdout AND captures stderr in errors (no more 2>/dev/null).
 func execInSidecar(ctx context.Context, client agentv1connect.AgentSidecarServiceClient, runID, repoPath, command string) (string, error) {
 	resp, err := client.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
 		Command:        command,
@@ -390,10 +596,9 @@ func execInSidecar(ctx context.Context, client agentv1connect.AgentSidecarServic
 }
 
 // pollUntilAgentDone polls the sidecar until the agent process completes.
-// Handles UNSPECIFIED state (agent never started or crashed immediately).
 func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarServiceClient, runID string) error {
 	unspecifiedCount := 0
-	const maxUnspecified = 10 // give the agent 30s to start (10 * 3s poll)
+	const maxUnspecified = 10
 
 	for {
 		select {
@@ -416,9 +621,8 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 			return fmt.Errorf("agent failed: %s", status.Msg.Error)
 		case agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
 			agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT:
-			unspecifiedCount = 0 // agent is alive, reset counter
+			unspecifiedCount = 0
 		default:
-			// UNSPECIFIED — agent hasn't started or exited immediately
 			unspecifiedCount++
 			if unspecifiedCount >= maxUnspecified {
 				return fmt.Errorf("agent never started (UNSPECIFIED state after %d polls)", unspecifiedCount)
