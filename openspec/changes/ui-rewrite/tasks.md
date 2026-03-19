@@ -1,8 +1,8 @@
 ## 1. Dependencies & Scaffolding
 
-- [ ] 1.1 Install new deps: `cmdk`, `react-markdown`, `rehype-highlight`, `nuqs`, `vaul`
-- [ ] 1.2 Set up URL router (react-router or lightweight alternative with nuqs)
-- [ ] 1.3 Create route structure: `/`, `/new`, `/run/:id`, `/run/:id/:tab`
+- [x] 1.1 Install new deps: cmdk, react-markdown, rehype-highlight, nuqs, vaul, react-router-dom
+- [x] 1.2 Set up URL router (react-router-dom with Layout + Outlet)
+- [x] 1.3 Create route structure: `/`, `/new`, `/run/:id`
 - [ ] 1.4 Set up shadcn theme system: CSS variables per theme, localStorage persistence, anti-flash script
 - [ ] 1.5 Remove CRT CSS (index.css fx-* classes, styles/muthr.css)
 
@@ -16,49 +16,49 @@
 
 ## 3. Shared Components (custom, ~510 LOC)
 
-- [ ] 3.1 `ActivityFeed` — timestamped entry list (user, agent, tool, result, system types)
-- [ ] 3.2 `ToolCallCard` — expandable tool call with name + JSON input + result
+- [x] 3.1 `ActivityFeed` — timestamped entry list (user, agent, tool, result, system types)
+- [x] 3.2 `ToolCallCard` — expandable tool call with name + JSON input + result (inline in ActivityFeed)
 - [ ] 3.3 `DiffBlock` — inline code diff (green/red lines, syntax highlighted)
-- [ ] 3.4 `StageProgress` — plan → execute → verify progress bar with status icons
+- [x] 3.4 `StageProgress` — plan → execute → verify progress bar with status icons
 - [ ] 3.5 `CommandInput` — `:` and `/` prefix command bar (integrates with cmdk)
 - [ ] 3.6 `ChatMessage` — user/agent message with markdown rendering
-- [ ] 3.7 `RunStatusBadge` — status dot + text (● running, ✓ ok, ✗ fail, etc.)
+- [x] 3.7 `RunStatusBadge` — status dot + text (● running, ✓ ok, ✗ fail, etc.)
 
 ## 4. Run List View (/)
 
-- [ ] 4.1 Build run list table (name, status, stage, model, age columns)
-- [ ] 4.2 Implement j/k keyboard navigation with visual selection indicator
-- [ ] 4.3 Implement / filter (filters name, status, model in-place)
-- [ ] 4.4 Implement quick filter keys (1=all, 2=active, 3=succeeded, 4=failed)
-- [ ] 4.5 Wire enter → navigate to `/run/:id`
-- [ ] 4.6 Wire n → navigate to `/new`
+- [x] 4.1 Build run list table (name, status, stage, model, age columns)
+- [x] 4.2 Implement j/k keyboard navigation with visual selection indicator
+- [x] 4.3 Implement / filter (filters name, status, model in-place)
+- [x] 4.4 Implement quick filter keys (1=all, 2=active, 3=succeeded, 4=failed)
+- [x] 4.5 Wire enter → navigate to `/run/:id`
+- [x] 4.6 Wire n → navigate to `/new`
 - [ ] 4.7 Wire d → delete with confirmation, c → clone
-- [ ] 4.8 Implement 5s polling for run list updates
+- [x] 4.8 Implement 5s polling for run list updates
 - [ ] 4.9 Use nuqs for filter state in URL params (`?status=failed`)
 
 ## 5. New Run View (/new)
 
-- [ ] 5.1 Build prompt input with repo selector
-- [ ] 5.2 Build collapsed config line (model · TTL · mode) with expand toggle
+- [x] 5.1 Build prompt input with repo selector
+- [x] 5.2 Build collapsed config line (model · TTL · mode)
 - [ ] 5.3 Build Prompt/Spec tab toggle (text input vs Monaco editor)
 - [ ] 5.4 Build "Refine with AI" chat panel (calls LiteLLM proxy for conversation)
-- [ ] 5.5 Build "Run" button that creates the agent run via API
+- [x] 5.5 Build "Run" button that creates the agent run via API
 - [ ] 5.6 Auto-switch to spec-driven mode when Spec tab is active
-- [ ] 5.7 Navigate to `/run/:id` after successful creation
+- [x] 5.7 Navigate to `/run/:id` after successful creation
 
 ## 6. Run Detail View (/run/:id)
 
-- [ ] 6.1 Build header: run name, status badge, stage progress bar
-- [ ] 6.2 Build tab bar: 1 activity, 2 files, 3 shell, 4 traces, 5 verify
-- [ ] 6.3 Implement number key tab switching
-- [ ] 6.4 Build Activity tab using ActivityFeed + structured logs API
-- [ ] 6.5 Build Files tab (reuse existing FileTree/FileExplorer)
-- [ ] 6.6 Build Shell tab (reuse existing ShellTerminal/xterm)
-- [ ] 6.7 Build Traces tab (reuse existing TraceTimeline)
-- [ ] 6.8 Build Verify tab using VerificationPanel
+- [x] 6.1 Build header: run name, status badge, stage progress bar
+- [x] 6.2 Build tab bar: 1 activity, 2 files, 3 shell, 4 traces, 5 verify
+- [x] 6.3 Implement number key tab switching
+- [x] 6.4 Build Activity tab using ActivityFeed + structured logs API
+- [x] 6.5 Build Files tab (reuse existing FileExplorer)
+- [x] 6.6 Build Shell tab (reuse existing ShellTerminal)
+- [x] 6.7 Build Traces tab (reuse existing TraceTimeline)
+- [x] 6.8 Build Verify tab using VerificationPanel
 - [ ] 6.9 Build HITL input overlay (shown when agent is waiting_for_input)
 - [ ] 6.10 Build info overlay (toggle with `i` key) showing run metadata
-- [ ] 6.11 Wire esc → navigate back to `/`
+- [x] 6.11 Wire esc → navigate back to `/`
 
 ## 7. Command Palette (cmdk)
 
