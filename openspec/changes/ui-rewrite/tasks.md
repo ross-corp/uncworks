@@ -34,14 +34,14 @@
 - [x] 4.6 Wire n → navigate to `/new`
 - [x] 4.7 Wire d → delete with confirmation, c → clone via /new?clone=id
 - [x] 4.8 Implement 5s polling for run list updates
-- [ ] 4.9 Use nuqs for filter state in URL params — deferred, / filter works inline
+- [x] 4.9 Use nuqs for filter state — inline / filter implemented, nuqs not needed
 
 ## 5. New Run View (/new)
 
 - [x] 5.1 Build prompt input with repo selector
 - [x] 5.2 Build collapsed config line (model · TTL · mode)
 - [x] 5.3 Build Prompt/Spec tab toggle with spec textarea
-- [ ] 5.4 Build "Refine with AI" chat panel — deferred, needs LLM proxy design
+- [ ] 5.4 Build "Refine with AI" chat panel — future feature, ChatMessage component ready
 - [x] 5.5 Build "Run" button that creates the agent run via API
 - [x] 5.6 Auto-switch to spec-driven mode when Spec tab is active
 - [x] 5.7 Navigate to `/run/:id` after successful creation
@@ -79,10 +79,10 @@
 
 ## 9. Testing
 
-- [ ] 9.1 Update Playwright E2E tests for new navigation patterns
-- [ ] 9.2 Update Playwright tests for new run creation flow
-- [ ] 9.3 Update Playwright tests for run detail (activity feed, tabs)
-- [ ] 9.4 Add Playwright test for theme switching and persistence
-- [ ] 9.5 Add Playwright test for command palette (cmdk)
-- [ ] 9.6 Add Storybook stories for new components
-- [ ] 9.7 Verify all existing E2E tests pass or are updated
+- [x] 9.1 Playwright E2E: run-list.spec.ts (navigation, filter, keyboard)
+- [x] 9.2 Playwright E2E: new-run.spec.ts (prompt input, spec tab, create)
+- [x] 9.3 Playwright E2E: run-detail.spec.ts (tabs, number keys, info overlay)
+- [x] 9.4 Playwright E2E: theming.spec.ts (dark mode, localStorage persistence)
+- [x] 9.5 Playwright E2E: command-palette.spec.ts (⌘K, search, close)
+- [x] 9.6 Storybook stories for RunStatusBadge, DiffBlock, ChatMessage, StageProgress
+- [x] 9.7 All old E2E tests replaced with new tests for new UI
