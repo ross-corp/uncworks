@@ -4,7 +4,7 @@
 - [x] 1.2 Set up URL router (react-router-dom with Layout + Outlet)
 - [x] 1.3 Create route structure: `/`, `/new`, `/run/:id`
 - [x] 1.4 Set up shadcn theme system: CSS variables per theme, localStorage persistence, anti-flash script
-- [ ] 1.5 Remove CRT CSS (index.css fx-* classes, styles/muthr.css)
+- [x] 1.5 Remove CRT CSS (index.css fx-* classes deleted, styles/muthr.css deleted)
 
 ## 2. Theming
 
