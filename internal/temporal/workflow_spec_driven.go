@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -96,9 +97,10 @@ type PlanRunInput struct {
 
 // PlanRunOutput contains the result of the planning stage.
 type PlanRunOutput struct {
-	ChangeName string
-	TaskCount  int
-	SpecsValid bool
+	ChangeName       string
+	TaskCount        int
+	SpecsValid       bool
+	ValidationErrors []string // errors from openspec validate/status (for retry context)
 }
 
 // VerifyRunInput contains parameters for the verification stage activity.
@@ -348,6 +350,17 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 
 	changeName := planOutput.ChangeName
 	maxRetries := int(execCfg.MaxRetries)
+
+	// Fix 1: Check plan validation result (was ignoring SpecsValid)
+	if !planOutput.SpecsValid {
+		state.Phase = "Failed"
+		errMsg := "Planning produced invalid OpenSpec change"
+		if len(planOutput.ValidationErrors) > 0 {
+			errMsg += ": " + strings.Join(planOutput.ValidationErrors, "; ")
+		}
+		state.Message = errMsg
+		return fmt.Errorf("%s", errMsg)
+	}
 
 	// =============================================
 	// STAGE 2 + 3: EXECUTE → VERIFY (with retry)
