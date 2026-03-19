@@ -3,16 +3,16 @@
 - [x] 1.1 Install new deps: cmdk, react-markdown, rehype-highlight, nuqs, vaul, react-router-dom
 - [x] 1.2 Set up URL router (react-router-dom with Layout + Outlet)
 - [x] 1.3 Create route structure: `/`, `/new`, `/run/:id`
-- [ ] 1.4 Set up shadcn theme system: CSS variables per theme, localStorage persistence, anti-flash script
+- [x] 1.4 Set up shadcn theme system: CSS variables per theme, localStorage persistence, anti-flash script
 - [ ] 1.5 Remove CRT CSS (index.css fx-* classes, styles/muthr.css)
 
 ## 2. Theming
 
-- [ ] 2.1 Create theme provider with all shadcn built-in themes (zinc, slate, stone, gray, neutral, red, rose, orange, green, blue, yellow, violet)
-- [ ] 2.2 Implement light/dark mode toggle with system preference detection
-- [ ] 2.3 Persist theme + mode to localStorage (`aot-theme`, `aot-mode`)
-- [ ] 2.4 Add anti-flash inline script in index.html (apply theme before first paint)
-- [ ] 2.5 Add "theme" command to command palette (list all themes, instant preview)
+- [x] 2.1 Create theme provider with all shadcn built-in themes (useThemeNew hook)
+- [x] 2.2 Implement light/dark mode toggle with system preference detection
+- [x] 2.3 Persist theme + mode to localStorage (aot-theme-color, aot-theme-mode)
+- [x] 2.4 Add anti-flash inline script in index.html (apply theme before first paint)
+- [x] 2.5 Add "theme" command to command palette (list all themes, toggle dark mode)
 
 ## 3. Shared Components (custom, ~510 LOC)
 
@@ -62,11 +62,11 @@
 
 ## 7. Command Palette (cmdk)
 
-- [ ] 7.1 Set up cmdk with ⌘K trigger
-- [ ] 7.2 Add run search (search by name, filter by status)
-- [ ] 7.3 Add navigation commands (go to runs, new run, settings)
+- [x] 7.1 Set up cmdk with ⌘K trigger
+- [x] 7.2 Add run search (search by name, top 10 results)
+- [x] 7.3 Add navigation commands (go to runs, new run)
 - [ ] 7.4 Add action commands (cancel run, clone run, delete run)
-- [ ] 7.5 Add theme commands (switch theme, toggle dark mode)
+- [x] 7.5 Add theme commands (switch theme, toggle dark mode)
 
 ## 8. Cleanup & Migration
 
