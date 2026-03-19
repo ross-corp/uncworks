@@ -29,31 +29,87 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	sidecarURL := fmt.Sprintf("http://%s:%d", input.PodIP, sidecarPort)
 	sidecarClient := agentv1connect.NewAgentSidecarServiceClient(http.DefaultClient, sidecarURL)
 
-	// Fix 2: OpenSpec init — ensure workspace has openspec configured
+	// Step 1: OpenSpec init — ensure workspace has openspec configured
 	activity.RecordHeartbeat(ctx, "initializing openspec in workspace")
 	initOut, initErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
 		"test -f openspec/config.yaml || openspec init --tools pi --force")
 	if initErr != nil {
 		log.Printf("openspec init warning (non-fatal): %v stdout=%q", initErr, initOut)
-		// Non-fatal — agent may still create the change manually
 	}
 
-	// Start the planning agent
-	prompt := input.Prompt
-	if input.SpecContent != "" {
-		prompt = fmt.Sprintf("User-provided specification:\n\n%s\n\n---\n\nCreate an OpenSpec change named \"%s\" based on the above. Generate proposal.md, specs/ with WHEN/THEN scenarios, and tasks.md.",
-			input.SpecContent, input.AgentRunName)
-	} else {
-		prompt = fmt.Sprintf("Create an OpenSpec change named \"%s\" for this task:\n\n%s\n\nGenerate proposal.md, specs/ with WHEN/THEN scenarios, and tasks.md.",
-			input.AgentRunName, prompt)
+	// Step 2: Scaffold the change BEFORE starting the agent
+	activity.RecordHeartbeat(ctx, "scaffolding openspec change")
+	newChangeCmd := fmt.Sprintf("openspec new change %q", input.AgentRunName)
+	newOut, newErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath, newChangeCmd)
+	if newErr != nil {
+		return PlanRunOutput{}, fmt.Errorf("scaffold openspec change: %w (output: %s)", newErr, newOut)
 	}
+
+	// Step 3: Verify the change was created via status
+	activity.RecordHeartbeat(ctx, "verifying scaffolded change")
+	statusCmd := fmt.Sprintf("openspec status --change %q --json", input.AgentRunName)
+	scaffoldStatusOut, scaffoldStatusErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath, statusCmd)
+	if scaffoldStatusErr != nil {
+		return PlanRunOutput{}, fmt.Errorf("verify scaffolded change: %w (output: %s)", scaffoldStatusErr, scaffoldStatusOut)
+	}
+
+	scaffoldStatus, scaffoldParseErr := parseOpenSpecStatusResponse(scaffoldStatusOut)
+	if scaffoldParseErr != nil {
+		return PlanRunOutput{}, fmt.Errorf("parse scaffolded change status: %w", scaffoldParseErr)
+	}
+
+	// Step 4: Get templates from openspec instructions for each artifact
+	activity.RecordHeartbeat(ctx, "fetching artifact templates")
+	proposalTemplate := ""
+	specsTemplate := ""
+	tasksTemplate := ""
+
+	proposalInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		fmt.Sprintf("openspec instructions proposal --change %q --json", input.AgentRunName))
+	if err == nil {
+		if t, parseErr := parseOpenSpecInstructionsResponse(proposalInstrOut); parseErr == nil {
+			proposalTemplate = t
+		} else {
+			log.Printf("parse proposal instructions warning: %v", parseErr)
+		}
+	} else {
+		log.Printf("openspec instructions proposal warning: %v", err)
+	}
+
+	specsInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		fmt.Sprintf("openspec instructions specs --change %q --json", input.AgentRunName))
+	if err == nil {
+		if t, parseErr := parseOpenSpecInstructionsResponse(specsInstrOut); parseErr == nil {
+			specsTemplate = t
+		} else {
+			log.Printf("parse specs instructions warning: %v", parseErr)
+		}
+	} else {
+		log.Printf("openspec instructions specs warning: %v", err)
+	}
+
+	tasksInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		fmt.Sprintf("openspec instructions tasks --change %q --json", input.AgentRunName))
+	if err == nil {
+		if t, parseErr := parseOpenSpecInstructionsResponse(tasksInstrOut); parseErr == nil {
+			tasksTemplate = t
+		} else {
+			log.Printf("parse tasks instructions warning: %v", parseErr)
+		}
+	} else {
+		log.Printf("openspec instructions tasks warning: %v", err)
+	}
+
+	// Step 5: Build structured agent prompt with exact paths and templates
+	prompt := buildPlanAgentPrompt(input.Prompt, input.SpecContent, input.AgentRunName,
+		scaffoldStatus, proposalTemplate, specsTemplate, tasksTemplate)
 
 	envVars := map[string]string{}
 	if input.Model != "" {
 		envVars["PI_MODEL"] = input.Model
 	}
 
-	_, err := sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
+	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
 		AgentRunId: input.AgentRunName,
 		Prompt:     prompt,
 		RepoPath:   input.RepoPath,
@@ -64,7 +120,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 		return PlanRunOutput{}, fmt.Errorf("start plan agent: %w", err)
 	}
 
-	if err := pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName); err != nil {
+	if err = pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName); err != nil {
 		return PlanRunOutput{}, fmt.Errorf("plan agent: %w", err)
 	}
 
@@ -552,6 +608,72 @@ func extractFileChecks(repoPath, changeName string) []FileCheck {
 // ======================================================================
 // Helpers
 // ======================================================================
+
+// buildPlanAgentPrompt constructs a structured prompt for the planning agent
+// that includes exact file paths and artifact templates from the scaffolded change.
+func buildPlanAgentPrompt(userPrompt, specContent, changeName string, status *OpenSpecStatusResponse, proposalTpl, specsTpl, tasksTpl string) string {
+	var sb strings.Builder
+
+	// Include the user's original prompt/spec as the "what to plan" content
+	if specContent != "" {
+		sb.WriteString("## User-Provided Specification\n\n")
+		sb.WriteString(specContent)
+		sb.WriteString("\n\n---\n\n")
+	} else {
+		sb.WriteString("## Task\n\n")
+		sb.WriteString(userPrompt)
+		sb.WriteString("\n\n---\n\n")
+	}
+
+	fmt.Fprintf(&sb, "## OpenSpec Change: %s\n\n", changeName)
+	sb.WriteString("The change directory has already been created for you. Write the following artifacts to the exact paths below.\n\n")
+
+	// Include exact file paths from the status output
+	changePath := fmt.Sprintf("openspec/changes/%s", changeName)
+	for _, artifact := range status.Artifacts {
+		switch artifact.ID {
+		case "proposal":
+			fmt.Fprintf(&sb, "### Proposal\n**Path:** `%s/proposal.md`\n", changePath)
+			if proposalTpl != "" {
+				sb.WriteString("\n**Template (follow this structure exactly):**\n```\n")
+				sb.WriteString(proposalTpl)
+				sb.WriteString("\n```\n\n")
+			} else {
+				sb.WriteString("\n")
+			}
+		case "design":
+			fmt.Fprintf(&sb, "### Design\n**Path:** `%s/design.md`\n\n", changePath)
+		case "specs":
+			fmt.Fprintf(&sb, "### Specs\n**Path:** `%s/specs/<capability>/spec.md` (one file per capability)\n", changePath)
+			if specsTpl != "" {
+				sb.WriteString("\n**Template (follow this WHEN/THEN format exactly):**\n```\n")
+				sb.WriteString(specsTpl)
+				sb.WriteString("\n```\n\n")
+			} else {
+				sb.WriteString("\n")
+			}
+		case "tasks":
+			fmt.Fprintf(&sb, "### Tasks\n**Path:** `%s/tasks.md`\n", changePath)
+			if tasksTpl != "" {
+				sb.WriteString("\n**Template (follow this checkbox format exactly):**\n```\n")
+				sb.WriteString(tasksTpl)
+				sb.WriteString("\n```\n\n")
+			} else {
+				sb.WriteString("\n")
+			}
+		default:
+			fmt.Fprintf(&sb, "### %s\n**Path:** `%s/%s`\n\n", artifact.ID, changePath, artifact.ID)
+		}
+	}
+
+	sb.WriteString("## Instructions\n\n")
+	sb.WriteString("- Write each artifact to its specified path using the templates provided\n")
+	sb.WriteString("- Each spec MUST include at least one machine-checkable WHEN/THEN scenario\n")
+	sb.WriteString("- Do NOT run openspec CLI commands — the change directory has been created for you\n")
+	sb.WriteString("- Do NOT implement any code — only create the spec artifacts\n")
+
+	return sb.String()
+}
 
 func writeVerificationResult(repoPath, changeName string, result VerificationResult) {
 	candidates := []string{

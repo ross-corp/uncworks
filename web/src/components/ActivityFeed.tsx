@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { apiFetch } from "../hooks/apiFetch";
+import type { AgentRunPhase } from "../types/agent-run";
 
 interface LogEntry {
   timestamp: string;
@@ -10,13 +11,22 @@ interface LogEntry {
   model?: string;
 }
 
-export default function ActivityFeed({ runId }: { runId: string }) {
+interface ThinkingState {
+  thinking: boolean;
+  text: string;
+  toolName?: string;
+}
+
+export default function ActivityFeed({ runId, phase }: { runId: string; phase?: AgentRunPhase }) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [thinking, setThinking] = useState<ThinkingState | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const prevEntryCountRef = useRef(0);
 
+  // Poll structured logs
   useEffect(() => {
     let cancelled = false;
 
@@ -39,10 +49,44 @@ export default function ActivityFeed({ runId }: { runId: string }) {
     return () => { cancelled = true; clearInterval(interval); };
   }, [runId]);
 
+  // Clear thinking when new completed entries arrive
+  useEffect(() => {
+    if (entries.length > prevEntryCountRef.current) {
+      setThinking(null);
+    }
+    prevEntryCountRef.current = entries.length;
+  }, [entries]);
+
+  // Poll thinking endpoint (only when run is active)
+  const isActive = phase === "running" || phase === "waiting_for_input";
+
+  const fetchThinking = useCallback(async () => {
+    try {
+      const r = await apiFetch(`/api/v1/runs/${runId}/logs/thinking`);
+      if (r.ok) {
+        const data: ThinkingState = await r.json();
+        setThinking(data.thinking ? data : null);
+      }
+    } catch {
+      // silent
+    }
+  }, [runId]);
+
+  useEffect(() => {
+    if (!isActive) {
+      setThinking(null);
+      return;
+    }
+
+    fetchThinking();
+    const interval = setInterval(fetchThinking, 2000);
+    return () => clearInterval(interval);
+  }, [isActive, fetchThinking]);
+
   // Auto-scroll
   useEffect(() => {
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [entries, autoScroll]);
+  }, [entries, thinking, autoScroll]);
 
   // Detect user scroll
   function handleScroll() {
@@ -65,7 +109,25 @@ export default function ActivityFeed({ runId }: { runId: string }) {
       {entries.map((entry, i) => (
         <EntryRow key={i} entry={entry} />
       ))}
+      {thinking?.thinking && (thinking.text || thinking.toolName) && (
+        <ThinkingEntry text={thinking.text} toolName={thinking.toolName} />
+      )}
       <div ref={bottomRef} />
+    </div>
+  );
+}
+
+function ThinkingEntry({ text, toolName }: { text: string; toolName?: string }) {
+  return (
+    <div className="flex gap-3 py-1">
+      <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">
+        <span className="animate-pulse text-green-400">●</span>
+      </span>
+      <span className="w-14 shrink-0 text-xs font-medium text-green-500/50">agent</span>
+      <span className="text-sm italic text-muted-foreground/50 whitespace-pre-wrap">
+        {toolName && <span className="text-purple-400/50">[{toolName}] </span>}
+        {text}
+      </span>
     </div>
   );
 }

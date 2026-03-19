@@ -137,7 +137,7 @@ export default function RunDetailView() {
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === "activity" && <ActivityFeed runId={run.id} />}
+        {tab === "activity" && <ActivityFeed runId={run.id} phase={run.status.phase} />}
         {tab === "files" && <FileExplorer runId={run.id} />}
         {tab === "shell" && <ShellTerminal runId={run.id} />}
         {tab === "traces" && (
