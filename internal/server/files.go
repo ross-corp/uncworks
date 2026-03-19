@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -49,6 +50,7 @@ func (f *FileHandler) RegisterFileHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/runs/{id}/files/content", f.handleFileContent)
 	mux.HandleFunc("GET /api/v1/runs/{id}/logs", f.handleLogs)
 	mux.HandleFunc("GET /api/v1/runs/{id}/logs/structured", f.handleStructuredLogs)
+	mux.HandleFunc("GET /api/v1/runs/{id}/logs/thinking", f.handleThinking)
 	mux.HandleFunc("GET /api/v1/runs/{id}/verification", f.handleVerificationResult)
 }
 
@@ -548,6 +550,159 @@ func (f *FileHandler) handleStructuredLogs(w http.ResponseWriter, r *http.Reques
 
 	entries := parseAgentJSONL(string(data))
 	writeJSON(w, http.StatusOK, entries)
+}
+
+// ThinkingResponse is the JSON response for the thinking endpoint.
+type ThinkingResponse struct {
+	Thinking bool   `json:"thinking"`
+	Text     string `json:"text,omitempty"`
+	ToolName string `json:"toolName,omitempty"`
+}
+
+// handleThinking returns the agent's current in-progress thinking text
+// by reading the last 100 lines of agent.jsonl and extracting partial text_delta events.
+func (f *FileHandler) handleThinking(w http.ResponseWriter, r *http.Request) {
+	runID := r.PathValue("id")
+	if runID == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing run id"})
+		return
+	}
+
+	hostPath, err := f.getPVCHostPath(r.Context(), runID)
+	if err != nil {
+		writeJSON(w, http.StatusOK, ThinkingResponse{Thinking: false})
+		return
+	}
+
+	jsonlPath := filepath.Join(hostPath, ".aot", "logs", "agent.jsonl")
+	lines, err := readLastNLines(jsonlPath, 100)
+	if err != nil {
+		writeJSON(w, http.StatusOK, ThinkingResponse{Thinking: false})
+		return
+	}
+
+	result := parseThinkingFromLines(lines)
+	writeJSON(w, http.StatusOK, result)
+}
+
+// readLastNLines reads the last n lines from a file efficiently.
+func readLastNLines(path string, n int) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	// Read the file and collect all lines.
+	var allLines []string
+	scanner := bufio.NewScanner(f)
+	// Increase the buffer size for potentially large JSONL lines.
+	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
+	for scanner.Scan() {
+		allLines = append(allLines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(allLines) <= n {
+		return allLines, nil
+	}
+	return allLines[len(allLines)-n:], nil
+}
+
+// parseThinkingFromLines parses JSONL lines to find the last in-progress message.
+// It looks for the last message_start that doesn't have a corresponding message_end,
+// and accumulates text_delta events from message_update entries after it.
+func parseThinkingFromLines(lines []string) ThinkingResponse {
+	// Walk backwards to find the last message_start and check if it has a message_end after it.
+	lastMsgStartIdx := -1
+	hasEndAfterStart := false
+
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+
+		var evt struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+			continue
+		}
+
+		if evt.Type == "message_start" {
+			lastMsgStartIdx = i
+			break
+		}
+		if evt.Type == "message_end" {
+			hasEndAfterStart = true
+			break // Found a message_end before any message_start — all messages complete.
+		}
+	}
+
+	// No in-progress message found.
+	if lastMsgStartIdx < 0 || hasEndAfterStart {
+		return ThinkingResponse{Thinking: false}
+	}
+
+	// Accumulate text_delta events from message_update entries after the message_start.
+	var textBuf strings.Builder
+	var toolName string
+
+	for i := lastMsgStartIdx + 1; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+
+		var evt struct {
+			Type                  string          `json:"type"`
+			AssistantMessageEvent json.RawMessage `json:"assistantMessageEvent,omitempty"`
+		}
+		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+			continue
+		}
+
+		if evt.Type != "message_update" || len(evt.AssistantMessageEvent) == 0 {
+			continue
+		}
+
+		var ame struct {
+			Type  string          `json:"type"`
+			Delta string          `json:"delta,omitempty"`
+			Tool  json.RawMessage `json:"tool,omitempty"`
+		}
+		if err := json.Unmarshal(evt.AssistantMessageEvent, &ame); err != nil {
+			continue
+		}
+
+		switch ame.Type {
+		case "text_delta":
+			textBuf.WriteString(ame.Delta)
+		case "tool_use":
+			if len(ame.Tool) > 0 {
+				var tool struct {
+					Name string `json:"name"`
+				}
+				if err := json.Unmarshal(ame.Tool, &tool); err == nil && tool.Name != "" {
+					toolName = tool.Name
+				}
+			}
+		}
+	}
+
+	text := textBuf.String()
+	if text == "" && toolName == "" {
+		return ThinkingResponse{Thinking: true, Text: ""}
+	}
+
+	return ThinkingResponse{
+		Thinking: true,
+		Text:     text,
+		ToolName: toolName,
+	}
 }
 
 // handleVerificationResult returns the verification-result.json from the workspace.

@@ -1,6 +1,7 @@
 package temporal
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -143,6 +144,60 @@ func TestParseOpenSpecStatusResponse(t *testing.T) {
 	}
 	if len(resp.MissingArtifacts()) != 0 {
 		t.Errorf("expected no missing artifacts, got %v", resp.MissingArtifacts())
+	}
+}
+
+func TestParseOpenSpecInstructionsResponse_Valid(t *testing.T) {
+	raw := `- Loading instructions...
+{
+  "template": "## Why\n\nDescribe the problem.\n\n## What Changes\n\nDescribe the solution."
+}`
+	tmpl, err := parseOpenSpecInstructionsResponse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tmpl == "" {
+		t.Fatal("expected non-empty template")
+	}
+	if !strings.Contains(tmpl, "## Why") {
+		t.Errorf("expected template to contain '## Why', got %q", tmpl)
+	}
+}
+
+func TestParseOpenSpecInstructionsResponse_EmptyTemplate(t *testing.T) {
+	raw := `{"template": ""}`
+	tmpl, err := parseOpenSpecInstructionsResponse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tmpl != "" {
+		t.Errorf("expected empty template, got %q", tmpl)
+	}
+}
+
+func TestParseOpenSpecInstructionsResponse_NoJSON(t *testing.T) {
+	_, err := parseOpenSpecInstructionsResponse("no json here at all")
+	if err == nil {
+		t.Fatal("expected error for input without JSON")
+	}
+}
+
+func TestParseOpenSpecInstructionsResponse_MalformedJSON(t *testing.T) {
+	_, err := parseOpenSpecInstructionsResponse("{broken json")
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+}
+
+func TestParseOpenSpecInstructionsResponse_MissingTemplate(t *testing.T) {
+	raw := `{"other_field": "value"}`
+	tmpl, err := parseOpenSpecInstructionsResponse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// template field not present → defaults to empty string
+	if tmpl != "" {
+		t.Errorf("expected empty template for missing field, got %q", tmpl)
 	}
 }
 

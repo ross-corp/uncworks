@@ -150,6 +150,25 @@ func (r *OpenSpecStatusResponse) MissingArtifacts() []string {
 	return missing
 }
 
+// OpenSpecInstructionsResponse is the parsed output of `openspec instructions <artifact> --json`.
+type OpenSpecInstructionsResponse struct {
+	Template string `json:"template"`
+}
+
+// parseOpenSpecInstructionsResponse parses `openspec instructions <artifact> --json` output
+// and extracts the template field.
+func parseOpenSpecInstructionsResponse(raw string) (string, error) {
+	jsonBytes, err := parseOpenSpecJSON(raw)
+	if err != nil {
+		return "", fmt.Errorf("parse instructions response: %w", err)
+	}
+	var resp OpenSpecInstructionsResponse
+	if err := json.Unmarshal(jsonBytes, &resp); err != nil {
+		return "", fmt.Errorf("unmarshal instructions response: %w", err)
+	}
+	return resp.Template, nil
+}
+
 func truncate(s string, max int) string {
 	if len(s) <= max {
 		return s
