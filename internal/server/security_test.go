@@ -119,7 +119,7 @@ func TestPathTraversal_FileContent_DotDot(t *testing.T) {
 		{
 			name:     "nested file path",
 			hostPath: "/data/pvc-abc",
-			filePath: "/workspace/src/pkg/handler.go",
+			filePath: "/workspace/myrepo/pkg/handler.go",
 			wantOK:   true,
 		},
 		{

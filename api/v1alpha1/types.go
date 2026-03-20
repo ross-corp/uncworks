@@ -63,7 +63,7 @@ type Repository struct {
 	// Branch is the git branch to check out.
 	// +optional
 	Branch string `json:"branch,omitempty"`
-	// Path is the directory name under /workspace/src/. Derived from repo URL if empty.
+	// Path is the directory name under /workspace/<repo>/. Derived from repo URL if empty.
 	// +optional
 	Path string `json:"path,omitempty"`
 }

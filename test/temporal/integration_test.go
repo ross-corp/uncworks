@@ -187,7 +187,7 @@ func (m *mockActivities) CreateAgentDeployment(_ context.Context, input aottempo
 }
 
 func (m *mockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
-	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.10", WorkspacePath: "/workspace/src/repo"}, nil
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.10", WorkspacePath: "/workspace"}, nil
 }
 
 func (m *mockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
@@ -236,7 +236,7 @@ func (m *hitlMockActivities) CreateAgentDeployment(_ context.Context, input aott
 	return &aottemporal.CreateAgentDeploymentOutput{DeploymentName: input.Name}, nil
 }
 func (m *hitlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
-	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.11", WorkspacePath: "/workspace/src/repo"}, nil
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.11", WorkspacePath: "/workspace"}, nil
 }
 func (m *hitlMockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
 	return nil
@@ -284,7 +284,7 @@ func (m *ttlMockActivities) CreateAgentDeployment(_ context.Context, input aotte
 	return &aottemporal.CreateAgentDeploymentOutput{DeploymentName: input.Name}, nil
 }
 func (m *ttlMockActivities) WaitForHydration(_ context.Context, _ aottemporal.WaitForHydrationInput) (*aottemporal.WaitForHydrationOutput, error) {
-	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.12", WorkspacePath: "/workspace/src/repo"}, nil
+	return &aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.12", WorkspacePath: "/workspace"}, nil
 }
 func (m *ttlMockActivities) StartAgent(_ context.Context, _ aottemporal.StartAgentInput) error {
 	return nil

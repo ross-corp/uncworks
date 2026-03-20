@@ -106,11 +106,11 @@ Thumbs.db
 storybook-static
 /sidecar
 
-# Build binaries
-hydration
-temporal-worker
-apiserver
-controller
-sidecar
-aot
-bin/
+# Build binaries (root-level only, not internal/ dirs)
+/hydration
+/temporal-worker
+/apiserver
+/controller
+/sidecar
+/aot
+/bin/

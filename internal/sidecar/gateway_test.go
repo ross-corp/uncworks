@@ -235,3 +235,91 @@ func TestExecCommand_CaptureStderr(t *testing.T) {
 		t.Errorf("expected stderr to contain 'error', got %q", resp.Msg.Stderr)
 	}
 }
+
+func TestExtractToolCallSignature(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{
+			name: "tool_use event returns name:inputlen",
+			line: `{"type":"message_end","message":{"content":[{"type":"tool_use","name":"bash","input":{"command":"ls -la"}}]}}`,
+			want: "bash:20",
+		},
+		{
+			name: "non-message_end event returns empty",
+			line: `{"type":"message_start","message":{"content":[{"type":"tool_use","name":"bash","input":{"command":"ls"}}]}}`,
+			want: "",
+		},
+		{
+			name: "text content returns empty",
+			line: `{"type":"message_end","message":{"content":[{"type":"text","text":"hello world"}]}}`,
+			want: "",
+		},
+		{
+			name: "empty line returns empty",
+			line: "",
+			want: "",
+		},
+		{
+			name: "invalid JSON returns empty",
+			line: "not json at all",
+			want: "",
+		},
+		{
+			name: "message_end with no message returns empty",
+			line: `{"type":"message_end"}`,
+			want: "",
+		},
+		{
+			name: "message_end with null content returns empty",
+			line: `{"type":"message_end","message":{"content":null}}`,
+			want: "",
+		},
+		{
+			name: "different tool name produces different signature",
+			line: `{"type":"message_end","message":{"content":[{"type":"tool_use","name":"write_file","input":{"path":"/tmp/a.txt","content":"hello"}}]}}`,
+			want: "write_file:39",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractToolCallSignature(tt.line)
+			if got != tt.want {
+				t.Errorf("extractToolCallSignature() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractToolCallSignature_IdenticalCallsSameSig(t *testing.T) {
+	line1 := `{"type":"message_end","message":{"content":[{"type":"tool_use","name":"bash","input":{"command":"cat /etc/hosts"}}]}}`
+	line2 := `{"type":"message_end","message":{"content":[{"type":"tool_use","name":"bash","input":{"command":"cat /etc/hosts"}}]}}`
+
+	sig1 := extractToolCallSignature(line1)
+	sig2 := extractToolCallSignature(line2)
+
+	if sig1 == "" {
+		t.Fatal("expected non-empty signature for tool_use event")
+	}
+	if sig1 != sig2 {
+		t.Errorf("identical tool calls produced different signatures: %q vs %q", sig1, sig2)
+	}
+}
+
+func TestExtractToolCallSignature_DifferentCallsDifferentSig(t *testing.T) {
+	line1 := `{"type":"message_end","message":{"content":[{"type":"tool_use","name":"bash","input":{"command":"ls"}}]}}`
+	line2 := `{"type":"message_end","message":{"content":[{"type":"tool_use","name":"bash","input":{"command":"pwd"}}]}}`
+
+	sig1 := extractToolCallSignature(line1)
+	sig2 := extractToolCallSignature(line2)
+
+	if sig1 == "" || sig2 == "" {
+		t.Fatal("expected non-empty signatures")
+	}
+	if sig1 == sig2 {
+		t.Errorf("different tool calls produced same signature: %q", sig1)
+	}
+}

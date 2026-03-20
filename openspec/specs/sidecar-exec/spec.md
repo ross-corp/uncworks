@@ -26,7 +26,7 @@ The command SHALL execute with the working directory set to the workspace root (
 - **THEN** the command runs in `/workspace`
 
 #### Scenario: Custom working directory
-- **WHEN** `ExecCommand` is called with `working_dir: "/workspace/src/my-repo"`
+- **WHEN** `ExecCommand` is called with `working_dir: "/workspace/my-repo"`
 - **THEN** the command runs in that directory
 
 ### Requirement: Verification activities use ExecCommand instead of agent spawning
