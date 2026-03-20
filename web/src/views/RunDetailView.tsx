@@ -121,7 +121,7 @@ export default function RunDetailView() {
     );
   }
 
-  const isSpecDriven = run.status.stage || run.spec.orchestrationMode === "spec-driven";
+  const isSpecDriven = run.spec.orchestrationMode === "spec-driven";
   const isRunning = run.status.phase === "running" || run.status.phase === "waiting_for_input";
   const isFailed = run.status.phase === "failed" || run.status.phase === "cancelled";
 

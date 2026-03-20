@@ -393,8 +393,8 @@ function SpanBadge({ spanId }: { spanId: string }) {
   );
 }
 
-/** Collapsible markdown content for long text entries. */
-function CollapsibleContent({ content, className }: { content: string; className?: string }) {
+/** Expandable markdown content for long text entries. */
+function ExpandableContent({ content, className }: { content: string; className?: string }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = content.length > 200;
 
@@ -442,7 +442,7 @@ function EntryRow({ display }: { display: DisplayEntry }) {
         <div className="flex gap-3 py-1">
           <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
           <span className="w-14 shrink-0 text-xs font-medium text-blue-500">user{spanBadge}</span>
-          <CollapsibleContent content={entry.content} />
+          <ExpandableContent content={entry.content} />
         </div>
       );
 
@@ -451,7 +451,7 @@ function EntryRow({ display }: { display: DisplayEntry }) {
         <div className="flex gap-3 py-1">
           <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
           <span className="w-14 shrink-0 text-xs font-medium text-blue-500">manage{spanBadge}</span>
-          <CollapsibleContent content={entry.content} />
+          <ExpandableContent content={entry.content} />
         </div>
       );
 
@@ -505,7 +505,7 @@ function EntryRow({ display }: { display: DisplayEntry }) {
           <div className="flex gap-3 py-1">
             <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
             <span className="w-14 shrink-0 text-xs font-medium text-green-500">impl{spanBadge}</span>
-            <CollapsibleContent content={entry.content} className="text-foreground" />
+            <ExpandableContent content={entry.content} className="text-foreground" />
           </div>
         );
       }
