@@ -1,73 +1,99 @@
 # UNCWORKS Architecture Overview
 
-UNCWORKS (AOT) is a Kubernetes-native platform for running autonomous coding agents against software repositories. It uses a spec-driven pipeline where an LLM plans work as structured specs, a second LLM implements the code, and a third verifies the result -- all orchestrated by Temporal workflows.
+UNCWORKS is a Kubernetes-native agentic development environment. It runs AI coding agents against software repositories using a spec-driven pipeline where a manage agent plans work as structured specs, an implement agent writes the code, and the manage agent verifies the result -- all orchestrated by Temporal workflows inside Kubernetes.
 
 ## System Diagram
 
 ```mermaid
 graph TB
-    User([User / Browser])
-    Web["Web UI<br/>(React + Vite)"]
-    API["API Server<br/>(ConnectRPC)"]
-    Controller["Controller<br/>(K8s Reconciler)"]
-    Temporal["Temporal Server"]
-    Worker["Temporal Worker<br/>(Activities)"]
-    LiteLLM["LiteLLM Proxy"]
-    Ollama["Ollama<br/>(Local Models)"]
+    User["User (Browser)"]
 
-    subgraph AgentPod["Agent Pod"]
-        Pi["pi-coding-agent<br/>(LLM agent)"]
-        Sidecar["Sidecar Gateway<br/>(ConnectRPC)"]
-        PVC["Workspace PVC<br/>(/workspace)"]
+    subgraph K8s["Kubernetes Cluster"]
+
+        subgraph UI["UNCWORKS UI"]
+            Web["Web Dashboard\nReact + Tailwind\n:30300"]
+        end
+
+        subgraph CP["UNCWORKS Control Plane"]
+            API["API Server\nConnectRPC :50055"]
+            Ctrl["K8s Controller\nAgentRun Reconciler"]
+            TW["Temporal Worker\nPipeline Activities"]
+        end
+
+        subgraph DP["UNCWORKS Data Plane"]
+            subgraph AgentPod["Agent Pod (per run)"]
+                Init["init: hydration\ngit clone + devbox"]
+                Pi["pi-coding-agent\n+ determinism ext"]
+                Sidecar["RPC Gateway\nsidecar"]
+                PVC["Workspace PVC\n/workspace"]
+            end
+            ExtAgent["External Agent (planned)"]
+            KubeVirt["KubeVirt VM (planned)"]
+        end
+
+        subgraph Deps["Dependencies"]
+            Temporal["Temporal Server\n:7233"]
+            LiteLLM["LiteLLM Proxy\n:4000"]
+            Ollama["Ollama\nLocal Models :11434"]
+        end
     end
 
-    User --> Web
-    Web -->|ConnectRPC / SSE| API
-    API -->|Create AgentRun CRD| Controller
-    Controller -->|Start Workflow| Temporal
-    Temporal --> Worker
-    Worker -->|StartAgent / GetStatus<br/>ExecCommand / SendInput| Sidecar
-    Sidecar --> Pi
-    Pi --> PVC
+    User -->|HTTP| Web
+    Web -->|nginx proxy| API
+    API -->|Signal/Query| Temporal
+    Temporal --> TW
+    Ctrl -->|watches AgentRun CRD| API
+    TW -->|creates pods| AgentPod
+    Sidecar -->|status, events| TW
     Pi -->|LLM calls| LiteLLM
     LiteLLM --> Ollama
-    API -->|Query Workflow| Temporal
-    API -->|kubectl exec / PVC read| AgentPod
+    LiteLLM -->|OpenRouter| Cloud["Cloud LLMs"]
+
+    style ExtAgent stroke-dasharray: 5 5
+    style KubeVirt stroke-dasharray: 5 5
 ```
 
 ## Components
 
-### Web UI (React)
-Single-page application built with React, Vite, and TailwindCSS. Provides a dashboard for creating agent runs, monitoring live status via server-sent events, browsing workspace files, viewing agent logs and trace timelines, and sending human-in-the-loop input.
+### UNCWORKS UI
 
-### API Server (ConnectRPC)
-Go service exposing a ConnectRPC API (`AOTService`). Handles CRUD operations on AgentRun resources, proxies Temporal workflow queries for real-time status, serves file content from agent pods via kubectl exec, and provides SSE-based event streaming through an in-memory event bus.
+| Component | Description |
+|-----------|-------------|
+| **Web Dashboard** | React + Tailwind SPA served via nginx. Activity feed, file browser, trace timeline, verification panel. Proxies API calls via nginx reverse proxy. |
 
-### Controller (K8s Reconciler)
-Kubernetes controller built with controller-runtime that watches `AgentRun` custom resources. When a new CRD appears, it starts a Temporal workflow and annotates the CRD with the workflow ID. On subsequent reconcile loops, it syncs the Temporal workflow state back to the CRD status. Deletion triggers workflow cancellation via a finalizer.
+### UNCWORKS Control Plane
 
-### Temporal Worker
-Registers all workflow activities (LLM key provisioning, deployment creation, hydration wait, agent start/stop/status, verification, knowledge persistence). Maintains a ConnectRPC client to communicate with agent pod sidecars. Uses LiteLLM for display name generation and LLM judge evaluations.
+| Component | Description |
+|-----------|-------------|
+| **API Server** | ConnectRPC/gRPC server. Handles CreateAgentRun, GetAgentRun, ListAgentRuns, CancelAgentRun, SendHumanInput. Also serves REST endpoints for structured logs, file browsing, and traces. |
+| **K8s Controller** | Watches `AgentRun` CRDs and starts Temporal workflows. Maps CRD spec to workflow input. Updates CRD status from workflow state. |
+| **Temporal Worker** | Executes pipeline activities: provision LLM keys, create agent deployments, wait for hydration, run plan/execute/verify stages, scale down pods, revoke keys. |
 
-### Temporal Server
-External Temporal deployment providing durable workflow execution, task queues, signal/query support, and automatic retry with backoff. Workflows survive worker restarts and pod rescheduling.
+### UNCWORKS Data Plane
 
-### Agent Pods (pi + sidecar)
-Each agent run gets a Kubernetes Deployment with a shared PVC. The pod contains two processes: the `pi-coding-agent` (LLM-powered coding agent) and the sidecar RPC gateway. The sidecar exposes ConnectRPC endpoints that the Temporal worker calls to start agents, poll status, execute commands, and relay human input. An init container hydrates the workspace before the agent starts.
+| Component | Description |
+|-----------|-------------|
+| **Agent Pod** | One pod per run. Three containers: hydration init (git worktree + devbox), pi-coding-agent (with determinism extension), RPC gateway sidecar. Workspace on a PVC at `/workspace`. |
+| **External Agent** | (Planned) Run agents on external infrastructure outside the cluster. |
+| **KubeVirt VM** | (Planned) Run agents in full VMs for stronger isolation. |
 
-### LiteLLM Proxy
-Reverse proxy that provides a unified OpenAI-compatible API in front of multiple LLM backends. Handles API key management, rate limiting, model aliasing (e.g., `default-cloud` maps to a specific model), and budget enforcement per agent run.
+### Dependencies
 
-### Ollama (Local Models)
-Optional local model server for running open-weight models on the cluster. LiteLLM routes requests to Ollama when configured, enabling fully local operation without external API calls.
+| Component | Description |
+|-----------|-------------|
+| **Temporal Server** | Orchestrates the spec-driven pipeline. Handles workflow state, signals, queries, retries, and compensation. |
+| **LiteLLM Proxy** | Centralized LLM routing. Routes model requests to local Ollama or cloud providers (OpenRouter). Manages per-key budgets and fallback chains. |
+| **Ollama** | Local LLM inference server. Runs qwen3:8b for zero-cost development. CPU or GPU. |
 
 ## Data Flow
 
-1. User submits a prompt and repository URL via the Web UI.
-2. API Server creates an `AgentRun` CRD in Kubernetes.
-3. Controller detects the new CRD, starts a Temporal workflow, annotates the CRD.
-4. Temporal Worker provisions an LLM key, creates the agent Deployment, and waits for workspace hydration.
-5. The hydration init container clones repos as bare clones, creates git worktrees, sets up devbox, and writes the workspace manifest.
-6. Worker starts the agent via the sidecar's `StartAgent` RPC and polls `GetStatus` until completion.
-7. For spec-driven runs, the pipeline cycles through Plan, Execute, and Verify stages with retry on verification failure.
-8. On completion, the worker scales down the Deployment and revokes the LLM key.
+1. User creates a run via the Web UI
+2. API Server creates an `AgentRun` CRD
+3. Controller detects the CRD and starts a Temporal workflow
+4. Temporal Worker provisions an LLM key, creates an agent pod, and waits for hydration
+5. Hydration init container clones repos as git worktrees and sets up devbox
+6. Manage agent (plan stage) reads the repo and creates OpenSpec artifacts
+7. Implement agent (execute stage) reads specs and writes code
+8. Manage agent (verify stage) validates specs, checks tasks, runs LLM judge
+9. On success: archive the change. On failure: retry execute with failure context.
+10. Pod is scaled down, LLM key revoked.
