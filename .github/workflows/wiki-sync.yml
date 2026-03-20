@@ -1,0 +1,111 @@
+name: Sync docs to GitHub Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+
+permissions:
+  contents: read
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Clone wiki
+        env:
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${WIKI_TOKEN}@github.com/ross-corp/uncworks.wiki.git" wiki
+
+      - name: Convert and copy docs to wiki
+        run: |
+          set -euo pipefail
+
+          # Clear previous wiki content (except .git)
+          find wiki -maxdepth 1 -not -name '.git' -not -name 'wiki' -delete 2>/dev/null || true
+
+          # title_case: convert kebab/snake to Title-Case
+          title_case() {
+            echo "$1" | sed -E 's/[-_]+/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1' | sed 's/ /-/g'
+          }
+
+          # Track sections for sidebar generation
+          declare -A SECTIONS
+
+          for file in $(find docs -name '*.md' -not -path 'docs/screenshots/*' | sort); do
+            # Strip docs/ prefix and .md suffix
+            rel="${file#docs/}"
+            base="${rel%.md}"
+
+            if [ "$base" = "README" ]; then
+              wiki_name="Home"
+              section="Home"
+            else
+              # Convert path separators to hyphens, title-case each segment
+              wiki_name=""
+              IFS='/' read -ra parts <<< "$base"
+              for part in "${parts[@]}"; do
+                tc=$(title_case "$part")
+                if [ -z "$wiki_name" ]; then
+                  wiki_name="$tc"
+                else
+                  wiki_name="${wiki_name}-${tc}"
+                fi
+              done
+
+              # Section is the first directory, or "General" for top-level files
+              if [[ "$base" == */* ]]; then
+                section=$(title_case "${parts[0]}")
+              else
+                section="General"
+              fi
+            fi
+
+            cp "$file" "wiki/${wiki_name}.md"
+            echo "  ${file} -> wiki/${wiki_name}.md"
+
+            # Accumulate sidebar entries
+            if [ -z "${SECTIONS[$section]+x}" ]; then
+              SECTIONS[$section]=""
+            fi
+            display_name=$(echo "$wiki_name" | sed 's/-/ /g')
+            SECTIONS[$section]+="  - [[${display_name}|${wiki_name}]]
+          "
+          done
+
+          # Generate _Sidebar.md
+          {
+            echo "## Navigation"
+            echo ""
+            # Home first
+            if [ -n "${SECTIONS[Home]+x}" ]; then
+              echo "**Home**"
+              echo "${SECTIONS[Home]}"
+              unset 'SECTIONS[Home]'
+            fi
+            # Remaining sections alphabetically
+            for section in $(echo "${!SECTIONS[@]}" | tr ' ' '\n' | sort); do
+              echo "**${section}**"
+              echo "${SECTIONS[$section]}"
+            done
+          } > wiki/_Sidebar.md
+
+          echo "Generated wiki/_Sidebar.md"
+
+      - name: Push to wiki
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No wiki changes to commit."
+          else
+            git commit -m "docs: sync from main ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            git push
+          fi

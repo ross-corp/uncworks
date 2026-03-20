@@ -1,4 +1,4 @@
-AOT has been installed.
+UNCWORKS has been installed.
 
 Components deployed:
   - Controller
