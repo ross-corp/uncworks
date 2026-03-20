@@ -37,6 +37,12 @@ filter_identifier() {
       return 1 ;;
   esac
 
+  # Skip Helm dotted-notation values (e.g., web.port, worker.image, llm.baseUrl)
+  # These are config keys, not code references.
+  if [[ "$id" =~ ^[a-z]+\.[a-z] ]]; then
+    return 1
+  fi
+
   # Must look like a code reference
   if [[ "$id" =~ [A-Z][a-z] ]] ||       # CamelCase
      [[ "$id" =~ \. ]] ||                 # dot notation

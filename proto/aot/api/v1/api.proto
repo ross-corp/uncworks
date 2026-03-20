@@ -78,7 +78,7 @@ message AgentRun {
 message Repository {
   string url = 1 [(buf.validate.field).string.uri = true];
   string branch = 2;
-  // Directory name under /workspace/src/. Derived from repo URL if empty.
+  // Directory name under /workspace/<repo>/. Derived from repo URL if empty.
   string path = 3;
 }
 

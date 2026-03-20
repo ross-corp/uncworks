@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -370,4 +371,178 @@ func TestBacktickPathRegex(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveStageConfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		cfg           *PipelineConfigInput
+		stage         string
+		wantModel     string
+		wantTimeout   int32
+		wantRetries   int32
+		wantOnFailure string
+	}{
+		{
+			name:          "nil config returns plan defaults",
+			cfg:           nil,
+			stage:         "plan",
+			wantModel:     "default-cloud",
+			wantTimeout:   300,
+			wantRetries:   2,
+			wantOnFailure: "fail",
+		},
+		{
+			name:          "nil config returns execute defaults",
+			cfg:           nil,
+			stage:         "execute",
+			wantModel:     "default-cloud",
+			wantTimeout:   900,
+			wantRetries:   3,
+			wantOnFailure: "retry",
+		},
+		{
+			name:          "nil config returns verify defaults",
+			cfg:           nil,
+			stage:         "verify",
+			wantModel:     "default-cloud",
+			wantTimeout:   180,
+			wantRetries:   1,
+			wantOnFailure: "fail",
+		},
+		{
+			name: "provided model overrides default",
+			cfg: &PipelineConfigInput{
+				Plan: StageConfigInput{Model: "gpt-4o"},
+			},
+			stage:         "plan",
+			wantModel:     "gpt-4o",
+			wantTimeout:   300,
+			wantRetries:   2,
+			wantOnFailure: "fail",
+		},
+		{
+			name: "provided timeout overrides default",
+			cfg: &PipelineConfigInput{
+				Execute: StageConfigInput{TimeoutSeconds: 1800},
+			},
+			stage:         "execute",
+			wantModel:     "default-cloud",
+			wantTimeout:   1800,
+			wantRetries:   3,
+			wantOnFailure: "retry",
+		},
+		{
+			name: "all fields provided override all defaults",
+			cfg: &PipelineConfigInput{
+				Verify: StageConfigInput{
+					Model:          "claude-sonnet",
+					TimeoutSeconds: 600,
+					MaxRetries:     5,
+					OnFailure:      "skip",
+				},
+			},
+			stage:         "verify",
+			wantModel:     "claude-sonnet",
+			wantTimeout:   600,
+			wantRetries:   5,
+			wantOnFailure: "skip",
+		},
+		{
+			name:          "empty config uses defaults",
+			cfg:           &PipelineConfigInput{},
+			stage:         "plan",
+			wantModel:     "default-cloud",
+			wantTimeout:   300,
+			wantRetries:   2,
+			wantOnFailure: "fail",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveStageConfig(tt.cfg, tt.stage)
+			if got.Model != tt.wantModel {
+				t.Errorf("Model = %q, want %q", got.Model, tt.wantModel)
+			}
+			if got.TimeoutSeconds != tt.wantTimeout {
+				t.Errorf("TimeoutSeconds = %d, want %d", got.TimeoutSeconds, tt.wantTimeout)
+			}
+			if got.MaxRetries != tt.wantRetries {
+				t.Errorf("MaxRetries = %d, want %d", got.MaxRetries, tt.wantRetries)
+			}
+			if got.OnFailure != tt.wantOnFailure {
+				t.Errorf("OnFailure = %q, want %q", got.OnFailure, tt.wantOnFailure)
+			}
+		})
+	}
+}
+
+func TestBuildPlanAgentPrompt(t *testing.T) {
+	t.Run("includes user prompt and change name", func(t *testing.T) {
+		prompt := buildPlanAgentPrompt("Add auth middleware", "", "add-auth", nil, "", "", "")
+
+		if !strings.Contains(prompt, "Add auth middleware") {
+			t.Error("prompt should contain the user prompt text")
+		}
+		if !strings.Contains(prompt, "add-auth") {
+			t.Error("prompt should contain the change name")
+		}
+	})
+
+	t.Run("includes openspec paths", func(t *testing.T) {
+		prompt := buildPlanAgentPrompt("Fix bug", "", "fix-bug", nil, "", "", "")
+
+		if !strings.Contains(prompt, "/workspace/openspec/changes/fix-bug/") {
+			t.Error("prompt should contain the openspec change directory path")
+		}
+		if !strings.Contains(prompt, "/workspace") {
+			t.Error("prompt should reference /workspace for openspec commands")
+		}
+	})
+
+	t.Run("specContent takes priority over userPrompt", func(t *testing.T) {
+		prompt := buildPlanAgentPrompt("user prompt", "spec content here", "my-change", nil, "", "", "")
+
+		if !strings.Contains(prompt, "spec content here") {
+			t.Error("prompt should contain spec content when provided")
+		}
+		// The spec content replaces the user prompt at the top
+		idx := strings.Index(prompt, "spec content here")
+		if idx != 0 {
+			t.Errorf("spec content should be at the beginning of the prompt, found at index %d", idx)
+		}
+	})
+
+	t.Run("empty specContent uses userPrompt", func(t *testing.T) {
+		prompt := buildPlanAgentPrompt("build the feature", "", "my-feature", nil, "", "", "")
+
+		if !strings.Contains(prompt, "build the feature") {
+			t.Error("prompt should contain user prompt when specContent is empty")
+		}
+	})
+
+	t.Run("contains openspec CLI instructions", func(t *testing.T) {
+		prompt := buildPlanAgentPrompt("test", "", "test-change", nil, "", "", "")
+
+		// Should instruct agent to use openspec validate
+		if !strings.Contains(prompt, "openspec validate") {
+			t.Error("prompt should contain openspec validate instructions")
+		}
+		// Should instruct agent to use openspec instructions
+		if !strings.Contains(prompt, "openspec instructions") {
+			t.Error("prompt should contain openspec instructions command")
+		}
+	})
+
+	t.Run("contains spec writing rules", func(t *testing.T) {
+		prompt := buildPlanAgentPrompt("test", "", "my-change", nil, "", "", "")
+
+		if !strings.Contains(prompt, "SHALL") && !strings.Contains(prompt, "MUST") {
+			t.Error("prompt should mention SHALL or MUST requirement syntax")
+		}
+		if !strings.Contains(prompt, "WHEN/THEN") {
+			t.Error("prompt should mention WHEN/THEN scenario format")
+		}
+	})
 }

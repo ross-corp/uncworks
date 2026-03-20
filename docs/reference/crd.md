@@ -34,7 +34,7 @@ Source: `api/v1alpha1/types.go`
 |-------|------|-------------|
 | `url` | `string` | Git repository URL (required) |
 | `branch` | `string` | Branch to check out |
-| `path` | `string` | Directory name under `/workspace/src/` (derived from URL if empty) |
+| `path` | `string` | Directory name under `/workspace/<repo>/` (derived from URL if empty) |
 
 ## Orchestration Modes
 
