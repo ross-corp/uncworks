@@ -799,7 +799,13 @@ func (g *Gateway) StopAgent(_ context.Context, req *connect.Request[agentv1.Stop
 // This is a lightweight alternative to StartAgent for running CLI tools like openspec,
 // test suites, and file checks.
 func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.ExecCommandRequest]) (*connect.Response[agentv1.ExecCommandResponse], error) {
-	workDir := resolveWorkDir(req.Msg.WorkingDir)
+	// ExecCommand uses the EXACT working dir from the request — no resolveWorkDir.
+	// This is intentional: PlanRun/VerifyRun pass specDir=/workspace for openspec commands
+	// and workDir for repo commands. resolveWorkDir is only for startAgentProcess (pi).
+	workDir := req.Msg.WorkingDir
+	if workDir == "" {
+		workDir = "/workspace"
+	}
 	// Fall back to current directory if the specified directory doesn't exist.
 	if _, err := os.Stat(workDir); err != nil {
 		workDir = "."
