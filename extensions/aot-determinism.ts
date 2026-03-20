@@ -8,6 +8,7 @@
  * 4. Protected paths — blocks writes outside workspace
  * 5. Audit logging — logs all tool calls for traceability
  * 6. HITL — registers ask_user tool for human-in-the-loop elicitation
+ * 7. Subagent — registers delegate_task tool for tracked task delegation
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -26,6 +27,10 @@ const SPEC_REQUIREMENT_KEYWORDS = /\b(SHALL|MUST)\b/;
 const INPUT_DIR = "/workspace/.aot/input";
 const QUESTION_PATH = path.join(INPUT_DIR, "question.json");
 const RESPONSE_PATH = path.join(INPUT_DIR, "response.txt");
+
+// Subagent tracking paths
+const SUBAGENT_DIR = "/workspace/.aot/subagents";
+const SUBAGENT_LOG = "/workspace/.aot/logs/agent.jsonl";
 
 // HITL polling config
 const POLL_INTERVAL_MS = 2000;
@@ -52,6 +57,59 @@ const AskUserParams = Type.Object({
 });
 
 type AskUserInput = Static<typeof AskUserParams>;
+
+// --- delegate_task tool schema (Typebox) ---
+
+const DelegateTaskParams = Type.Object({
+  task: Type.String({ description: "A clear description of the subtask to delegate" }),
+  context: Type.Optional(
+    Type.String({
+      description: "Optional additional context, file paths, or constraints for the subtask",
+    })
+  ),
+});
+
+type DelegateTaskInput = Static<typeof DelegateTaskParams>;
+
+let delegateCounter = 0;
+
+/**
+ * Logs the delegation event to a marker file and the JSONL log,
+ * then returns guidance to handle the task inline.
+ */
+function delegateTask(params: DelegateTaskInput): string {
+  delegateCounter++;
+  const delegateId = `delegate-${Date.now()}-${delegateCounter}`;
+
+  // Ensure subagent tracking directory exists
+  fs.mkdirSync(SUBAGENT_DIR, { recursive: true });
+
+  // Write a marker file for this delegation
+  const marker = {
+    id: delegateId,
+    task: params.task,
+    context: params.context ?? "",
+    status: "inline",
+    timestamp: new Date().toISOString(),
+  };
+  fs.writeFileSync(
+    path.join(SUBAGENT_DIR, `${delegateId}.json`),
+    JSON.stringify(marker, null, 2)
+  );
+
+  return [
+    `[Delegation tracked: ${delegateId}]`,
+    "",
+    `Task: ${params.task}`,
+    params.context ? `Context: ${params.context}` : "",
+    "",
+    "Note: This delegation is tracked for visibility in the AOT dashboard.",
+    "Handle this subtask inline now — break it into steps and execute them sequentially.",
+    "When complete, move on to your next objective.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 /**
  * Writes the question file and polls for a response file written by the
@@ -109,6 +167,22 @@ export default function (pi: ExtensionAPI) {
       }
       const options = params.options as string[] | undefined;
       return askUser({ question, options });
+    },
+  });
+
+  // --- Register delegate_task custom tool ---
+  pi.registerTool({
+    name: "delegate_task",
+    description:
+      "Delegate a subtask for tracking purposes. Use when you want to break work into logical subtasks that should be visible in the AOT dashboard. The task will be handled inline but tracked as a subagent delegation for observability.",
+    parameters: DelegateTaskParams,
+    execute: async (params: Record<string, unknown>) => {
+      const task = params.task as string;
+      if (!task) {
+        return "Error: task description is required";
+      }
+      const context = params.context as string | undefined;
+      return delegateTask({ task, context });
     },
   });
 
@@ -221,7 +295,7 @@ export default function (pi: ExtensionAPI) {
   // Log session info on start
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.hasUI) {
-      ctx.ui.notify(`AOT determinism: max ${MAX_TURNS} turns, loop detection active, ask_user tool registered`, "info");
+      ctx.ui.notify(`AOT determinism: max ${MAX_TURNS} turns, loop detection active, ask_user + delegate_task tools registered`, "info");
     }
   });
 }

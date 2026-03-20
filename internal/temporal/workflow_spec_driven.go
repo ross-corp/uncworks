@@ -387,10 +387,11 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		// --- EXECUTE ---
 		state.Message = fmt.Sprintf("Executing: attempt %d/%d", attempt, maxRetries)
 
-		prompt := input.Prompt
+		prompt := fmt.Sprintf("Implement the OpenSpec change '%s'. Read the specs at /workspace/openspec/changes/%s/ for requirements and tasks.\n\n%s",
+			changeName, changeName, input.Prompt)
 		if lastFailureReport != "" {
-			prompt = fmt.Sprintf("PREVIOUS ATTEMPT FAILED VERIFICATION:\n\n%s\n\n---\n\nOriginal task:\n%s",
-				lastFailureReport, input.Prompt)
+			prompt = fmt.Sprintf("PREVIOUS ATTEMPT FAILED VERIFICATION:\n%s\n\nImplement the OpenSpec change '%s'. Read specs at /workspace/openspec/changes/%s/\n\nOriginal task: %s",
+				lastFailureReport, changeName, changeName, input.Prompt)
 		}
 
 		if err := workflow.ExecuteActivity(
@@ -425,7 +426,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		}
 
 		// --- VERIFY ---
-		state.Message = fmt.Sprintf("Verifying: evaluating against spec (attempt %d/%d)", attempt, maxRetries)
+		state.Message = fmt.Sprintf("manage: verifying against spec (attempt %d/%d)", attempt, maxRetries)
 
 		verifyInput := VerifyRunInput{
 			AgentRunName: input.AgentRunName,
@@ -542,7 +543,7 @@ func pollAgentStatus(ctx workflow.Context, state *WorkflowState, podName, namesp
 				switch statusOutput.State {
 				case "AGENT_PROCESS_STATE_COMPLETED":
 					state.Phase = "Succeeded"
-					state.Message = "Agent completed"
+					state.Message = "implement: completed, starting verification"
 				case "AGENT_PROCESS_STATE_FAILED":
 					state.Phase = "Failed"
 					state.Message = fmt.Sprintf("Agent failed: %s", statusOutput.Error)

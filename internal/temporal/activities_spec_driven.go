@@ -376,14 +376,17 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 
 	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
 		AgentRunId: input.AgentRunName + "-verify",
-		Prompt: fmt.Sprintf(`Evaluate whether the implementation satisfies the spec.
+		Prompt: fmt.Sprintf(`You are the manage agent verifying the implementation of OpenSpec change '%s'.
+
+You planned this change earlier. Now verify that the implement agent completed it correctly.
 
 Git diff summary:
 %s
 
-Read the spec files in the openspec change directory and evaluate each WHEN/THEN scenario.
+Read the spec files at /workspace/openspec/changes/%s/ and evaluate each WHEN/THEN scenario against the implementation.
+Check that all tasks in tasks.md are marked complete.
 Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}`,
-			gitDiff),
+			input.ChangeName, gitDiff, input.ChangeName),
 		RepoPath: workDir,
 		Stage:    "verify",
 	}))

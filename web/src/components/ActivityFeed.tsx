@@ -17,8 +17,8 @@ interface DisplayEntry {
   entry: LogEntry;
   /** For tool_call entries, the paired tool_result (if any). */
   pairedResult?: LogEntry;
-  /** Synthetic label override: "user" | "manage" | "impl" | "system" */
-  label: "user" | "manage" | "impl" | "system";
+  /** Synthetic label override: "user" | "manage" | "impl" | "system" | "delegate" */
+  label: "user" | "manage" | "impl" | "system" | "delegate";
 }
 
 interface ThinkingState {
@@ -322,6 +322,18 @@ function buildDisplayEntries(entries: LogEntry[]): DisplayEntry[] {
       } else {
         result.push({ entry, label: "manage" });
       }
+    } else if (entry.type === "delegate") {
+      // Delegate entries: find the paired tool_result (delegate_task response)
+      let pairedResult: LogEntry | undefined;
+      for (let j = i + 1; j < entries.length; j++) {
+        if (entries[j].type === "tool_result" && !consumedResults.has(j)) {
+          pairedResult = entries[j];
+          consumedResults.add(j);
+          break;
+        }
+        if (entries[j].type === "tool_call" || entries[j].type === "delegate") break;
+      }
+      result.push({ entry, pairedResult, label: "delegate" });
     } else if (entry.type === "tool_call") {
       // Find paired result
       let pairedResult: LogEntry | undefined;
@@ -331,7 +343,7 @@ function buildDisplayEntries(entries: LogEntry[]): DisplayEntry[] {
           consumedResults.add(j);
           break;
         }
-        if (entries[j].type === "tool_call") break;
+        if (entries[j].type === "tool_call" || entries[j].type === "delegate") break;
       }
       result.push({ entry, pairedResult, label: "impl" });
     } else if (entry.type === "tool_result") {
@@ -451,6 +463,40 @@ function EntryRow({ display }: { display: DisplayEntry }) {
           <span className="text-xs italic text-muted-foreground">{entry.content}</span>
         </div>
       );
+
+    case "delegate": {
+      // Parse the task from toolInput JSON
+      let taskDesc = "";
+      let contextDesc = "";
+      if (entry.toolInput) {
+        try {
+          const parsed = JSON.parse(entry.toolInput);
+          taskDesc = parsed.task || "";
+          contextDesc = parsed.context || "";
+        } catch {
+          taskDesc = entry.toolInput;
+        }
+      }
+      return (
+        <div className="flex gap-3 py-1 pl-4 border-l-2 border-purple-500/30">
+          <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
+          <span className="w-14 shrink-0 text-xs font-medium text-purple-400">deleg{spanBadge}</span>
+          <div className="min-w-0">
+            <div className="text-sm text-purple-300">
+              {taskDesc || "delegate_task"}
+            </div>
+            {contextDesc && (
+              <div className="text-xs text-muted-foreground/60 mt-0.5">{contextDesc}</div>
+            )}
+            {pairedResult && (
+              <div className="text-xs text-muted-foreground/50 mt-0.5">
+                {truncate(pairedResult.content, 120)}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     case "impl": {
       // Assistant text (no tool)
