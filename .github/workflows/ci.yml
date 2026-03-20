@@ -10,86 +10,29 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build + Lint
+  ci:
+    name: Build + Lint + Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
+      - uses: dagger/dagger-for-github@v8
         with:
-          go-version-file: go.mod
+          version: latest
+          module: ./ci
+          call: all --source .
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      # Go build — catch compile errors early
-      - name: Go build
-        run: go build ./cmd/... ./internal/...
-
-      # Go lint (v2 required for Go 1.25+)
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-      - name: Run golangci-lint
-        run: golangci-lint run
-
-      # TypeScript — web
-      - name: Web TypeScript check
-        run: cd web && npm ci --ignore-scripts && npx tsc --noEmit
-
-      # TypeScript — shared
-      - name: Shared package TypeScript check
-        run: cd packages/shared && npm ci --ignore-scripts && npx tsc --noEmit
-
-      # TypeScript — extension
-      - name: Extension TypeScript check
-        run: cd packages/pi-aot-extension && npm ci --ignore-scripts && npx tsc --noEmit
-
-  test:
-    name: Tests
-    needs: build
+  release:
+    name: Release Please
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
+      - uses: googleapis/release-please-action@v4
         with:
-          go-version-file: go.mod
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      # Install and configure envtest for controller tests
-      - name: Setup envtest
-        run: |
-          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
-          ENVTEST_PATH=$(setup-envtest use --print path 2>/dev/null || echo "")
-          if [ -n "$ENVTEST_PATH" ]; then
-            echo "KUBEBUILDER_ASSETS=$ENVTEST_PATH" >> "$GITHUB_ENV"
-          fi
-
-      # Go unit tests
-      - name: Go tests
-        run: go test ./api/... ./internal/... -count=1
-
-      # Contract tests
-      - name: Contract tests
-        run: go test ./test/contract/... -count=1 -v
-
-      # Shared package tests
-      - name: Shared package tests
-        run: cd packages/shared && npm ci --ignore-scripts && npx tsx --test src/**/*.test.ts
-
-  schema:
-    name: Schema Gate
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: bufbuild/buf-setup-action@v1
-      - run: buf lint
-      - run: buf breaking --against '.git#branch=main'
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
