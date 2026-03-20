@@ -876,47 +876,22 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 			extractContentEntries(&entries, contents, role, ts, model, seenToolCalls, seenTexts)
 
 		case "turn_end":
-			// turn_end contains toolResults that aren't in message_end
+			// turn_end contains assistant content and toolResults.
+			// Skip toolResults here — they're already captured from tool_execution_end.
 			ts := sessionTimestamp
 			if msg, ok := event["message"].(map[string]interface{}); ok {
 				ts = formatTimestamp(msg["timestamp"], sessionTimestamp)
-				// Also extract assistant content from turn_end message
 				model, _ := msg["model"].(string)
 				if contents, ok := msg["content"].([]interface{}); ok {
 					extractContentEntries(&entries, contents, "assistant", ts, model, seenToolCalls, seenTexts)
 				}
 			}
-			if results, ok := event["toolResults"].([]interface{}); ok {
-				for _, r := range results {
-					rm, ok := r.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					toolName, _ := rm["toolName"].(string)
-					resultText := extractResultContent(rm["content"])
-					if resultText == "" {
-						continue
-					}
-					resultKey := "tool_result:" + toolName + ":" + resultText
-					if len(resultKey) > 200 {
-						resultKey = resultKey[:200]
-					}
-					if seenTexts[resultKey] {
-						continue
-					}
-					seenTexts[resultKey] = true
-					entries = append(entries, AgentLogEntry{
-						Timestamp: ts,
-						Type:      "tool_result",
-						Content:   resultText,
-						ToolName:  toolName,
-					})
-				}
-			}
+			// toolResults from turn_end are duplicates of tool_execution_end — skip them
 
 		case "agent_end":
-			// agent_end contains the full final conversation — use it to fill
-			// any gaps from auto-retry or compaction.
+			// agent_end contains the full final conversation. We only extract
+			// assistant text content here — tool results are already captured
+			// from tool_execution_start/end events and would be duplicates.
 			if messages, ok := event["messages"].([]interface{}); ok {
 				for _, m := range messages {
 					msg, ok := m.(map[string]interface{})
@@ -924,32 +899,12 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 						continue
 					}
 					role, _ := msg["role"].(string)
-					ts := formatTimestamp(msg["timestamp"], sessionTimestamp)
-					model, _ := msg["model"].(string)
-
+					// Skip toolResult — already captured from tool_execution_end
 					if role == "toolResult" {
-						toolName, _ := msg["toolName"].(string)
-						resultText := extractResultContent(msg["content"])
-						if resultText == "" {
-							continue
-						}
-						resultKey := "tool_result:" + toolName + ":" + resultText
-						if len(resultKey) > 200 {
-							resultKey = resultKey[:200]
-						}
-						if seenTexts[resultKey] {
-							continue
-						}
-						seenTexts[resultKey] = true
-						entries = append(entries, AgentLogEntry{
-							Timestamp: ts,
-							Type:      "tool_result",
-							Content:   resultText,
-							ToolName:  toolName,
-						})
 						continue
 					}
-
+					ts := formatTimestamp(msg["timestamp"], sessionTimestamp)
+					model, _ := msg["model"].(string)
 					if contents, ok := msg["content"].([]interface{}); ok {
 						extractContentEntries(&entries, contents, role, ts, model, seenToolCalls, seenTexts)
 					}
