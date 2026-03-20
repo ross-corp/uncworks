@@ -883,9 +883,8 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 		case "turn_end":
 			// turn_end contains assistant content and toolResults.
 			// Skip toolResults here — they're already captured from tool_execution_end.
-			ts := sessionTimestamp
 			if msg, ok := event["message"].(map[string]interface{}); ok {
-				ts = formatTimestamp(msg["timestamp"], sessionTimestamp)
+				ts := formatTimestamp(msg["timestamp"], sessionTimestamp)
 				model, _ := msg["model"].(string)
 				if contents, ok := msg["content"].([]interface{}); ok {
 					extractContentEntries(&entries, contents, "assistant", ts, model, seenToolCalls, seenTexts)

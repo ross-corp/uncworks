@@ -2,43 +2,12 @@ package temporal
 
 import (
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
-
-var (
-	// Max retries for spec-driven verification failures. Configurable via AOT_PIPELINE_MAX_RETRIES.
-	defaultMaxRetries = envOrDefaultInt("AOT_PIPELINE_MAX_RETRIES", 3)
-
-	// Planning stage timeout. Configurable via AOT_PIPELINE_PLAN_TIMEOUT (seconds).
-	defaultPlanTimeout = envOrDefaultDuration("AOT_PIPELINE_PLAN_TIMEOUT", 2*time.Minute)
-)
-
-func envOrDefaultInt(key string, fallback int) int {
-	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	return fallback
-}
-
-func envOrDefaultDuration(key string, fallback time.Duration) time.Duration {
-	if v := os.Getenv(key); v != "" {
-		if secs, err := strconv.Atoi(v); err == nil {
-			return time.Duration(secs) * time.Second
-		}
-		if d, err := time.ParseDuration(v); err == nil {
-			return d
-		}
-	}
-	return fallback
-}
 
 // PipelineStage represents the current stage of a spec-driven run.
 type PipelineStage string
