@@ -30,7 +30,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	sidecarClient := agentv1connect.NewAgentSidecarServiceClient(http.DefaultClient, sidecarURL)
 
 	// Step 1: Determine workspaces
-	// repoDir = where the code lives (resolved by sidecar to /workspace/src/<repo>)
+	// repoDir = where the code lives (resolved by sidecar to /workspace/<repo>)
 	// specDir = where OpenSpec artifacts live (/workspace — NOT inside the repo)
 	workDir := input.RepoPath
 	specDir := "/workspace"

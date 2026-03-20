@@ -12,8 +12,8 @@ func TestHydrator_DevboxSetup(t *testing.T) {
 	runner := NewMockRunner()
 	tmpDir := t.TempDir()
 
-	// Create a fake workspace with devbox.json (multi-repo: src/<repo-name>/)
-	srcDir := filepath.Join(tmpDir, "src", "repo")
+	// Create a fake workspace with devbox.json (worktree at /workspace/<repo-name>/)
+	srcDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -55,8 +55,8 @@ func TestHydrator_DevboxConfigNotFound(t *testing.T) {
 	runner := NewMockRunner()
 	tmpDir := t.TempDir()
 
-	// Create workspace but no devbox.json in src/repo
-	srcDir := filepath.Join(tmpDir, "src", "repo")
+	// Create workspace but no devbox.json in repo dir
+	srcDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestHydrator_DevboxInstallFailure(t *testing.T) {
 	runner.On("devbox", MockResult{Err: os.ErrPermission})
 	tmpDir := t.TempDir()
 
-	srcDir := filepath.Join(tmpDir, "src", "repo")
+	srcDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

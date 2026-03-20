@@ -245,6 +245,9 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	if stage := req.GetStage(); stage != "" {
 		cmd.Env = append(cmd.Env, "PI_STAGE="+stage)
 	}
+	// Set PI_ROLE based on pipeline stage so the determinism extension can
+	// enforce role-based tool policies (manage vs implement).
+	cmd.Env = append(cmd.Env, "PI_ROLE="+stageToRole(req.GetStage()))
 	for k, v := range req.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -303,7 +306,7 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 func stageSystemPrompt(stage string) string {
 	switch stage {
 	case "plan":
-		return `You are a planning agent. Create an OpenSpec change following the instructions in your prompt.
+		return `You are a manage agent. Create an OpenSpec change following the instructions in your prompt.
 
 Key rules:
 - The OpenSpec workspace is at /workspace — run ALL openspec commands from /workspace (cd /workspace && openspec ...)
@@ -316,7 +319,7 @@ Key rules:
 - Be thorough in acceptance criteria — they will be used to verify the implementation.`
 
 	case "execute":
-		return `You are an execution agent implementing a spec-driven change. Your work will be verified against the spec's acceptance criteria.
+		return `You are an implement agent implementing a spec-driven change. Your work will be verified against the spec's acceptance criteria.
 
 1. Read the change artifacts at /workspace/openspec/changes/ to understand what to implement
 2. Read tasks.md for your implementation checklist
@@ -327,7 +330,7 @@ Key rules:
 Focus on completing ALL tasks. Your work will be verified programmatically.`
 
 	case "verify":
-		return `You are a verification agent. Evaluate whether the implementation satisfies the spec's acceptance criteria.
+		return `You are a manage agent performing verification. Evaluate whether the implementation satisfies the spec's acceptance criteria.
 
 1. Read the spec files in the openspec/changes/ directory
 2. For each WHEN/THEN scenario, check if the implementation satisfies it
@@ -341,6 +344,18 @@ Output a JSON verdict with this structure:
 
 	default:
 		return ""
+	}
+}
+
+// stageToRole maps a pipeline stage to the PI_ROLE value ("manage" or "implement").
+func stageToRole(stage string) string {
+	switch stage {
+	case "plan", "verify":
+		return "manage"
+	case "execute":
+		return "implement"
+	default:
+		return "implement"
 	}
 }
 
@@ -1233,9 +1248,8 @@ func appendTraceSpan(span TraceSpan) {
 }
 
 // resolveWorkDir determines the actual working directory for agent processes.
-// Single-repo runs clone directly into /workspace, so /workspace is correct.
-// Multi-repo runs have subdirs in /workspace/<repoName>.
-// Also handles legacy /workspace/src/<repoName> layout.
+// Repos are cloned as worktrees into /workspace/<repoName>/.
+// Single-repo runs have one subdir, multi-repo runs have multiple.
 func resolveWorkDir(repoPath string) string {
 	if repoPath == "" {
 		repoPath = "/workspace"
@@ -1247,27 +1261,17 @@ func resolveWorkDir(repoPath string) string {
 	if _, err := os.Stat("/workspace/.git"); err == nil {
 		return "/workspace"
 	}
-	// Legacy: check /workspace/src/<repo>
-	if entries, err := os.ReadDir("/workspace/src"); err == nil {
-		for _, e := range entries {
-			if e.IsDir() {
-				resolved := "/workspace/src/" + e.Name()
-				log.Printf("resolveWorkDir: /workspace → %s (legacy src layout)", resolved)
-				return resolved
-			}
-		}
-	}
-	// Multi-repo: check for repo subdirs in /workspace/
+	// Check for repo subdirs in /workspace/ (worktrees at /workspace/<repoName>/)
 	entries, err := os.ReadDir("/workspace")
 	if err != nil {
 		return repoPath
 	}
 	for _, e := range entries {
-		if e.IsDir() && e.Name() != ".bare" && e.Name() != ".aot" && e.Name() != ".devcontainer" {
+		if e.IsDir() && e.Name() != ".bare" && e.Name() != ".aot" && e.Name() != ".devcontainer" && e.Name() != "openspec" && e.Name() != "spec" {
 			gitPath := "/workspace/" + e.Name() + "/.git"
 			if _, err := os.Stat(gitPath); err == nil {
 				resolved := "/workspace/" + e.Name()
-				log.Printf("resolveWorkDir: /workspace → %s (multi-repo)", resolved)
+				log.Printf("resolveWorkDir: /workspace → %s", resolved)
 				return resolved
 			}
 		}

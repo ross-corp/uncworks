@@ -125,7 +125,7 @@ func (h *Hydrator) Run(ctx context.Context) error {
 		}
 
 		bareDir := filepath.Join(h.config.WorkspaceDir, ".bare", repoPath)
-		worktreeDir := filepath.Join(h.config.WorkspaceDir, "src", repoPath)
+		worktreeDir := filepath.Join(h.config.WorkspaceDir, repoPath)
 
 		if err := h.cloneRepo(ctx, repo.URL, bareDir); err != nil {
 			return fmt.Errorf("clone repo %d (%s): %w", i, repo.URL, err)
@@ -190,7 +190,7 @@ func (h *Hydrator) generateManifest() error {
 		if repoPath == "" {
 			repoPath = repoNameFromURL(repo.URL)
 		}
-		relPath := filepath.Join("src", repoPath)
+		relPath := repoPath
 
 		manifest.Repos = append(manifest.Repos, ManifestRepo{
 			Path:   relPath,
@@ -240,10 +240,10 @@ func (h *Hydrator) composeDevbox(ctx context.Context) error {
 			repoPath = repoNameFromURL(repo.URL)
 		}
 
-		worktreeDir := filepath.Join(h.config.WorkspaceDir, "src", repoPath)
+		worktreeDir := filepath.Join(h.config.WorkspaceDir, repoPath)
 		devboxPath := filepath.Join(worktreeDir, "devbox.json")
 		if _, err := os.Stat(devboxPath); err == nil {
-			includes = append(includes, filepath.Join("src", repoPath, "devbox.json"))
+			includes = append(includes, filepath.Join(repoPath, "devbox.json"))
 		}
 	}
 
@@ -411,13 +411,13 @@ func (h *Hydrator) setupDevbox(ctx context.Context) error {
 // PrimaryWorktreePath returns the path to the first repo's worktree.
 func (h *Hydrator) PrimaryWorktreePath() string {
 	if len(h.config.Repos) == 0 {
-		return filepath.Join(h.config.WorkspaceDir, "src")
+		return h.config.WorkspaceDir
 	}
 	repoPath := h.config.Repos[0].Path
 	if repoPath == "" {
 		repoPath = repoNameFromURL(h.config.Repos[0].URL)
 	}
-	return filepath.Join(h.config.WorkspaceDir, "src", repoPath)
+	return filepath.Join(h.config.WorkspaceDir, repoPath)
 }
 
 // WorktreePath returns the path to the created worktree (backward compat alias).
