@@ -2,7 +2,7 @@
 
 Ensure OpenSpec specs accurately reflect the current implementation so that agent verification produces correct results.
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Theme support matches implementation
 The ui-theming spec SHALL require light mode, dark mode, and a system-preference toggle instead of 12 shadcn themes.

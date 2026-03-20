@@ -1,5 +1,8 @@
-## MODIFIED Requirements
+# dead-code-removal Specification
 
+## Purpose
+TBD - created by archiving change cleanup-dead-ui-code. Update Purpose after archive.
+## Requirements
 ### Requirement: No dead UI files in the codebase
 
 The web frontend SHALL NOT contain source files that are not imported by any other module. Specifically, the following files SHALL be removed:
@@ -30,3 +33,4 @@ The TypeScript build SHALL compile without errors after all three files are remo
 - **WHEN** all three files are deleted
 - **AND** `tsc --noEmit` is run
 - **THEN** the compiler reports zero errors
+
