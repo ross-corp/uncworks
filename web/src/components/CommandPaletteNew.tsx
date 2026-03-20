@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Command } from "cmdk";
 import type { AgentRun } from "../types/agent-run";
-import { useThemeNew, THEMES } from "../hooks/useThemeNew";
+import { useThemeNew } from "../hooks/useThemeNew";
 import { useClient } from "../hooks/useClient";
 
 import "./command-palette.css";
@@ -16,7 +16,7 @@ export default function CommandPaletteNew({ runs, selectedRunId }: Props) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const client = useClient();
-  const { setTheme, toggleMode, theme } = useThemeNew();
+  const { toggleMode } = useThemeNew();
 
   // ⌘K to toggle
   useEffect(() => {
@@ -102,15 +102,6 @@ export default function CommandPaletteNew({ runs, selectedRunId }: Props) {
           <Command.Item onSelect={() => runAction(toggleMode)}>
             Toggle dark mode
           </Command.Item>
-          {THEMES.map((t) => (
-            <Command.Item
-              key={t}
-              onSelect={() => runAction(() => setTheme(t))}
-              value={`theme ${t}`}
-            >
-              {t === theme ? `● ${t}` : `  ${t}`}
-            </Command.Item>
-          ))}
         </Command.Group>
       </Command.List>
     </Command.Dialog>
