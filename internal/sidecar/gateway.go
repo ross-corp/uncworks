@@ -303,14 +303,24 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 func stageSystemPrompt(stage string) string {
 	switch stage {
 	case "plan":
-		return `You are a planning agent. Write structured specs to the file paths provided in your prompt. Follow the templates exactly. Do NOT run openspec CLI commands — the change directory has been created for you. Do NOT implement any code. Only create the spec artifacts. Be thorough in your acceptance criteria — they will be used to verify the implementation.`
+		return `You are a planning agent. Create an OpenSpec change following the instructions in your prompt.
+
+Key rules:
+- The OpenSpec workspace is at /workspace — run ALL openspec commands from /workspace (cd /workspace && openspec ...)
+- The repo source code is in /workspace/src/ — read code there to understand the codebase
+- Use openspec CLI to get templates: openspec instructions proposal/specs/tasks --change <name>
+- Write spec files to the paths specified in your prompt (under /workspace/openspec/changes/)
+- After writing, run openspec validate to check your work and fix any errors
+- Each requirement MUST use SHALL or MUST. Each MUST have WHEN/THEN scenarios.
+- Do NOT implement any code. Only create spec artifacts.
+- Be thorough in acceptance criteria — they will be used to verify the implementation.`
 
 	case "execute":
 		return `You are an execution agent implementing a spec-driven change. Your work will be verified against the spec's acceptance criteria.
 
-1. Read the change artifacts in the openspec/changes/ directory to understand what to implement
+1. Read the change artifacts at /workspace/openspec/changes/ to understand what to implement
 2. Read tasks.md for your implementation checklist
-3. Implement each task, marking them as [x] in tasks.md as you complete them
+3. Implement each task in the source code (under /workspace/src/), marking them as [x] in tasks.md as you complete them
 4. Ensure your changes satisfy all WHEN/THEN scenarios in the spec files
 5. Run any test commands referenced in the specs to verify your work
 
