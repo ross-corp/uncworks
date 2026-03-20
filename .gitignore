@@ -105,3 +105,12 @@ Thumbs.db
 *storybook.log
 storybook-static
 /sidecar
+
+# Build binaries
+hydration
+temporal-worker
+apiserver
+controller
+sidecar
+aot
+bin/
