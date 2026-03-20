@@ -79,6 +79,11 @@ graph LR
     Init --> PVC
     Pi --> PVC
     Sidecar --> PVC
+
+    style K8s fill:transparent,stroke:#555
+    style CP fill:transparent,stroke:#555
+    style Deps fill:transparent,stroke:#555
+    style DP fill:transparent,stroke:#555
 ```
 
 | Section | Component | Description |
@@ -100,43 +105,34 @@ graph LR
 ```mermaid
 sequenceDiagram
     actor User
-    participant Web as Web UI
-    participant API as API Server
-    participant Ctrl as Controller
-    participant TW as Temporal Worker
-    participant Pod as Agent Pod
-    participant LLM as LiteLLM / OpenRouter
+    participant UW as UNCWORKS
+    participant Manage as Manage Agent
+    participant Impl as Implement Agent
+    participant LLM as LLM (local/cloud)
 
-    User->>Web: Create run (repo + prompt)
-    Web->>API: CreateAgentRun
-    API->>API: Create AgentRun CRD
-    Ctrl->>TW: Start workflow
+    User->>UW: Submit task + repo
+    UW->>UW: Provision workspace
 
-    TW->>Pod: Create pod + PVC
-    Note over Pod: Hydration: clone, worktree, devbox
+    Note over Manage: PLAN
+    UW->>Manage: Plan this task
+    Manage->>LLM: Analyze repo
+    Manage->>Manage: Write specs + tasks
+    Manage->>UW: Specs ready
 
-    Note over TW,LLM: PLAN (manage agent)
-    TW->>Pod: Scaffold openspec change
-    TW->>Pod: StartAgent (plan prompt)
-    Pod->>LLM: Read repo, write specs
-    Pod->>TW: Complete
-    TW->>Pod: openspec validate
+    Note over Impl: EXECUTE
+    UW->>Impl: Implement the specs
+    Impl->>LLM: Write code, run tests
+    Impl->>UW: Done
 
-    Note over TW,LLM: EXECUTE (implement agent)
-    TW->>Pod: StartAgent (specs + prompt)
-    Pod->>LLM: Read specs, write code, run tests
-    Pod->>TW: Complete
-
-    Note over TW,LLM: VERIFY (manage agent)
-    TW->>Pod: Check tasks, validate specs, LLM judge
+    Note over Manage: VERIFY
+    UW->>Manage: Verify implementation
+    Manage->>Manage: Check tasks, validate specs
     alt Pass
-        TW->>Pod: openspec archive
-        TW-->>API: Succeeded
+        Manage->>UW: Verified
+        UW->>User: Run succeeded
     else Fail
-        TW->>Pod: Retry execute
+        UW->>Impl: Retry with feedback
     end
-
-    TW->>Pod: Scale down
 ```
 
 ---
