@@ -35,24 +35,135 @@ task dev:web          # start web dashboard
 
 ## Architecture
 
-```mermaid
-graph TD
-    WebUI["Web UI (SolidJS)"] -->|ConnectRPC| API["API Server"]
-    API --> Temporal["Temporal"]
-    Temporal --> Worker["Temporal Worker"]
-    Worker -->|creates| Pod["Agent Pod"]
+Everything runs inside Kubernetes.
 
-    subgraph Pod["Agent Pod"]
-        Init["init: hydration"]
-        Agent["pi + agent"]
-        Sidecar["rpc-gateway sidecar"]
+```mermaid
+graph TB
+    User["User (Browser)"]
+
+    subgraph K8s["Kubernetes Cluster"]
+
+        subgraph UI["UNCWORKS UI"]
+            Web["Web Dashboard<br/>React + Tailwind :30300"]
+        end
+
+        subgraph CP["UNCWORKS Control Plane"]
+            API["API Server<br/>ConnectRPC :50055"]
+            Ctrl["K8s Controller<br/>AgentRun Reconciler"]
+            TW["Temporal Worker<br/>Pipeline Activities"]
+        end
+
+        subgraph DP["UNCWORKS Data Plane"]
+            subgraph AgentPod["Agent Pod (1 per run)"]
+                direction TB
+                Init["Init: Hydration<br/>git clone + worktree + devbox"]
+                Sidecar["Sidecar: RPC Gateway<br/>StartAgent, GetStatus, ExecCommand"]
+                Pi["Agent: pi-coding-agent<br/>determinism ext, manage/implement"]
+                PVC[("PVC: /workspace<br/>worktrees, specs, logs")]
+            end
+            ExtAgent["External Agent (planned)"]
+            KubeVirtVM["KubeVirt VM (planned)"]
+        end
+
+        subgraph Deps["Dependencies"]
+            Temporal["Temporal Server :7233"]
+            LiteLLM["LiteLLM Proxy :4000"]
+            Ollama["Ollama :11434"]
+        end
     end
 
-    Agent -->|OPENAI_BASE_URL| LiteLLM["LiteLLM Proxy"]
-    Sidecar --> API
+    User -->|HTTP| Web
+    Web -->|nginx proxy| API
+    API -->|"Signal + Query"| Temporal
+    Temporal --> TW
+    Ctrl -->|"reconcile loop"| API
+    TW -->|creates pod + PVC| AgentPod
+    Sidecar -->|heartbeat, status| TW
+    Pi -->|"OPENAI_BASE_URL"| LiteLLM
+    LiteLLM --> Ollama
+    LiteLLM -->|OpenRouter| Cloud["Cloud LLMs"]
+    Init -.->|"writes to"| PVC
+    Pi -.->|"reads/writes"| PVC
+    Sidecar -.->|"reads logs from"| PVC
+
+    style ExtAgent stroke-dasharray: 5 5
+    style KubeVirtVM stroke-dasharray: 5 5
 ```
 
-The control plane (API Server, Controller, Temporal Worker) manages the lifecycle of each `AgentRun` CRD. Agent pods contain three containers: a hydration init-container (git clone + devbox setup), the agent process with pi extension policies, and an rpc-gateway sidecar that bridges the agent back to the control plane.
+### Sequence: Spec-Driven Run
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web as Web UI
+    participant API as API Server
+    participant Ctrl as Controller
+    participant TW as Temporal Worker
+    participant Pod as Agent Pod
+    participant LLM as LiteLLM
+
+    User->>Web: Create run (repo + prompt)
+    Web->>API: CreateAgentRun RPC
+    API->>API: Create AgentRun CRD
+    Ctrl->>API: Detect new CRD
+    Ctrl->>TW: Start Temporal workflow
+
+    Note over TW: Provision LLM key
+    TW->>Pod: Create pod + PVC
+    Note over Pod: Init: clone repo,<br/>create worktree,<br/>setup devbox
+
+    rect rgb(59, 130, 246, 0.1)
+        Note over TW,Pod: PLAN (agent-manage, PI_ROLE=manage)
+        TW->>Pod: openspec init + scaffold change
+        TW->>Pod: StartAgent (plan prompt)
+        Pod->>LLM: LLM calls (read repo, write specs)
+        Pod->>TW: Agent completed
+        TW->>Pod: openspec validate
+    end
+
+    rect rgb(34, 197, 94, 0.1)
+        Note over TW,Pod: EXECUTE (agent-implement, PI_ROLE=implement)
+        TW->>Pod: StartAgent (execute prompt + spec ref)
+        Pod->>LLM: LLM calls (read specs, write code)
+        Pod->>TW: Agent completed
+    end
+
+    rect rgb(234, 179, 8, 0.1)
+        Note over TW,Pod: VERIFY (agent-manage, PI_ROLE=manage)
+        TW->>Pod: VerifyRun (task check, validate, LLM judge)
+        alt Verification passes
+            TW->>Pod: openspec archive
+            TW->>API: Phase = Succeeded
+        else Verification fails
+            TW->>Pod: Retry execute with failure context
+        end
+    end
+
+    TW->>Pod: Scale down pod
+    TW->>LLM: Revoke LLM key
+
+    User->>Web: View results (activity, files, traces)
+```
+
+### Control Plane
+
+The **API Server** exposes ConnectRPC endpoints for creating, listing, and managing agent runs. It also serves REST endpoints for structured logs, file browsing, traces, and thinking state. The **K8s Controller** watches `AgentRun` CRDs and starts Temporal workflows, mapping CRD spec fields to workflow input. The **Temporal Worker** registers 16 activities covering the full agent lifecycle: key provisioning, pod creation, hydration, plan/execute/verify stages, and cleanup.
+
+### Data Plane
+
+Each run gets its own **pod** with a **PVC** at `/workspace`:
+
+| Container | Role | What it does |
+|-----------|------|-------------|
+| **Init: Hydration** | Setup | Bare-clones repos, creates git worktrees at `/workspace/<repo>/`, composes devbox environments, writes workspace manifest |
+| **pi-coding-agent** | Agent | Runs the LLM agent with the determinism extension loaded. In plan/verify stages: `PI_ROLE=manage` (can run openspec CLI, ask_user; blocked from writing code). In execute stage: `PI_ROLE=implement` (can write/edit code; blocked from modifying specs). |
+| **RPC Gateway** | Sidecar | Bridges agent to control plane via ConnectRPC: StartAgent, GetStatus, ExecCommand, SendInput, NotifyEvent. Streams agent JSONL output to the PVC for the UI to read. Detects rate limit errors and auto-retries. |
+
+**External agents** (running outside the cluster) and **KubeVirt VMs** (full VM isolation) are planned backends.
+
+### Dependencies
+
+**Temporal** orchestrates the spec-driven pipeline with retry logic, compensation (cleanup on failure), and signal handling (cancel, human input). **LiteLLM** proxies all LLM calls with model routing (local Ollama or cloud via OpenRouter), per-key budgets, and fallback chains. **Ollama** runs local models for zero-cost development.
 
 ---
 
