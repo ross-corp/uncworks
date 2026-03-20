@@ -201,6 +201,9 @@ func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 
 	entries := make([]FileEntry, 0, len(dirEntries))
 	for _, de := range dirEntries {
+		if isHiddenDir(de.Name()) {
+			continue
+		}
 		info, infoErr := de.Info()
 		entry := FileEntry{
 			Name: de.Name(),
@@ -368,8 +371,8 @@ func parseLsOutput(output string) []FileEntry {
 		perms := fields[0]
 		name := strings.Join(fields[7:], " ") // file name may contain spaces
 
-		// Skip . and .. entries
-		if name == "." || name == ".." {
+		// Skip . and .. entries and hidden internal dirs
+		if name == "." || name == ".." || isHiddenDir(name) {
 			continue
 		}
 
@@ -392,6 +395,11 @@ func parseLsOutput(output string) []FileEntry {
 	}
 
 	return entries
+}
+
+// isHiddenDir returns true for internal directories that should be filtered from file listings.
+func isHiddenDir(name string) bool {
+	return name == ".aot" || name == ".bare"
 }
 
 // detectContentType returns a Content-Type based on file extension.
@@ -549,6 +557,34 @@ func (f *FileHandler) handleStructuredLogs(w http.ResponseWriter, r *http.Reques
 	}
 
 	entries := parseAgentJSONL(string(data))
+
+	// Inject Temporal pipeline events from the CRD status
+	crd := &aotv1alpha1.AgentRun{}
+	if err := f.k8sClient.Get(r.Context(), runtimeclient.ObjectKey{
+		Namespace: f.namespace,
+		Name:      runID,
+	}, crd); err == nil {
+		if crd.Spec.OrchestrationMode == aotv1alpha1.OrchestrationModeSpecDriven {
+			var pipelineEvents []AgentLogEntry
+			if crd.Status.Stage != "" {
+				pipelineEvents = append(pipelineEvents, AgentLogEntry{
+					Timestamp: crd.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
+					Type:      "system",
+					Content:   fmt.Sprintf("Pipeline: %s", crd.Status.Message),
+				})
+			}
+			if crd.Status.RetryCount > 0 {
+				pipelineEvents = append(pipelineEvents, AgentLogEntry{
+					Timestamp: crd.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
+					Type:      "system",
+					Content:   fmt.Sprintf("Retry attempt %d", crd.Status.RetryCount),
+				})
+			}
+			// Prepend pipeline events before agent entries
+			entries = append(pipelineEvents, entries...)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, entries)
 }
 

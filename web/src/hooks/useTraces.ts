@@ -15,26 +15,25 @@ export function useTraces(runId: string) {
     let cancelled = false;
     setLoading(true);
 
-    apiFetch(`/api/v1/runs/${runId}/traces`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data: TraceSpan[]) => {
-        if (!cancelled) setSpans(data ?? []);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error("Failed to fetch traces:", err);
-          setSpans([]);
+    async function fetchTraces() {
+      try {
+        const r = await apiFetch(`/api/v1/runs/${runId}/traces`);
+        if (r.ok) {
+          const data: TraceSpan[] = await r.json();
+          if (!cancelled) setSpans(data ?? []);
         }
-      })
-      .finally(() => {
+      } catch {
+        // silent — traces may not exist yet during hydration
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
 
+    fetchTraces();
+    const interval = setInterval(fetchTraces, 5000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [runId]);
 

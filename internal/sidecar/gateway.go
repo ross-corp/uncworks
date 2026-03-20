@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -46,6 +47,12 @@ const agentLogPath = agentLogDir + "/agent.log"
 
 // agentJSONLPath is the full path to the raw JSON lines log for machine parsing.
 const agentJSONLPath = agentLogDir + "/agent.jsonl"
+
+// agentInputDir is the directory for HITL input files on the PVC.
+const agentInputDir = "/workspace/.aot/input"
+
+// agentInputResponsePath is the file where SendInput writes the human's answer.
+const agentInputResponsePath = agentInputDir + "/response.txt"
 
 // traceDir is the directory for trace span files on the PVC.
 const traceDir = "/workspace/.aot/traces"
@@ -92,6 +99,8 @@ type AgentProcess struct {
 	readerWg  sync.WaitGroup
 	// textBuf accumulates text_delta fragments for the human-readable log.
 	textBuf strings.Builder
+	// pendingQuestion stores the HITL question payload when state is WAITING_FOR_INPUT.
+	pendingQuestion string
 }
 
 // NewGateway creates a new RPC Gateway sidecar.
@@ -209,6 +218,12 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	// -p = non-interactive (process and exit), --mode json = stream JSON events
 	args := []string{"-p", "--mode", "json", "--no-session"}
 
+	// Load AOT determinism extension for policy enforcement
+	const aotExtensionPath = "/opt/aot/extensions/aot-determinism.ts"
+	if _, err := os.Stat(aotExtensionPath); err == nil {
+		args = append(args, "--extension", aotExtensionPath)
+	}
+
 	// Stage-specific system prompt for spec-driven pipeline.
 	if sp := stageSystemPrompt(req.GetStage()); sp != "" {
 		args = append(args, "--system-prompt", sp)
@@ -221,15 +236,15 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 		args = append(args, "--model", model)
 	}
 	cmd := exec.Command("pi", args...)
-	cmd.Dir = req.RepoPath
-	if cmd.Dir == "" {
-		cmd.Dir = "/workspace"
-	}
+	cmd.Dir = resolveWorkDir(req.RepoPath)
 
 	// Inherit current environment and add request-specific vars on top.
 	// PI_LOG_LEVEL=debug: emit detailed tool call and LLM response info.
 	// PI_ACCEPT_TOS=1: skip interactive TOS prompt in headless mode.
 	cmd.Env = append(os.Environ(), "PI_LOG_LEVEL=debug", "PI_ACCEPT_TOS=1")
+	if stage := req.GetStage(); stage != "" {
+		cmd.Env = append(cmd.Env, "PI_STAGE="+stage)
+	}
 	for k, v := range req.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -319,6 +334,10 @@ Output a JSON verdict with this structure:
 	}
 }
 
+// maxRepeatedToolCalls is the number of identical consecutive tool calls before
+// the agent is killed to prevent infinite loops (e.g., rewriting the same file).
+const maxRepeatedToolCalls = 5
+
 // startReaders begins scanning stdout/stderr pipes immediately.
 // MUST be called while the pipe is still open (before the process exits).
 func (proc *AgentProcess) startReaders() {
@@ -330,12 +349,32 @@ func (proc *AgentProcess) startReaders() {
 		scanner := bufio.NewScanner(reader)
 		// Allow up to 256KB per line for verbose JSON output from pi.
 		scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
+
+		// Loop detection state
+		var lastToolSig string
+		var repeatCount int
+
 		for scanner.Scan() {
 			line := make([]byte, len(scanner.Bytes()))
 			copy(line, scanner.Bytes())
 
 			// For stdout: write raw JSON to agent.jsonl, formatted text to agent.log
 			if outputType == agentv1.OutputType_OUTPUT_TYPE_STDOUT {
+				// Loop detection: kill agent if it repeats the same tool call too many times
+				if sig := extractToolCallSignature(string(line)); sig != "" {
+					if sig == lastToolSig {
+						repeatCount++
+						if repeatCount >= maxRepeatedToolCalls {
+							log.Printf("Loop detected: tool call %q repeated %d times — killing agent", sig, repeatCount)
+							_ = proc.cmd.Process.Kill()
+							return
+						}
+					} else {
+						lastToolSig = sig
+						repeatCount = 1
+					}
+				}
+
 				// Always write raw line to JSONL file for machine parsing
 				if proc.jsonlFile != nil {
 					proc.mu.Lock()
@@ -580,7 +619,7 @@ func (g *Gateway) StreamOutput(_ context.Context, _ *connect.Request[agentv1.Str
 	return nil
 }
 
-func (g *Gateway) SendInput(_ context.Context, _ *connect.Request[agentv1.SendInputRequest]) (*connect.Response[agentv1.SendInputResponse], error) {
+func (g *Gateway) SendInput(_ context.Context, req *connect.Request[agentv1.SendInputRequest]) (*connect.Response[agentv1.SendInputResponse], error) {
 	g.mu.RLock()
 	proc := g.process
 	g.mu.RUnlock()
@@ -589,9 +628,21 @@ func (g *Gateway) SendInput(_ context.Context, _ *connect.Request[agentv1.SendIn
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
 	}
 
-	// pi-coding-agent in -p (print) mode doesn't accept stdin after startup.
-	// HITL will need a different mechanism (e.g., RPC mode or session continuation).
-	return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("stdin-based input not supported in print mode"))
+	// Write the human's answer to the response file.
+	// The aot-determinism extension polls for this file and resolves the waiting promise.
+	if err := os.MkdirAll(filepath.Dir(agentInputResponsePath), 0o755); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create input dir: %w", err))
+	}
+	if err := os.WriteFile(agentInputResponsePath, req.Msg.Data, 0o644); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("write response file: %w", err))
+	}
+
+	// Transition the agent state back to RUNNING.
+	proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING
+	proc.pendingQuestion = ""
+	log.Printf("SendInput: wrote response file, state → RUNNING")
+
+	return connect.NewResponse(&agentv1.SendInputResponse{Accepted: true}), nil
 }
 
 func (g *Gateway) GetStatus(_ context.Context, _ *connect.Request[agentv1.GetStatusRequest]) (*connect.Response[agentv1.AgentStatus], error) {
@@ -609,6 +660,11 @@ func (g *Gateway) GetStatus(_ context.Context, _ *connect.Request[agentv1.GetSta
 		State:     proc.state,
 		StartedAt: timestamppb.New(proc.startedAt),
 		Error:     proc.exitError,
+	}
+	// When waiting for input, surface the pending question in the error field
+	// so callers can display it. The proto has no dedicated message field.
+	if proc.state == agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT && proc.pendingQuestion != "" {
+		s.Error = proc.pendingQuestion
 	}
 	if proc.cmd.Process != nil {
 		s.Pid = int32(proc.cmd.Process.Pid)
@@ -630,6 +686,7 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 	switch req.Msg.EventType {
 	case agentv1.EventType_EVENT_TYPE_WAITING_FOR_INPUT:
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT
+		proc.pendingQuestion = req.Msg.Payload
 		log.Printf("Agent entered WAITING_FOR_INPUT: %s", req.Msg.Payload)
 
 	case agentv1.EventType_EVENT_TYPE_STARTED:
@@ -715,10 +772,7 @@ func (g *Gateway) StopAgent(_ context.Context, req *connect.Request[agentv1.Stop
 // This is a lightweight alternative to StartAgent for running CLI tools like openspec,
 // test suites, and file checks.
 func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.ExecCommandRequest]) (*connect.Response[agentv1.ExecCommandResponse], error) {
-	workDir := req.Msg.WorkingDir
-	if workDir == "" {
-		workDir = "/workspace"
-	}
+	workDir := resolveWorkDir(req.Msg.WorkingDir)
 	// Fall back to current directory if the specified directory doesn't exist.
 	if _, err := os.Stat(workDir); err != nil {
 		workDir = "."
@@ -1166,4 +1220,79 @@ func appendTraceSpan(span TraceSpan) {
 	if _, err := f.Write(append(data, '\n')); err != nil {
 		log.Printf("WARNING: failed to write trace span: %v", err)
 	}
+}
+
+// resolveWorkDir determines the actual working directory for agent processes.
+// Single-repo runs clone directly into /workspace, so /workspace is correct.
+// Multi-repo runs have subdirs in /workspace/<repoName>.
+// Also handles legacy /workspace/src/<repoName> layout.
+func resolveWorkDir(repoPath string) string {
+	if repoPath == "" {
+		repoPath = "/workspace"
+	}
+	if repoPath != "/workspace" {
+		return repoPath
+	}
+	// Check if this is already a repo (single-repo clone into root)
+	if _, err := os.Stat("/workspace/.git"); err == nil {
+		return "/workspace"
+	}
+	// Legacy: check /workspace/src/<repo>
+	if entries, err := os.ReadDir("/workspace/src"); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				resolved := "/workspace/src/" + e.Name()
+				log.Printf("resolveWorkDir: /workspace → %s (legacy src layout)", resolved)
+				return resolved
+			}
+		}
+	}
+	// Multi-repo: check for repo subdirs in /workspace/
+	entries, err := os.ReadDir("/workspace")
+	if err != nil {
+		return repoPath
+	}
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != ".bare" && e.Name() != ".aot" && e.Name() != ".devcontainer" {
+			gitPath := "/workspace/" + e.Name() + "/.git"
+			if _, err := os.Stat(gitPath); err == nil {
+				resolved := "/workspace/" + e.Name()
+				log.Printf("resolveWorkDir: /workspace → %s (multi-repo)", resolved)
+				return resolved
+			}
+		}
+	}
+	return "/workspace"
+}
+
+// extractToolCallSignature returns a short signature for a tool call JSONL event,
+// used for loop detection. Returns "" for non-tool-call events.
+func extractToolCallSignature(line string) string {
+	var event struct {
+		Type    string `json:"type"`
+		Message *struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal([]byte(line), &event) != nil || event.Type != "message_end" {
+		return ""
+	}
+	if event.Message == nil {
+		return ""
+	}
+
+	var blocks []struct {
+		Type  string          `json:"type"`
+		Name  string          `json:"name"`
+		Input json.RawMessage `json:"input"`
+	}
+	if json.Unmarshal(event.Message.Content, &blocks) != nil {
+		return ""
+	}
+	for _, b := range blocks {
+		if b.Type == "tool_use" {
+			return fmt.Sprintf("%s:%d", b.Name, len(b.Input))
+		}
+	}
+	return ""
 }

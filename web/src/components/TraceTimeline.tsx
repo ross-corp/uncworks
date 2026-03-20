@@ -1,46 +1,84 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import type { TraceSpan } from "../types/agent-run";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import type { TraceSpan, FileDiff } from "../types/agent-run";
 import { Badge } from "./ui/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "./ui/collapsible";
+import { cn } from "../lib/utils";
+import {
+  ChevronRightIcon,
+  ChevronDownIcon,
+  FileIcon,
+} from "lucide-react";
 
 // ============================================================
-// Trace Timeline v2 — MU-TH-UR aesthetic
-// Horizontal span bars with phosphor glow, CRT scanlines,
-// monospace labels, and interactive tooltips/click handling.
+// Trace Timeline — Flame Graph / Waterfall View
+// Horizontal span bars nested by parent-child, width proportional
+// to duration. Click to expand details + diff viewer.
 // ============================================================
 
-const SPAN_TYPE_CONFIG: Record<
+// -- Span type visual config --------------------------------
+
+const SPAN_TYPE_STYLES: Record<
   string,
-  { color: string; activeColor: string; label: string }
+  {
+    label: string;
+    bar: string;
+    barActive: string;
+    text: string;
+    dot: string;
+  }
 > = {
   llm: {
-    color: "var(--muthr-dim-green)",
-    activeColor: "var(--muthr-green)",
     label: "LLM",
+    bar: "bg-blue-500/20 border-l-2 border-blue-500",
+    barActive: "bg-blue-500/30 border-l-2 border-blue-500",
+    text: "text-blue-400",
+    dot: "bg-blue-500",
   },
   tool: {
-    color: "var(--muthr-dim-green)",
-    activeColor: "var(--muthr-green)",
     label: "TOOL",
+    bar: "bg-green-500/20 border-l-2 border-green-500",
+    barActive: "bg-green-500/30 border-l-2 border-green-500",
+    text: "text-green-400",
+    dot: "bg-green-500",
   },
   thought: {
-    color: "var(--muthr-dim-green)",
-    activeColor: "var(--muthr-green)",
     label: "THINK",
+    bar: "bg-muted border-l-2 border-muted-foreground",
+    barActive: "bg-muted border-l-2 border-muted-foreground",
+    text: "text-muted-foreground",
+    dot: "bg-muted-foreground",
   },
   input: {
-    color: "var(--muthr-dim-green)",
-    activeColor: "var(--muthr-green)",
     label: "INPUT",
+    bar: "bg-yellow-500/20 border-l-2 border-yellow-500",
+    barActive: "bg-yellow-500/30 border-l-2 border-yellow-500",
+    text: "text-yellow-400",
+    dot: "bg-yellow-500",
   },
 };
 
-function formatDuration(startTime: string, endTime: string): string {
+const FAILED_STYLES = {
+  bar: "bg-red-500/20 border-l-2 border-red-500",
+  text: "text-red-400",
+  dot: "bg-red-500",
+};
+
+// -- Helpers ------------------------------------------------
+
+function getDurationMs(startTime: string, endTime: string): number {
   const start = new Date(startTime).getTime();
   const end = endTime ? new Date(endTime).getTime() : Date.now();
-  const ms = end - start;
+  return Math.max(0, end - start);
+}
+
+function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
+  if (secs < 60) return `${secs}.${Math.floor((ms % 1000) / 100)}s`;
   return `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
 
@@ -49,9 +87,256 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString();
 }
 
-/** Span item height for virtualization */
-const SPAN_HEIGHT = 36;
-const OVERSCAN = 5;
+// -- Tree building ------------------------------------------
+
+interface FlatSpan {
+  span: TraceSpan;
+  depth: number;
+  durationMs: number;
+  offsetMs: number;
+}
+
+function buildFlatTree(spans: TraceSpan[]): {
+  flat: FlatSpan[];
+  traceStartMs: number;
+  traceDurationMs: number;
+} {
+  if (spans.length === 0) {
+    return { flat: [], traceStartMs: 0, traceDurationMs: 0 };
+  }
+
+  // Build lookup maps
+  const byId = new Map<string, TraceSpan>();
+  const childrenOf = new Map<string, TraceSpan[]>();
+
+  for (const span of spans) {
+    byId.set(span.id, span);
+  }
+
+  // Separate roots and children
+  const roots: TraceSpan[] = [];
+  for (const span of spans) {
+    if (!span.parentId || !byId.has(span.parentId)) {
+      roots.push(span);
+    } else {
+      const siblings = childrenOf.get(span.parentId) ?? [];
+      siblings.push(span);
+      childrenOf.set(span.parentId, siblings);
+    }
+  }
+
+  // Sort roots by start time
+  roots.sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+
+  // Find global trace start for offset calculation
+  let traceStartMs = Infinity;
+  let traceEndMs = -Infinity;
+  for (const span of spans) {
+    const s = new Date(span.startTime).getTime();
+    const e = span.endTime ? new Date(span.endTime).getTime() : Date.now();
+    if (s < traceStartMs) traceStartMs = s;
+    if (e > traceEndMs) traceEndMs = e;
+  }
+  const traceDurationMs = Math.max(1, traceEndMs - traceStartMs);
+
+  // DFS flatten
+  const flat: FlatSpan[] = [];
+  function walk(node: TraceSpan, depth: number) {
+    const startMs = new Date(node.startTime).getTime();
+    const durationMs = getDurationMs(node.startTime, node.endTime);
+    flat.push({
+      span: node,
+      depth,
+      durationMs,
+      offsetMs: startMs - traceStartMs,
+    });
+    const children = childrenOf.get(node.id) ?? [];
+    children.sort(
+      (a, b) =>
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+    for (const child of children) {
+      walk(child, depth + 1);
+    }
+  }
+  for (const root of roots) {
+    walk(root, 0);
+  }
+
+  return { flat, traceStartMs, traceDurationMs };
+}
+
+// -- Diff viewer --------------------------------------------
+
+function DiffViewer({ files }: { files: FileDiff[] }) {
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(
+    () => new Set(files.map((f) => f.path))
+  );
+
+  const toggleFile = (path: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-1">
+      {files.map((file) => {
+        const isExpanded = expandedFiles.has(file.path);
+        const lines = file.patch.split("\n");
+
+        return (
+          <div
+            key={file.path}
+            className="rounded border border-border bg-background"
+          >
+            <button
+              onClick={() => toggleFile(file.path)}
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs font-mono hover:bg-muted/50 transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronDownIcon className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              ) : (
+                <ChevronRightIcon className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              )}
+              <FileIcon className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              <span className="text-foreground truncate">{file.path}</span>
+            </button>
+            {isExpanded && (
+              <div className="border-t border-border overflow-x-auto">
+                <pre className="text-[11px] leading-[18px] font-mono">
+                  {lines.map((line, idx) => {
+                    let lineClass = "px-3 ";
+                    if (line.startsWith("+") && !line.startsWith("+++")) {
+                      lineClass += "bg-green-500/10 text-green-400";
+                    } else if (
+                      line.startsWith("-") &&
+                      !line.startsWith("---")
+                    ) {
+                      lineClass += "bg-red-500/10 text-red-400";
+                    } else if (line.startsWith("@@")) {
+                      lineClass += "bg-blue-500/10 text-blue-400";
+                    } else {
+                      lineClass += "text-muted-foreground";
+                    }
+                    return (
+                      <div key={idx} className={lineClass}>
+                        {line}
+                      </div>
+                    );
+                  })}
+                </pre>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// -- Span detail panel --------------------------------------
+
+function SpanDetail({ span }: { span: TraceSpan }) {
+  const durationMs = getDurationMs(span.startTime, span.endTime);
+  const isFailed = span.metadata?.error !== undefined;
+
+  return (
+    <div className="bg-muted/30 border-t border-border px-4 py-3 space-y-3 text-xs">
+      {/* Metadata grid */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 max-w-lg">
+        <div className="text-muted-foreground">Type</div>
+        <div className="font-medium text-foreground">
+          {(SPAN_TYPE_STYLES[span.type]?.label ?? span.type).toUpperCase()}
+        </div>
+
+        <div className="text-muted-foreground">Start</div>
+        <div className="font-mono text-foreground">
+          {formatTime(span.startTime)}
+        </div>
+
+        <div className="text-muted-foreground">End</div>
+        <div className="font-mono text-foreground">
+          {span.endTime ? formatTime(span.endTime) : "running..."}
+        </div>
+
+        <div className="text-muted-foreground">Duration</div>
+        <div className="font-mono text-foreground">
+          {formatDuration(durationMs)}
+        </div>
+
+        {span.parentId && (
+          <>
+            <div className="text-muted-foreground">Parent</div>
+            <div className="font-mono text-foreground truncate">
+              {span.parentId}
+            </div>
+          </>
+        )}
+
+        {isFailed && (
+          <>
+            <div className="text-red-400">Error</div>
+            <div className="text-red-400 font-mono truncate">
+              {String(span.metadata?.error)}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Extra metadata */}
+      {span.metadata &&
+        Object.keys(span.metadata).filter((k) => k !== "error").length > 0 && (
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group">
+              <ChevronRightIcon className="h-3 w-3 group-data-[state=open]:rotate-90 transition-transform" />
+              Metadata
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <pre className="mt-1 p-2 bg-background border border-border rounded text-[11px] font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto">
+                {JSON.stringify(
+                  Object.fromEntries(
+                    Object.entries(span.metadata).filter(
+                      ([k]) => k !== "error"
+                    )
+                  ),
+                  null,
+                  2
+                )}
+              </pre>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+      {/* Diff viewer */}
+      {span.hasDiff && span.diff && span.diff.files.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium text-foreground">
+            Changes ({span.diff.files.length}{" "}
+            {span.diff.files.length === 1 ? "file" : "files"})
+          </div>
+          <DiffViewer files={span.diff.files} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -- Constants for virtualization ---------------------------
+
+const SPAN_ROW_HEIGHT = 32;
+const DETAIL_HEIGHT_ESTIMATE = 200;
+const OVERSCAN = 8;
+const INDENT_PX = 20;
+const LABEL_WIDTH = 240;
+const MIN_BAR_WIDTH_PX = 4;
+
+// -- Main component -----------------------------------------
 
 export default function TraceTimeline({
   spans,
@@ -69,9 +354,34 @@ export default function TraceTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(400);
-  const [hoveredSpanId, setHoveredSpanId] = useState<string | null>(null);
+  const [expandedSpanIds, setExpandedSpanIds] = useState<Set<string>>(
+    new Set()
+  );
   const [userScrolled, setUserScrolled] = useState(false);
   const prevSpanCount = useRef(spans.length);
+
+  // Build tree structure
+  const { flat, traceDurationMs } = useMemo(
+    () => buildFlatTree(spans),
+    [spans]
+  );
+
+  // Toggle detail expansion
+  const toggleExpand = useCallback(
+    (span: TraceSpan) => {
+      setExpandedSpanIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(span.id)) {
+          next.delete(span.id);
+        } else {
+          next.add(span.id);
+        }
+        return next;
+      });
+      onSelectSpan(span);
+    },
+    [onSelectSpan]
+  );
 
   // Track container resize
   useEffect(() => {
@@ -86,7 +396,7 @@ export default function TraceTimeline({
     return () => observer.disconnect();
   }, []);
 
-  // Auto-scroll to latest span
+  // Auto-scroll to bottom on new spans
   useEffect(() => {
     if (spans.length > prevSpanCount.current && !userScrolled) {
       const el = containerRef.current;
@@ -101,217 +411,303 @@ export default function TraceTimeline({
     const el = containerRef.current;
     if (!el) return;
     setScrollTop(el.scrollTop);
-    // Detect if user has scrolled away from bottom
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     setUserScrolled(!atBottom);
   }, []);
 
-  // Virtualization
-  const totalHeight = spans.length * SPAN_HEIGHT;
-  const startIndex = Math.max(0, Math.floor(scrollTop / SPAN_HEIGHT) - OVERSCAN);
-  const endIndex = Math.min(
-    spans.length,
-    Math.ceil((scrollTop + containerHeight) / SPAN_HEIGHT) + OVERSCAN
-  );
-  const visibleSpans = spans.slice(startIndex, endIndex);
+  // Compute positions for each row (accounting for expanded detail panels)
+  const rowPositions = useMemo(() => {
+    const positions: { top: number; height: number; flatIndex: number }[] = [];
+    let y = 0;
+    for (let i = 0; i < flat.length; i++) {
+      const isExpanded = expandedSpanIds.has(flat[i].span.id);
+      const rowH = SPAN_ROW_HEIGHT + (isExpanded ? DETAIL_HEIGHT_ESTIMATE : 0);
+      positions.push({ top: y, height: rowH, flatIndex: i });
+      y += rowH;
+    }
+    return positions;
+  }, [flat, expandedSpanIds]);
+
+  const totalHeight = useMemo(() => {
+    if (rowPositions.length === 0) return 0;
+    const last = rowPositions[rowPositions.length - 1];
+    return last.top + last.height;
+  }, [rowPositions]);
+
+  // Determine visible rows
+  const visibleRange = useMemo(() => {
+    const viewTop = scrollTop;
+    const viewBottom = scrollTop + containerHeight;
+
+    let startIdx = 0;
+    let endIdx = rowPositions.length;
+
+    // Binary search for start
+    let lo = 0;
+    let hi = rowPositions.length - 1;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (rowPositions[mid].top + rowPositions[mid].height < viewTop) {
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    startIdx = Math.max(0, lo - OVERSCAN);
+
+    // Binary search for end
+    lo = startIdx;
+    hi = rowPositions.length - 1;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (rowPositions[mid].top > viewBottom) {
+        hi = mid - 1;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    endIdx = Math.min(rowPositions.length, lo + OVERSCAN);
+
+    return { startIdx, endIdx };
+  }, [scrollTop, containerHeight, rowPositions]);
+
+  // Time axis ticks
+  const timeTicks = useMemo(() => {
+    const count = 5;
+    const ticks: { label: string; pct: number }[] = [];
+    for (let i = 0; i <= count; i++) {
+      const ms = (traceDurationMs / count) * i;
+      ticks.push({
+        label: formatDuration(Math.round(ms)),
+        pct: (i / count) * 100,
+      });
+    }
+    return ticks;
+  }, [traceDurationMs]);
 
   if (spans.length === 0) {
     return (
       <div
-        className="flex items-center justify-center py-8 muthr-scanlines"
-        style={{
-          background: "var(--muthr-bg)",
-          fontFamily: "var(--muthr-font)",
-        }}
+        data-testid="trace-timeline"
+        className="flex items-center justify-center py-12 text-muted-foreground text-sm"
       >
-        <span
-          className="text-[11px] uppercase tracking-widest"
-          style={{ color: "var(--muthr-dim-green)" }}
-        >
-          No trace spans recorded
-        </span>
+        No trace spans recorded
       </div>
     );
   }
 
   return (
-    <div
-      data-testid="trace-timeline"
-      className="flex flex-col muthr-scanlines"
-      style={{ background: "var(--muthr-bg)", fontFamily: "var(--muthr-font)" }}
-    >
-      {/* Timeline header */}
-      <div
-        className="flex items-center justify-between px-3 py-2 border-b"
-        style={{ borderColor: "var(--muthr-dim-green)" }}
-      >
+    <div data-testid="trace-timeline" className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
         <div className="flex items-center gap-2">
           {runId && (
-            <span
-              className="text-[10px] uppercase tracking-widest truncate max-w-[200px]"
-              style={{ color: "var(--muthr-green)" }}
-            >
+            <span className="text-xs font-mono text-foreground truncate max-w-[200px]">
               {runId}
             </span>
           )}
           {agentType && (
-            <span
-              className="text-[10px] uppercase tracking-widest"
-              style={{ color: "var(--muthr-dim-green)" }}
-            >
+            <Badge variant="outline" className="text-[10px]">
               {agentType}
-            </span>
+            </Badge>
           )}
+          <span className="text-xs text-muted-foreground">
+            {spans.length} span{spans.length !== 1 ? "s" : ""}
+          </span>
         </div>
         {/* Legend */}
         <div className="flex items-center gap-3">
-          {Object.entries(SPAN_TYPE_CONFIG).map(([type, config]) => (
-            <div key={type} className="flex items-center gap-1">
+          {Object.entries(SPAN_TYPE_STYLES).map(([type, style]) => (
+            <div key={type} className="flex items-center gap-1.5">
               <span
-                className="inline-block h-2 w-2"
-                style={{ background: config.activeColor }}
+                className={cn("inline-block h-2 w-2 rounded-sm", style.dot)}
               />
-              <span
-                className="text-[10px] uppercase tracking-wider"
-                style={{ color: "var(--muthr-dim-green)" }}
-              >
-                {config.label}
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                {style.label}
               </span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Virtualized span list */}
+      {/* Column headers: label column + time axis */}
+      <div className="flex border-b border-border bg-muted/20">
+        <div
+          className="flex-shrink-0 px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider border-r border-border"
+          style={{ width: LABEL_WIDTH }}
+        >
+          Span
+        </div>
+        <div className="flex-1 relative py-1 px-2">
+          {timeTicks.map((tick, i) => (
+            <span
+              key={i}
+              className="absolute text-[10px] text-muted-foreground font-mono -translate-x-1/2"
+              style={{ left: `${tick.pct}%` }}
+            >
+              {tick.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Virtualized waterfall body */}
       <div
         ref={containerRef}
-        className="overflow-y-auto"
-        style={{ maxHeight: "300px" }}
+        className="flex-1 overflow-y-auto min-h-0"
+        style={{ maxHeight: "100%" }}
         onScroll={handleScroll}
       >
         <div style={{ height: totalHeight, position: "relative" }}>
-          {visibleSpans.map((span, i) => {
-            const index = startIndex + i;
-            const config = SPAN_TYPE_CONFIG[span.type] ?? SPAN_TYPE_CONFIG.tool;
+          {rowPositions.slice(visibleRange.startIdx, visibleRange.endIdx).map((pos) => {
+            const { span, depth, durationMs, offsetMs } = flat[pos.flatIndex];
+            const style = SPAN_TYPE_STYLES[span.type] ?? SPAN_TYPE_STYLES.tool;
             const isActive = !span.endTime;
+            const isExpanded = expandedSpanIds.has(span.id);
             const isSelected = span.id === selectedSpanId;
-            const isHovered = span.id === hoveredSpanId;
-            const isFailed = span.metadata?.error !== undefined;
+            const isFailed =
+              span.metadata?.error !== undefined ||
+              (span.type === "tool" && span.metadata?.exitCode !== 0 && span.metadata?.exitCode !== undefined);
 
-            let barColor = config.color;
-            if (isActive) barColor = config.activeColor;
-            if (isFailed) barColor = "var(--muthr-amber)";
+            // Bar positioning within the waterfall
+            const barLeftPct =
+              traceDurationMs > 0 ? (offsetMs / traceDurationMs) * 100 : 0;
+            const barWidthPct =
+              traceDurationMs > 0
+                ? Math.max(
+                    (MIN_BAR_WIDTH_PX / (containerRef.current?.clientWidth ?? 600)) * 100,
+                    (durationMs / traceDurationMs) * 100
+                  )
+                : 100;
+
+            const barClass = isFailed
+              ? FAILED_STYLES.bar
+              : isActive
+                ? style.barActive
+                : style.bar;
+
+            const textClass = isFailed ? FAILED_STYLES.text : style.text;
 
             return (
               <div
                 key={span.id}
                 style={{
                   position: "absolute",
-                  top: index * SPAN_HEIGHT,
+                  top: pos.top,
                   left: 0,
                   right: 0,
-                  height: SPAN_HEIGHT,
                 }}
               >
+                {/* Span row */}
                 <button
-                  onClick={() => onSelectSpan(span)}
-                  onMouseEnter={() => setHoveredSpanId(span.id)}
-                  onMouseLeave={() => setHoveredSpanId(null)}
-                  className="flex items-center gap-2 w-full h-full px-3 text-left transition-colors relative"
-                  style={{
-                    background: isSelected
-                      ? "rgba(0, 255, 65, 0.08)"
-                      : isHovered
-                        ? "rgba(0, 255, 65, 0.04)"
-                        : "transparent",
-                    borderLeft: isSelected ? `2px solid var(--muthr-green)` : "2px solid transparent",
-                  }}
+                  onClick={() => toggleExpand(span)}
+                  className={cn(
+                    "flex items-center w-full text-left transition-colors group",
+                    isSelected
+                      ? "bg-accent/10"
+                      : "hover:bg-muted/40"
+                  )}
+                  style={{ height: SPAN_ROW_HEIGHT }}
                 >
-                  {/* Span type indicator */}
-                  <span
-                    className="inline-block h-3 w-3 flex-shrink-0"
-                    style={{
-                      background: barColor,
-                      boxShadow: isActive ? `0 0 8px ${barColor}` : "none",
-                    }}
-                  />
-
-                  {/* Span label */}
-                  <span
-                    className="flex-1 truncate text-[11px] uppercase tracking-wider"
-                    style={{
-                      color: isActive
-                        ? "var(--muthr-green)"
-                        : isFailed
-                          ? "var(--muthr-amber)"
-                          : "var(--muthr-dim-green)",
-                    }}
-                  >
-                    {span.name}
-                  </span>
-
-                  {/* Duration */}
-                  <span
-                    className="flex-shrink-0 text-[10px]"
-                    style={{ color: "var(--muthr-dim-green)" }}
-                  >
-                    {formatDuration(span.startTime, span.endTime)}
-                  </span>
-
-                  {/* Diff badge */}
-                  {span.hasDiff && (
-                    <Badge
-                      variant="outline"
-                      className="text-[9px] px-1 py-0 border-[var(--muthr-green)] ml-1"
-                      style={{ color: "var(--muthr-green)" }}
-                    >
-                      DIFF
-                    </Badge>
-                  )}
-
-                  {/* Active indicator (growing bar) */}
-                  {isActive && (
-                    <span
-                      className="absolute right-0 top-0 bottom-0 w-1"
-                      style={{
-                        background: "var(--muthr-green)",
-                        boxShadow: `0 0 8px var(--muthr-green)`,
-                        animation: "muthr-phosphor-pulse 1.5s ease-in-out infinite",
-                      }}
-                    />
-                  )}
-                </button>
-
-                {/* Tooltip on hover */}
-                {isHovered && (
+                  {/* Label column */}
                   <div
-                    className="absolute z-50 px-3 py-2 pointer-events-none"
+                    className="flex items-center gap-1.5 flex-shrink-0 px-2 h-full border-r border-border overflow-hidden"
                     style={{
-                      top: SPAN_HEIGHT,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      background: "var(--muthr-bg)",
-                      border: "1px solid var(--muthr-dim-green)",
-                      fontFamily: "var(--muthr-font)",
-                      minWidth: 200,
+                      width: LABEL_WIDTH,
+                      paddingLeft: depth * INDENT_PX + 8,
                     }}
                   >
-                    <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--muthr-green)" }}>
+                    {/* Expand chevron */}
+                    <span className="flex-shrink-0 w-3 h-3">
+                      {isExpanded ? (
+                        <ChevronDownIcon className="h-3 w-3 text-muted-foreground" />
+                      ) : (
+                        <ChevronRightIcon className="h-3 w-3 text-muted-foreground" />
+                      )}
+                    </span>
+
+                    {/* Type dot */}
+                    <span
+                      className={cn(
+                        "inline-block h-2 w-2 rounded-sm flex-shrink-0",
+                        isFailed ? FAILED_STYLES.dot : style.dot
+                      )}
+                    />
+
+                    {/* Span name */}
+                    <span
+                      className={cn(
+                        "text-[11px] font-mono truncate",
+                        textClass
+                      )}
+                    >
                       {span.name}
-                    </div>
-                    <div className="text-[10px]" style={{ color: "var(--muthr-dim-green)" }}>
-                      Start: {formatTime(span.startTime)}
-                    </div>
-                    <div className="text-[10px]" style={{ color: "var(--muthr-dim-green)" }}>
-                      Duration: {formatDuration(span.startTime, span.endTime)}
-                    </div>
+                    </span>
+
+                    {/* Diff indicator */}
                     {span.hasDiff && (
-                      <div className="text-[10px] mt-1" style={{ color: "var(--muthr-green)" }}>
-                        Click to view diff
-                      </div>
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] px-1 py-0 ml-auto flex-shrink-0 border-blue-500/40 text-blue-400"
+                      >
+                        DIFF
+                      </Badge>
                     )}
                   </div>
-                )}
+
+                  {/* Waterfall bar column */}
+                  <div className="flex-1 relative h-full flex items-center px-1">
+                    {/* Background grid lines */}
+                    {timeTicks.map((tick, i) => (
+                      <div
+                        key={i}
+                        className="absolute top-0 bottom-0 border-l border-border/30"
+                        style={{ left: `${tick.pct}%` }}
+                      />
+                    ))}
+
+                    {/* Duration bar */}
+                    <div
+                      className={cn(
+                        "absolute h-5 rounded-sm transition-all",
+                        barClass,
+                        isActive && "animate-pulse"
+                      )}
+                      style={{
+                        left: `${barLeftPct}%`,
+                        width: `${barWidthPct}%`,
+                        minWidth: MIN_BAR_WIDTH_PX,
+                      }}
+                    >
+                      {/* Duration label inside bar if wide enough */}
+                      {barWidthPct > 8 && (
+                        <span
+                          className={cn(
+                            "absolute inset-0 flex items-center px-1.5 text-[10px] font-mono truncate",
+                            textClass
+                          )}
+                        >
+                          {formatDuration(durationMs)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Duration label outside bar if narrow */}
+                    {barWidthPct <= 8 && (
+                      <span
+                        className="absolute text-[10px] font-mono text-muted-foreground whitespace-nowrap"
+                        style={{
+                          left: `calc(${barLeftPct + barWidthPct}% + 4px)`,
+                        }}
+                      >
+                        {formatDuration(durationMs)}
+                      </span>
+                    )}
+                  </div>
+                </button>
+
+                {/* Expanded detail section */}
+                {isExpanded && <SpanDetail span={span} />}
               </div>
             );
           })}

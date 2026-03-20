@@ -29,29 +29,43 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	sidecarURL := fmt.Sprintf("http://%s:%d", input.PodIP, sidecarPort)
 	sidecarClient := agentv1connect.NewAgentSidecarServiceClient(http.DefaultClient, sidecarURL)
 
-	// Step 1: OpenSpec init — ensure workspace has openspec configured
+	// Step 1: Determine workspace — sidecar resolves /workspace to the actual repo dir
+	workDir := input.RepoPath
+	log.Printf("[PlanRun %s] Using workdir: %s (sidecar will resolve)", input.AgentRunName, workDir)
+
+	// Step 2: OpenSpec init — ensure workspace has openspec configured
 	activity.RecordHeartbeat(ctx, "initializing openspec in workspace")
-	initOut, initErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	initOut, initErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		"test -f openspec/config.yaml || openspec init --tools pi --force")
 	if initErr != nil {
-		log.Printf("openspec init warning (non-fatal): %v stdout=%q", initErr, initOut)
+		log.Printf("[PlanRun %s] openspec init warning (non-fatal): %v stdout=%q", input.AgentRunName, initErr, initOut)
+	} else {
+		log.Printf("[PlanRun %s] openspec init OK: %s", input.AgentRunName, truncate(initOut, 200))
 	}
 
-	// Step 2: Scaffold the change BEFORE starting the agent
+	// Step 3: Scaffold the change BEFORE starting the agent (idempotent — skip if already exists)
 	activity.RecordHeartbeat(ctx, "scaffolding openspec change")
-	newChangeCmd := fmt.Sprintf("openspec new change %q", input.AgentRunName)
-	newOut, newErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath, newChangeCmd)
-	if newErr != nil {
-		return PlanRunOutput{}, fmt.Errorf("scaffold openspec change: %w (output: %s)", newErr, newOut)
+	checkCmd := fmt.Sprintf("test -d openspec/changes/%s && echo exists || echo missing", input.AgentRunName)
+	checkOut, _ := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir, checkCmd)
+	if strings.TrimSpace(checkOut) == "exists" {
+		log.Printf("[PlanRun %s] change directory already exists, skipping scaffold", input.AgentRunName)
+	} else {
+		newChangeCmd := fmt.Sprintf("openspec new change %q", input.AgentRunName)
+		newOut, newErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir, newChangeCmd)
+		if newErr != nil {
+			return PlanRunOutput{}, fmt.Errorf("scaffold openspec change: %w (output: %s)", newErr, newOut)
+		}
+		log.Printf("[PlanRun %s] scaffolded change: %s", input.AgentRunName, truncate(newOut, 200))
 	}
 
-	// Step 3: Verify the change was created via status
+	// Step 4: Verify the change was created via status
 	activity.RecordHeartbeat(ctx, "verifying scaffolded change")
 	statusCmd := fmt.Sprintf("openspec status --change %q --json", input.AgentRunName)
-	scaffoldStatusOut, scaffoldStatusErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath, statusCmd)
+	scaffoldStatusOut, scaffoldStatusErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir, statusCmd)
 	if scaffoldStatusErr != nil {
 		return PlanRunOutput{}, fmt.Errorf("verify scaffolded change: %w (output: %s)", scaffoldStatusErr, scaffoldStatusOut)
 	}
+	log.Printf("[PlanRun %s] status response: %s", input.AgentRunName, truncate(scaffoldStatusOut, 300))
 
 	scaffoldStatus, scaffoldParseErr := parseOpenSpecStatusResponse(scaffoldStatusOut)
 	if scaffoldParseErr != nil {
@@ -64,40 +78,40 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	specsTemplate := ""
 	tasksTemplate := ""
 
-	proposalInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	proposalInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		fmt.Sprintf("openspec instructions proposal --change %q --json", input.AgentRunName))
 	if err == nil {
 		if t, parseErr := parseOpenSpecInstructionsResponse(proposalInstrOut); parseErr == nil {
 			proposalTemplate = t
 		} else {
-			log.Printf("parse proposal instructions warning: %v", parseErr)
+			log.Printf("[PlanRun %s] parse proposal instructions warning: %v", input.AgentRunName, parseErr)
 		}
 	} else {
-		log.Printf("openspec instructions proposal warning: %v", err)
+		log.Printf("[PlanRun %s] openspec instructions proposal warning: %v", input.AgentRunName, err)
 	}
 
-	specsInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	specsInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		fmt.Sprintf("openspec instructions specs --change %q --json", input.AgentRunName))
 	if err == nil {
 		if t, parseErr := parseOpenSpecInstructionsResponse(specsInstrOut); parseErr == nil {
 			specsTemplate = t
 		} else {
-			log.Printf("parse specs instructions warning: %v", parseErr)
+			log.Printf("[PlanRun %s] parse specs instructions warning: %v", input.AgentRunName, parseErr)
 		}
 	} else {
-		log.Printf("openspec instructions specs warning: %v", err)
+		log.Printf("[PlanRun %s] openspec instructions specs warning: %v", input.AgentRunName, err)
 	}
 
-	tasksInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	tasksInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		fmt.Sprintf("openspec instructions tasks --change %q --json", input.AgentRunName))
 	if err == nil {
 		if t, parseErr := parseOpenSpecInstructionsResponse(tasksInstrOut); parseErr == nil {
 			tasksTemplate = t
 		} else {
-			log.Printf("parse tasks instructions warning: %v", parseErr)
+			log.Printf("[PlanRun %s] parse tasks instructions warning: %v", input.AgentRunName, parseErr)
 		}
 	} else {
-		log.Printf("openspec instructions tasks warning: %v", err)
+		log.Printf("[PlanRun %s] openspec instructions tasks warning: %v", input.AgentRunName, err)
 	}
 
 	// Step 5: Build structured agent prompt with exact paths and templates
@@ -109,10 +123,11 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 		envVars["PI_MODEL"] = input.Model
 	}
 
+	log.Printf("[PlanRun %s] starting plan agent in workDir=%s", input.AgentRunName, workDir)
 	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
 		AgentRunId: input.AgentRunName,
 		Prompt:     prompt,
-		RepoPath:   input.RepoPath,
+		RepoPath:   workDir,
 		Stage:      "plan",
 		EnvVars:    envVars,
 	}))
@@ -130,7 +145,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	output := PlanRunOutput{ChangeName: input.AgentRunName}
 
 	// Validate the change structure
-	validateOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	validateOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		fmt.Sprintf("openspec validate \"%s\" --json", input.AgentRunName))
 	if err != nil {
 		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("openspec validate failed: %v (stderr: %s)", err, validateOut))
@@ -150,7 +165,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	}
 
 	// Check artifact completion status
-	statusOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	statusOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		fmt.Sprintf("openspec status --change \"%s\" --json", input.AgentRunName))
 	if err != nil {
 		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("openspec status failed: %v", err))
@@ -184,19 +199,23 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	sidecarURL := fmt.Sprintf("http://%s:%d", input.PodIP, sidecarPort)
 	sidecarClient := agentv1connect.NewAgentSidecarServiceClient(http.DefaultClient, sidecarURL)
 
+	// Sidecar resolves /workspace to the actual repo dir via resolveWorkDir
+	workDir := input.RepoPath
+	log.Printf("[VerifyRun %s] Using workdir: %s (sidecar will resolve)", input.AgentRunName, workDir)
+
 	result := VerificationResult{
 		AutomatedChecks: []AutomatedCheck{},
 	}
 
 	defer func() {
 		result.ExecutionTimeMs = time.Since(startTime).Milliseconds()
-		writeVerificationResult(input.RepoPath, input.ChangeName, result)
+		writeVerificationResult(workDir, input.ChangeName, result)
 	}()
 
 	// ── Gate 1: Task completion (Fix 4: fail on errors, not pass) ──
 	activity.RecordHeartbeat(ctx, "checking task completion")
 
-	listOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	listOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		"openspec list --json")
 	if err != nil {
 		result.Pass = false
@@ -259,10 +278,9 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	// ── Gate 2: Structural validation (Fix 5: remove hardcoded true, Fix 6.2-6.5) ──
 	activity.RecordHeartbeat(ctx, "validating spec structure")
 
-	valOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	valOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		fmt.Sprintf("openspec validate \"%s\" --json", input.ChangeName))
 	if err != nil {
-		// Fix 6.4: ExecCommand failure = gate FAIL (was skipped)
 		result.Pass = false
 		result.FailureReport = fmt.Sprintf("openspec validate failed: %v (output: %s)", err, valOut)
 		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
@@ -295,7 +313,6 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		return VerifyRunOutput{Result: result}, nil
 	}
 
-	// Fix 5: only set true when validation actually passes (was unconditional on line 165)
 	result.ValidationValid = true
 	result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
 		Name: "spec_validation", Pass: true,
@@ -304,10 +321,9 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	// ── Gate 2b: File existence checks ──
 	activity.RecordHeartbeat(ctx, "checking file existence")
 
-	// Fix 11: use ExecCommand for file checks (was os.Stat on worker)
-	fileChecks := extractFileChecks(input.RepoPath, input.ChangeName)
+	fileChecks := extractFileChecks(workDir, input.ChangeName)
 	for _, fc := range fileChecks {
-		checkOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+		checkOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 			fmt.Sprintf("test -f %q && echo exists || echo missing", fc.Path))
 		check := AutomatedCheck{
 			Name: fmt.Sprintf("file_exists: %s", fc.Path),
@@ -325,12 +341,12 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		result.AutomatedChecks = append(result.AutomatedChecks, check)
 	}
 
-	// ── Gate 3: Test command extraction and execution (Fix 6: was stub) ──
+	// ── Gate 3: Test command extraction and execution ──
 	activity.RecordHeartbeat(ctx, "running automated checks")
 
-	testCommands := detectTestCommands(input.RepoPath, input.ChangeName)
+	testCommands := detectTestCommands(workDir, input.ChangeName)
 	for _, tc := range testCommands {
-		output, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath, tc.Command)
+		output, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir, tc.Command)
 		check := AutomatedCheck{
 			Name:    tc.Name,
 			Command: tc.Command,
@@ -348,11 +364,11 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		result.AutomatedChecks = append(result.AutomatedChecks, check)
 	}
 
-	// ── Gate 4: LLM judge (Fix 7: parse verdict instead of discarding) ──
+	// ── Gate 4: LLM judge ──
 	activity.RecordHeartbeat(ctx, "running LLM evaluation")
 
-	gitDiff, _ := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
-		"cd /workspace/src/* 2>/dev/null && git diff HEAD~1 --stat || echo 'no git diff available'")
+	gitDiff, _ := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
+		"git diff HEAD~1 --stat 2>/dev/null || echo 'no git diff available'")
 
 	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
 		AgentRunId: input.AgentRunName + "-verify",
@@ -364,19 +380,17 @@ Git diff summary:
 Read the spec files in the openspec change directory and evaluate each WHEN/THEN scenario.
 Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}`,
 			gitDiff),
-		RepoPath: input.RepoPath,
+		RepoPath: workDir,
 		Stage:    "verify",
 	}))
 	if err != nil {
-		// LLM judge start failure is non-fatal
 		log.Printf("LLM judge failed to start: %v", err)
 	} else {
 		if pollErr := pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName+"-verify"); pollErr != nil {
 			log.Printf("LLM judge failed: %v", pollErr)
 		} else {
-			// Fix 7: actually parse the LLM verdict from JSONL logs
 			activity.RecordHeartbeat(ctx, "parsing LLM verdict")
-			verdictJSON, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+			verdictJSON, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 				"cat .aot/logs/agent.jsonl 2>/dev/null | tail -50")
 			if err == nil {
 				verdict := parseLLMVerdict(verdictJSON)
@@ -398,10 +412,10 @@ Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...
 		}
 	}
 
-	// ── Gate 5: Archive (Fix 8: no more || true) ──
+	// ── Gate 5: Archive ──
 	activity.RecordHeartbeat(ctx, "archiving change")
 
-	archiveOut, archiveErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, input.RepoPath,
+	archiveOut, archiveErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 		fmt.Sprintf("openspec archive \"%s\" --yes", input.ChangeName))
 	if archiveErr != nil {
 		// Fix 8: report archive errors (was swallowed with || true)
@@ -609,68 +623,50 @@ func extractFileChecks(repoPath, changeName string) []FileCheck {
 // Helpers
 // ======================================================================
 
-// buildPlanAgentPrompt constructs a structured prompt for the planning agent
-// that includes exact file paths and artifact templates from the scaffolded change.
+// buildPlanAgentPrompt constructs a concise prompt for the planning agent.
+// Keeps the user's task front-and-center, with OpenSpec paths and format rules
+// appended as a compact reference — not a wall of templates.
 func buildPlanAgentPrompt(userPrompt, specContent, changeName string, status *OpenSpecStatusResponse, proposalTpl, specsTpl, tasksTpl string) string {
 	var sb strings.Builder
 
-	// Include the user's original prompt/spec as the "what to plan" content
+	// User task first — this is what matters
 	if specContent != "" {
-		sb.WriteString("## User-Provided Specification\n\n")
 		sb.WriteString(specContent)
-		sb.WriteString("\n\n---\n\n")
 	} else {
-		sb.WriteString("## Task\n\n")
 		sb.WriteString(userPrompt)
-		sb.WriteString("\n\n---\n\n")
 	}
 
-	fmt.Fprintf(&sb, "## OpenSpec Change: %s\n\n", changeName)
-	sb.WriteString("The change directory has already been created for you. Write the following artifacts to the exact paths below.\n\n")
-
-	// Include exact file paths from the status output
 	changePath := fmt.Sprintf("openspec/changes/%s", changeName)
-	for _, artifact := range status.Artifacts {
-		switch artifact.ID {
-		case "proposal":
-			fmt.Fprintf(&sb, "### Proposal\n**Path:** `%s/proposal.md`\n", changePath)
-			if proposalTpl != "" {
-				sb.WriteString("\n**Template (follow this structure exactly):**\n```\n")
-				sb.WriteString(proposalTpl)
-				sb.WriteString("\n```\n\n")
-			} else {
-				sb.WriteString("\n")
-			}
-		case "design":
-			fmt.Fprintf(&sb, "### Design\n**Path:** `%s/design.md`\n\n", changePath)
-		case "specs":
-			fmt.Fprintf(&sb, "### Specs\n**Path:** `%s/specs/<capability>/spec.md` (one file per capability)\n", changePath)
-			if specsTpl != "" {
-				sb.WriteString("\n**Template (follow this WHEN/THEN format exactly):**\n```\n")
-				sb.WriteString(specsTpl)
-				sb.WriteString("\n```\n\n")
-			} else {
-				sb.WriteString("\n")
-			}
-		case "tasks":
-			fmt.Fprintf(&sb, "### Tasks\n**Path:** `%s/tasks.md`\n", changePath)
-			if tasksTpl != "" {
-				sb.WriteString("\n**Template (follow this checkbox format exactly):**\n```\n")
-				sb.WriteString(tasksTpl)
-				sb.WriteString("\n```\n\n")
-			} else {
-				sb.WriteString("\n")
-			}
-		default:
-			fmt.Fprintf(&sb, "### %s\n**Path:** `%s/%s`\n\n", artifact.ID, changePath, artifact.ID)
-		}
-	}
 
-	sb.WriteString("## Instructions\n\n")
-	sb.WriteString("- Write each artifact to its specified path using the templates provided\n")
-	sb.WriteString("- Each spec MUST include at least one machine-checkable WHEN/THEN scenario\n")
-	sb.WriteString("- Do NOT run openspec CLI commands — the change directory has been created for you\n")
-	sb.WriteString("- Do NOT implement any code — only create the spec artifacts\n")
+	sb.WriteString("\n\n---\n\n")
+	fmt.Fprintf(&sb, "Write an OpenSpec change to `%s/`. The directory exists — do NOT run openspec CLI commands.\n\n", changePath)
+	sb.WriteString("Create these files:\n")
+	fmt.Fprintf(&sb, "- `%s/proposal.md` — why, what changes, capabilities, impact\n", changePath)
+	fmt.Fprintf(&sb, "- `%s/design.md` — architecture, workflow, integration\n", changePath)
+	fmt.Fprintf(&sb, "- `%s/specs/<capability>/spec.md` — one per capability (see format below)\n", changePath)
+	fmt.Fprintf(&sb, "- `%s/tasks.md` — numbered checkbox groups\n\n", changePath)
+
+	sb.WriteString("Spec format (each requirement MUST use SHALL or MUST):\n")
+	sb.WriteString("```\n")
+	sb.WriteString("## ADDED Requirements\n\n")
+	sb.WriteString("### Requirement: <name>\n")
+	sb.WriteString("The system SHALL <requirement text>.\n\n")
+	sb.WriteString("#### Scenario: <name>\n")
+	sb.WriteString("- **WHEN** <condition>\n")
+	sb.WriteString("- **THEN** <expected outcome>\n")
+	sb.WriteString("```\n\n")
+
+	sb.WriteString("Tasks format:\n")
+	sb.WriteString("```\n")
+	sb.WriteString("## 1. <Group>\n")
+	sb.WriteString("- [ ] 1.1 <task>\n")
+	sb.WriteString("- [ ] 1.2 <task>\n")
+	sb.WriteString("```\n\n")
+
+	sb.WriteString("Rules:\n")
+	sb.WriteString("- Only create spec artifacts, do NOT implement code\n")
+	sb.WriteString("- Keep tasks proportional to the task complexity — a simple task should have 3-5 tasks, not 50+\n")
+	sb.WriteString("- Stop after writing all files\n")
 
 	return sb.String()
 }

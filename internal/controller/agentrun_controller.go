@@ -160,6 +160,30 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		SpecRunID:         agentRun.Spec.SpecRunID,
 	}
 
+	// Map pipeline config from CRD to workflow input
+	if agentRun.Spec.PipelineConfig != nil {
+		workflowInput.PipelineConfig = &aottemporal.PipelineConfigInput{
+			Plan: aottemporal.StageConfigInput{
+				Model:          agentRun.Spec.PipelineConfig.Plan.Model,
+				TimeoutSeconds: agentRun.Spec.PipelineConfig.Plan.TimeoutSeconds,
+				MaxRetries:     agentRun.Spec.PipelineConfig.Plan.MaxRetries,
+				OnFailure:      agentRun.Spec.PipelineConfig.Plan.OnFailure,
+			},
+			Execute: aottemporal.StageConfigInput{
+				Model:          agentRun.Spec.PipelineConfig.Execute.Model,
+				TimeoutSeconds: agentRun.Spec.PipelineConfig.Execute.TimeoutSeconds,
+				MaxRetries:     agentRun.Spec.PipelineConfig.Execute.MaxRetries,
+				OnFailure:      agentRun.Spec.PipelineConfig.Execute.OnFailure,
+			},
+			Verify: aottemporal.StageConfigInput{
+				Model:          agentRun.Spec.PipelineConfig.Verify.Model,
+				TimeoutSeconds: agentRun.Spec.PipelineConfig.Verify.TimeoutSeconds,
+				MaxRetries:     agentRun.Spec.PipelineConfig.Verify.MaxRetries,
+				OnFailure:      agentRun.Spec.PipelineConfig.Verify.OnFailure,
+			},
+		}
+	}
+
 	// Set orchestration labels
 	if agentRun.Labels == nil {
 		agentRun.Labels = make(map[string]string)

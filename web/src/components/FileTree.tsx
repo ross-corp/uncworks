@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { FileEntry } from "../hooks/useFiles";
 import { useFiles } from "../hooks/useFiles";
 
@@ -19,35 +19,176 @@ export default function FileTree({
 }) {
   const { listDir } = useFiles();
   const [roots, setRoots] = useState<FileTreeNode[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadingRoot, setLoadingRoot] = useState(false);
+  const [hydrating, setHydrating] = useState(false);
+  const loadingRootRef = useRef(false);
+  const rootsRef = useRef<FileTreeNode[] | null>(null);
 
-  // Load root directory on first render
-  const loadRoot = useCallback(async () => {
-    if (roots !== null || loadingRoot) return;
-    setLoadingRoot(true);
-    try {
-      const result = await listDir(runId, "/workspace");
-      setRoots(
-        result.entries.map((entry) => ({
-          entry,
-          path: `/workspace/${entry.name}`,
-          children: null,
-          expanded: false,
-          loading: false,
-        }))
-      );
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoadingRoot(false);
+  // Keep refs in sync so interval callbacks see current values
+  useEffect(() => {
+    rootsRef.current = roots;
+  }, [roots]);
+
+  // Collect the set of expanded directory paths from the current tree
+  function collectExpandedPaths(nodes: FileTreeNode[], into?: Set<string>): Set<string> {
+    const paths = into ?? new Set<string>();
+    for (const node of nodes) {
+      if (node.expanded) {
+        paths.add(node.path);
+      }
+      if (node.children) {
+        collectExpandedPaths(node.children, paths);
+      }
     }
-  }, [runId, roots, loadingRoot, listDir]);
-
-  // Trigger root load
-  if (roots === null && !loadingRoot && !error) {
-    loadRoot();
+    return paths;
   }
+
+  // Build new root nodes from entries, preserving expanded state for dirs
+  // that were previously expanded. Also auto-expands single-child directories.
+  function buildRootNodes(
+    entries: FileEntry[],
+    expandedPaths: Set<string>
+  ): FileTreeNode[] {
+    const nodes = entries.map((entry) => {
+      const path = `/workspace/${entry.name}`;
+      const wasExpanded = expandedPaths.has(path);
+      const prev = rootsRef.current?.find((n) => n.path === path);
+      return {
+        entry,
+        path,
+        // Preserve children if the directory was already loaded
+        children: prev?.children ?? null,
+        expanded: wasExpanded,
+        loading: false,
+      };
+    });
+
+    // Auto-expand: if there is exactly one child and it is a directory,
+    // expand it (only on initial load, i.e. when expandedPaths is empty)
+    if (expandedPaths.size === 0 && nodes.length === 1 && nodes[0].entry.type === "directory") {
+      nodes[0].expanded = true;
+    }
+
+    return nodes;
+  }
+
+  // Load root directory entries. Returns the entries on success, or null on failure.
+  const loadRoot = useCallback(
+    async ({ isRetry }: { isRetry?: boolean } = {}): Promise<FileTreeNode[] | null> => {
+      if (loadingRootRef.current) return null;
+      loadingRootRef.current = true;
+
+      try {
+        const result = await listDir(runId, "/workspace");
+        const expandedPaths = rootsRef.current
+          ? collectExpandedPaths(rootsRef.current)
+          : new Set<string>();
+        const newRoots = buildRootNodes(result.entries, expandedPaths);
+
+        // If auto-expanding a single child dir, eagerly load its children
+        if (
+          expandedPaths.size === 0 &&
+          newRoots.length === 1 &&
+          newRoots[0].expanded &&
+          newRoots[0].children === null
+        ) {
+          try {
+            const childResult = await listDir(runId, newRoots[0].path);
+            newRoots[0].children = childResult.entries.map((entry) => ({
+              entry,
+              path: `${newRoots[0].path}/${entry.name}`,
+              children: null,
+              expanded: false,
+              loading: false,
+            }));
+            // Recurse: if the auto-expanded dir also has a single child dir, expand that too
+            let current = newRoots[0];
+            while (
+              current.children &&
+              current.children.length === 1 &&
+              current.children[0].entry.type === "directory"
+            ) {
+              current.children[0].expanded = true;
+              try {
+                const deeper = await listDir(runId, current.children[0].path);
+                current.children[0].children = deeper.entries.map((entry) => ({
+                  entry,
+                  path: `${current.children![0].path}/${entry.name}`,
+                  children: null,
+                  expanded: false,
+                  loading: false,
+                }));
+                current = current.children[0];
+              } catch {
+                break;
+              }
+            }
+          } catch {
+            // Fine -- the dir just won't be pre-loaded
+          }
+        }
+
+        setRoots(newRoots);
+        setHydrating(false);
+        return newRoots;
+      } catch {
+        // If we have never loaded successfully, enter hydrating state
+        if (rootsRef.current === null && !isRetry) {
+          setHydrating(true);
+        }
+        return null;
+      } finally {
+        loadingRootRef.current = false;
+      }
+    },
+    // listDir is stable (from useFiles) and runId is the only external dep
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [runId, listDir]
+  );
+
+  // Initial load + hydration retry loop
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    async function init() {
+      const result = await loadRoot();
+      if (cancelled) return;
+      if (result === null) {
+        // Failed -- start hydration retry loop (every 3s)
+        scheduleRetry();
+      }
+    }
+
+    function scheduleRetry() {
+      retryTimer = setTimeout(async () => {
+        if (cancelled) return;
+        const result = await loadRoot({ isRetry: true });
+        if (cancelled) return;
+        if (result === null) {
+          scheduleRetry();
+        }
+      }, 3000);
+    }
+
+    init();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) clearTimeout(retryTimer);
+    };
+  }, [loadRoot]);
+
+  // Auto-refresh: poll root directory every 5 seconds to pick up new files
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Only refresh if we have already loaded successfully at least once
+      if (rootsRef.current !== null) {
+        loadRoot();
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [loadRoot]);
 
   async function toggleDir(node: FileTreeNode, updateFn: (updated: FileTreeNode) => void) {
     if (node.expanded) {
@@ -105,9 +246,11 @@ export default function FileTree({
     }
   }
 
-  if (error) {
+  if (hydrating) {
     return (
-      <div className="p-3 text-sm text-destructive">{error}</div>
+      <div className="p-3 text-sm text-muted-foreground/60">
+        Workspace hydrating...
+      </div>
     );
   }
 

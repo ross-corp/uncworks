@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { useThemeNew } from "../hooks/useThemeNew";
@@ -14,7 +14,12 @@ export default function Layout() {
   useThemeNew();
 
   const client = useClient();
+  const location = useLocation();
   const [runs, setRuns] = useState<AgentRun[]>([]);
+
+  // Extract run ID from /run/:id path
+  const runIdMatch = location.pathname.match(/^\/run\/([^/]+)/);
+  const selectedRunId = runIdMatch?.[1];
 
   const fetchRuns = useCallback(async () => {
     try {
@@ -34,7 +39,7 @@ export default function Layout() {
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground font-mono text-sm">
       <Outlet />
-      <CommandPaletteNew runs={runs} />
+      <CommandPaletteNew runs={runs} selectedRunId={selectedRunId} />
     </div>
   );
 }
