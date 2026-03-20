@@ -59,6 +59,13 @@ const SPAN_TYPE_STYLES: Record<
     text: "text-yellow-400",
     dot: "bg-yellow-500",
   },
+  delegate: {
+    label: "DELEG",
+    bar: "bg-purple-500/20 border-l-2 border-purple-500",
+    barActive: "bg-purple-500/30 border-l-2 border-purple-500",
+    text: "text-purple-400",
+    dot: "bg-purple-500",
+  },
 };
 
 const FAILED_STYLES = {

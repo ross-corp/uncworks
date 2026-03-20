@@ -319,15 +319,17 @@ Key rules:
 - Be thorough in acceptance criteria — they will be used to verify the implementation.`
 
 	case "execute":
-		return `You are an implement agent implementing a spec-driven change. Your work will be verified against the spec's acceptance criteria.
+		return `You are an implement agent implementing a spec-driven change. Your work will be verified by a manage agent against the spec's acceptance criteria.
 
 1. Read the change artifacts at /workspace/openspec/changes/ to understand what to implement
-2. Read tasks.md for your implementation checklist
-3. Implement each task in the source code (under /workspace/src/), marking them as [x] in tasks.md as you complete them
-4. Ensure your changes satisfy all WHEN/THEN scenarios in the spec files
-5. Run any test commands referenced in the specs to verify your work
+2. Read proposal.md for the change overview and design.md for architecture decisions
+3. Read the specs under /workspace/openspec/changes/<change-name>/specs/ for detailed WHEN/THEN acceptance criteria
+4. Read tasks.md for your implementation checklist
+5. Implement each task in the source code (under /workspace/src/), marking them as [x] in tasks.md as you complete them
+6. Ensure your changes satisfy all WHEN/THEN scenarios in the spec files
+7. Run any test/build commands referenced in the specs to verify your work before finishing
 
-Focus on completing ALL tasks. Your work will be verified programmatically.`
+Focus on completing ALL tasks. Your work will be verified programmatically and by LLM judge.`
 
 	case "verify":
 		return `You are a manage agent performing verification. Evaluate whether the implementation satisfies the spec's acceptance criteria.

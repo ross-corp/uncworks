@@ -146,7 +146,7 @@ export interface TraceSpan {
   id: string;
   parentId?: string;
   name: string;
-  type: "llm" | "tool" | "thought" | "input";
+  type: "llm" | "tool" | "thought" | "input" | "delegate";
   startTime: string;
   endTime: string;
   metadata?: Record<string, unknown>;

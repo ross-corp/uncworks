@@ -521,7 +521,7 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 // AgentLogEntry is a structured log entry parsed from the agent's JSONL output.
 type AgentLogEntry struct {
 	Timestamp string `json:"timestamp"`
-	Type      string `json:"type"`    // user, assistant, tool_call, tool_result, system
+	Type      string `json:"type"`    // user, assistant, tool_call, tool_result, system, delegate
 	Content   string `json:"content"` // text content
 	ToolName  string `json:"toolName,omitempty"`
 	ToolInput string `json:"toolInput,omitempty"`
@@ -827,9 +827,14 @@ func parseAgentJSONL(raw string) []AgentLogEntry {
 			if toolCallID != "" {
 				seenToolCalls[dedupeKey] = true
 			}
+			// Emit delegate_task calls as "delegate" type for distinct UI treatment
+			entryType := "tool_call"
+			if toolName == "delegate_task" {
+				entryType = "delegate"
+			}
 			entries = append(entries, AgentLogEntry{
 				Timestamp: sessionTimestamp,
-				Type:      "tool_call",
+				Type:      entryType,
 				ToolName:  toolName,
 				ToolInput: string(argsJSON),
 			})
@@ -968,9 +973,14 @@ func extractContentEntries(entries *[]AgentLogEntry, contents []interface{}, rol
 			}
 			args, _ := cm["arguments"].(map[string]interface{})
 			argsJSON, _ := json.Marshal(args)
+			// Emit delegate_task calls as "delegate" type for distinct UI treatment
+			tcType := "tool_call"
+			if name == "delegate_task" {
+				tcType = "delegate"
+			}
 			*entries = append(*entries, AgentLogEntry{
 				Timestamp: ts,
-				Type:      "tool_call",
+				Type:      tcType,
 				ToolName:  name,
 				ToolInput: string(argsJSON),
 				Model:     model,

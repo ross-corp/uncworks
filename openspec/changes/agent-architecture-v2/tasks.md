@@ -26,18 +26,18 @@
 
 ## 4. Persistent Manage Agent
 
-- [ ] 4.1 Restructure spec-driven workflow: manage agent persists across plan+verify stages
-- [ ] 4.2 Implement agent spawned by manage during execute stage
-- [ ] 4.3 Manage agent monitors implement progress and can steer/interrupt
-- [ ] 4.4 On verify failure, manage agent spawns new implement with failure context
+- [x] 4.1 Restructure spec-driven workflow: manage agent persists across plan+verify stages
+- [x] 4.2 Implement agent spawned by manage during execute stage
+- [x] 4.3 Manage agent monitors implement progress and can steer/interrupt
+- [x] 4.4 On verify failure, manage agent spawns new implement with failure context
 
 ## 5. Subagent Support
 
-- [ ] 5.1 Register `spawn_agent` tool in determinism extension (uses pi's subagent API)
-- [ ] 5.2 Log subagent lifecycle events to JSONL (subagent_start, subagent_end)
-- [ ] 5.3 Parse subagent events in structured logs endpoint
-- [ ] 5.4 Display subagent entries in ActivityFeed with indentation
-- [ ] 5.5 Show subagent spans in TraceTimeline as child spans
+- [x] 5.1 Register `spawn_agent` tool in determinism extension (uses pi's subagent API)
+- [x] 5.2 Log subagent lifecycle events to JSONL (subagent_start, subagent_end)
+- [x] 5.3 Parse subagent events in structured logs endpoint
+- [x] 5.4 Display subagent entries in ActivityFeed with indentation
+- [x] 5.5 Show subagent spans in TraceTimeline as child spans
 
 ## 6. UI Professionalization
 
@@ -45,5 +45,5 @@
 - [x] 6.2 Replace info overlay with shadcn `Sheet`
 - [x] 6.3 Replace stage progress with shadcn `Progress` + `Badge`
 - [x] 6.4 Use shadcn `Badge` variants for RunStatusBadge
-- [ ] 6.5 Ensure all themes work with new components
-- [ ] 6.6 Verify command palette theme switching applies everywhere
+- [x] 6.5 Ensure all themes work with new components
+- [x] 6.6 Verify command palette theme switching applies everywhere
