@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Project Overview
 
-AOT (Agent Orchestration Tool) is a Kubernetes-native platform for running AI coding agents. Users submit a prompt + git repo, and AOT provisions an isolated workspace, runs the agent, and streams results in real time. The core abstraction is the `AgentRun` CRD.
+UNCWORKS is a Kubernetes-native platform for running AI coding agents. Users submit a prompt + git repo, and UNCWORKS provisions an isolated workspace, runs the agent, and streams results in real time. The core abstraction is the `AgentRun` CRD.
 
 ## Commands
 
@@ -63,7 +63,7 @@ Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `hac
 | `controller` | K8s controller — watches AgentRun CRDs, creates pods |
 | `hydration` | Init-container — git clone + devbox setup |
 | `sidecar` | RPC Gateway — bridges agent process to control plane |
-| `aot` | CLI tool (`aot open` finds/opens AOT worktrees) |
+| `aot` | CLI tool (`aot open` finds/opens UNCWORKS worktrees) |
 
 ### Key Go packages (`internal/`)
 

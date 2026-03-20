@@ -1,12 +1,14 @@
-# AOT Roadmap
+# UNCWORKS Roadmap
 
-Items graduate from Future → Next → Current as they're prioritized. When an item
+Items graduate from Future to Next to Current as they are prioritized. When an item
 moves to Current, create an OpenSpec change (`/opsx:propose`) to formalize the
 design and track implementation.
 
 ## Current
 
-*No items currently in progress.*
+### Docs Rebrand
+Renaming user-facing references from AOT to UNCWORKS across documentation,
+UI, and Helm chart templates. Code-level package names (`aot`) remain unchanged.
 
 ## Next
 
@@ -22,7 +24,7 @@ Enabling it requires:
 - UI component for SearchPastWork (search bar + results display)
 
 ### Spec-Driven Pipeline Hardening
-The Plan → Execute → Verify pipeline is wired but needs real-world testing:
+The Plan, Execute, Verify pipeline is wired and functional. Remaining work:
 - Direct exec in sidecar (replace `execInSidecar` agent-spawning with lightweight bash exec)
 - Streaming verification progress to the frontend
 - Verification result display in the UI for completed runs
@@ -31,7 +33,7 @@ The Plan → Execute → Verify pipeline is wired but needs real-world testing:
 ## Future
 
 ### Real-Time Log Streaming for Spec-Driven Stages
-Stage transitions (plan → execute → verify) should stream live output to the
+Stage transitions (plan, execute, verify) should stream live output to the
 frontend, not just show results after each stage completes.
 
 ### User-Editable Specs Mid-Run
@@ -39,11 +41,17 @@ Allow users to pause a spec-driven run after the Plan stage, edit the generated
 spec, and resume execution with the modified spec.
 
 ### Custom Verification Scripts
-Allow users to provide their own verification commands beyond what's extracted
+Allow users to provide their own verification commands beyond what is extracted
 from spec scenarios (e.g., custom test suites, integration checks).
 
 ### Multi-Cluster Support
 Run agents on remote Kubernetes clusters, not just the local k0s instance.
+
+## Completed
+
+### Agent Architecture v2
+Spec-driven pipeline (Plan, Execute, Verify) with manage/implement role separation.
+Shipped and operational.
 
 ---
 
@@ -53,4 +61,4 @@ Run agents on remote Kubernetes clusters, not just the local k0s instance.
 2. **Prioritized items** move to Next with enough detail to estimate scope
 3. **Active work** moves to Current when an OpenSpec change is created
 4. When a change is archived, its Current entry is removed
-5. Anyone can propose additions — open a PR or discuss in an issue
+5. Anyone can propose additions -- open a PR or discuss in an issue

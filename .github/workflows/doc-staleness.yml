@@ -1,0 +1,65 @@
+name: Check doc staleness
+
+on:
+  pull_request:
+    paths:
+      - "**/*.go"
+      - "**/*.ts"
+      - "**/*.tsx"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-staleness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run doc staleness check
+        id: staleness
+        continue-on-error: true
+        run: |
+          chmod +x scripts/check-doc-staleness.sh
+          OUTPUT=$(./scripts/check-doc-staleness.sh 2>&1)
+          EXIT_CODE=$?
+          echo "$OUTPUT"
+
+          # Write output to file for the comment step
+          echo "$OUTPUT" > /tmp/staleness-report.txt
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on PR
+        if: steps.staleness.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('/tmp/staleness-report.txt', 'utf8');
+            const body = `### Doc Staleness Check Failed
+
+            The following code references in \`docs/\` may be stale — they were not found in any \`.go\`, \`.ts\`, or \`.tsx\` source files.
+
+            <details>
+            <summary>Full report</summary>
+
+            \`\`\`
+            ${report}
+            \`\`\`
+
+            </details>
+
+            > Please update the documentation or remove outdated references.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.split('\n').map(l => l.trim()).join('\n'),
+            });
+
+      - name: Fail if stale
+        if: steps.staleness.outputs.exit_code != '0'
+        run: exit 1
