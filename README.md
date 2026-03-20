@@ -59,11 +59,12 @@ graph LR
         end
 
         subgraph DP["Data Plane — Agent Pod (1 per run)"]
-            Init["init: Hydration"]
-            Pi["pi-coding-agent"]
             Sidecar["RPC Gateway"]
-            PVC[("/workspace PVC")]
+            Init["init: Hydration"]
+            Agent["Agent"]
         end
+
+        PVC[("/workspace PVC")]
     end
 
     User --> Web
@@ -73,12 +74,14 @@ graph LR
     Ctrl --> API
     TW -->|creates| DP
     Sidecar --> TW
-    Pi --> LiteLLM
+    Sidecar --> Init
+    Sidecar --> Agent
+    Agent --> LiteLLM
     LiteLLM --> Ollama
     LiteLLM --> Cloud
-    Init --> PVC
-    Pi --> PVC
-    Sidecar --> PVC
+    PVC -.- Init
+    PVC -.- Agent
+    PVC -.- Sidecar
 
     style K8s fill:transparent,stroke:#555
     style CP fill:transparent,stroke:#555
@@ -95,10 +98,10 @@ graph LR
 | **Dependencies** | Temporal | Workflow orchestration with retries, compensation, signals (cancel, human input). |
 | | LiteLLM | LLM proxy with model routing, budgets, fallback chains. Routes to local Ollama or cloud (OpenRouter). |
 | | Ollama | Local model server (qwen3:8b, llama3.1:8b). |
-| **Data Plane** | init: Hydration | Bare-clones repos, creates git worktrees at `/workspace/<repo>/`, sets up devbox. |
-| | pi-coding-agent | LLM agent with determinism extension. `PI_ROLE=manage` (plan/verify): reads repo, runs openspec CLI, writes specs. `PI_ROLE=implement` (execute): reads specs, writes code, runs tests. |
-| | RPC Gateway | Sidecar bridging agent to control plane: StartAgent, GetStatus, ExecCommand, SendInput. Streams JSONL logs to PVC. |
-| | /workspace PVC | Persistent volume with repo worktrees, OpenSpec artifacts, agent logs, and traces. |
+| **Data Plane** | RPC Gateway | Sidecar that fronts the pod. Bridges agent to control plane: StartAgent, GetStatus, ExecCommand, SendInput. Manages agent lifecycle and streams JSONL logs to PVC. |
+| | init: Hydration | Bare-clones repos, creates git worktrees at `/workspace/<repo>/`, sets up devbox. |
+| | Agent | LLM coding agent with determinism extension. `PI_ROLE=manage` (plan/verify): reads repo, runs openspec CLI, writes specs. `PI_ROLE=implement` (execute): reads specs, writes code, runs tests. |
+| | /workspace PVC | Persistent volume mounted into the pod. Contains repo worktrees, OpenSpec artifacts, agent logs, and traces. |
 
 ### Sequence: Spec-Driven Run
 
