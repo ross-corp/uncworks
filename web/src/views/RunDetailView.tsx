@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { useToast } from "../components/Toast";
+import { useThemeNew } from "../hooks/useThemeNew";
 import RunStatusBadge from "../components/RunStatusBadge";
 import ActivityFeed from "../components/ActivityFeed";
 import StageProgress from "../components/StageProgress";
@@ -27,6 +28,7 @@ export default function RunDetailView() {
   const navigate = useNavigate();
   const client = useClient();
   const { toast } = useToast();
+  const { mode, toggleMode } = useThemeNew();
   const [run, setRun] = useState<AgentRun | null>(null);
   const [tab, setTab] = useState<Tab>("activity");
   const [showInfo, setShowInfo] = useState(false);
@@ -43,6 +45,16 @@ export default function RunDetailView() {
       toast("Failed to send input", "error");
     }
   }, [id, hitlInput, client, toast]);
+
+  const cancelRun = useCallback(async () => {
+    if (!id) return;
+    try {
+      await client.cancelAgentRun(id);
+      toast("Run cancelled", "success");
+    } catch {
+      toast("Failed to cancel run", "error");
+    }
+  }, [id, client, toast]);
 
   // Fetch run and poll
   useEffect(() => {
@@ -94,6 +106,16 @@ export default function RunDetailView() {
   }
 
   const isSpecDriven = run.status.stage || run.spec.orchestrationMode === "spec-driven";
+  const isRunning = run.status.phase === "running" || run.status.phase === "waiting_for_input";
+  const isFailed = run.status.phase === "failed" || run.status.phase === "cancelled";
+
+  // Resolve current mode for theme toggle icon
+  const resolvedMode =
+    mode === "system"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+      : mode;
 
   return (
     <div className="flex h-full flex-col">
@@ -105,8 +127,46 @@ export default function RunDetailView() {
           {run.status.stage && (
             <span className="text-xs text-muted-foreground">{run.status.stage}</span>
           )}
+          {run.status.phase === "failed" && run.status.message && (
+            <span className="text-xs text-red-500 truncate max-w-[32rem]" title={run.status.message}>
+              {run.status.message.length > 80
+                ? run.status.message.slice(0, 80) + "..."
+                : run.status.message}
+            </span>
+          )}
         </div>
-        <span className="text-xs text-muted-foreground">esc back · 1-5 tabs · i info</span>
+        <div className="flex items-center gap-2">
+          {/* Cancel button - visible when running or waiting */}
+          {isRunning && (
+            <button
+              onClick={cancelRun}
+              className="px-2 py-0.5 text-xs bg-red-600 text-white hover:bg-red-700 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+
+          {/* Retry/Clone button - visible when failed or cancelled */}
+          {isFailed && (
+            <button
+              onClick={() => navigate(`/new?clone=${id}`)}
+              className="px-2 py-0.5 text-xs bg-primary text-primary-foreground hover:opacity-90 transition-colors"
+            >
+              Retry
+            </button>
+          )}
+
+          {/* Theme toggle */}
+          <button
+            onClick={toggleMode}
+            className="px-1.5 py-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            title={`Switch to ${resolvedMode === "dark" ? "light" : "dark"} mode`}
+          >
+            {resolvedMode === "dark" ? "\u2600" : "\u263E"}
+          </button>
+
+          <span className="text-xs text-muted-foreground">esc back · 1-5 tabs · i info</span>
+        </div>
       </div>
 
       {/* Stage progress (spec-driven only) */}
@@ -176,11 +236,11 @@ export default function RunDetailView() {
         <div className="border-t bg-muted/50 px-4 py-3 text-xs space-y-1">
           <div className="flex gap-8">
             <div><span className="text-muted-foreground">ID</span> <span>{run.id}</span></div>
-            <div><span className="text-muted-foreground">Created</span> <span>{run.createdAt ? new Date(run.createdAt).toLocaleString() : "—"}</span></div>
+            <div><span className="text-muted-foreground">Created</span> <span>{run.createdAt ? new Date(run.createdAt).toLocaleString() : "---"}</span></div>
             <div><span className="text-muted-foreground">Model</span> <span>{run.spec.modelTier || "default"}</span></div>
           </div>
           <div className="flex gap-8">
-            <div><span className="text-muted-foreground">Repo</span> <span>{run.spec.repos?.[0]?.url || "—"}</span></div>
+            <div><span className="text-muted-foreground">Repo</span> <span>{run.spec.repos?.[0]?.url || "---"}</span></div>
             <div><span className="text-muted-foreground">Mode</span> <span>{run.spec.orchestrationMode || "single"}</span></div>
             {run.status.stage && <div><span className="text-muted-foreground">Stage</span> <span>{run.status.stage} (attempt {(run.status.retryCount ?? 0) + 1})</span></div>}
           </div>

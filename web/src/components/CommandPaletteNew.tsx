@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Command } from "cmdk";
 import type { AgentRun } from "../types/agent-run";
 import { useThemeNew, THEMES } from "../hooks/useThemeNew";
-import { apiFetch } from "../hooks/apiFetch";
+import { useClient } from "../hooks/useClient";
 
 import "./command-palette.css";
 
@@ -15,6 +15,7 @@ interface Props {
 export default function CommandPaletteNew({ runs, selectedRunId }: Props) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const client = useClient();
   const { setTheme, toggleMode, theme } = useThemeNew();
 
   // ⌘K to toggle
@@ -64,7 +65,7 @@ export default function CommandPaletteNew({ runs, selectedRunId }: Props) {
                 <Command.Item
                   onSelect={() =>
                     runAction(() => {
-                      apiFetch(`/api/v1/runs/${selectedRunId}/cancel`, { method: "POST" });
+                      client.cancelAgentRun(selectedRunId);
                     })
                   }
                 >

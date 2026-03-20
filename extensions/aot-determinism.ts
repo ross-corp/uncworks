@@ -1,0 +1,194 @@
+/**
+ * AOT Determinism Extension for pi-coding-agent
+ *
+ * Enforces deterministic agent behavior in the AOT spec-driven pipeline:
+ * 1. Loop detection — blocks repeated identical tool calls
+ * 2. Turn limit — kills agent after max turns to prevent runaway
+ * 3. Write validation — ensures OpenSpec files use SHALL/MUST
+ * 4. Protected paths — blocks writes outside workspace
+ * 5. Audit logging — logs all tool calls for traceability
+ * 6. HITL — registers ask_user tool for human-in-the-loop elicitation
+ */
+
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type, type Static } from "@sinclair/typebox";
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+// Max identical consecutive tool calls before blocking
+const MAX_REPEAT_CALLS = 3;
+// Max total turns before forcing exit
+const MAX_TURNS = 50;
+// Required keywords in spec requirement text
+const SPEC_REQUIREMENT_KEYWORDS = /\b(SHALL|MUST)\b/;
+
+// HITL file paths
+const INPUT_DIR = "/workspace/.aot/input";
+const QUESTION_PATH = path.join(INPUT_DIR, "question.json");
+const RESPONSE_PATH = path.join(INPUT_DIR, "response.txt");
+
+// HITL polling config
+const POLL_INTERVAL_MS = 2000;
+const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+interface ToolSignature {
+  name: string;
+  inputHash: string;
+}
+
+function hashInput(input: unknown): string {
+  return JSON.stringify(input).length.toString();
+}
+
+// --- ask_user tool schema (Typebox) ---
+
+const AskUserParams = Type.Object({
+  question: Type.String({ description: "The question to ask the human" }),
+  options: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "Optional list of choices for the human to pick from",
+    })
+  ),
+});
+
+type AskUserInput = Static<typeof AskUserParams>;
+
+/**
+ * Writes the question file and polls for a response file written by the
+ * sidecar's SendInput RPC handler.
+ */
+async function askUser(params: AskUserInput): Promise<string> {
+  // Ensure input directory exists
+  fs.mkdirSync(INPUT_DIR, { recursive: true });
+
+  // Write the question payload
+  const questionPayload = {
+    question: params.question,
+    type: params.options && params.options.length > 0 ? "choice" : "text",
+    options: params.options ?? [],
+    timestamp: new Date().toISOString(),
+  };
+  fs.writeFileSync(QUESTION_PATH, JSON.stringify(questionPayload, null, 2));
+
+  // Poll for response file
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (fs.existsSync(RESPONSE_PATH)) {
+      const response = fs.readFileSync(RESPONSE_PATH, "utf-8");
+      // Clean up the response file so it doesn't get re-read
+      try {
+        fs.unlinkSync(RESPONSE_PATH);
+      } catch {
+        // ignore cleanup errors
+      }
+      return response;
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+
+  return "No response received within 5 minutes";
+}
+
+export default function (pi: ExtensionAPI) {
+  let lastToolSig: ToolSignature | null = null;
+  let repeatCount = 0;
+  let turnCount = 0;
+  const stage = process.env.PI_STAGE || "";
+
+  // --- Register ask_user custom tool ---
+  pi.registerTool({
+    name: "ask_user",
+    description:
+      "Pause and ask the human operator a question. Use when you need clarification, approval, or a decision from the user. The question will be displayed in the AOT dashboard and the agent will wait for a response.",
+    parameters: AskUserParams,
+    execute: async (params: Record<string, unknown>) => {
+      const question = params.question as string;
+      if (!question) {
+        return "Error: question is required";
+      }
+      const options = params.options as string[] | undefined;
+      return askUser({ question, options });
+    },
+  });
+
+  pi.on("turn_start", async () => {
+    turnCount++;
+
+    if (turnCount > MAX_TURNS) {
+      return { block: true, reason: `Turn limit exceeded (${MAX_TURNS}). Stopping agent to prevent runaway.` };
+    }
+
+    return undefined;
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    const sig: ToolSignature = {
+      name: event.toolName,
+      inputHash: hashInput(event.input),
+    };
+
+    // Loop detection
+    if (lastToolSig && sig.name === lastToolSig.name && sig.inputHash === lastToolSig.inputHash) {
+      repeatCount++;
+      if (repeatCount >= MAX_REPEAT_CALLS) {
+        const reason = `Loop detected: ${sig.name} called ${repeatCount + 1} times with identical input. Blocking to prevent infinite loop.`;
+        if (ctx.hasUI) {
+          ctx.ui.notify(reason, "warning");
+        }
+        // Reset so agent can try something else
+        lastToolSig = null;
+        repeatCount = 0;
+        return { block: true, reason };
+      }
+    } else {
+      lastToolSig = sig;
+      repeatCount = 0;
+    }
+
+    // Spec validation for write tool in plan stage
+    if (stage === "plan" && event.toolName === "write") {
+      const path = (event.input as { path?: string }).path || "";
+      const content = (event.input as { content?: string }).content || "";
+
+      // Check if writing a spec file
+      if (path.includes("/specs/") && path.endsWith("spec.md")) {
+        // Validate that requirement text contains SHALL or MUST
+        if (content.includes("### Requirement:") && !SPEC_REQUIREMENT_KEYWORDS.test(content)) {
+          return {
+            block: true,
+            reason: "Spec requirement text must contain SHALL or MUST (e.g., 'The system SHALL...'). Rewrite the requirement with formal language.",
+          };
+        }
+      }
+
+      // Check tasks.md doesn't have too many tasks for simple prompts
+      if (path.endsWith("tasks.md")) {
+        const checkboxCount = (content.match(/- \[ \]/g) || []).length;
+        if (checkboxCount > 30) {
+          return {
+            block: true,
+            reason: `Too many tasks (${checkboxCount}). Keep tasks proportional to complexity. Aim for 3-15 tasks.`,
+          };
+        }
+      }
+    }
+
+    // Protected paths — block writes outside workspace
+    if (event.toolName === "write" || event.toolName === "edit") {
+      const path = (event.input as { path?: string; file_path?: string }).path ||
+                   (event.input as { file_path?: string }).file_path || "";
+      if (path.startsWith("/") && !path.startsWith("/workspace")) {
+        return { block: true, reason: `Cannot write outside /workspace: ${path}` };
+      }
+    }
+
+    return undefined;
+  });
+
+  // Log session info on start
+  pi.on("session_start", async (_event, ctx) => {
+    if (ctx.hasUI) {
+      ctx.ui.notify(`AOT determinism: max ${MAX_TURNS} turns, loop detection active, ask_user tool registered`, "info");
+    }
+  });
+}

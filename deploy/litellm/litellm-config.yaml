@@ -27,10 +27,11 @@ model_list:
       model: "ollama_chat/qwen3:8b"
       api_base: "http://ollama:11434"
 
-  # Default-cloud: capable cloud model (rate-limited on free tier)
+  # Default-cloud: cheapest effective paid model
+  # DeepSeek V3.1 — $0.15/M in, $0.75/M out, strong coding/reasoning
   - model_name: "default-cloud"
     litellm_params:
-      model: "openrouter/qwen/qwen3-coder:free"
+      model: "openrouter/deepseek/deepseek-chat-v3.1"
 
   # CI: tiny local model for testing only
   - model_name: "ci"
@@ -38,30 +39,53 @@ model_list:
       model: "ollama_chat/qwen2.5:0.5b"
       api_base: "http://ollama:11434"
 
-  # --- Cloud models (OpenRouter) ---
+  # --- Cloud models (OpenRouter, paid tier) ---
+
+  # Qwen3 Coder — $0.22/M in, $1.00/M out, 262K ctx
+  # Purpose-built for agentic coding, tool use, long-context repo reasoning
   - model_name: "qwen3-coder"
+    litellm_params:
+      model: "openrouter/qwen/qwen3-coder"
+
+  # DeepSeek V3.1 — $0.15/M in, $0.75/M out, 32K ctx
+  # Cheapest paid model, strong at coding/reasoning
+  - model_name: "deepseek-v3.1"
+    litellm_params:
+      model: "openrouter/deepseek/deepseek-chat-v3.1"
+
+  # DeepSeek V3.2 — $0.26/M in, $0.38/M out, 164K ctx
+  # Cheapest output tokens, great for code generation
+  - model_name: "deepseek-v3.2"
+    litellm_params:
+      model: "openrouter/deepseek/deepseek-v3.2"
+
+  # Mistral Medium 3.1 — $0.40/M in, $2.00/M out, 131K ctx
+  # Strong coding + multimodal support
+  - model_name: "mistral-medium"
+    litellm_params:
+      model: "openrouter/mistralai/mistral-medium-3.1"
+
+  # --- Free tier (rate-limited, fallback only) ---
+  - model_name: "qwen3-coder-free"
     litellm_params:
       model: "openrouter/qwen/qwen3-coder:free"
 
-  - model_name: "mistral-small"
+  - model_name: "mistral-small-free"
     litellm_params:
       model: "openrouter/mistralai/mistral-small-3.1-24b-instruct:free"
-
-  - model_name: "gemma-3-4b"
-    litellm_params:
-      model: "openrouter/google/gemma-3-4b-it:free"
 
   # Aliases
   - model_name: "premium"
     litellm_params:
-      model: "openrouter/qwen/qwen3-coder:free"
+      model: "openrouter/qwen/qwen3-coder"
 
 litellm_settings:
-  # Fallback: if primary model is rate-limited, try alternatives
+  # Fallback chains: paid → paid → local
   fallbacks:
-    - {"qwen3-coder": ["mistral-small", "gemma-3-4b", "qwen3:8b"]}
-    - {"mistral-small": ["qwen3-coder", "gemma-3-4b", "qwen3:8b"]}
-    - {"default-cloud": ["qwen3:8b", "llama3.1:8b"]}
+    - {"qwen3-coder": ["deepseek-v3.2", "deepseek-v3.1", "qwen3:8b"]}
+    - {"deepseek-v3.2": ["qwen3-coder", "deepseek-v3.1", "qwen3:8b"]}
+    - {"deepseek-v3.1": ["qwen3-coder", "deepseek-v3.2", "qwen3:8b"]}
+    - {"default-cloud": ["deepseek-v3.2", "qwen3:8b"]}
 
   # Retry settings
   num_retries: 3

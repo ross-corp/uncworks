@@ -183,6 +183,12 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	planOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Duration(planCfg.TimeoutSeconds) * time.Second,
 		HeartbeatTimeout:    30 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    5 * time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    60 * time.Second,
+			MaximumAttempts:    3,
+		},
 	}
 	executeOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Duration(execCfg.TimeoutSeconds) * time.Second,
@@ -197,6 +203,12 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	verifyOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Duration(verifyCfg.TimeoutSeconds) * time.Second,
 		HeartbeatTimeout:    30 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    5 * time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    60 * time.Second,
+			MaximumAttempts:    3,
+		},
 	}
 
 	// Compensation: ensure deployment scale-down and LLM key revocation on any exit.

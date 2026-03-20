@@ -36,11 +36,11 @@ spec:
             - name: AOT_INIT_IMAGE
               value: "{{ .Values.images.init.repository }}:{{ .Values.images.init.tag | default .Chart.AppVersion }}"
             {{- if .Values.llm.baseUrl }}
-            - name: LLM_BASE_URL
+            - name: LITELLM_BASE_URL
               value: {{ .Values.llm.baseUrl | quote }}
             {{- end }}
             {{- if .Values.llm.apiKey }}
-            - name: LLM_API_KEY
+            - name: LITELLM_MASTER_KEY
               value: {{ .Values.llm.apiKey | quote }}
             {{- end }}
             - name: AOT_PIPELINE_MAX_RETRIES
