@@ -35,60 +35,65 @@ task dev:web          # start web dashboard
 
 ## Architecture
 
-Everything runs inside Kubernetes.
+Everything runs inside Kubernetes, except cloud LLM providers.
 
 ```mermaid
-graph TB
-    User["User (Browser)"]
+graph LR
+    User(("User"))
+    Cloud["OpenRouter<br/>Cloud LLMs"]
 
     subgraph K8s["Kubernetes Cluster"]
+        direction TB
 
-        subgraph UI["UNCWORKS UI"]
-            Web["Web Dashboard<br/>React + Tailwind :30300"]
-        end
-
-        subgraph CP["UNCWORKS Control Plane"]
-            API["API Server<br/>ConnectRPC :50055"]
-            Ctrl["K8s Controller<br/>AgentRun Reconciler"]
-            TW["Temporal Worker<br/>Pipeline Activities"]
-        end
-
-        subgraph DP["UNCWORKS Data Plane"]
-            subgraph AgentPod["Agent Pod (1 per run)"]
-                direction TB
-                Init["Init: Hydration<br/>git clone + worktree + devbox"]
-                Sidecar["Sidecar: RPC Gateway<br/>StartAgent, GetStatus, ExecCommand"]
-                Pi["Agent: pi-coding-agent<br/>determinism ext, manage/implement"]
-                PVC[("PVC: /workspace<br/>worktrees, specs, logs")]
-            end
-            ExtAgent["External Agent (planned)"]
-            KubeVirtVM["KubeVirt VM (planned)"]
+        subgraph CP["Control Plane"]
+            Web["Web UI :30300"]
+            API["API Server :50055"]
+            Ctrl["K8s Controller"]
+            TW["Temporal Worker"]
         end
 
         subgraph Deps["Dependencies"]
-            Temporal["Temporal Server :7233"]
-            LiteLLM["LiteLLM Proxy :4000"]
+            Temporal["Temporal :7233"]
+            LiteLLM["LiteLLM :4000"]
             Ollama["Ollama :11434"]
+        end
+
+        subgraph DP["Data Plane — Agent Pod (1 per run)"]
+            Init["init: Hydration"]
+            Pi["pi-coding-agent"]
+            Sidecar["RPC Gateway"]
+            PVC[("/workspace PVC")]
         end
     end
 
-    User -->|HTTP| Web
-    Web -->|nginx proxy| API
-    API -->|"Signal + Query"| Temporal
+    User --> Web
+    Web --> API
+    API --> Temporal
     Temporal --> TW
-    Ctrl -->|"reconcile loop"| API
-    TW -->|creates pod + PVC| AgentPod
-    Sidecar -->|heartbeat, status| TW
-    Pi -->|"OPENAI_BASE_URL"| LiteLLM
+    Ctrl --> API
+    TW -->|creates| DP
+    Sidecar --> TW
+    Pi --> LiteLLM
     LiteLLM --> Ollama
-    LiteLLM -->|OpenRouter| Cloud["Cloud LLMs"]
-    Init -.->|"writes to"| PVC
-    Pi -.->|"reads/writes"| PVC
-    Sidecar -.->|"reads logs from"| PVC
-
-    style ExtAgent stroke-dasharray: 5 5
-    style KubeVirtVM stroke-dasharray: 5 5
+    LiteLLM --> Cloud
+    Init --> PVC
+    Pi --> PVC
+    Sidecar --> PVC
 ```
+
+| Section | Component | Description |
+|---------|-----------|-------------|
+| **Control Plane** | Web UI | React dashboard. Activity feed, file browser, traces, verification panel. Proxied to API via nginx. |
+| | API Server | ConnectRPC endpoints: create, get, list, cancel runs. REST endpoints: structured logs, files, traces, thinking. |
+| | K8s Controller | Watches `AgentRun` CRDs, triggers Temporal workflows, updates CRD status. |
+| | Temporal Worker | Executes pipeline activities: provision keys, create pods, hydrate, plan, execute, verify, cleanup. |
+| **Dependencies** | Temporal | Workflow orchestration with retries, compensation, signals (cancel, human input). |
+| | LiteLLM | LLM proxy with model routing, budgets, fallback chains. Routes to local Ollama or cloud (OpenRouter). |
+| | Ollama | Local model server (qwen3:8b, llama3.1:8b). |
+| **Data Plane** | init: Hydration | Bare-clones repos, creates git worktrees at `/workspace/<repo>/`, sets up devbox. |
+| | pi-coding-agent | LLM agent with determinism extension. `PI_ROLE=manage` (plan/verify): reads repo, runs openspec CLI, writes specs. `PI_ROLE=implement` (execute): reads specs, writes code, runs tests. |
+| | RPC Gateway | Sidecar bridging agent to control plane: StartAgent, GetStatus, ExecCommand, SendInput. Streams JSONL logs to PVC. |
+| | /workspace PVC | Persistent volume with repo worktrees, OpenSpec artifacts, agent logs, and traces. |
 
 ### Sequence: Spec-Driven Run
 
@@ -100,70 +105,39 @@ sequenceDiagram
     participant Ctrl as Controller
     participant TW as Temporal Worker
     participant Pod as Agent Pod
-    participant LLM as LiteLLM
+    participant LLM as LiteLLM / OpenRouter
 
     User->>Web: Create run (repo + prompt)
-    Web->>API: CreateAgentRun RPC
+    Web->>API: CreateAgentRun
     API->>API: Create AgentRun CRD
-    Ctrl->>API: Detect new CRD
-    Ctrl->>TW: Start Temporal workflow
+    Ctrl->>TW: Start workflow
 
-    Note over TW: Provision LLM key
     TW->>Pod: Create pod + PVC
-    Note over Pod: Init: clone repo,<br/>create worktree,<br/>setup devbox
+    Note over Pod: Hydration: clone, worktree, devbox
 
-    rect rgb(59, 130, 246, 0.1)
-        Note over TW,Pod: PLAN (agent-manage, PI_ROLE=manage)
-        TW->>Pod: openspec init + scaffold change
-        TW->>Pod: StartAgent (plan prompt)
-        Pod->>LLM: LLM calls (read repo, write specs)
-        Pod->>TW: Agent completed
-        TW->>Pod: openspec validate
+    Note over TW,LLM: PLAN (manage agent)
+    TW->>Pod: Scaffold openspec change
+    TW->>Pod: StartAgent (plan prompt)
+    Pod->>LLM: Read repo, write specs
+    Pod->>TW: Complete
+    TW->>Pod: openspec validate
+
+    Note over TW,LLM: EXECUTE (implement agent)
+    TW->>Pod: StartAgent (specs + prompt)
+    Pod->>LLM: Read specs, write code, run tests
+    Pod->>TW: Complete
+
+    Note over TW,LLM: VERIFY (manage agent)
+    TW->>Pod: Check tasks, validate specs, LLM judge
+    alt Pass
+        TW->>Pod: openspec archive
+        TW-->>API: Succeeded
+    else Fail
+        TW->>Pod: Retry execute
     end
 
-    rect rgb(34, 197, 94, 0.1)
-        Note over TW,Pod: EXECUTE (agent-implement, PI_ROLE=implement)
-        TW->>Pod: StartAgent (execute prompt + spec ref)
-        Pod->>LLM: LLM calls (read specs, write code)
-        Pod->>TW: Agent completed
-    end
-
-    rect rgb(234, 179, 8, 0.1)
-        Note over TW,Pod: VERIFY (agent-manage, PI_ROLE=manage)
-        TW->>Pod: VerifyRun (task check, validate, LLM judge)
-        alt Verification passes
-            TW->>Pod: openspec archive
-            TW->>API: Phase = Succeeded
-        else Verification fails
-            TW->>Pod: Retry execute with failure context
-        end
-    end
-
-    TW->>Pod: Scale down pod
-    TW->>LLM: Revoke LLM key
-
-    User->>Web: View results (activity, files, traces)
+    TW->>Pod: Scale down
 ```
-
-### Control Plane
-
-The **API Server** exposes ConnectRPC endpoints for creating, listing, and managing agent runs. It also serves REST endpoints for structured logs, file browsing, traces, and thinking state. The **K8s Controller** watches `AgentRun` CRDs and starts Temporal workflows, mapping CRD spec fields to workflow input. The **Temporal Worker** registers 16 activities covering the full agent lifecycle: key provisioning, pod creation, hydration, plan/execute/verify stages, and cleanup.
-
-### Data Plane
-
-Each run gets its own **pod** with a **PVC** at `/workspace`:
-
-| Container | Role | What it does |
-|-----------|------|-------------|
-| **Init: Hydration** | Setup | Bare-clones repos, creates git worktrees at `/workspace/<repo>/`, composes devbox environments, writes workspace manifest |
-| **pi-coding-agent** | Agent | Runs the LLM agent with the determinism extension loaded. In plan/verify stages: `PI_ROLE=manage` (can run openspec CLI, ask_user; blocked from writing code). In execute stage: `PI_ROLE=implement` (can write/edit code; blocked from modifying specs). |
-| **RPC Gateway** | Sidecar | Bridges agent to control plane via ConnectRPC: StartAgent, GetStatus, ExecCommand, SendInput, NotifyEvent. Streams agent JSONL output to the PVC for the UI to read. Detects rate limit errors and auto-retries. |
-
-**External agents** (running outside the cluster) and **KubeVirt VMs** (full VM isolation) are planned backends.
-
-### Dependencies
-
-**Temporal** orchestrates the spec-driven pipeline with retry logic, compensation (cleanup on failure), and signal handling (cancel, human input). **LiteLLM** proxies all LLM calls with model routing (local Ollama or cloud via OpenRouter), per-key budgets, and fallback chains. **Ollama** runs local models for zero-cost development.
 
 ---
 
