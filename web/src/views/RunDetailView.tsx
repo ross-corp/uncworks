@@ -12,6 +12,14 @@ import ShellTerminal from "../components/ShellTerminal";
 import TraceTimeline from "../components/TraceTimeline";
 import VerificationPanel from "../components/VerificationPanel";
 import { useTraces } from "../hooks/useTraces";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "../components/ui/sheet";
 
 type Tab = "activity" | "files" | "shell" | "traces" | "verify";
 
@@ -78,11 +86,19 @@ export default function RunDetailView() {
     };
   }, [id, client]);
 
-  // Keyboard: esc back, number keys for tabs
+  // Keyboard: esc back, number keys for tabs, i for info
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      // Don't intercept keys when typing in an input
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+
       if (e.key === "Escape") {
-        navigate("/");
+        if (showInfo) {
+          setShowInfo(false);
+        } else {
+          navigate("/");
+        }
         return;
       }
       const num = parseInt(e.key);
@@ -95,7 +111,7 @@ export default function RunDetailView() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [navigate]);
+  }, [navigate, showInfo]);
 
   if (!run) {
     return (
@@ -176,37 +192,43 @@ export default function RunDetailView() {
         </div>
       )}
 
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 border-b px-4 py-1">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            data-testid={`detail-tab-${t.key}`}
-            onClick={() => setTab(t.key)}
-            className={`px-2 py-0.5 text-xs transition-colors ${
-              tab === t.key
-                ? "bg-accent text-accent-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span className="text-muted-foreground/50 mr-1">{t.num}</span>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs */}
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as Tab)}
+        className="flex-1 min-h-0 flex flex-col gap-0"
+      >
+        <TabsList>
+          {TABS.map((t) => (
+            <TabsTrigger
+              key={t.key}
+              value={t.key}
+              data-testid={`detail-tab-${t.key}`}
+            >
+              <span className="opacity-40 mr-1">{t.num}</span>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {/* Tab content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === "activity" && <ActivityFeed runId={run.id} phase={run.status.phase} />}
-        {tab === "files" && <FileExplorer runId={run.id} />}
-        {tab === "shell" && <ShellTerminal runId={run.id} />}
-        {tab === "traces" && (
+        <TabsContent value="activity" className="flex-1 min-h-0 overflow-hidden">
+          <ActivityFeed runId={run.id} phase={run.status.phase} />
+        </TabsContent>
+        <TabsContent value="files" className="flex-1 min-h-0 overflow-hidden">
+          <FileExplorer runId={run.id} />
+        </TabsContent>
+        <TabsContent value="shell" className="flex-1 min-h-0 overflow-hidden">
+          <ShellTerminal runId={run.id} />
+        </TabsContent>
+        <TabsContent value="traces" className="flex-1 min-h-0 overflow-hidden">
           <div className="h-full overflow-y-auto">
             <TraceTimeline spans={spans} onSelectSpan={() => {}} />
           </div>
-        )}
-        {tab === "verify" && <VerificationPanel runId={run.id} />}
-      </div>
+        </TabsContent>
+        <TabsContent value="verify" className="flex-1 min-h-0 overflow-hidden">
+          <VerificationPanel runId={run.id} />
+        </TabsContent>
+      </Tabs>
 
       {/* HITL overlay */}
       {run.status.phase === "waiting_for_input" && (
@@ -231,22 +253,51 @@ export default function RunDetailView() {
         </div>
       )}
 
-      {/* Info overlay */}
-      {showInfo && (
-        <div className="border-t bg-muted/50 px-4 py-3 text-xs space-y-1">
-          <div className="flex gap-8">
-            <div><span className="text-muted-foreground">ID</span> <span>{run.id}</span></div>
-            <div><span className="text-muted-foreground">Created</span> <span>{run.createdAt ? new Date(run.createdAt).toLocaleString() : "---"}</span></div>
-            <div><span className="text-muted-foreground">Model</span> <span>{run.spec.modelTier || "default"}</span></div>
+      {/* Info Sheet (side panel) */}
+      <Sheet open={showInfo} onOpenChange={setShowInfo}>
+        <SheetContent side="right">
+          <SheetHeader>
+            <SheetTitle>Run Details</SheetTitle>
+            <SheetDescription>
+              {run.spec.displayName || run.name}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="px-4 space-y-4 text-sm">
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">ID</span>
+                <span className="font-mono text-xs">{run.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Created</span>
+                <span>{run.createdAt ? new Date(run.createdAt).toLocaleString() : "---"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Model</span>
+                <span>{run.spec.modelTier || "default"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Repo</span>
+                <span className="text-xs truncate max-w-[200px]">{run.spec.repos?.[0]?.url || "---"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Mode</span>
+                <span>{run.spec.orchestrationMode || "single"}</span>
+              </div>
+              {run.status.stage && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Stage</span>
+                  <span>{run.status.stage} (attempt {(run.status.retryCount ?? 0) + 1})</span>
+                </div>
+              )}
+            </div>
+            <div className="border-t pt-3">
+              <span className="text-muted-foreground text-xs">Prompt</span>
+              <p className="mt-1 text-xs">{run.spec.prompt}</p>
+            </div>
           </div>
-          <div className="flex gap-8">
-            <div><span className="text-muted-foreground">Repo</span> <span>{run.spec.repos?.[0]?.url || "---"}</span></div>
-            <div><span className="text-muted-foreground">Mode</span> <span>{run.spec.orchestrationMode || "single"}</span></div>
-            {run.status.stage && <div><span className="text-muted-foreground">Stage</span> <span>{run.status.stage} (attempt {(run.status.retryCount ?? 0) + 1})</span></div>}
-          </div>
-          <div className="text-muted-foreground truncate">Prompt: {run.spec.prompt}</div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       {/* Footer */}
       <div className="border-t px-4 py-1 text-xs text-muted-foreground">

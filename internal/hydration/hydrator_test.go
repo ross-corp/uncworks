@@ -174,8 +174,8 @@ func TestHydrator_WorktreePath(t *testing.T) {
 		WorkspaceDir: "/workspace",
 	}
 	h := NewHydrator(config, NewMockRunner())
-	if h.WorktreePath() != "/workspace/src/myrepo" {
-		t.Errorf("expected /workspace/src/myrepo, got %s", h.WorktreePath())
+	if h.WorktreePath() != "/workspace/myrepo" {
+		t.Errorf("expected /workspace/myrepo, got %s", h.WorktreePath())
 	}
 
 	// With explicit path
@@ -184,15 +184,15 @@ func TestHydrator_WorktreePath(t *testing.T) {
 		WorkspaceDir: "/workspace",
 	}
 	h2 := NewHydrator(config2, NewMockRunner())
-	if h2.WorktreePath() != "/workspace/src/custom" {
-		t.Errorf("expected /workspace/src/custom, got %s", h2.WorktreePath())
+	if h2.WorktreePath() != "/workspace/custom" {
+		t.Errorf("expected /workspace/custom, got %s", h2.WorktreePath())
 	}
 
 	// With no repos — fallback
 	config3 := &Config{WorkspaceDir: "/workspace"}
 	h3 := NewHydrator(config3, NewMockRunner())
-	if h3.WorktreePath() != "/workspace/src" {
-		t.Errorf("expected /workspace/src, got %s", h3.WorktreePath())
+	if h3.WorktreePath() != "/workspace" {
+		t.Errorf("expected /workspace, got %s", h3.WorktreePath())
 	}
 }
 
@@ -332,8 +332,8 @@ func TestHydrator_GenerateManifest_MultiRepo(t *testing.T) {
 	}
 
 	// First repo: path derived from URL
-	if manifest.Repos[0].Path != "src/frontend" {
-		t.Errorf("repo[0].Path = %q, want src/frontend", manifest.Repos[0].Path)
+	if manifest.Repos[0].Path != "frontend" {
+		t.Errorf("repo[0].Path = %q, want frontend", manifest.Repos[0].Path)
 	}
 	if manifest.Repos[0].URL != "https://github.com/org/frontend.git" {
 		t.Errorf("repo[0].URL = %q", manifest.Repos[0].URL)
@@ -343,8 +343,8 @@ func TestHydrator_GenerateManifest_MultiRepo(t *testing.T) {
 	}
 
 	// Second repo: explicit path
-	if manifest.Repos[1].Path != "src/api" {
-		t.Errorf("repo[1].Path = %q, want src/api", manifest.Repos[1].Path)
+	if manifest.Repos[1].Path != "api" {
+		t.Errorf("repo[1].Path = %q, want api", manifest.Repos[1].Path)
 	}
 }
 
@@ -374,8 +374,8 @@ func TestHydrator_GenerateManifest_SingleRepo(t *testing.T) {
 	if len(manifest.Repos) != 1 {
 		t.Fatalf("expected 1 repo, got %d", len(manifest.Repos))
 	}
-	if manifest.Repos[0].Path != "src/mono" {
-		t.Errorf("repo.Path = %q", manifest.Repos[0].Path)
+	if manifest.Repos[0].Path != "mono" {
+		t.Errorf("repo.Path = %q, want mono", manifest.Repos[0].Path)
 	}
 }
 
@@ -411,7 +411,7 @@ func TestHydrator_GenerateManifest_DevboxDetection(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a fake devbox.json in the worktree path that would exist after clone
-	worktree1 := filepath.Join(tmpDir, "src", "repo1")
+	worktree1 := filepath.Join(tmpDir, "repo1")
 	if err := os.MkdirAll(worktree1, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +420,7 @@ func TestHydrator_GenerateManifest_DevboxDetection(t *testing.T) {
 	}
 
 	// repo2 has no devbox.json
-	worktree2 := filepath.Join(tmpDir, "src", "repo2")
+	worktree2 := filepath.Join(tmpDir, "repo2")
 	if err := os.MkdirAll(worktree2, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -455,8 +455,8 @@ func TestHydrator_GenerateManifest_DevboxDetection(t *testing.T) {
 	if len(manifest.Devbox.Sources) != 1 {
 		t.Fatalf("expected 1 devbox source, got %d", len(manifest.Devbox.Sources))
 	}
-	if manifest.Devbox.Sources[0].Path != "src/repo1/devbox.json" {
-		t.Errorf("devbox source path = %q", manifest.Devbox.Sources[0].Path)
+	if manifest.Devbox.Sources[0].Path != "repo1/devbox.json" {
+		t.Errorf("devbox source path = %q, want repo1/devbox.json", manifest.Devbox.Sources[0].Path)
 	}
 }
 
@@ -468,7 +468,7 @@ func TestHydrator_ComposeDevbox_MultipleConfigs(t *testing.T) {
 
 	// Create fake devbox.json files in worktree paths
 	for _, name := range []string{"repo1", "repo2"} {
-		dir := filepath.Join(tmpDir, "src", name)
+		dir := filepath.Join(tmpDir, name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -504,10 +504,10 @@ func TestHydrator_ComposeDevbox_MultipleConfigs(t *testing.T) {
 	if len(devbox.Include) != 2 {
 		t.Fatalf("expected 2 includes, got %d", len(devbox.Include))
 	}
-	if devbox.Include[0] != "src/repo1/devbox.json" {
+	if devbox.Include[0] != "repo1/devbox.json" {
 		t.Errorf("include[0] = %q", devbox.Include[0])
 	}
-	if devbox.Include[1] != "src/repo2/devbox.json" {
+	if devbox.Include[1] != "repo2/devbox.json" {
 		t.Errorf("include[1] = %q", devbox.Include[1])
 	}
 
@@ -530,7 +530,7 @@ func TestHydrator_ComposeDevbox_SingleConfig(t *testing.T) {
 	runner := NewMockRunner()
 	tmpDir := t.TempDir()
 
-	dir := filepath.Join(tmpDir, "src", "repo1")
+	dir := filepath.Join(tmpDir, "repo1")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +564,7 @@ func TestHydrator_ComposeDevbox_SingleConfig(t *testing.T) {
 	if len(devbox.Include) != 1 {
 		t.Fatalf("expected 1 include, got %d", len(devbox.Include))
 	}
-	if devbox.Include[0] != "src/repo1/devbox.json" {
+	if devbox.Include[0] != "repo1/devbox.json" {
 		t.Errorf("include[0] = %q", devbox.Include[0])
 	}
 }
@@ -603,7 +603,7 @@ func TestHydrator_ComposeDevbox_ExplicitOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create devbox.json in worktree
-	dir := filepath.Join(tmpDir, "src", "repo1")
+	dir := filepath.Join(tmpDir, "repo1")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -622,7 +622,7 @@ func TestHydrator_ComposeDevbox_ExplicitOverride(t *testing.T) {
 	h := NewHydrator(config, runner)
 	// Run will use setupDevbox (which checks in worktree), not composeDevbox
 	// setupDevbox will look for devbox.json at PrimaryWorktreePath/devbox.json
-	// which exists at src/repo1/devbox.json — should succeed
+	// which exists at repo1/devbox.json — should succeed
 	err := h.Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -640,7 +640,7 @@ func TestHydrator_ComposeDevbox_InstallFailure(t *testing.T) {
 	runner.On("devbox", MockResult{Err: fmt.Errorf("devbox install failed")})
 	tmpDir := t.TempDir()
 
-	dir := filepath.Join(tmpDir, "src", "repo1")
+	dir := filepath.Join(tmpDir, "repo1")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

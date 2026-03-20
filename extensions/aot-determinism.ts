@@ -94,6 +94,7 @@ export default function (pi: ExtensionAPI) {
   let repeatCount = 0;
   let turnCount = 0;
   const stage = process.env.PI_STAGE || "";
+  const role = process.env.PI_ROLE || "implement"; // "manage" or "implement"
 
   // --- Register ask_user custom tool ---
   pi.registerTool({
@@ -143,6 +144,38 @@ export default function (pi: ExtensionAPI) {
     } else {
       lastToolSig = sig;
       repeatCount = 0;
+    }
+
+    // Role-based tool policies
+    if (role === "manage") {
+      // Manage agents may not write/edit repo files (only openspec and .aot are allowed)
+      if (event.toolName === "write" || event.toolName === "edit") {
+        const filePath =
+          (event.input as { path?: string }).path ||
+          (event.input as { file_path?: string }).file_path ||
+          "";
+        if (
+          filePath &&
+          !filePath.startsWith("/workspace/openspec/") &&
+          !filePath.startsWith("/workspace/.aot/")
+        ) {
+          return {
+            block: true,
+            reason: `Manage agent cannot write/edit repo files (${filePath}). Only /workspace/openspec/ and /workspace/.aot/ are allowed.`,
+          };
+        }
+      }
+    }
+
+    if (role === "implement") {
+      // Implement agents may not use ask_user — surface questions in output for manage agent
+      if (event.toolName === "ask_user") {
+        return {
+          block: true,
+          reason:
+            "Implement agents must include questions in their output for the manage agent to surface.",
+        };
+      }
     }
 
     // Spec validation for write tool in plan stage
