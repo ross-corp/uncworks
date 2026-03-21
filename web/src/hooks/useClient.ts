@@ -60,6 +60,10 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       project: r.spec.project,
       feature: r.spec.feature,
       tags: r.spec.tags,
+      maxBudget: r.spec.maxBudget,
+      autoPush: r.spec.autoPush,
+      autoPR: r.spec.autoPR,
+      prBaseBranch: r.spec.prBaseBranch,
     },
     status: {
       phase: phaseMap[r.status.phase] ?? "pending",

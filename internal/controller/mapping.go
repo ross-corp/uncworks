@@ -46,6 +46,7 @@ func BuildWorkflowInput(agentRun *aotv1alpha1.AgentRun, liteLLMBaseURL string) a
 		Orchestration:     orchTasks,
 		ParentRunID:       agentRun.Spec.ParentRunID,
 		SpecRunID:         agentRun.Spec.SpecRunID,
+		MaxBudget:         agentRun.Spec.MaxBudget,
 		AutoPush:          agentRun.Spec.AutoPush,
 		AutoPR:            agentRun.Spec.AutoPR,
 		PRBaseBranch:      agentRun.Spec.PRBaseBranch,

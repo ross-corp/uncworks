@@ -42,6 +42,7 @@ func TestBoundary_CRDToWorkflowInput_AllFields(t *testing.T) {
 			ParentRunID:  "parent-42",
 			SpecRunID:    "spec-77",
 			DisplayName:  "Fix Everything Run",
+			MaxBudget:    5.0,
 			AutoPush:     true,
 			AutoPR:       true,
 			PRBaseBranch: "staging",
@@ -88,6 +89,7 @@ func TestBoundary_CRDToWorkflowInput_AllFields(t *testing.T) {
 	assertEqual(t, "OrchestrationMode", got.OrchestrationMode, aottemporal.OrchestrationModeSpecDriven)
 	assertEqual(t, "ParentRunID", got.ParentRunID, "parent-42")
 	assertEqual(t, "SpecRunID", got.SpecRunID, "spec-77")
+	assertEqual(t, "MaxBudget", got.MaxBudget, 5.0)
 	assertEqual(t, "AutoPush", got.AutoPush, true)
 	assertEqual(t, "AutoPR", got.AutoPR, true)
 	assertEqual(t, "PRBaseBranch", got.PRBaseBranch, "staging")

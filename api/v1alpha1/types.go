@@ -148,6 +148,10 @@ type AgentRunSpec struct {
 	// +optional
 	PipelineConfig *PipelineConfig `json:"pipelineConfig,omitempty"`
 
+	// MaxBudget is the maximum LLM spend budget in USD.
+	// +optional
+	MaxBudget float64 `json:"maxBudget,omitempty"`
+
 	// AutoPush controls whether changes are pushed to a feature branch after successful verification.
 	// +optional
 	AutoPush bool `json:"autoPush,omitempty"`
