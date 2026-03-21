@@ -734,7 +734,7 @@ export default function TraceTimeline({
   }, []);
 
   // Build tree structure (collapse-aware)
-  const { flat, traceDurationMs } = useMemo(
+  const { flat, traceDurationMs, traceStartMs } = useMemo(
     () => buildFlatTree(spans, collapsedSpanIds),
     [spans, collapsedSpanIds]
   );
@@ -877,14 +877,20 @@ export default function TraceTimeline({
     return { startIdx, endIdx };
   }, [scrollTop, containerHeight, rowPositions]);
 
-  // Time axis ticks
+  // Time axis ticks — show real timestamps
   const timeTicks = useMemo(() => {
     const count = 5;
     const ticks: { label: string; pct: number }[] = [];
     for (let i = 0; i <= count; i++) {
       const ms = (traceDurationMs / count) * i;
+      const timestamp = new Date(traceStartMs + ms);
+      const h = timestamp.getHours();
+      const m = timestamp.getMinutes().toString().padStart(2, "0");
+      const s = timestamp.getSeconds().toString().padStart(2, "0");
+      const ampm = h >= 12 ? "pm" : "am";
+      const h12 = h % 12 || 12;
       ticks.push({
-        label: formatDuration(Math.round(ms)),
+        label: `${h12}:${m}:${s}${ampm}`,
         pct: (i / count) * 100,
       });
     }
@@ -1124,28 +1130,50 @@ export default function TraceTimeline({
                           ))}
 
                           {isStageSpan ? (
-                            /* Stage row: section header with summary stats, no waterfall bar */
-                            <div className="flex items-center gap-3 px-2 text-[10px] font-mono text-muted-foreground w-full">
-                              <span>{formatDuration(durationMs)}</span>
-                              {stageAgg && (
-                                <>
-                                  <span className="text-border">·</span>
-                                  <span>{stageAgg.childCount} span{stageAgg.childCount !== 1 ? "s" : ""}</span>
-                                  {stageAgg.estimatedCostUsd > 0 && (
-                                    <>
-                                      <span className="text-border">·</span>
-                                      <span>{formatCost(stageAgg.estimatedCostUsd)}</span>
-                                    </>
-                                  )}
-                                  {stageAgg.toolErrors > 0 && (
-                                    <>
-                                      <span className="text-border">·</span>
-                                      <span className="text-red-400">{stageAgg.toolErrors} err</span>
-                                    </>
-                                  )}
-                                </>
-                              )}
-                            </div>
+                            /* Stage row: waterfall bar + summary stats */
+                            <>
+                              {/* Stage bar — shows position within parent timeline */}
+                              <div
+                                className={cn(
+                                  "absolute rounded-sm h-6",
+                                  isFailed
+                                    ? "bg-red-500/15 border border-red-500/30"
+                                    : "bg-amber-500/10 border border-amber-500/20"
+                                )}
+                                style={{
+                                  left: `${Math.min(barLeftPct, 97)}%`,
+                                  width: `${Math.min(barWidthPct, 100 - Math.min(barLeftPct, 97))}%`,
+                                  minWidth: MIN_BAR_WIDTH_PX,
+                                }}
+                              />
+                              {/* Stats label after the bar */}
+                              <span
+                                className="absolute text-[10px] font-mono text-muted-foreground whitespace-nowrap flex items-center gap-2"
+                                style={{
+                                  left: `calc(${Math.min(barLeftPct + barWidthPct, 100)}% + 4px)`,
+                                }}
+                              >
+                                <span>{formatDuration(durationMs)}</span>
+                                {stageAgg && (
+                                  <>
+                                    <span className="text-border">·</span>
+                                    <span>{stageAgg.childCount} spans</span>
+                                    {stageAgg.estimatedCostUsd > 0 && (
+                                      <>
+                                        <span className="text-border">·</span>
+                                        <span>{formatCost(stageAgg.estimatedCostUsd)}</span>
+                                      </>
+                                    )}
+                                    {stageAgg.toolErrors > 0 && (
+                                      <>
+                                        <span className="text-border">·</span>
+                                        <span className="text-red-400">{stageAgg.toolErrors} err</span>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </span>
+                            </>
                           ) : (
                             /* Leaf span: waterfall bar positioned relative to parent */
                             <>
@@ -1182,6 +1210,15 @@ export default function TraceTimeline({
                                     {String(span.metadata?.["gen_ai.context.utilization_pct"])}% ctx
                                   </span>
                                 )}
+                                {/* Inline cost per thought span */}
+                                {span.type === "llm" && (span.metadata?.["gen_ai.usage.input_tokens"] as number) > 0 && (() => {
+                                  const inTok = (span.metadata?.["gen_ai.usage.input_tokens"] as number) || 0;
+                                  const outTok = (span.metadata?.["gen_ai.usage.output_tokens"] as number) || 0;
+                                  const cost = (inTok * 0.15 + outTok * 0.75) / 1_000_000;
+                                  return cost > 0.0001 ? (
+                                    <span className="ml-1 text-amber-400/60">{formatCost(cost)}</span>
+                                  ) : null;
+                                })()}
                               </span>
                             </>
                           )}
