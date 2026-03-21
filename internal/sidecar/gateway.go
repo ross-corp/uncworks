@@ -1267,6 +1267,20 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 			if diff != nil && len(diff.Files) > 0 {
 				span.HasDiff = true
 				span.Diff = diff
+				// Count additions/deletions for inline display
+				var additions, deletions int
+				for _, f := range diff.Files {
+					for _, line := range strings.Split(f.Patch, "\n") {
+						if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+							additions++
+						} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
+							deletions++
+						}
+					}
+				}
+				span.Metadata["diff.additions"] = additions
+				span.Metadata["diff.deletions"] = deletions
+				span.Metadata["diff.files"] = len(diff.Files)
 			}
 			if sha != "" {
 				span.Metadata["checkpointSHA"] = sha

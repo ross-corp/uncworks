@@ -1115,14 +1115,13 @@ export default function TraceTimeline({
                             </Badge>
                           )}
 
-                          {/* Diff indicator */}
+                          {/* Diff line count indicator */}
                           {span.hasDiff && (
-                            <Badge
-                              variant="outline"
-                              className="text-[9px] px-1 py-0 ml-auto flex-shrink-0 border-blue-500/40 text-blue-400"
-                            >
-                              DIFF
-                            </Badge>
+                            <span className="ml-auto flex-shrink-0 text-[9px] font-mono text-muted-foreground">
+                              <span className="text-emerald-400">+{String(span.metadata?.["diff.additions"] ?? "?")}</span>
+                              <span className="text-muted-foreground/40">/</span>
+                              <span className="text-red-400">-{String(span.metadata?.["diff.deletions"] ?? "?")}</span>
+                            </span>
                           )}
                         </div>
 
@@ -1207,6 +1206,15 @@ export default function TraceTimeline({
                                 }}
                               >
                                 <span className="text-foreground/70">{formatDuration(durationMs)}</span>
+                                {/* Inline diff stats for tool spans */}
+                                {span.hasDiff && (
+                                  <>
+                                    <span className="text-border mx-1">·</span>
+                                    <span className="text-emerald-400/70">+{String(span.metadata?.["diff.additions"] ?? "?")}</span>
+                                    <span className="text-muted-foreground/40">/</span>
+                                    <span className="text-red-400/70">-{String(span.metadata?.["diff.deletions"] ?? "?")}</span>
+                                  </>
+                                )}
                                 {/* Inline metrics for thought spans — dot-separated, semantic colors */}
                                 {span.type === "llm" && (span.metadata?.["gen_ai.usage.input_tokens"] as number) > 0 && (() => {
                                   const inTok = (span.metadata?.["gen_ai.usage.input_tokens"] as number) || 0;
