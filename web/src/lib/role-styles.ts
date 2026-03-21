@@ -45,9 +45,17 @@ export const ROLE_STYLES = {
 
 export type RoleName = keyof typeof ROLE_STYLES;
 
+// Legacy name aliases (unc/neph from older sidecar versions)
+const ROLE_ALIASES: Record<string, RoleName> = {
+  unc: "manage",
+  neph: "implement",
+  impl: "implement",
+};
+
 /** Extract the role from a span name like "manage.thought" → "manage" */
 export function roleFromSpanName(name: string): RoleName {
   const prefix = name.split(".")[0];
   if (prefix in ROLE_STYLES) return prefix as RoleName;
-  return "system"; // fallback
+  if (prefix in ROLE_ALIASES) return ROLE_ALIASES[prefix];
+  return "system";
 }
