@@ -471,3 +471,41 @@ func TestBoundary_TokenUsage_OTelConventionFieldNames(t *testing.T) {
 		t.Errorf("gen_ai.usage.output_tokens = %v, want 567", outputTokens)
 	}
 }
+
+// TestBoundary_RESTTypes_AgentLogEntrySpanId verifies that spanId appears in
+// JSON when set and is omitted when empty (omitempty behavior).
+func TestBoundary_RESTTypes_AgentLogEntrySpanId(t *testing.T) {
+	// With SpanId set
+	entry := server.AgentLogEntry{
+		Timestamp: "2026-03-20T10:00:00Z",
+		Type:      "tool_call",
+		Content:   "calling tool",
+		SpanId:    "span-abc-123",
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("json.Marshal AgentLogEntry with SpanId: %v", err)
+	}
+	jsonStr := string(data)
+	if !strings.Contains(jsonStr, `"spanId"`) {
+		t.Errorf("expected spanId in JSON when set: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"span-abc-123"`) {
+		t.Errorf("expected spanId value in JSON: %s", jsonStr)
+	}
+
+	// Without SpanId (empty string — should be omitted)
+	entry2 := server.AgentLogEntry{
+		Timestamp: "2026-03-20T10:00:00Z",
+		Type:      "assistant",
+		Content:   "hello",
+	}
+	data2, err := json.Marshal(entry2)
+	if err != nil {
+		t.Fatalf("json.Marshal AgentLogEntry without SpanId: %v", err)
+	}
+	jsonStr2 := string(data2)
+	if strings.Contains(jsonStr2, `"spanId"`) {
+		t.Errorf("expected spanId to be omitted when empty: %s", jsonStr2)
+	}
+}

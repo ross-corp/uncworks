@@ -526,6 +526,7 @@ type AgentLogEntry struct {
 	ToolName  string `json:"toolName,omitempty"`
 	ToolInput string `json:"toolInput,omitempty"`
 	Model     string `json:"model,omitempty"`
+	SpanId    string `json:"spanId,omitempty"`
 }
 
 // handleStructuredLogs reads the agent's JSONL log file and returns parsed

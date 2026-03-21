@@ -53,6 +53,8 @@ func BuildWorkflowInput(agentRun *aotv1alpha1.AgentRun, liteLLMBaseURL string) a
 		Project:           agentRun.Spec.Project,
 		Feature:           agentRun.Spec.Feature,
 		Tags:              agentRun.Spec.Tags,
+		Backend:           string(agentRun.Spec.Backend),
+		SpecSource:        agentRun.Spec.SpecSource,
 	}
 
 	if agentRun.Spec.PipelineConfig != nil {

@@ -109,6 +109,8 @@ type WorkflowInput struct {
 	Project           string
 	Feature           string
 	Tags              []string
+	Backend           string
+	SpecSource        string
 }
 
 // PipelineConfigInput contains per-stage configuration for spec-driven runs.
