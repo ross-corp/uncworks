@@ -306,8 +306,7 @@ function SpanDetail({
 
   const meta = span.metadata ?? {};
   const toolInput = meta.toolInput as string | undefined;
-  const thinkingText =
-    span.type === "thought" ? (meta.thinking as string | undefined) : undefined;
+  const contentText = (meta.content as string | undefined) ?? (meta.thinking as string | undefined);
   const checkpointSha = meta.checkpointSha as string | undefined;
   const stage = meta.stage as string | undefined;
 
@@ -569,26 +568,34 @@ function SpanDetail({
           </div>
         )}
 
-        {/* Tool input */}
+        {/* Tool input — formatted JSON, collapsed by default */}
         {toolInput && (
-          <div className="space-y-1.5">
-            <div className="text-xs font-medium text-foreground">
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs font-medium text-foreground hover:text-foreground/80 transition-colors group">
+              <ChevronRightIcon className="h-3 w-3 text-muted-foreground group-data-[state=open]:rotate-90 transition-transform" />
               Tool Input
-            </div>
-            <pre className="p-2 bg-background border border-border rounded text-[11px] font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
-              {toolInput}
-            </pre>
-          </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <pre className="mt-1 p-2 bg-background border border-border rounded text-[11px] font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
+                {(() => { try { return JSON.stringify(JSON.parse(toolInput), null, 2); } catch { return toolInput; } })()}
+              </pre>
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
-        {/* Thinking content */}
-        {thinkingText && (
-          <div className="space-y-1.5">
-            <div className="text-xs font-medium text-foreground">Thinking</div>
-            <div className="p-2 bg-background border border-border rounded text-[11px] text-foreground overflow-y-auto max-h-64 whitespace-pre-wrap">
-              {thinkingText}
-            </div>
-          </div>
+        {/* Response content */}
+        {contentText && (
+          <Collapsible defaultOpen>
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs font-medium text-foreground hover:text-foreground/80 transition-colors group">
+              <ChevronRightIcon className="h-3 w-3 text-muted-foreground group-data-[state=open]:rotate-90 transition-transform" />
+              Response
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-1 p-2 bg-background border border-border rounded text-[11px] text-foreground overflow-y-auto max-h-64 whitespace-pre-wrap">
+                {contentText}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
         {/* Extra metadata (everything else) */}

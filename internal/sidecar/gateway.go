@@ -1151,6 +1151,10 @@ var (
 
 	// Model tracking — set by StartAgent from PI_MODEL env var
 	currentModel string
+
+	// Text accumulator for thought spans — collects text_delta events
+	thoughtTextMu      sync.Mutex
+	thoughtTextBuilder strings.Builder
 )
 
 // modelContextWindows maps model names to their context window sizes (in tokens).
@@ -1311,7 +1315,16 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 			}
 			thinkingSpanMu.Unlock()
 
-		case "text_delta", "text_end":
+		case "text_delta":
+			closeThinkingSpan()
+			// Accumulate text for the thought span content
+			if ame.Delta != "" {
+				thoughtTextMu.Lock()
+				thoughtTextBuilder.WriteString(ame.Delta)
+				thoughtTextMu.Unlock()
+			}
+
+		case "text_end":
 			closeThinkingSpan()
 
 		case "tool_use", "toolcall_start", "toolcall_end":
@@ -1351,6 +1364,17 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 					"role":                 prefix,
 					"gen_ai.request.model": currentModel,
 				},
+			}
+
+			// Attach accumulated thought text (truncated to 2000 chars for storage)
+			thoughtTextMu.Lock()
+			thoughtText := thoughtTextBuilder.String()
+			thoughtTextBuilder.Reset()
+			thoughtTextMu.Unlock()
+			if len(thoughtText) > 2000 {
+				span.Metadata["content"] = thoughtText[:2000] + "..."
+			} else if thoughtText != "" {
+				span.Metadata["content"] = thoughtText
 			}
 
 			// Extract token usage from message_end event.
