@@ -194,8 +194,8 @@ export default function RunDetailView() {
           <ActivityFeed runId={run.id} phase={run.status.phase} />
         </TabsContent>
         <TabsContent value="traces" className="flex-1 min-h-0 overflow-hidden">
-          <div className="h-full overflow-y-auto">
-            <TraceTimeline spans={spans} onSelectSpan={() => {}} />
+          <div className="h-full">
+            <TraceTimeline spans={spans} runId={run.id} onSelectSpan={() => {}} />
           </div>
         </TabsContent>
         <TabsContent value="files" className="flex-1 min-h-0 overflow-hidden">
