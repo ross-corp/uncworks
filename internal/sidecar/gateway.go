@@ -1169,23 +1169,14 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 
 	switch evt.Type {
 	case "tool_execution_start":
-		// Extract tool name from the event
-		toolName := "tool"
-		if len(evt.AssistantMsgEvent) > 0 {
-			var ame piAssistantEvent
-			if json.Unmarshal(evt.AssistantMsgEvent, &ame) == nil {
-				if ame.Type == "tool_use" {
-					var tool piToolInfo
-					if json.Unmarshal(ame.Tool, &tool) == nil && tool.Name != "" {
-						toolName = tool.Name
-					}
-				}
-			}
-		}
 		activeToolSpanMu.Lock()
+		// Tool name was already set by the preceding message_update tool_use event.
+		// Only default to "tool" if it wasn't set.
+		if activeToolSpanName == "" {
+			activeToolSpanName = "tool"
+		}
 		activeToolSpanID = uuid.New().String()
 		activeToolSpanStart = now
-		activeToolSpanName = toolName
 		activeToolSpanMu.Unlock()
 
 	case "tool_execution_end":
