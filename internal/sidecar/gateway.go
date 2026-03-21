@@ -1353,30 +1353,33 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 				},
 			}
 
-			// Extract token usage from message_end event
+			// Extract token usage from message_end event.
+			// Pi sends usage as: {"input": N, "output": N, "cacheRead": N, "totalTokens": N}
 			if len(evt.Message) > 0 {
 				var msg struct {
 					Usage *struct {
-						InputTokens              int `json:"input_tokens"`
-						OutputTokens             int `json:"output_tokens"`
-						CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-						CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+						Input       int `json:"input"`
+						Output      int `json:"output"`
+						CacheRead   int `json:"cacheRead"`
+						CacheWrite  int `json:"cacheWrite"`
+						TotalTokens int `json:"totalTokens"`
 					} `json:"usage"`
 				}
 				if json.Unmarshal(evt.Message, &msg) == nil && msg.Usage != nil {
-					span.Metadata["gen_ai.usage.input_tokens"] = msg.Usage.InputTokens
-					span.Metadata["gen_ai.usage.output_tokens"] = msg.Usage.OutputTokens
-					if msg.Usage.CacheReadInputTokens > 0 {
-						span.Metadata["gen_ai.usage.cache_read_tokens"] = msg.Usage.CacheReadInputTokens
+					span.Metadata["gen_ai.usage.input_tokens"] = msg.Usage.Input
+					span.Metadata["gen_ai.usage.output_tokens"] = msg.Usage.Output
+					span.Metadata["gen_ai.usage.total_tokens"] = msg.Usage.TotalTokens
+					if msg.Usage.CacheRead > 0 {
+						span.Metadata["gen_ai.usage.cache_read_tokens"] = msg.Usage.CacheRead
 					}
 					// Context utilization
-					if msg.Usage.InputTokens > 0 {
+					if msg.Usage.Input > 0 {
 						windowSize := modelContextWindows[currentModel]
 						if windowSize == 0 {
 							windowSize = 32768
 						}
 						span.Metadata["gen_ai.context.window_size"] = windowSize
-						span.Metadata["gen_ai.context.utilization_pct"] = int(float64(msg.Usage.InputTokens) / float64(windowSize) * 100)
+						span.Metadata["gen_ai.context.utilization_pct"] = int(float64(msg.Usage.Input) / float64(windowSize) * 100)
 					}
 				}
 			}

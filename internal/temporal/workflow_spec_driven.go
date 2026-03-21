@@ -64,6 +64,8 @@ type PlanRunInput struct {
 	SpecContent  string
 	RepoPath     string
 	Model        string
+	ParentSpanID string
+	TraceID      string
 }
 
 // PlanRunOutput contains the result of the planning stage.
@@ -82,6 +84,8 @@ type VerifyRunInput struct {
 	PodIP        string
 	ChangeName   string
 	RepoPath     string
+	ParentSpanID string
+	TraceID      string
 }
 
 // VerifyRunOutput contains the result of the verification stage.
@@ -341,6 +345,8 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		SpecContent:  input.SpecContent,
 		Model:        planCfg.Model,
 		RepoPath:     "/workspace",
+		ParentSpanID: planSpanID,
+		TraceID:      traceID,
 	}
 
 	var planOutput PlanRunOutput
@@ -527,6 +533,8 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			PodIP:        podIP,
 			ChangeName:   changeName,
 			RepoPath:     "/workspace",
+			ParentSpanID: verifySpanID,
+			TraceID:      traceID,
 		}
 
 		var verifyOutput VerifyRunOutput
