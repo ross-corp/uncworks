@@ -69,6 +69,16 @@ spec:
                 displayName:
                   type: string
                   maxLength: 63
+                project:
+                  type: string
+                  maxLength: 63
+                feature:
+                  type: string
+                  maxLength: 63
+                tags:
+                  type: array
+                  items:
+                    type: string
                 devboxConfig:
                   type: string
                   maxLength: 512

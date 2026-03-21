@@ -486,6 +486,30 @@ func repoNameFromURL(repoURL string) string {
 	return strings.TrimSuffix(base, ".git")
 }
 
+// crdFieldOrLabel returns the spec field value if non-empty, otherwise falls back to the label.
+func crdFieldOrLabel(crd *aotv1alpha1.AgentRun, field, labelKey string) string {
+	if field != "" {
+		return field
+	}
+	if crd.Labels != nil {
+		return crd.Labels[labelKey]
+	}
+	return ""
+}
+
+// crdTagsOrLabel returns spec tags if non-empty, otherwise parses the comma-separated label.
+func crdTagsOrLabel(crd *aotv1alpha1.AgentRun) []string {
+	if len(crd.Spec.Tags) > 0 {
+		return crd.Spec.Tags
+	}
+	if crd.Labels != nil {
+		if v := crd.Labels["aot.uncworks.io/tags"]; v != "" {
+			return strings.Split(v, ",")
+		}
+	}
+	return nil
+}
+
 // isTerminalPhase returns true for phases that indicate a completed run.
 func isTerminalPhase(phase apiv1.AgentRunPhase) bool {
 	switch phase {
@@ -775,9 +799,9 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		AutoPush:          crd.Spec.AutoPush,
 		AutoPr:            crd.Spec.AutoPR,
 		PrBaseBranch:      crd.Spec.PRBaseBranch,
-		Project:           crd.Spec.Project,
-		Feature:           crd.Spec.Feature,
-		Tags:              crd.Spec.Tags,
+		Project:           crdFieldOrLabel(crd, crd.Spec.Project, "aot.uncworks.io/project"),
+		Feature:           crdFieldOrLabel(crd, crd.Spec.Feature, "aot.uncworks.io/feature"),
+		Tags:              crdTagsOrLabel(crd),
 	}
 	if crd.Spec.PipelineConfig != nil {
 		protoSpec.PipelineConfig = &apiv1.PipelineConfig{
