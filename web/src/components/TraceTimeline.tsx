@@ -993,10 +993,13 @@ export default function TraceTimeline({
                   const proportionalPct = traceDurationMs > 0
                     ? (durationMs / traceDurationMs) * 100
                     : 100;
-                  const barWidthPct = Math.max(
-                    isStageSpan ? 0.5 : 1.5, // minimum visible width
-                    Math.min(proportionalPct, 100 - barLeftPct)
-                  );
+                  const isInstant = durationMs <= 1; // 0ms or 1ms = thin vertical line
+                  const barWidthPct = isInstant
+                    ? 0.15
+                    : Math.max(
+                        isStageSpan ? 0.5 : 1.5,
+                        Math.min(proportionalPct, 100 - barLeftPct)
+                      );
 
                   // Operation-based coloring (error overrides)
                   const barClass = isFailed
@@ -1184,7 +1187,8 @@ export default function TraceTimeline({
                             <>
                               <div
                                 className={cn(
-                                  "absolute rounded-sm transition-all h-5",
+                                  "absolute transition-all",
+                                  isInstant ? "h-5 w-px rounded-none" : "h-5 rounded-sm",
                                   barClass,
                                   isActive && "animate-pulse"
                                 )}
@@ -1202,27 +1206,35 @@ export default function TraceTimeline({
                                   left: `calc(${Math.min(barLeftPct + barWidthPct, 100)}% + 4px)`,
                                 }}
                               >
-                                {formatDuration(durationMs)}
-                                {/* Inline token count for thought spans */}
-                                {span.type === "llm" && (span.metadata?.["gen_ai.usage.input_tokens"] as number) > 0 && (
-                                  <span className="ml-2 text-blue-400/60">
-                                    {Math.round((span.metadata?.["gen_ai.usage.input_tokens"] as number) / 1000)}k tok
-                                  </span>
-                                )}
-                                {/* Inline context utilization */}
-                                {span.type === "llm" && (span.metadata?.["gen_ai.context.utilization_pct"] as number) > 0 && (
-                                  <span className="ml-1 text-muted-foreground/50">
-                                    {String(span.metadata?.["gen_ai.context.utilization_pct"])}% ctx
-                                  </span>
-                                )}
-                                {/* Inline cost per thought span */}
+                                <span className="text-foreground/70">{formatDuration(durationMs)}</span>
+                                {/* Inline metrics for thought spans — dot-separated, semantic colors */}
                                 {span.type === "llm" && (span.metadata?.["gen_ai.usage.input_tokens"] as number) > 0 && (() => {
                                   const inTok = (span.metadata?.["gen_ai.usage.input_tokens"] as number) || 0;
                                   const outTok = (span.metadata?.["gen_ai.usage.output_tokens"] as number) || 0;
+                                  const ctxPct = (span.metadata?.["gen_ai.context.utilization_pct"] as number) || 0;
                                   const cost = (inTok * 0.15 + outTok * 0.75) / 1_000_000;
-                                  return cost > 0.0001 ? (
-                                    <span className="ml-1 text-amber-400/60">{formatCost(cost)}</span>
-                                  ) : null;
+                                  return (
+                                    <>
+                                      <span className="text-border mx-1">·</span>
+                                      <span className="text-blue-400/70">{Math.round(inTok / 1000)}k in</span>
+                                      <span className="text-border mx-0.5">·</span>
+                                      <span className="text-violet-400/70">{outTok} out</span>
+                                      {ctxPct > 0 && (
+                                        <>
+                                          <span className="text-border mx-0.5">·</span>
+                                          <span className={cn(
+                                            ctxPct > 80 ? "text-red-400/70" : ctxPct > 50 ? "text-amber-400/70" : "text-emerald-400/70"
+                                          )}>{ctxPct}% ctx</span>
+                                        </>
+                                      )}
+                                      {cost > 0.0001 && (
+                                        <>
+                                          <span className="text-border mx-0.5">·</span>
+                                          <span className="text-amber-400/70">{formatCost(cost)}</span>
+                                        </>
+                                      )}
+                                    </>
+                                  );
                                 })()}
                               </span>
                             </>
