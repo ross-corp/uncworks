@@ -79,12 +79,23 @@ function computeStageAggregates(
   stageSpan: TraceSpan,
   allSpans: TraceSpan[]
 ): StageAggregates {
-  const children = allSpans.filter((s) => s.parentId === stageSpan.id);
+  // Collect ALL descendants, not just direct children
+  const descendants: TraceSpan[] = [];
+  const queue = [stageSpan.id];
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    for (const s of allSpans) {
+      if (s.parentId === parentId) {
+        descendants.push(s);
+        queue.push(s.id);
+      }
+    }
+  }
   let inputTokens = 0;
   let outputTokens = 0;
   let toolCount = 0;
   let toolErrors = 0;
-  for (const child of children) {
+  for (const child of descendants) {
     inputTokens +=
       (child.metadata?.["gen_ai.usage.input_tokens"] as number) || 0;
     outputTokens +=
@@ -111,7 +122,7 @@ function computeStageAggregates(
     outputTokens,
     toolCount,
     toolErrors,
-    childCount: children.length,
+    childCount: descendants.length,
     estimatedCostUsd,
   };
 }
@@ -612,7 +623,7 @@ function SpanDetail({
         {meta &&
           Object.keys(meta).filter(
             (k) =>
-              !["error", "toolInput", "thinking", "checkpointSha", "stage", "attempt"].includes(k)
+              !["error", "toolInput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result"].includes(k)
           ).length > 0 && (
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group">
@@ -625,7 +636,7 @@ function SpanDetail({
                     Object.fromEntries(
                       Object.entries(meta).filter(
                         ([k]) =>
-                          !["error", "toolInput", "thinking", "checkpointSha", "stage", "attempt"].includes(k)
+                          !["error", "toolInput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result"].includes(k)
                       )
                     ),
                     null,
@@ -671,7 +682,7 @@ const SPAN_ROW_HEIGHT = 32;
 const STAGE_ROW_HEIGHT = 36;
 const OVERSCAN = 8;
 const INDENT_PX = 20;
-const LABEL_WIDTH = 240;
+const LABEL_WIDTH = 280;
 const MIN_BAR_WIDTH_PX = 4;
 const DEFAULT_DETAIL_WIDTH = 400;
 const MIN_DETAIL_WIDTH = 280;
@@ -1014,7 +1025,7 @@ export default function TraceTimeline({
                         className={cn(
                           "flex items-center w-full text-left transition-colors group",
                           isSelected
-                            ? "bg-accent/10 ring-1 ring-inset ring-accent/20"
+                            ? "bg-accent/20 border-l-2 border-l-primary"
                             : "hover:bg-muted/40",
                           isStageSpan && "bg-muted/10 border-b border-border/50"
                         )}
@@ -1159,6 +1170,18 @@ export default function TraceTimeline({
                                 }}
                               >
                                 {formatDuration(durationMs)}
+                                {/* Inline token count for thought spans */}
+                                {span.type === "llm" && (span.metadata?.["gen_ai.usage.input_tokens"] as number) > 0 && (
+                                  <span className="ml-2 text-blue-400/60">
+                                    {Math.round((span.metadata?.["gen_ai.usage.input_tokens"] as number) / 1000)}k tok
+                                  </span>
+                                )}
+                                {/* Inline context utilization */}
+                                {span.type === "llm" && (span.metadata?.["gen_ai.context.utilization_pct"] as number) > 0 && (
+                                  <span className="ml-1 text-muted-foreground/50">
+                                    {String(span.metadata?.["gen_ai.context.utilization_pct"])}% ctx
+                                  </span>
+                                )}
                               </span>
                             </>
                           )}
