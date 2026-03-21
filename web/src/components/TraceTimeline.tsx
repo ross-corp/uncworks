@@ -971,7 +971,7 @@ export default function TraceTimeline({
               {rowPositions
                 .slice(visibleRange.startIdx, visibleRange.endIdx)
                 .map((pos) => {
-                  const { span, depth, durationMs, hasChildren, parentDurationMs, offsetInParentMs } =
+                  const { span, depth, durationMs, offsetMs, hasChildren } =
                     flat[pos.flatIndex];
                   const isStageSpan = span.type === "stage";
                   const isActive = !span.endTime;
@@ -985,13 +985,18 @@ export default function TraceTimeline({
                   const isCollapsed = collapsedSpanIds.has(span.id);
                   const isComplete = !!span.endTime && !isFailed;
 
-                  // Parent-relative bar positioning
-                  const barLeftPct = parentDurationMs > 0
-                    ? (offsetInParentMs / parentDurationMs) * 100
+                  // Global timeline positioning — all bars on the same time axis
+                  const barLeftPct = traceDurationMs > 0
+                    ? (offsetMs / traceDurationMs) * 100
                     : 0;
-                  const barWidthPct = parentDurationMs > 0
-                    ? Math.max(3, (durationMs / parentDurationMs) * 100)
+                  // Width relative to parent for visibility, but clamped to trace bounds
+                  const proportionalPct = traceDurationMs > 0
+                    ? (durationMs / traceDurationMs) * 100
                     : 100;
+                  const barWidthPct = Math.max(
+                    isStageSpan ? 0.5 : 1.5, // minimum visible width
+                    Math.min(proportionalPct, 100 - barLeftPct)
+                  );
 
                   // Operation-based coloring (error overrides)
                   const barClass = isFailed
