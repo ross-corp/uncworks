@@ -7,7 +7,7 @@ import {
   CollapsibleTrigger,
 } from "./ui/collapsible";
 import { cn } from "../lib/utils";
-import { ROLE_STYLES, roleFromSpanName } from "../lib/role-styles";
+import { ROLE_STYLES, roleFromSpanName, displaySpanName } from "../lib/role-styles";
 import type { RoleName } from "../lib/role-styles";
 import {
   ChevronRightIcon,
@@ -256,7 +256,7 @@ function SpanDetail({
                 isFailed ? FAILED_STYLES.text : roleStyle.text
               )}
             >
-              {span.name}
+              {displaySpanName(span.name)}
             </h3>
           </div>
           <div className="text-xs text-muted-foreground font-mono mt-0.5">
@@ -801,7 +801,7 @@ export default function TraceTimeline({
                               textClass
                             )}
                           >
-                            {span.name}
+                            {displaySpanName(span.name)}
                           </span>
 
                           {/* Diff indicator */}

@@ -894,6 +894,16 @@ type piAssistantEvent struct {
 	Delta   string          `json:"delta,omitempty"`
 	Content string          `json:"content,omitempty"`
 	Tool    json.RawMessage `json:"tool,omitempty"`
+	// Partial is present in toolcall_start events — contains content blocks with tool info.
+	Partial json.RawMessage `json:"partial,omitempty"`
+}
+
+// piToolCallBlock is a content block of type "toolCall" within a toolcall_start partial.
+type piToolCallBlock struct {
+	Type      string                 `json:"type"`
+	Name      string                 `json:"name,omitempty"`
+	ID        string                 `json:"id,omitempty"`
+	Arguments map[string]interface{} `json:"arguments,omitempty"`
 }
 
 // piToolInfo represents tool call information from pi events.
@@ -1253,23 +1263,17 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 		case "text_delta", "text_end":
 			closeThinkingSpan()
 
-		case "tool_use":
+		case "tool_use", "toolcall_start", "toolcall_end":
 			closeThinkingSpan()
-			// Capture tool name for the upcoming tool_execution_start
-			var tool piToolInfo
-			if json.Unmarshal(ame.Tool, &tool) == nil && tool.Name != "" {
+			// Extract tool name + input from the event.
+			toolName, toolInputJSON := extractToolFromEvent(&ame)
+			if toolName != "" {
 				activeToolSpanMu.Lock()
-				activeToolSpanName = tool.Name
-				// Capture tool input summary for span metadata
-				if tool.Input != nil {
-					inputJSON, _ := json.Marshal(tool.Input)
-					if len(inputJSON) > 200 {
-						activeToolInputSummary = string(inputJSON[:200]) + "..."
-					} else {
-						activeToolInputSummary = string(inputJSON)
-					}
+				activeToolSpanName = toolName
+				if len(toolInputJSON) > 200 {
+					activeToolInputSummary = toolInputJSON[:200] + "..."
 				} else {
-					activeToolInputSummary = ""
+					activeToolInputSummary = toolInputJSON
 				}
 				activeToolSpanMu.Unlock()
 			}
@@ -1298,6 +1302,45 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 		}
 		activeLLMSpanMu.Unlock()
 	}
+}
+
+// extractToolFromEvent extracts the tool name and input JSON from an assistantMessageEvent.
+// Handles both pi's "toolcall_start" format (partial.content[].type=="toolCall")
+// and legacy "tool_use" format (ame.Tool).
+func extractToolFromEvent(ame *piAssistantEvent) (name string, inputJSON string) {
+	// Try pi's toolcall_start format: partial.content[] has toolCall blocks
+	if len(ame.Partial) > 0 {
+		var partial struct {
+			Content []piToolCallBlock `json:"content"`
+		}
+		if json.Unmarshal(ame.Partial, &partial) == nil {
+			for _, block := range partial.Content {
+				if block.Type == "toolCall" && block.Name != "" {
+					name = block.Name
+					if block.Arguments != nil {
+						b, _ := json.Marshal(block.Arguments)
+						inputJSON = string(b)
+					}
+					return
+				}
+			}
+		}
+	}
+
+	// Try legacy format: ame.Tool
+	if len(ame.Tool) > 0 {
+		var tool piToolInfo
+		if json.Unmarshal(ame.Tool, &tool) == nil && tool.Name != "" {
+			name = tool.Name
+			if tool.Input != nil {
+				b, _ := json.Marshal(tool.Input)
+				inputJSON = string(b)
+			}
+			return
+		}
+	}
+
+	return "", ""
 }
 
 // closeThinkingSpan closes an active thinking span if one is open.

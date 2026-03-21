@@ -59,3 +59,11 @@ export function roleFromSpanName(name: string): RoleName {
   if (prefix in ROLE_ALIASES) return ROLE_ALIASES[prefix];
   return "system";
 }
+
+/** Remap legacy span names for display: unc.tool → manage.tool, neph.thought → implement.thought */
+export function displaySpanName(name: string): string {
+  return name
+    .replace(/^unc\./, "manage.")
+    .replace(/^neph\./, "implement.")
+    .replace(/^impl\./, "implement.");
+}
