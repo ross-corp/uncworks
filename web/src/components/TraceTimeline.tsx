@@ -11,6 +11,7 @@ import { ROLE_STYLES, roleFromSpanName, displaySpanName } from "../lib/role-styl
 import type { RoleName } from "../lib/role-styles";
 import {
   ChevronRightIcon,
+  ChevronDownIcon,
   FileIcon,
   XIcon,
 } from "lucide-react";
@@ -44,6 +45,70 @@ function roleBarStyles(role: RoleName) {
     barActive: cn(s.bg, "border-l-2", s.border),
     text: s.text,
     dot: s.dot,
+  };
+}
+
+// -- Stage span bar styles (bold, taller, system/amber color) -
+
+function stageBarStyles() {
+  const s = ROLE_STYLES["system"];
+  return {
+    bar: cn(s.bg, "border-l-2", s.border),
+    barActive: cn(s.bg, "border-l-2", s.border),
+    text: s.text,
+    dot: s.dot,
+  };
+}
+
+// -- Stage span aggregation (client-side, tasks 7.4/7.5) -----
+
+interface StageAggregates {
+  inputTokens: number;
+  outputTokens: number;
+  toolCount: number;
+  toolErrors: number;
+  childCount: number;
+  estimatedCostUsd: number;
+}
+
+function computeStageAggregates(
+  stageSpan: TraceSpan,
+  allSpans: TraceSpan[]
+): StageAggregates {
+  const children = allSpans.filter((s) => s.parentId === stageSpan.id);
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let toolCount = 0;
+  let toolErrors = 0;
+  for (const child of children) {
+    inputTokens +=
+      (child.metadata?.["gen_ai.usage.input_tokens"] as number) || 0;
+    outputTokens +=
+      (child.metadata?.["gen_ai.usage.output_tokens"] as number) || 0;
+    if (child.type === "tool") toolCount++;
+    if (child.metadata?.error) toolErrors++;
+  }
+  // Simple cost estimate: $0.15/M input + $0.75/M output (default pricing)
+  const model =
+    (stageSpan.metadata?.["gen_ai.request.model"] as string) || "";
+  const pricing: Record<string, { input: number; output: number }> = {
+    "deepseek-v3.1": { input: 0.15, output: 0.75 },
+    "deepseek-v3.2": { input: 0.26, output: 0.38 },
+    "qwen3-coder": { input: 0.22, output: 1.0 },
+    "qwen3:8b": { input: 0.0, output: 0.0 },
+    "mistral-medium": { input: 0.4, output: 2.0 },
+  };
+  const p = pricing[model] ?? { input: 0.15, output: 0.75 };
+  const estimatedCostUsd =
+    (inputTokens * p.input + outputTokens * p.output) / 1_000_000;
+
+  return {
+    inputTokens,
+    outputTokens,
+    toolCount,
+    toolErrors,
+    childCount: children.length,
+    estimatedCostUsd,
   };
 }
 
@@ -83,15 +148,25 @@ interface FlatSpan {
   depth: number;
   durationMs: number;
   offsetMs: number;
+  hasChildren?: boolean;
 }
 
-function buildFlatTree(spans: TraceSpan[]): {
+function buildFlatTree(
+  spans: TraceSpan[],
+  collapsedSpanIds: Set<string> = new Set()
+): {
   flat: FlatSpan[];
   traceStartMs: number;
   traceDurationMs: number;
+  childrenOf: Map<string, TraceSpan[]>;
 } {
   if (spans.length === 0) {
-    return { flat: [], traceStartMs: 0, traceDurationMs: 0 };
+    return {
+      flat: [],
+      traceStartMs: 0,
+      traceDurationMs: 0,
+      childrenOf: new Map(),
+    };
   }
 
   const byId = new Map<string, TraceSpan>();
@@ -131,12 +206,16 @@ function buildFlatTree(spans: TraceSpan[]): {
   function walk(node: TraceSpan, depth: number) {
     const startMs = new Date(node.startTime).getTime();
     const durationMs = getDurationMs(node.startTime, node.endTime);
+    const hasChildren = (childrenOf.get(node.id) ?? []).length > 0;
     flat.push({
       span: node,
       depth,
       durationMs,
       offsetMs: startMs - traceStartMs,
+      hasChildren,
     });
+    // Skip children if this span is collapsed
+    if (collapsedSpanIds.has(node.id)) return;
     const children = childrenOf.get(node.id) ?? [];
     children.sort(
       (a, b) =>
@@ -150,7 +229,7 @@ function buildFlatTree(spans: TraceSpan[]): {
     walk(root, 0);
   }
 
-  return { flat, traceStartMs, traceDurationMs };
+  return { flat, traceStartMs, traceDurationMs, childrenOf };
 }
 
 // -- Diff viewer --------------------------------------------
@@ -196,10 +275,12 @@ function DiffViewer({ files }: { files: FileDiff[] }) {
 
 function SpanDetail({
   span,
+  allSpans,
   runId,
   onClose,
 }: {
   span: TraceSpan;
+  allSpans: TraceSpan[];
   runId?: string;
   onClose: () => void;
 }) {
@@ -227,9 +308,10 @@ function SpanDetail({
   }, [span.id, span.hasDiff, runId]);
 
   const durationMs = getDurationMs(span.startTime, span.endTime);
-  const isFailed = span.metadata?.error !== undefined;
+  const isFailed = span.metadata?.error !== undefined || span.status === "error";
+  const isStage = span.type === "stage";
   const role = roleFromSpanName(span.name);
-  const roleStyle = ROLE_STYLES[role];
+  const roleStyle = ROLE_STYLES[isStage ? "system" : role];
 
   const meta = span.metadata ?? {};
   const toolInput = meta.toolInput as string | undefined;
@@ -237,6 +319,57 @@ function SpanDetail({
     span.type === "thought" ? (meta.thinking as string | undefined) : undefined;
   const checkpointSha = meta.checkpointSha as string | undefined;
   const stage = meta.stage as string | undefined;
+
+  // Compute stage aggregates for stage/pipeline spans (tasks 7.4, 7.5)
+  const stageAgg = useMemo(() => {
+    if (!isStage) return null;
+    return computeStageAggregates(span, allSpans);
+  }, [isStage, span, allSpans]);
+
+  // For root pipeline spans, aggregate across all child stages recursively
+  const pipelineAgg = useMemo(() => {
+    if (!isStage) return null;
+    const isRoot = !span.parentId;
+    if (!isRoot) return null;
+    // Aggregate all descendant spans (not just direct children)
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let toolCount = 0;
+    let toolErrors = 0;
+    let childCount = 0;
+    for (const s of allSpans) {
+      if (s.id === span.id) continue;
+      inputTokens +=
+        (s.metadata?.["gen_ai.usage.input_tokens"] as number) || 0;
+      outputTokens +=
+        (s.metadata?.["gen_ai.usage.output_tokens"] as number) || 0;
+      if (s.type === "tool") toolCount++;
+      if (s.metadata?.error) toolErrors++;
+      childCount++;
+    }
+    const model =
+      (span.metadata?.["gen_ai.request.model"] as string) || "";
+    const pricing: Record<string, { input: number; output: number }> = {
+      "deepseek-v3.1": { input: 0.15, output: 0.75 },
+      "deepseek-v3.2": { input: 0.26, output: 0.38 },
+      "qwen3-coder": { input: 0.22, output: 1.0 },
+      "qwen3:8b": { input: 0.0, output: 0.0 },
+      "mistral-medium": { input: 0.4, output: 2.0 },
+    };
+    const p = pricing[model] ?? { input: 0.15, output: 0.75 };
+    const estimatedCostUsd =
+      (inputTokens * p.input + outputTokens * p.output) / 1_000_000;
+    return {
+      inputTokens,
+      outputTokens,
+      toolCount,
+      toolErrors,
+      childCount,
+      estimatedCostUsd,
+    };
+  }, [isStage, span, allSpans]);
+
+  const agg = pipelineAgg ?? stageAgg;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -252,12 +385,34 @@ function SpanDetail({
             />
             <h3
               className={cn(
-                "text-sm font-mono font-medium truncate",
+                "text-sm font-mono truncate",
+                isStage ? "font-bold" : "font-medium",
                 isFailed ? FAILED_STYLES.text : roleStyle.text
               )}
             >
               {displaySpanName(span.name)}
+              {isStage && meta.attempt != null && (
+                <span className="ml-1 text-muted-foreground font-normal">
+                  {"(attempt " + String(meta.attempt) + ")"}
+                </span>
+              )}
             </h3>
+            {/* Status badge for stage spans */}
+            {isStage && span.status && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[9px] px-1.5 py-0",
+                  span.status === "ok"
+                    ? "border-emerald-500/40 text-emerald-400"
+                    : span.status === "error"
+                      ? "border-red-500/40 text-red-400"
+                      : "border-muted-foreground/40 text-muted-foreground"
+                )}
+              >
+                {span.status === "ok" ? "PASSED" : span.status === "error" ? "FAILED" : span.status.toUpperCase()}
+              </Badge>
+            )}
           </div>
           <div className="text-xs text-muted-foreground font-mono mt-0.5">
             {formatDuration(durationMs)}
@@ -275,7 +430,7 @@ function SpanDetail({
       <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3 space-y-4 text-xs">
         {/* Metadata grid */}
         <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-          {role && (
+          {!isStage && role && (
             <>
               <div className="text-muted-foreground">Role</div>
               <div className={cn("font-medium capitalize", roleStyle.text)}>
@@ -294,6 +449,25 @@ function SpanDetail({
           <div className="text-muted-foreground">Type</div>
           <div className="font-medium text-foreground uppercase">
             {span.type}
+          </div>
+
+          {isStage && meta.attempt != null && (
+            <>
+              <div className="text-muted-foreground">Attempt</div>
+              <div className="font-mono text-foreground">
+                {String(meta.attempt)}
+              </div>
+            </>
+          )}
+
+          <div className="text-muted-foreground">Status</div>
+          <div className={cn(
+            "font-medium uppercase",
+            isFailed ? "text-red-400"
+              : span.status === "ok" ? "text-emerald-400"
+              : "text-foreground"
+          )}>
+            {span.status ?? (isFailed ? "error" : span.endTime ? "ok" : "running")}
           </div>
 
           <div className="text-muted-foreground">Start</div>
@@ -320,7 +494,7 @@ function SpanDetail({
             </>
           )}
 
-          {isFailed && (
+          {isFailed && meta.error != null && (
             <>
               <div className="text-red-400">Error</div>
               <div className="text-red-400 font-mono break-all">
@@ -329,6 +503,80 @@ function SpanDetail({
             </>
           )}
         </div>
+
+        {/* Stage aggregate stats (tasks 7.4/7.5) */}
+        {agg && (agg.inputTokens > 0 || agg.toolCount > 0) && (
+          <div className="space-y-2">
+            {/* Tokens */}
+            {(agg.inputTokens > 0 || agg.outputTokens > 0) && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-foreground">
+                  Tokens
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 pl-2">
+                  <div className="text-muted-foreground">Input</div>
+                  <div className="font-mono text-foreground">
+                    {agg.inputTokens.toLocaleString()}
+                  </div>
+                  <div className="text-muted-foreground">Output</div>
+                  <div className="font-mono text-foreground">
+                    {agg.outputTokens.toLocaleString()}
+                  </div>
+                  <div className="text-muted-foreground">Total</div>
+                  <div className="font-mono text-foreground">
+                    {(agg.inputTokens + agg.outputTokens).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Cost */}
+            {agg.estimatedCostUsd > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-foreground">
+                  Estimated Cost
+                </div>
+                <div className="font-mono text-foreground pl-2">
+                  ${agg.estimatedCostUsd.toFixed(4)} USD
+                </div>
+              </div>
+            )}
+
+            {/* Tools */}
+            {agg.toolCount > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-foreground">
+                  Tools
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 pl-2">
+                  <div className="text-muted-foreground">Total</div>
+                  <div className="font-mono text-foreground">
+                    {agg.toolCount}
+                  </div>
+                  <div className="text-muted-foreground">Errors</div>
+                  <div
+                    className={cn(
+                      "font-mono",
+                      agg.toolErrors > 0
+                        ? "text-red-400"
+                        : "text-foreground"
+                    )}
+                  >
+                    {agg.toolErrors}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Child count */}
+            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+              <div className="text-muted-foreground">Child spans</div>
+              <div className="font-mono text-foreground">
+                {agg.childCount}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tool input */}
         {toolInput && (
@@ -356,7 +604,7 @@ function SpanDetail({
         {meta &&
           Object.keys(meta).filter(
             (k) =>
-              !["error", "toolInput", "thinking", "checkpointSha", "stage"].includes(k)
+              !["error", "toolInput", "thinking", "checkpointSha", "stage", "attempt"].includes(k)
           ).length > 0 && (
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group">
@@ -369,7 +617,7 @@ function SpanDetail({
                     Object.fromEntries(
                       Object.entries(meta).filter(
                         ([k]) =>
-                          !["error", "toolInput", "thinking", "checkpointSha", "stage"].includes(k)
+                          !["error", "toolInput", "thinking", "checkpointSha", "stage", "attempt"].includes(k)
                       )
                     ),
                     null,
@@ -412,6 +660,7 @@ function SpanDetail({
 // -- Constants for virtualization ---------------------------
 
 const SPAN_ROW_HEIGHT = 32;
+const STAGE_ROW_HEIGHT = 36;
 const OVERSCAN = 8;
 const INDENT_PX = 20;
 const LABEL_WIDTH = 240;
@@ -444,15 +693,31 @@ export default function TraceTimeline({
   const [userScrolled, setUserScrolled] = useState(false);
   const [detailWidth, setDetailWidth] = useState(DEFAULT_DETAIL_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
+  const [collapsedSpanIds, setCollapsedSpanIds] = useState<Set<string>>(
+    new Set()
+  );
   const prevSpanCount = useRef(spans.length);
 
   // Use controlled selectedSpanId if provided, otherwise use internal
   const selectedSpanId = controlledSelectedSpanId ?? internalSelectedSpanId;
 
-  // Build tree structure
+  // Toggle collapse for stage spans
+  const toggleCollapse = useCallback((spanId: string) => {
+    setCollapsedSpanIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(spanId)) {
+        next.delete(spanId);
+      } else {
+        next.add(spanId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Build tree structure (collapse-aware)
   const { flat, traceDurationMs } = useMemo(
-    () => buildFlatTree(spans),
-    [spans]
+    () => buildFlatTree(spans, collapsedSpanIds),
+    [spans, collapsedSpanIds]
   );
 
   // Find the selected span object
@@ -537,20 +802,24 @@ export default function TraceTimeline({
     [detailWidth]
   );
 
-  // Compute positions for each row
+  // Compute positions for each row (stage spans are slightly taller)
   const rowPositions = useMemo(() => {
     const positions: { top: number; height: number; flatIndex: number }[] = [];
     let y = 0;
     for (let i = 0; i < flat.length; i++) {
-      positions.push({ top: y, height: SPAN_ROW_HEIGHT, flatIndex: i });
-      y += SPAN_ROW_HEIGHT;
+      const h =
+        flat[i].span.type === "stage" ? STAGE_ROW_HEIGHT : SPAN_ROW_HEIGHT;
+      positions.push({ top: y, height: h, flatIndex: i });
+      y += h;
     }
     return positions;
   }, [flat]);
 
   const totalHeight = useMemo(() => {
-    return flat.length * SPAN_ROW_HEIGHT;
-  }, [flat.length]);
+    if (rowPositions.length === 0) return 0;
+    const last = rowPositions[rowPositions.length - 1];
+    return last.top + last.height;
+  }, [rowPositions]);
 
   // Determine visible rows
   const visibleRange = useMemo(() => {
@@ -686,37 +955,22 @@ export default function TraceTimeline({
               {rowPositions
                 .slice(visibleRange.startIdx, visibleRange.endIdx)
                 .map((pos) => {
-                  const { span, depth, durationMs, offsetMs } =
+                  const { span, depth, durationMs, offsetMs, hasChildren } =
                     flat[pos.flatIndex];
+                  const isStageSpan = span.type === "stage";
                   const role = roleFromSpanName(span.name);
-                  const rStyle = roleBarStyles(role);
+                  const rStyle = isStageSpan
+                    ? stageBarStyles()
+                    : roleBarStyles(role);
                   const isActive = !span.endTime;
                   const isSelected = span.id === selectedSpanId;
                   const isFailed =
                     span.metadata?.error !== undefined ||
+                    span.status === "error" ||
                     (span.type === "tool" &&
                       span.metadata?.exitCode !== 0 &&
                       span.metadata?.exitCode !== undefined);
-
-                  // Stage separator: check previous span's stage
-                  const currentStage = span.metadata?.stage as
-                    | string
-                    | undefined;
-                  let showStageSeparator = false;
-                  if (currentStage && pos.flatIndex > 0) {
-                    const prevSpan = flat[pos.flatIndex - 1].span;
-                    const prevStage = prevSpan.metadata?.stage as
-                      | string
-                      | undefined;
-                    if (prevStage !== currentStage) {
-                      showStageSeparator = true;
-                    }
-                  } else if (
-                    currentStage &&
-                    pos.flatIndex === 0
-                  ) {
-                    showStageSeparator = true;
-                  }
+                  const isCollapsed = collapsedSpanIds.has(span.id);
 
                   // Bar positioning within the waterfall
                   const barLeftPct =
@@ -748,6 +1002,10 @@ export default function TraceTimeline({
                       ? SUCCESS_STYLES.text
                       : rStyle.text;
 
+                  const rowHeight = isStageSpan
+                    ? STAGE_ROW_HEIGHT
+                    : SPAN_ROW_HEIGHT;
+
                   return (
                     <div
                       key={span.id}
@@ -758,15 +1016,6 @@ export default function TraceTimeline({
                         right: 0,
                       }}
                     >
-                      {/* Stage separator */}
-                      {showStageSeparator && (
-                        <div className="flex items-center gap-2 px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground absolute -top-4 left-0 right-0 pointer-events-none">
-                          <div className="flex-1 border-t border-border" />
-                          <span>{currentStage}</span>
-                          <div className="flex-1 border-t border-border" />
-                        </div>
-                      )}
-
                       {/* Span row */}
                       <button
                         onClick={() => handleSelectSpan(span)}
@@ -774,9 +1023,10 @@ export default function TraceTimeline({
                           "flex items-center w-full text-left transition-colors group",
                           isSelected
                             ? "bg-accent/10 ring-1 ring-inset ring-accent/20"
-                            : "hover:bg-muted/40"
+                            : "hover:bg-muted/40",
+                          isStageSpan && "bg-muted/20"
                         )}
-                        style={{ height: SPAN_ROW_HEIGHT }}
+                        style={{ height: rowHeight }}
                       >
                         {/* Label column */}
                         <div
@@ -786,11 +1036,34 @@ export default function TraceTimeline({
                             paddingLeft: depth * INDENT_PX + 8,
                           }}
                         >
+                          {/* Collapse toggle for stage/parent spans */}
+                          {hasChildren ? (
+                            <span
+                              className="flex-shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCollapse(span.id);
+                              }}
+                            >
+                              {isCollapsed ? (
+                                <ChevronRightIcon className="h-3 w-3" />
+                              ) : (
+                                <ChevronDownIcon className="h-3 w-3" />
+                              )}
+                            </span>
+                          ) : (
+                            <span className="inline-block w-3 flex-shrink-0" />
+                          )}
+
                           {/* Role dot */}
                           <span
                             className={cn(
                               "inline-block h-2 w-2 rounded-sm flex-shrink-0",
-                              isFailed ? FAILED_STYLES.dot : isComplete ? SUCCESS_STYLES.dot : rStyle.dot
+                              isFailed
+                                ? FAILED_STYLES.dot
+                                : isComplete
+                                  ? SUCCESS_STYLES.dot
+                                  : rStyle.dot
                             )}
                           />
 
@@ -798,11 +1071,33 @@ export default function TraceTimeline({
                           <span
                             className={cn(
                               "text-[11px] font-mono truncate",
+                              isStageSpan ? "font-bold" : "",
                               textClass
                             )}
                           >
                             {displaySpanName(span.name)}
                           </span>
+
+                          {/* Stage status badge (Task 7.3) */}
+                          {isStageSpan && span.status && (
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[8px] px-1 py-0 ml-auto flex-shrink-0",
+                                span.status === "ok"
+                                  ? "border-emerald-500/40 text-emerald-400"
+                                  : span.status === "error"
+                                    ? "border-red-500/40 text-red-400"
+                                    : "border-muted-foreground/40 text-muted-foreground"
+                              )}
+                            >
+                              {span.status === "ok"
+                                ? "PASS"
+                                : span.status === "error"
+                                  ? "FAIL"
+                                  : span.status.toUpperCase()}
+                            </Badge>
+                          )}
 
                           {/* Diff indicator */}
                           {span.hasDiff && (
@@ -829,7 +1124,8 @@ export default function TraceTimeline({
                           {/* Duration bar */}
                           <div
                             className={cn(
-                              "absolute h-5 rounded-sm transition-all",
+                              "absolute rounded-sm transition-all",
+                              isStageSpan ? "h-6" : "h-5",
                               barClass,
                               isActive && "animate-pulse"
                             )}
@@ -890,6 +1186,7 @@ export default function TraceTimeline({
             >
               <SpanDetail
                 span={selectedSpan}
+                allSpans={spans}
                 runId={runId}
                 onClose={handleCloseDetail}
               />

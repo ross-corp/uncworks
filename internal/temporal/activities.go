@@ -128,13 +128,15 @@ type SidecarRPCInput struct {
 
 // StartAgentInput contains the parameters for starting the agent.
 type StartAgentInput struct {
-	PodName   string
-	Namespace string
-	PodIP     string
-	Prompt    string
-	RepoPath  string
-	Model     string // LiteLLM model name override (passed as PI_MODEL env var)
-	Stage     string // Pipeline stage: "plan", "execute", "verify", or "" for single
+	PodName      string
+	Namespace    string
+	PodIP        string
+	Prompt       string
+	RepoPath     string
+	Model        string // LiteLLM model name override (passed as PI_MODEL env var)
+	Stage        string // Pipeline stage: "plan", "execute", "verify", or "" for single
+	ParentSpanID string // Links to parent stage span in the trace hierarchy
+	TraceID      string // Shared trace identifier across all spans in a pipeline run
 }
 
 // StartAgent calls the sidecar StartAgent RPC, retrying until the sidecar is ready.
@@ -152,10 +154,12 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 		}
 
 		resp, err := sc.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
-			Prompt:   input.Prompt,
-			RepoPath: input.RepoPath,
-			Stage:    input.Stage,
-			EnvVars:  envVars,
+			Prompt:       input.Prompt,
+			RepoPath:     input.RepoPath,
+			Stage:        input.Stage,
+			EnvVars:      envVars,
+			ParentSpanId: input.ParentSpanID,
+			TraceId:      input.TraceID,
 		}))
 		if err == nil {
 			if !resp.Msg.Started {

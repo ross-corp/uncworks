@@ -227,6 +227,60 @@ func TestBoundary_PlanRunOutput_FieldContract(t *testing.T) {
 	assertEqual(t, "ValidationErrors[0]", output.ValidationErrors[0], "warning: unused import")
 }
 
+// TestBoundary_StartAgentInput_TraceFields verifies that StartAgentInput has
+// ParentSpanID and TraceID fields and they are non-empty when populated.
+func TestBoundary_StartAgentInput_TraceFields(t *testing.T) {
+	input := aottemporal.StartAgentInput{
+		PodName:      "run-42-pod-abc",
+		Namespace:    "aot",
+		PodIP:        "10.42.0.100",
+		Prompt:       "Fix the auth module",
+		RepoPath:     "/workspace",
+		Model:        "deepseek-v3.1",
+		Stage:        "execute",
+		ParentSpanID: "span-stage-execute-001",
+		TraceID:      "trace-pipeline-xyz",
+	}
+
+	if input.ParentSpanID == "" {
+		t.Error("ParentSpanID is empty when populated")
+	}
+	if input.TraceID == "" {
+		t.Error("TraceID is empty when populated")
+	}
+
+	assertEqual(t, "ParentSpanID", input.ParentSpanID, "span-stage-execute-001")
+	assertEqual(t, "TraceID", input.TraceID, "trace-pipeline-xyz")
+
+	// Verify all other required fields still compile and are accessible
+	assertEqual(t, "PodName", input.PodName, "run-42-pod-abc")
+	assertEqual(t, "Namespace", input.Namespace, "aot")
+	assertEqual(t, "PodIP", input.PodIP, "10.42.0.100")
+	assertEqual(t, "Stage", input.Stage, "execute")
+	assertEqual(t, "Model", input.Model, "deepseek-v3.1")
+}
+
+// TestBoundary_StartAgentInput_TraceFieldsOptional verifies that ParentSpanID
+// and TraceID can be left empty (they are optional for single-stage runs).
+func TestBoundary_StartAgentInput_TraceFieldsOptional(t *testing.T) {
+	input := aottemporal.StartAgentInput{
+		PodName:   "run-99-pod",
+		Namespace: "aot",
+		PodIP:     "10.42.0.50",
+		Prompt:    "Do something",
+		RepoPath:  "/workspace",
+		Model:     "deepseek-v3.1",
+	}
+
+	// For single-stage runs, trace fields should be empty
+	if input.ParentSpanID != "" {
+		t.Errorf("ParentSpanID should be empty for single-stage, got %q", input.ParentSpanID)
+	}
+	if input.TraceID != "" {
+		t.Errorf("TraceID should be empty for single-stage, got %q", input.TraceID)
+	}
+}
+
 // TestBoundary_VerifyRunOutput_FieldContract verifies VerifyRunOutput wraps
 // VerificationResult correctly.
 func TestBoundary_VerifyRunOutput_FieldContract(t *testing.T) {

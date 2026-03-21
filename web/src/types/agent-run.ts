@@ -148,11 +148,13 @@ export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: stri
 /** A single trace span from an agent run. */
 export interface TraceSpan {
   id: string;
+  traceId?: string;
   parentId?: string;
   name: string;
-  type: "llm" | "tool" | "thought" | "input" | "delegate" | "lifecycle";
+  type: "llm" | "tool" | "thought" | "input" | "delegate" | "lifecycle" | "stage";
   startTime: string;
   endTime: string;
+  status?: "ok" | "error" | "unset";
   metadata?: Record<string, unknown>;
   hasDiff: boolean;
   diff?: SpanDiff;
