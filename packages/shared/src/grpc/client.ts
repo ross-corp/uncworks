@@ -217,6 +217,10 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       project: (pb.spec as Record<string, unknown>)?.project as string | undefined,
       feature: (pb.spec as Record<string, unknown>)?.feature as string | undefined,
       tags: ((pb.spec as Record<string, unknown>)?.tags as string[] | undefined) || undefined,
+      maxBudget: pb.spec?.maxBudget || undefined,
+      autoPush: pb.spec?.autoPush || undefined,
+      autoPR: pb.spec?.autoPr || undefined,
+      prBaseBranch: pb.spec?.prBaseBranch || undefined,
     },
     status: {
       phase: phaseFromProto(pb.status?.phase ?? PbAgentRunPhase.UNSPECIFIED),

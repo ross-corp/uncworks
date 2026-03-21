@@ -41,6 +41,7 @@ func TestBoundary_SpecProtoToCRD_AllFields(t *testing.T) {
 		},
 		SpecRunId:    "spec-run-99",
 		DisplayName:  "My Display Name",
+		MaxBudget:    5.0,
 		AutoPush:     true,
 		AutoPr:       true,
 		PrBaseBranch: "develop",
@@ -98,6 +99,7 @@ func TestBoundary_SpecProtoToCRD_AllFields(t *testing.T) {
 	assertEqual(t, "SpecRunId", got.SpecRunId, original.SpecRunId)
 	// DisplayName is set by the server's generateDisplayName, not round-tripped
 	// from the proto input. The server overwrites it. Skip.
+	assertEqual(t, "MaxBudget", got.MaxBudget, original.MaxBudget)
 	assertEqual(t, "AutoPush", got.AutoPush, original.AutoPush)
 	assertEqual(t, "AutoPr", got.AutoPr, original.AutoPr)
 	assertEqual(t, "PrBaseBranch", got.PrBaseBranch, original.PrBaseBranch)

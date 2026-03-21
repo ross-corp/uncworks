@@ -88,6 +88,10 @@ export interface AgentRunSpec {
   project?: string;
   feature?: string;
   tags?: string[];
+  maxBudget?: number;
+  autoPush?: boolean;
+  autoPR?: boolean;
+  prBaseBranch?: string;
 }
 
 export interface AgentRunStatus {

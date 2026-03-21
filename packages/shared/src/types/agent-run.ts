@@ -58,6 +58,10 @@ export interface AgentRunSpec {
     execute?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };
     verify?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };
   };
+  maxBudget?: number;
+  autoPush?: boolean;
+  autoPR?: boolean;
+  prBaseBranch?: string;
 }
 
 /** Status of an AgentRun. */
