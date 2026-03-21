@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -299,10 +300,37 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		state.Message = "Cancelled by user"
 	})
 
+	// --- Trace: create root pipeline span ---
+	traceID := newWorkflowUUID(ctx)
+	rootSpanID := newWorkflowUUID(ctx)
+	pipelineStartTime := workflow.Now(ctx)
+
+	writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+		ID:        rootSpanID,
+		TraceID:   traceID,
+		Name:      "pipeline",
+		Type:      "stage",
+		StartTime: pipelineStartTime.Format(time.RFC3339Nano),
+		Metadata:  map[string]interface{}{"pipeline.result": "running"},
+	})
+
 	// =============================================
 	// STAGE 1: PLAN — Generate OpenSpec change
 	// =============================================
 	state.Message = "Planning: generating spec from prompt"
+
+	// --- Trace: open PLAN span ---
+	planSpanID := newWorkflowUUID(ctx)
+	planStartTime := workflow.Now(ctx)
+	writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+		ID:        planSpanID,
+		TraceID:   traceID,
+		ParentID:  rootSpanID,
+		Name:      "PLAN",
+		Type:      "stage",
+		StartTime: planStartTime.Format(time.RFC3339Nano),
+		Metadata:  map[string]interface{}{"stage": "plan"},
+	})
 
 	planInput := PlanRunInput{
 		AgentRunName: input.AgentRunName,
@@ -320,6 +348,18 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		workflow.WithActivityOptions(ctx, planOpts),
 		ActivityPlanRun, planInput,
 	).Get(ctx, &planOutput); err != nil {
+		// --- Trace: close PLAN span with error ---
+		writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+			ID:        planSpanID,
+			TraceID:   traceID,
+			ParentID:  rootSpanID,
+			Name:      "PLAN",
+			Type:      "stage",
+			StartTime: planStartTime.Format(time.RFC3339Nano),
+			EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+			Status:    "error",
+			Metadata:  map[string]interface{}{"stage": "plan", "error": err.Error()},
+		})
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during planning"
@@ -335,14 +375,39 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 
 	// Fix 1: Check plan validation result (was ignoring SpecsValid)
 	if !planOutput.SpecsValid {
-		state.Phase = "Failed"
+		// --- Trace: close PLAN span with error ---
 		errMsg := "Planning produced invalid OpenSpec change"
 		if len(planOutput.ValidationErrors) > 0 {
 			errMsg += ": " + strings.Join(planOutput.ValidationErrors, "; ")
 		}
+		writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+			ID:        planSpanID,
+			TraceID:   traceID,
+			ParentID:  rootSpanID,
+			Name:      "PLAN",
+			Type:      "stage",
+			StartTime: planStartTime.Format(time.RFC3339Nano),
+			EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+			Status:    "error",
+			Metadata:  map[string]interface{}{"stage": "plan", "error": errMsg},
+		})
+		state.Phase = "Failed"
 		state.Message = errMsg
 		return fmt.Errorf("%s", errMsg)
 	}
+
+	// --- Trace: close PLAN span with success ---
+	writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+		ID:        planSpanID,
+		TraceID:   traceID,
+		ParentID:  rootSpanID,
+		Name:      "PLAN",
+		Type:      "stage",
+		StartTime: planStartTime.Format(time.RFC3339Nano),
+		EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+		Status:    "ok",
+		Metadata:  map[string]interface{}{"stage": "plan", "taskCount": planOutput.TaskCount},
+	})
 
 	// =============================================
 	// STAGE 2 + 3: EXECUTE → VERIFY (with retry)
@@ -357,6 +422,19 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		// --- EXECUTE ---
 		state.Message = fmt.Sprintf("Executing: attempt %d/%d", attempt, maxRetries)
 
+		// --- Trace: open EXECUTE span ---
+		execSpanID := newWorkflowUUID(ctx)
+		execStartTime := workflow.Now(ctx)
+		writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+			ID:        execSpanID,
+			TraceID:   traceID,
+			ParentID:  rootSpanID,
+			Name:      fmt.Sprintf("EXECUTE (attempt %d)", attempt),
+			Type:      "stage",
+			StartTime: execStartTime.Format(time.RFC3339Nano),
+			Metadata:  map[string]interface{}{"stage": "execute", "attempt": attempt},
+		})
+
 		prompt := fmt.Sprintf("Implement the OpenSpec change '%s'.\n\nRead specs at /workspace/openspec/changes/%s/ for requirements.\nRead tasks.md for your checklist. Mark each task [x] as you complete it.\n\nOriginal task: %s",
 			changeName, changeName, input.Prompt)
 		if lastFailureReport != "" {
@@ -367,15 +445,29 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		if err := workflow.ExecuteActivity(
 			workflow.WithActivityOptions(ctx, executeOpts),
 			ActivityStartAgent, StartAgentInput{
-				PodName:   podName,
-				Namespace: input.Namespace,
-				PodIP:     podIP,
-				Prompt:    prompt,
-				RepoPath:  "/workspace",
-				Model:     execCfg.Model,
-				Stage:     "execute",
+				PodName:      podName,
+				Namespace:    input.Namespace,
+				PodIP:        podIP,
+				Prompt:       prompt,
+				RepoPath:     "/workspace",
+				Model:        execCfg.Model,
+				Stage:        "execute",
+				ParentSpanID: execSpanID,
+				TraceID:      traceID,
 			},
 		).Get(ctx, nil); err != nil {
+			// --- Trace: close EXECUTE span with error ---
+			writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+				ID:        execSpanID,
+				TraceID:   traceID,
+				ParentID:  rootSpanID,
+				Name:      fmt.Sprintf("EXECUTE (attempt %d)", attempt),
+				Type:      "stage",
+				StartTime: execStartTime.Format(time.RFC3339Nano),
+				EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+				Status:    "error",
+				Metadata:  map[string]interface{}{"stage": "execute", "attempt": attempt, "error": err.Error()},
+			})
 			if temporal.IsCanceledError(err) {
 				state.Phase = "Cancelled"
 				state.Message = "Cancelled during execution"
@@ -391,12 +483,42 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			return err
 		}
 
+		// --- Trace: close EXECUTE span ---
+		execStatus := "ok"
+		if state.Phase == "Failed" || state.Phase == "Cancelled" {
+			execStatus = "error"
+		}
+		writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+			ID:        execSpanID,
+			TraceID:   traceID,
+			ParentID:  rootSpanID,
+			Name:      fmt.Sprintf("EXECUTE (attempt %d)", attempt),
+			Type:      "stage",
+			StartTime: execStartTime.Format(time.RFC3339Nano),
+			EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+			Status:    execStatus,
+			Metadata:  map[string]interface{}{"stage": "execute", "attempt": attempt},
+		})
+
 		if state.Phase == "Cancelled" {
 			return fmt.Errorf("cancelled by user")
 		}
 
 		// --- VERIFY ---
 		state.Message = fmt.Sprintf("manage: verifying against spec (attempt %d/%d)", attempt, maxRetries)
+
+		// --- Trace: open VERIFY span ---
+		verifySpanID := newWorkflowUUID(ctx)
+		verifyStartTime := workflow.Now(ctx)
+		writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+			ID:        verifySpanID,
+			TraceID:   traceID,
+			ParentID:  rootSpanID,
+			Name:      fmt.Sprintf("VERIFY (attempt %d)", attempt),
+			Type:      "stage",
+			StartTime: verifyStartTime.Format(time.RFC3339Nano),
+			Metadata:  map[string]interface{}{"stage": "verify", "attempt": attempt},
+		})
 
 		verifyInput := VerifyRunInput{
 			AgentRunName: input.AgentRunName,
@@ -412,6 +534,18 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			workflow.WithActivityOptions(ctx, verifyOpts),
 			ActivityVerifyRun, verifyInput,
 		).Get(ctx, &verifyOutput); err != nil {
+			// --- Trace: close VERIFY span with error ---
+			writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+				ID:        verifySpanID,
+				TraceID:   traceID,
+				ParentID:  rootSpanID,
+				Name:      fmt.Sprintf("VERIFY (attempt %d)", attempt),
+				Type:      "stage",
+				StartTime: verifyStartTime.Format(time.RFC3339Nano),
+				EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+				Status:    "error",
+				Metadata:  map[string]interface{}{"stage": "verify", "attempt": attempt, "error": err.Error()},
+			})
 			if temporal.IsCanceledError(err) {
 				state.Phase = "Cancelled"
 				state.Message = "Cancelled during verification"
@@ -424,6 +558,25 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		}
 
 		if verifyOutput.Result.Pass {
+			// --- Trace: close VERIFY span with success ---
+			writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+				ID:        verifySpanID,
+				TraceID:   traceID,
+				ParentID:  rootSpanID,
+				Name:      fmt.Sprintf("VERIFY (attempt %d)", attempt),
+				Type:      "stage",
+				StartTime: verifyStartTime.Format(time.RFC3339Nano),
+				EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+				Status:    "ok",
+				Metadata: map[string]interface{}{
+					"stage":   "verify",
+					"attempt": attempt,
+					"result":  "passed",
+					"task.completion": fmt.Sprintf("%d/%d",
+						verifyOutput.Result.TasksCompleted, verifyOutput.Result.TasksTotal),
+				},
+			})
+
 			// --- POST-VERIFY: Enrich tags from diff ---
 			enrichCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 				StartToCloseTimeout: 30 * time.Second,
@@ -451,6 +604,21 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 				// Push/PR failure is not a pipeline failure
 			}
 
+			// --- Trace: close root pipeline span with success ---
+			writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+				ID:        rootSpanID,
+				TraceID:   traceID,
+				Name:      "pipeline",
+				Type:      "stage",
+				StartTime: pipelineStartTime.Format(time.RFC3339Nano),
+				EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+				Status:    "ok",
+				Metadata: map[string]interface{}{
+					"pipeline.result":   "succeeded",
+					"pipeline.attempts": attempt,
+				},
+			})
+
 			state.Phase = "Succeeded"
 			state.Message = fmt.Sprintf("Spec-driven pipeline: verified and archived (attempt %d)", attempt)
 			if state.PRUrl != "" {
@@ -458,6 +626,25 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			}
 			return nil
 		}
+
+		// --- Trace: close VERIFY span with failure ---
+		writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+			ID:        verifySpanID,
+			TraceID:   traceID,
+			ParentID:  rootSpanID,
+			Name:      fmt.Sprintf("VERIFY (attempt %d)", attempt),
+			Type:      "stage",
+			StartTime: verifyStartTime.Format(time.RFC3339Nano),
+			EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+			Status:    "error",
+			Metadata: map[string]interface{}{
+				"stage":   "verify",
+				"attempt": attempt,
+				"result":  "failed",
+				"task.completion": fmt.Sprintf("%d/%d",
+					verifyOutput.Result.TasksCompleted, verifyOutput.Result.TasksTotal),
+			},
+		})
 
 		// Verification failed — prepare retry context.
 		lastFailureReport = verifyOutput.Result.FailureReport
@@ -467,6 +654,21 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			"failureReport", lastFailureReport,
 		)
 	}
+
+	// --- Trace: close root pipeline span with failure ---
+	writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+		ID:        rootSpanID,
+		TraceID:   traceID,
+		Name:      "pipeline",
+		Type:      "stage",
+		StartTime: pipelineStartTime.Format(time.RFC3339Nano),
+		EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+		Status:    "error",
+		Metadata: map[string]interface{}{
+			"pipeline.result":   "failed",
+			"pipeline.attempts": maxRetries,
+		},
+	})
 
 	// All retries exhausted.
 	state.Phase = "Failed"
@@ -611,6 +813,36 @@ func truncateForTitle(s string, max int) string {
 		truncated = truncated[:idx]
 	}
 	return truncated + "..."
+}
+
+// newWorkflowUUID generates a UUID inside a Temporal SideEffect for deterministic replay.
+func newWorkflowUUID(ctx workflow.Context) string {
+	var id string
+	_ = workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+		return uuid.New().String()
+	}).Get(&id)
+	return id
+}
+
+// traceSpanOpts returns short-timeout activity options for trace span writes.
+var traceSpanOpts = workflow.ActivityOptions{
+	StartToCloseTimeout: 10 * time.Second,
+	RetryPolicy: &temporal.RetryPolicy{
+		MaximumAttempts: 2,
+	},
+}
+
+// writeStageSpan writes a trace span via the WriteTraceSpan activity.
+// Errors are logged but do not fail the workflow.
+func writeStageSpan(ctx workflow.Context, agentRunName, podIP string, span TraceSpanData) {
+	traceCtx := workflow.WithActivityOptions(ctx, traceSpanOpts)
+	if err := workflow.ExecuteActivity(traceCtx, ActivityWriteTraceSpan, WriteTraceSpanInput{
+		AgentRunName: agentRunName,
+		PodIP:        podIP,
+		Span:         span,
+	}).Get(traceCtx, nil); err != nil {
+		workflow.GetLogger(ctx).Warn("Failed to write trace span", "span", span.Name, "error", err)
+	}
 }
 
 // pollAgentStatus reuses the existing agent status polling logic from the

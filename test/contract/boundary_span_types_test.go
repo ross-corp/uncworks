@@ -19,6 +19,7 @@ var validSpanTypes = map[string]bool{
 	"thought":   true,
 	"input":     true,
 	"delegate":  true,
+	"stage":     true,
 	"lifecycle": true,
 }
 

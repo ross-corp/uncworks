@@ -207,7 +207,11 @@ type StartAgentRequest struct {
 	EnvVars    map[string]string      `protobuf:"bytes,4,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Stage controls the agent's behavior in spec-driven pipelines.
 	// Values: "" (default/single), "plan", "execute", "verify".
-	Stage         string `protobuf:"bytes,5,opt,name=stage,proto3" json:"stage,omitempty"`
+	Stage string `protobuf:"bytes,5,opt,name=stage,proto3" json:"stage,omitempty"`
+	// ParentSpanID links this agent invocation to a parent stage span in the trace hierarchy.
+	ParentSpanId string `protobuf:"bytes,7,opt,name=parent_span_id,json=parentSpanId,proto3" json:"parent_span_id,omitempty"`
+	// TraceID is the shared trace identifier across all spans in a pipeline run.
+	TraceId       string `protobuf:"bytes,8,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -273,6 +277,20 @@ func (x *StartAgentRequest) GetEnvVars() map[string]string {
 func (x *StartAgentRequest) GetStage() string {
 	if x != nil {
 		return x.Stage
+	}
+	return ""
+}
+
+func (x *StartAgentRequest) GetParentSpanId() string {
+	if x != nil {
+		return x.ParentSpanId
+	}
+	return ""
+}
+
+func (x *StartAgentRequest) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
 	}
 	return ""
 }
@@ -975,14 +993,16 @@ var File_aot_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_aot_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x18aot/agent/v1/agent.proto\x12\faot.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x97\x02\n" +
+	"\x18aot/agent/v1/agent.proto\x12\faot.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd8\x02\n" +
 	"\x11StartAgentRequest\x12)\n" +
 	"\fagent_run_id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\n" +
 	"agentRunId\x12\x1f\n" +
 	"\x06prompt\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06prompt\x12\x1b\n" +
 	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x12G\n" +
 	"\benv_vars\x18\x04 \x03(\v2,.aot.agent.v1.StartAgentRequest.EnvVarsEntryR\aenvVars\x12\x14\n" +
-	"\x05stage\x18\x05 \x01(\tR\x05stage\x1a:\n" +
+	"\x05stage\x18\x05 \x01(\tR\x05stage\x12$\n" +
+	"\x0eparent_span_id\x18\a \x01(\tR\fparentSpanId\x12\x19\n" +
+	"\btrace_id\x18\b \x01(\tR\atraceId\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +

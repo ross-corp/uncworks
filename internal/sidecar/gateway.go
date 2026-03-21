@@ -63,11 +63,13 @@ const traceSpansPath = traceDir + "/spans.jsonl"
 // TraceSpan represents a single trace span recorded during an agent run.
 type TraceSpan struct {
 	ID        string                 `json:"id"`
+	TraceID   string                 `json:"traceId,omitempty"`
 	ParentID  string                 `json:"parentId,omitempty"`
 	Name      string                 `json:"name"`
 	Type      string                 `json:"type"`
 	StartTime time.Time              `json:"startTime"`
 	EndTime   time.Time              `json:"endTime"`
+	Status    string                 `json:"status,omitempty"` // "ok", "error", "unset"
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 	HasDiff   bool                   `json:"hasDiff"`
 	Diff      *SpanDiff              `json:"diff,omitempty"`
@@ -192,6 +194,15 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 	resolvedDir := resolveWorkDir(req.Msg.RepoPath)
 	setCurrentStage(req.Msg.Stage, resolvedDir)
 
+	// Store parent span ID and trace ID for child span linking
+	setCurrentParentSpan(req.Msg.ParentSpanId, req.Msg.TraceId)
+
+	// Store model name for span metadata
+	currentModel = os.Getenv("PI_MODEL")
+	if currentModel == "" {
+		currentModel = "default"
+	}
+
 	// Configure git for checkpoint commits
 	gitConfigCmd := exec.Command("git", "config", "user.name", "aot-agent")
 	gitConfigCmd.Dir = resolvedDir
@@ -209,6 +220,8 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 	stageName := spanPrefix() + ".started"
 	appendTraceSpan(TraceSpan{
 		ID:        uuid.New().String(),
+		TraceID:   getTraceID(),
+		ParentID:  getParentSpanID(),
 		Name:      stageName,
 		Type:      "input",
 		StartTime: time.Now(),
@@ -1130,7 +1143,43 @@ var (
 	// Git checkpoint state — tracks the last checkpoint commit SHA
 	checkpointMu      sync.Mutex
 	lastCheckpointSHA string
+
+	// Parent span linking — set by StartAgent from workflow-provided IDs
+	parentSpanMu        sync.RWMutex
+	currentParentSpanID string
+	currentTraceID      string
+
+	// Model tracking — set by StartAgent from PI_MODEL env var
+	currentModel string
 )
+
+// modelContextWindows maps model names to their context window sizes (in tokens).
+var modelContextWindows = map[string]int{
+	"deepseek-v3.1": 32768,
+	"deepseek-v3.2": 163840,
+	"qwen3-coder":   262144,
+	"qwen3:8b":      32768,
+	"default":       32768,
+}
+
+func setCurrentParentSpan(parentID, traceID string) {
+	parentSpanMu.Lock()
+	defer parentSpanMu.Unlock()
+	currentParentSpanID = parentID
+	currentTraceID = traceID
+}
+
+func getParentSpanID() string {
+	parentSpanMu.RLock()
+	defer parentSpanMu.RUnlock()
+	return currentParentSpanID
+}
+
+func getTraceID() string {
+	parentSpanMu.RLock()
+	defer parentSpanMu.RUnlock()
+	return currentTraceID
+}
 
 // setCurrentStage updates the package-level stage and workdir for span naming.
 func setCurrentStage(stage, workDir string) {
@@ -1196,6 +1245,8 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 			prefix := spanPrefix()
 			span := TraceSpan{
 				ID:        activeToolSpanID,
+				TraceID:   getTraceID(),
+				ParentID:  getParentSpanID(),
 				Name:      prefix + "." + activeToolSpanName,
 				Type:      "tool",
 				StartTime: activeToolSpanStart,
@@ -1286,18 +1337,51 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 		if activeLLMSpanID != "" {
 			prefix := spanPrefix()
 			durationMs := now.Sub(activeLLMSpanStart).Milliseconds()
-			appendTraceSpan(TraceSpan{
+			span := TraceSpan{
 				ID:        activeLLMSpanID,
+				TraceID:   getTraceID(),
+				ParentID:  getParentSpanID(),
 				Name:      prefix + ".thought",
 				Type:      "llm",
 				StartTime: activeLLMSpanStart,
 				EndTime:   now,
 				Metadata: map[string]interface{}{
-					"durationMs": durationMs,
-					"stage":      currentStage,
-					"role":       prefix,
+					"durationMs":           durationMs,
+					"stage":                currentStage,
+					"role":                 prefix,
+					"gen_ai.request.model": currentModel,
 				},
-			})
+			}
+
+			// Extract token usage from message_end event
+			if len(evt.Message) > 0 {
+				var msg struct {
+					Usage *struct {
+						InputTokens              int `json:"input_tokens"`
+						OutputTokens             int `json:"output_tokens"`
+						CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+						CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+					} `json:"usage"`
+				}
+				if json.Unmarshal(evt.Message, &msg) == nil && msg.Usage != nil {
+					span.Metadata["gen_ai.usage.input_tokens"] = msg.Usage.InputTokens
+					span.Metadata["gen_ai.usage.output_tokens"] = msg.Usage.OutputTokens
+					if msg.Usage.CacheReadInputTokens > 0 {
+						span.Metadata["gen_ai.usage.cache_read_tokens"] = msg.Usage.CacheReadInputTokens
+					}
+					// Context utilization
+					if msg.Usage.InputTokens > 0 {
+						windowSize := modelContextWindows[currentModel]
+						if windowSize == 0 {
+							windowSize = 32768
+						}
+						span.Metadata["gen_ai.context.window_size"] = windowSize
+						span.Metadata["gen_ai.context.utilization_pct"] = int(float64(msg.Usage.InputTokens) / float64(windowSize) * 100)
+					}
+				}
+			}
+
+			appendTraceSpan(span)
 			activeLLMSpanID = ""
 		}
 		activeLLMSpanMu.Unlock()
@@ -1353,6 +1437,8 @@ func closeThinkingSpan() {
 	inThinkingBlock = false
 	appendTraceSpan(TraceSpan{
 		ID:        thinkingSpanID,
+		TraceID:   getTraceID(),
+		ParentID:  getParentSpanID(),
 		Name:      "thinking",
 		Type:      "thought",
 		StartTime: thinkingSpanStart,

@@ -45,6 +45,10 @@ message StartAgentRequest {
   // Stage controls the agent's behavior in spec-driven pipelines.
   // Values: "" (default/single), "plan", "execute", "verify".
   string stage = 5;
+  // ParentSpanID links this agent invocation to a parent stage span in the trace hierarchy.
+  string parent_span_id = 7;
+  // TraceID is the shared trace identifier across all spans in a pipeline run.
+  string trace_id = 8;
 }
 
 message StartAgentResponse {

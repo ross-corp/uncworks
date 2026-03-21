@@ -167,6 +167,9 @@ const (
 
 	// Tag enrichment
 	ActivityEnrichRunTags = "EnrichRunTags"
+
+	// Trace span writing
+	ActivityWriteTraceSpan = "WriteTraceSpan"
 )
 
 // AgentRunWorkflow orchestrates the full lifecycle of an agent run.

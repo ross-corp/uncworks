@@ -17,11 +17,13 @@ import (
 // TraceSpan represents a single trace span from an agent run.
 type TraceSpan struct {
 	ID        string                 `json:"id"`
+	TraceID   string                 `json:"traceId,omitempty"`
 	ParentID  string                 `json:"parentId,omitempty"`
 	Name      string                 `json:"name"`
-	Type      string                 `json:"type"` // llm, tool, thought, input
+	Type      string                 `json:"type"` // llm, tool, thought, input, stage
 	StartTime string                 `json:"startTime"`
 	EndTime   string                 `json:"endTime"`
+	Status    string                 `json:"status,omitempty"` // "ok", "error", "unset"
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 	HasDiff   bool                   `json:"hasDiff"`
 	Diff      *SpanDiff              `json:"diff,omitempty"`

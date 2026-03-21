@@ -2,6 +2,7 @@ package sidecar
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -323,6 +324,137 @@ func TestExtractToolCallSignature_DifferentCallsDifferentSig(t *testing.T) {
 	}
 	if sig1 == sig2 {
 		t.Errorf("different tool calls produced same signature: %q", sig1)
+	}
+}
+
+// --- resolveWorkDir regression tests ---
+
+// --- extractToolFromEvent tests ---
+
+func TestExtractToolFromEvent_ToolCallStartFormat(t *testing.T) {
+	// pi's toolcall_start format: partial.content[] has toolCall blocks
+	partial := `{"content":[{"type":"toolCall","name":"bash","id":"tc-1","arguments":{"command":"ls -la"}}]}`
+	ame := &piAssistantEvent{
+		Partial: json.RawMessage(partial),
+	}
+
+	name, inputJSON := extractToolFromEvent(ame)
+	if name != "bash" {
+		t.Errorf("name = %q, want %q", name, "bash")
+	}
+	if inputJSON == "" {
+		t.Fatal("inputJSON is empty, expected non-empty")
+	}
+
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(inputJSON), &args); err != nil {
+		t.Fatalf("inputJSON is not valid JSON: %v", err)
+	}
+	if args["command"] != "ls -la" {
+		t.Errorf("args[command] = %v, want %q", args["command"], "ls -la")
+	}
+}
+
+func TestExtractToolFromEvent_LegacyToolUseFormat(t *testing.T) {
+	// Legacy format: ame.Tool contains tool info
+	tool := `{"name":"write_file","input":{"path":"/tmp/test.txt","content":"hello"}}`
+	ame := &piAssistantEvent{
+		Tool: json.RawMessage(tool),
+	}
+
+	name, inputJSON := extractToolFromEvent(ame)
+	if name != "write_file" {
+		t.Errorf("name = %q, want %q", name, "write_file")
+	}
+	if inputJSON == "" {
+		t.Fatal("inputJSON is empty, expected non-empty")
+	}
+
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(inputJSON), &args); err != nil {
+		t.Fatalf("inputJSON is not valid JSON: %v", err)
+	}
+	if args["path"] != "/tmp/test.txt" {
+		t.Errorf("args[path] = %v, want %q", args["path"], "/tmp/test.txt")
+	}
+}
+
+func TestExtractToolFromEvent_NoToolInfo(t *testing.T) {
+	// Event with no tool information should return empty strings
+	ame := &piAssistantEvent{
+		Type:  "assistant_message",
+		Delta: "some text content",
+	}
+
+	name, inputJSON := extractToolFromEvent(ame)
+	if name != "" {
+		t.Errorf("name = %q, want empty", name)
+	}
+	if inputJSON != "" {
+		t.Errorf("inputJSON = %q, want empty", inputJSON)
+	}
+}
+
+func TestExtractToolFromEvent_PartialWithNoToolCall(t *testing.T) {
+	// Partial content with non-toolCall blocks should return empty
+	partial := `{"content":[{"type":"text","text":"hello world"}]}`
+	ame := &piAssistantEvent{
+		Partial: json.RawMessage(partial),
+	}
+
+	name, inputJSON := extractToolFromEvent(ame)
+	if name != "" {
+		t.Errorf("name = %q, want empty for text block", name)
+	}
+	if inputJSON != "" {
+		t.Errorf("inputJSON = %q, want empty for text block", inputJSON)
+	}
+}
+
+func TestExtractToolFromEvent_PartialTakesPrecedenceOverLegacy(t *testing.T) {
+	// When both formats are present, partial (toolcall_start) takes precedence
+	partial := `{"content":[{"type":"toolCall","name":"bash","arguments":{"command":"pwd"}}]}`
+	tool := `{"name":"write_file","input":{"path":"/tmp/a"}}`
+	ame := &piAssistantEvent{
+		Partial: json.RawMessage(partial),
+		Tool:    json.RawMessage(tool),
+	}
+
+	name, _ := extractToolFromEvent(ame)
+	if name != "bash" {
+		t.Errorf("name = %q, want %q (partial should take precedence over legacy)", name, "bash")
+	}
+}
+
+func TestExtractToolFromEvent_ToolCallNoArguments(t *testing.T) {
+	// toolCall with no arguments should return name but empty inputJSON
+	partial := `{"content":[{"type":"toolCall","name":"get_status","id":"tc-2"}]}`
+	ame := &piAssistantEvent{
+		Partial: json.RawMessage(partial),
+	}
+
+	name, inputJSON := extractToolFromEvent(ame)
+	if name != "get_status" {
+		t.Errorf("name = %q, want %q", name, "get_status")
+	}
+	if inputJSON != "" {
+		t.Errorf("inputJSON = %q, want empty when no arguments", inputJSON)
+	}
+}
+
+func TestExtractToolFromEvent_LegacyToolNoInput(t *testing.T) {
+	// Legacy tool with no input should return name but empty inputJSON
+	tool := `{"name":"list_files"}`
+	ame := &piAssistantEvent{
+		Tool: json.RawMessage(tool),
+	}
+
+	name, inputJSON := extractToolFromEvent(ame)
+	if name != "list_files" {
+		t.Errorf("name = %q, want %q", name, "list_files")
+	}
+	if inputJSON != "" {
+		t.Errorf("inputJSON = %q, want empty when no input", inputJSON)
 	}
 }
 
