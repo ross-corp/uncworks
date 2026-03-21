@@ -491,8 +491,20 @@ type AgentRunSpec struct {
 	DisplayName string `protobuf:"bytes,19,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	// PipelineConfig provides per-stage configuration for spec-driven runs.
 	PipelineConfig *PipelineConfig `protobuf:"bytes,20,opt,name=pipeline_config,json=pipelineConfig,proto3" json:"pipeline_config,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// AutoPush controls whether changes are pushed to a feature branch after successful verification.
+	AutoPush bool `protobuf:"varint,21,opt,name=auto_push,json=autoPush,proto3" json:"auto_push,omitempty"`
+	// AutoPR controls whether a GitHub PR is created after pushing changes.
+	AutoPr bool `protobuf:"varint,22,opt,name=auto_pr,json=autoPr,proto3" json:"auto_pr,omitempty"`
+	// PRBaseBranch is the base branch for the PR (default: "main").
+	PrBaseBranch string `protobuf:"bytes,23,opt,name=pr_base_branch,json=prBaseBranch,proto3" json:"pr_base_branch,omitempty"`
+	// Project is the project this run belongs to.
+	Project string `protobuf:"bytes,27,opt,name=project,proto3" json:"project,omitempty"`
+	// Feature is the feature/unit-of-work this run contributes to.
+	Feature string `protobuf:"bytes,28,opt,name=feature,proto3" json:"feature,omitempty"`
+	// Tags are freeform labels for cross-cutting filtering.
+	Tags          []string `protobuf:"bytes,29,rep,name=tags,proto3" json:"tags,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AgentRunSpec) Reset() {
@@ -647,6 +659,48 @@ func (x *AgentRunSpec) GetDisplayName() string {
 func (x *AgentRunSpec) GetPipelineConfig() *PipelineConfig {
 	if x != nil {
 		return x.PipelineConfig
+	}
+	return nil
+}
+
+func (x *AgentRunSpec) GetAutoPush() bool {
+	if x != nil {
+		return x.AutoPush
+	}
+	return false
+}
+
+func (x *AgentRunSpec) GetAutoPr() bool {
+	if x != nil {
+		return x.AutoPr
+	}
+	return false
+}
+
+func (x *AgentRunSpec) GetPrBaseBranch() string {
+	if x != nil {
+		return x.PrBaseBranch
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetFeature() string {
+	if x != nil {
+		return x.Feature
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetTags() []string {
+	if x != nil {
+		return x.Tags
 	}
 	return nil
 }
@@ -911,8 +965,10 @@ type AgentRunStatus struct {
 	RetryCount int32 `protobuf:"varint,13,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
 	// VerificationResult is the JSON-encoded verdict from the verification stage.
 	VerificationResult string `protobuf:"bytes,14,opt,name=verification_result,json=verificationResult,proto3" json:"verification_result,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// PRUrl is the URL of the GitHub PR created by the pipeline.
+	PrUrl         string `protobuf:"bytes,15,opt,name=pr_url,json=prUrl,proto3" json:"pr_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AgentRunStatus) Reset() {
@@ -1039,6 +1095,13 @@ func (x *AgentRunStatus) GetRetryCount() int32 {
 func (x *AgentRunStatus) GetVerificationResult() string {
 	if x != nil {
 		return x.VerificationResult
+	}
+	return ""
+}
+
+func (x *AgentRunStatus) GetPrUrl() string {
+	if x != nil {
+		return x.PrUrl
 	}
 	return ""
 }
@@ -1185,7 +1248,13 @@ type ListAgentRunsRequest struct {
 	// ParentRunID filters runs that are children of a specific parent.
 	ParentRunId string `protobuf:"bytes,5,opt,name=parent_run_id,json=parentRunId,proto3" json:"parent_run_id,omitempty"`
 	// StageFilter filters by pipeline stage (planning, executing, verifying).
-	StageFilter   string `protobuf:"bytes,6,opt,name=stage_filter,json=stageFilter,proto3" json:"stage_filter,omitempty"`
+	StageFilter string `protobuf:"bytes,6,opt,name=stage_filter,json=stageFilter,proto3" json:"stage_filter,omitempty"`
+	// ProjectFilter filters runs belonging to a specific project.
+	ProjectFilter string `protobuf:"bytes,7,opt,name=project_filter,json=projectFilter,proto3" json:"project_filter,omitempty"`
+	// FeatureFilter filters runs belonging to a specific feature.
+	FeatureFilter string `protobuf:"bytes,8,opt,name=feature_filter,json=featureFilter,proto3" json:"feature_filter,omitempty"`
+	// TagFilter filters runs that have this tag.
+	TagFilter     string `protobuf:"bytes,9,opt,name=tag_filter,json=tagFilter,proto3" json:"tag_filter,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1258,6 +1327,27 @@ func (x *ListAgentRunsRequest) GetParentRunId() string {
 func (x *ListAgentRunsRequest) GetStageFilter() string {
 	if x != nil {
 		return x.StageFilter
+	}
+	return ""
+}
+
+func (x *ListAgentRunsRequest) GetProjectFilter() string {
+	if x != nil {
+		return x.ProjectFilter
+	}
+	return ""
+}
+
+func (x *ListAgentRunsRequest) GetFeatureFilter() string {
+	if x != nil {
+		return x.FeatureFilter
+	}
+	return ""
+}
+
+func (x *ListAgentRunsRequest) GetTagFilter() string {
+	if x != nil {
+		return x.TagFilter
 	}
 	return ""
 }
@@ -2112,7 +2202,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"Repository\x12\x1a\n" +
 	"\x03url\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\x03url\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\"\xe4\x06\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"\x88\b\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x126\n" +
 	"\x05repos\x18\x02 \x03(\v2\x16.aot.api.v1.RepositoryB\b\xbaH\x05\x92\x01\x02\b\x01R\x05repos\x12\x16\n" +
@@ -2136,7 +2226,13 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\rorchestration\x18\x11 \x01(\v2\x19.aot.api.v1.OrchestrationR\rorchestration\x12\x1e\n" +
 	"\vspec_run_id\x18\x12 \x01(\tR\tspecRunId\x12!\n" +
 	"\fdisplay_name\x18\x13 \x01(\tR\vdisplayName\x12C\n" +
-	"\x0fpipeline_config\x18\x14 \x01(\v2\x1a.aot.api.v1.PipelineConfigR\x0epipelineConfig\x1a:\n" +
+	"\x0fpipeline_config\x18\x14 \x01(\v2\x1a.aot.api.v1.PipelineConfigR\x0epipelineConfig\x12\x1b\n" +
+	"\tauto_push\x18\x15 \x01(\bR\bautoPush\x12\x17\n" +
+	"\aauto_pr\x18\x16 \x01(\bR\x06autoPr\x12$\n" +
+	"\x0epr_base_branch\x18\x17 \x01(\tR\fprBaseBranch\x12\x18\n" +
+	"\aproject\x18\x1b \x01(\tR\aproject\x12\x18\n" +
+	"\afeature\x18\x1c \x01(\tR\afeature\x12\x12\n" +
+	"\x04tags\x18\x1d \x03(\tR\x04tags\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0e\x10\x0f\"\xa1\x01\n" +
@@ -2156,7 +2252,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x12\x1b\n" +
 	"\trepo_urls\x18\x03 \x03(\tR\brepoUrls\"D\n" +
 	"\rOrchestration\x123\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x1d.aot.api.v1.OrchestrationTaskR\x05tasks\"\xc2\x04\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x1d.aot.api.v1.OrchestrationTaskR\x05tasks\"\xd9\x04\n" +
 	"\x0eAgentRunStatus\x12/\n" +
 	"\x05phase\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\x05phase\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x19\n" +
@@ -2175,20 +2271,25 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x05stage\x18\f \x01(\tR\x05stage\x12\x1f\n" +
 	"\vretry_count\x18\r \x01(\x05R\n" +
 	"retryCount\x12/\n" +
-	"\x13verification_result\x18\x0e \x01(\tR\x12verificationResult\"E\n" +
+	"\x13verification_result\x18\x0e \x01(\tR\x12verificationResult\x12\x15\n" +
+	"\x06pr_url\x18\x0f \x01(\tR\x05prUrl\"E\n" +
 	"\x15CreateAgentRunRequest\x12,\n" +
 	"\x04spec\x18\x01 \x01(\v2\x18.aot.api.v1.AgentRunSpecR\x04spec\"K\n" +
 	"\x16CreateAgentRunResponse\x121\n" +
 	"\tagent_run\x18\x01 \x01(\v2\x14.aot.api.v1.AgentRunR\bagentRun\"$\n" +
 	"\x12GetAgentRunRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\xe9\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xd6\x02\n" +
 	"\x14ListAgentRunsRequest\x12<\n" +
 	"\fphase_filter\x18\x01 \x01(\x0e2\x19.aot.api.v1.AgentRunPhaseR\vphaseFilter\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06cursor\x18\x03 \x01(\tR\x06cursor\x12\x1e\n" +
 	"\vspec_run_id\x18\x04 \x01(\tR\tspecRunId\x12\"\n" +
 	"\rparent_run_id\x18\x05 \x01(\tR\vparentRunId\x12!\n" +
-	"\fstage_filter\x18\x06 \x01(\tR\vstageFilter\"m\n" +
+	"\fstage_filter\x18\x06 \x01(\tR\vstageFilter\x12%\n" +
+	"\x0eproject_filter\x18\a \x01(\tR\rprojectFilter\x12%\n" +
+	"\x0efeature_filter\x18\b \x01(\tR\rfeatureFilter\x12\x1d\n" +
+	"\n" +
+	"tag_filter\x18\t \x01(\tR\ttagFilter\"m\n" +
 	"\x15ListAgentRunsResponse\x123\n" +
 	"\n" +
 	"agent_runs\x18\x01 \x03(\v2\x14.aot.api.v1.AgentRunR\tagentRuns\x12\x1f\n" +

@@ -85,6 +85,9 @@ export interface AgentRunSpec {
   specRunId?: string;
   displayName?: string;
   pipelineConfig?: PipelineConfig;
+  project?: string;
+  feature?: string;
+  tags?: string[];
 }
 
 export interface AgentRunStatus {
@@ -100,6 +103,7 @@ export interface AgentRunStatus {
   stage?: string;
   retryCount?: number;
   verificationResult?: string;
+  prUrl?: string;
 }
 
 export interface AgentRunEvent {
@@ -146,7 +150,7 @@ export interface TraceSpan {
   id: string;
   parentId?: string;
   name: string;
-  type: "llm" | "tool" | "thought" | "input" | "delegate";
+  type: "llm" | "tool" | "thought" | "input" | "delegate" | "lifecycle";
   startTime: string;
   endTime: string;
   metadata?: Record<string, unknown>;

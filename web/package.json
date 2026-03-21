@@ -54,6 +54,7 @@
     "monaco-editor": "^0.55.1",
     "nuqs": "^2.8.9",
     "react": "^19.0.0",
+    "react-diff-viewer-continued": "^4.2.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.1",

@@ -30,9 +30,9 @@ const phaseMap: Record<string, AgentRunPhase> = {
 };
 
 const backendMap: Record<string, Backend> = {
-  Pod: "pod",
-  KubeVirt: "kubevirt",
-  External: "external",
+  pod: "pod",
+  kubevirt: "kubevirt",
+  external: "external",
 };
 
 /** Map shared AgentRun → web UI AgentRun */
@@ -55,6 +55,11 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       modelTier: (r.spec.modelTier as ModelTier) ?? "default",
       specContent: r.spec.specContent,
       specSource: r.spec.specSource,
+      orchestrationMode: r.spec.orchestrationMode as AgentRun["spec"]["orchestrationMode"],
+      displayName: r.spec.displayName,
+      project: r.spec.project,
+      feature: r.spec.feature,
+      tags: r.spec.tags,
     },
     status: {
       phase: phaseMap[r.status.phase] ?? "pending",
@@ -69,6 +74,7 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       retryCount: r.status.retryCount,
       verificationResult: r.status.verificationResult,
       debugActive: r.status.debugActive ?? false,
+      prUrl: r.status.prUrl,
     },
     createdAt: r.createdAt,
   };

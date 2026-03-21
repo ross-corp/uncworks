@@ -134,6 +134,10 @@ func main() {
 	traceHandler := server.NewTraceHandler(k8sClient, restConfig, namespace)
 	traceHandler.RegisterTraceHandlers(mux)
 
+	// Register classify endpoint
+	classifyHandler := server.NewClassifyRunHandler(k8sClient, namespace, svc.LiteLLMBaseURL)
+	classifyHandler.RegisterClassifyHandlers(mux)
+
 	// Register SSE endpoints for real-time graph and trace updates
 	sseHandler := server.NewSSEHandler(k8sClient, bus, namespace)
 	sseHandler.RegisterSSEHandlers(mux)

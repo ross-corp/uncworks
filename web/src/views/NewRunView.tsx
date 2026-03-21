@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useClient, mapRun } from "../hooks/useClient";
+import { apiFetch } from "../hooks/apiFetch";
 import { useToast } from "../components/Toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -19,6 +20,17 @@ export default function NewRunView() {
   const [mode, setMode] = useState<"prompt" | "spec">("prompt");
   const [specContent, setSpecContent] = useState("");
 
+  // Auto-classification fields
+  const [project, setProject] = useState("");
+  const [feature, setFeature] = useState("");
+  const [tags, setTags] = useState("");
+  const [classifying, setClassifying] = useState(false);
+
+  // Track whether user has manually edited classification fields
+  const userEditedProject = useRef(false);
+  const userEditedFeature = useRef(false);
+  const userEditedTags = useRef(false);
+
   // Clone support: pre-fill from cloned run
   useEffect(() => {
     const cloneId = searchParams.get("clone");
@@ -34,26 +46,74 @@ export default function NewRunView() {
         setSpecContent(run.spec.specContent);
         setMode("spec");
       }
+      if (run.spec.project) {
+        setProject(run.spec.project);
+        userEditedProject.current = true;
+      }
+      if (run.spec.feature) {
+        setFeature(run.spec.feature);
+        userEditedFeature.current = true;
+      }
+      if (run.spec.tags?.length) {
+        setTags(run.spec.tags.join(", "));
+        userEditedTags.current = true;
+      }
     }).catch(() => {});
   }, [searchParams, client]);
+
+  // Auto-classify prompt on blur
+  const handlePromptBlur = useCallback(async () => {
+    if (prompt.trim().length <= 10) return;
+    // Don't classify if all fields already have user edits
+    if (userEditedProject.current && userEditedFeature.current && userEditedTags.current) return;
+
+    setClassifying(true);
+    try {
+      const resp = await apiFetch("/api/v1/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          repos: [{ url: repo.trim(), branch: branch.trim() || "main" }],
+        }),
+      });
+      if (!resp.ok) return;
+      const data = await resp.json() as { project?: string; feature?: string; tags?: string[] };
+      if (data.project && !userEditedProject.current) setProject(data.project);
+      if (data.feature && !userEditedFeature.current) setFeature(data.feature);
+      if (data.tags?.length && !userEditedTags.current) setTags(data.tags.join(", "));
+    } catch {
+      // Classification is best-effort — silently ignore errors
+    } finally {
+      setClassifying(false);
+    }
+  }, [prompt, repo, branch]);
 
   async function handleRun() {
     if (!prompt.trim() || !repo.trim()) return;
     setSubmitting(true);
     try {
+      const parsedTags = tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
       const run = await client.createAgentRun({
-        backend: "Pod",
+        backend: "pod",
         repos: [{ url: repo.trim(), branch: branch.trim() || "main" }],
         prompt: prompt.trim(),
         ttlSeconds: 900,
         modelTier: "default",
+        ...(project.trim() ? { project: project.trim() } : {}),
+        ...(feature.trim() ? { feature: feature.trim() } : {}),
+        ...(parsedTags.length > 0 ? { tags: parsedTags } : {}),
         ...(mode === "spec" && specContent.trim()
           ? { specContent: specContent.trim(), orchestrationMode: "spec-driven" as OrchestrationMode }
           : {}),
       });
       toast("Run created", "success");
       navigate(`/run/${run.id}`);
-    } catch (err) {
+    } catch {
       toast("Failed to create run", "error");
     } finally {
       setSubmitting(false);
@@ -115,6 +175,7 @@ export default function NewRunView() {
             className={`w-full resize-none border bg-background p-3 text-sm outline-none focus:border-primary ${mode === "spec" ? "min-h-[80px]" : "h-full min-h-[200px]"}`}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            onBlur={handlePromptBlur}
             placeholder="What should the agent do?"
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
@@ -137,6 +198,45 @@ export default function NewRunView() {
             />
           </div>
         )}
+
+        {/* Classification fields */}
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <label className="block text-xs text-muted-foreground">Classification</label>
+            {classifying && (
+              <span className="text-xs text-muted-foreground animate-pulse">Auto-suggesting...</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              className="flex-1"
+              value={project}
+              onChange={(e) => {
+                setProject(e.target.value);
+                userEditedProject.current = true;
+              }}
+              placeholder="Project"
+            />
+            <Input
+              className="flex-1"
+              value={feature}
+              onChange={(e) => {
+                setFeature(e.target.value);
+                userEditedFeature.current = true;
+              }}
+              placeholder="Feature"
+            />
+          </div>
+          <Input
+            className="mt-2"
+            value={tags}
+            onChange={(e) => {
+              setTags(e.target.value);
+              userEditedTags.current = true;
+            }}
+            placeholder="Tags (comma-separated)"
+          />
+        </div>
 
         {/* Config summary + actions */}
         <div className="flex items-center justify-between">

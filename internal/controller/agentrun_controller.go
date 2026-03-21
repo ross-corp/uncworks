@@ -121,68 +121,7 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		return r.handleNotImplemented(ctx, agentRun, "External")
 	}
 
-	var repos []aottemporal.Repository
-	for _, repo := range agentRun.Spec.Repos {
-		repos = append(repos, aottemporal.Repository{
-			URL:    repo.URL,
-			Branch: repo.Branch,
-			Path:   repo.Path,
-		})
-	}
-	// Map orchestration tasks from CRD to workflow input
-	var orchTasks []aottemporal.OrchestrationTask
-	if agentRun.Spec.Orchestration != nil {
-		for _, t := range agentRun.Spec.Orchestration.Tasks {
-			orchTasks = append(orchTasks, aottemporal.OrchestrationTask{
-				Name:     t.Name,
-				Prompt:   t.Prompt,
-				RepoURLs: t.RepoURLs,
-			})
-		}
-	}
-
-	workflowInput := aottemporal.WorkflowInput{
-		AgentRunName:      agentRun.Name,
-		Namespace:         agentRun.Namespace,
-		Repos:             repos,
-		Prompt:            agentRun.Spec.Prompt,
-		DevboxConfig:      agentRun.Spec.DevboxConfig,
-		TTLSeconds:        agentRun.Spec.TTLSeconds,
-		Image:             agentRun.Spec.Image,
-		EnvVars:           agentRun.Spec.EnvVars,
-		ModelTier:         agentRun.Spec.ModelTier,
-		LiteLLMBaseURL:    r.LiteLLMBaseURL,
-		SpecContent:       agentRun.Spec.SpecContent,
-		WorkspaceName:     agentRun.Spec.WorkspaceName,
-		OrchestrationMode: aottemporal.OrchestrationMode(agentRun.Spec.OrchestrationMode),
-		Orchestration:     orchTasks,
-		ParentRunID:       agentRun.Spec.ParentRunID,
-		SpecRunID:         agentRun.Spec.SpecRunID,
-	}
-
-	// Map pipeline config from CRD to workflow input
-	if agentRun.Spec.PipelineConfig != nil {
-		workflowInput.PipelineConfig = &aottemporal.PipelineConfigInput{
-			Plan: aottemporal.StageConfigInput{
-				Model:          agentRun.Spec.PipelineConfig.Plan.Model,
-				TimeoutSeconds: agentRun.Spec.PipelineConfig.Plan.TimeoutSeconds,
-				MaxRetries:     agentRun.Spec.PipelineConfig.Plan.MaxRetries,
-				OnFailure:      agentRun.Spec.PipelineConfig.Plan.OnFailure,
-			},
-			Execute: aottemporal.StageConfigInput{
-				Model:          agentRun.Spec.PipelineConfig.Execute.Model,
-				TimeoutSeconds: agentRun.Spec.PipelineConfig.Execute.TimeoutSeconds,
-				MaxRetries:     agentRun.Spec.PipelineConfig.Execute.MaxRetries,
-				OnFailure:      agentRun.Spec.PipelineConfig.Execute.OnFailure,
-			},
-			Verify: aottemporal.StageConfigInput{
-				Model:          agentRun.Spec.PipelineConfig.Verify.Model,
-				TimeoutSeconds: agentRun.Spec.PipelineConfig.Verify.TimeoutSeconds,
-				MaxRetries:     agentRun.Spec.PipelineConfig.Verify.MaxRetries,
-				OnFailure:      agentRun.Spec.PipelineConfig.Verify.OnFailure,
-			},
-		}
-	}
+	workflowInput := BuildWorkflowInput(agentRun, r.LiteLLMBaseURL)
 
 	// Set orchestration labels
 	if agentRun.Labels == nil {
@@ -206,6 +145,17 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		agentRun.Labels[labelSpecRunID] = specRunID
 		agentRun.Labels[labelRunRole] = "junior"
 		agentRun.Annotations[annotationParent] = agentRun.Spec.ParentRunID
+	}
+
+	// Auto-set feature label for spec-driven runs that don't have one.
+	if orchMode == aotv1alpha1.OrchestrationModeSpecDriven {
+		if _, hasFeature := agentRun.Labels["aot.uncworks.io/feature"]; !hasFeature {
+			featureName := agentRun.Spec.DisplayName
+			if featureName == "" {
+				featureName = agentRun.Name
+			}
+			agentRun.Labels["aot.uncworks.io/feature"] = featureName
+		}
 	}
 
 	taskQueue := r.TaskQueue
@@ -300,6 +250,10 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 	}
 	if state.DeploymentName != "" && agentRun.Status.DeploymentName != state.DeploymentName {
 		agentRun.Status.DeploymentName = state.DeploymentName
+		updated = true
+	}
+	if state.PRUrl != "" && agentRun.Status.PRUrl != state.PRUrl {
+		agentRun.Status.PRUrl = state.PRUrl
 		updated = true
 	}
 

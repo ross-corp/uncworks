@@ -103,6 +103,12 @@ type WorkflowInput struct {
 	ParentRunID       string
 	SpecRunID         string
 	PipelineConfig    *PipelineConfigInput
+	AutoPush          bool
+	AutoPR            bool
+	PRBaseBranch      string
+	Project           string
+	Feature           string
+	Tags              []string
 }
 
 // PipelineConfigInput contains per-stage configuration for spec-driven runs.
@@ -126,6 +132,7 @@ type WorkflowState struct {
 	Message        string
 	PodName        string
 	DeploymentName string
+	PRUrl          string
 }
 
 // HumanInputSignal is the payload for the human-input signal.
@@ -153,6 +160,13 @@ const (
 	ActivityPersistRunData = "PersistRunData"
 	ActivityEmbedRunData   = "EmbedRunData"
 	ActivityHydrateContext = "HydrateContext"
+
+	// Git/PR activities
+	ActivityPushChanges = "PushChanges"
+	ActivityCreatePR    = "CreatePR"
+
+	// Tag enrichment
+	ActivityEnrichRunTags = "EnrichRunTags"
 )
 
 // AgentRunWorkflow orchestrates the full lifecycle of an agent run.
@@ -519,7 +533,29 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 		// Check terminal states
 		switch state.Phase {
-		case "Succeeded", "Failed", "Cancelled":
+		case "Succeeded":
+			// Enrich tags from git diff before cleanup
+			enrichCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+				StartToCloseTimeout: 30 * time.Second,
+			})
+			repoPath := workspacePath
+			if len(input.Repos) > 0 {
+				rp := input.Repos[0].Path
+				if rp == "" {
+					rp = repoNameFromURL(input.Repos[0].URL)
+				}
+				repoPath = "/workspace/" + rp
+			}
+			if err := workflow.ExecuteActivity(enrichCtx, ActivityEnrichRunTags, EnrichRunTagsInput{
+				AgentRunName: input.AgentRunName,
+				Namespace:    input.Namespace,
+				PodIP:        podIP,
+				RepoPath:     repoPath,
+			}).Get(ctx, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Tag enrichment failed", "error", err)
+			}
+			return nil
+		case "Failed", "Cancelled":
 			// Pod cleanup happens via defer
 			return nil
 		}

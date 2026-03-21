@@ -375,6 +375,11 @@ func (h *Hydrator) cloneRepo(ctx context.Context, repoURL, bareDir string) error
 }
 
 func (h *Hydrator) createWorktree(ctx context.Context, bareDir, worktreeDir, branch string) error {
+	// Idempotent: skip if worktree directory already exists (e.g., debug pod restart)
+	if _, err := os.Stat(filepath.Join(worktreeDir, ".git")); err == nil {
+		return nil
+	}
+
 	if branch == "" {
 		// Detect default branch from the bare repo's HEAD
 		out, err := h.runner.Run(ctx, bareDir, "git", "symbolic-ref", "--short", "HEAD")
