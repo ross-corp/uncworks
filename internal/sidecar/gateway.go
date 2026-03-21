@@ -188,12 +188,25 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 
 	g.process = proc
 
+	// Track current stage + workdir for span naming and diff capture.
+	resolvedDir := resolveWorkDir(req.Msg.RepoPath)
+	setCurrentStage(req.Msg.Stage, resolvedDir)
+
+	// Configure git for checkpoint commits
+	gitConfigCmd := exec.Command("git", "config", "user.name", "aot-agent")
+	gitConfigCmd.Dir = resolvedDir
+	_ = gitConfigCmd.Run()
+	gitEmailCmd := exec.Command("git", "config", "user.email", "agent@aot.uncworks.io")
+	gitEmailCmd.Dir = resolvedDir
+	_ = gitEmailCmd.Run()
+
+	// Reset checkpoint state for new stage
+	checkpointMu.Lock()
+	lastCheckpointSHA = ""
+	checkpointMu.Unlock()
+
 	// Write an initial trace span so the traces tab has data immediately.
-	// Use stage to determine if this is manager (unc) or implementer (neph).
-	stageName := "neph.started"
-	if req.Msg.Stage == "plan" || req.Msg.Stage == "verify" {
-		stageName = "unc.started"
-	}
+	stageName := spanPrefix() + ".started"
 	appendTraceSpan(TraceSpan{
 		ID:        uuid.New().String(),
 		Name:      stageName,
@@ -744,7 +757,7 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 		})
 
 	case agentv1.EventType_EVENT_TYPE_TOOL_CALL:
-		// 10.1 + 10.2: Record tool call span with git diff
+		// 10.1 + 10.2: Record tool call span with git checkpoint
 		log.Printf("Agent tool call: %s", req.Msg.Payload)
 		metadata := parsePayloadMetadata(req.Msg.Payload)
 		spanName := "tool_call"
@@ -761,10 +774,14 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 			Metadata:  metadata,
 		}
 
-		// 10.6: Capture git diff HEAD in the workspace
-		if diff := captureGitDiff("/workspace"); diff != nil && len(diff.Files) > 0 {
+		// Create git checkpoint and capture diff
+		sha, diff := createGitCheckpoint(resolvedWorkDir(), spanName)
+		if diff != nil && len(diff.Files) > 0 {
 			span.HasDiff = true
 			span.Diff = diff
+		}
+		if sha != "" {
+			span.Metadata["checkpointSHA"] = sha
 		}
 
 		appendTraceSpan(span)
@@ -1038,18 +1055,6 @@ var stdoutToolCallPrefixes = []string{
 	"Running command:", // shell/bash tool
 }
 
-// piJSONEvent represents a JSON-mode event from pi-coding-agent.
-// Pi emits events like: {"type":"tool_call","name":"bash","input":{...}}
-// and {"type":"tool_result","name":"bash","output":"..."}.
-type piJSONEvent struct {
-	Type   string                 `json:"type"`
-	Name   string                 `json:"name,omitempty"`
-	Input  map[string]interface{} `json:"input,omitempty"`
-	Output string                 `json:"output,omitempty"`
-	Text   string                 `json:"text,omitempty"`
-	Error  string                 `json:"error,omitempty"`
-}
-
 // maybeCaptureStdoutSpan inspects a single stdout line and, if it looks like
 // a tool invocation or a pi JSON-mode event, records a trace span.
 func maybeCaptureStdoutSpan(line string) {
@@ -1100,87 +1105,50 @@ func maybeCaptureStdoutSpan(line string) {
 	}
 }
 
-// maybeCaptureJSONEvent processes a parsed pi JSON-mode event and records
-// the appropriate trace span.
-func maybeCaptureJSONEvent(evt *piJSONEvent, raw string) {
-	now := time.Now()
-
-	switch evt.Type {
-	case "tool_call":
-		spanName := evt.Name
-		if spanName == "" {
-			spanName = "tool_call"
-		}
-		metadata := map[string]interface{}{
-			"source": "json",
-			"raw":    raw,
-		}
-		if evt.Input != nil {
-			metadata["input"] = evt.Input
-		}
-		appendTraceSpan(TraceSpan{
-			ID:        uuid.New().String(),
-			Name:      spanName,
-			Type:      "tool",
-			StartTime: now,
-			EndTime:   now,
-			Metadata:  metadata,
-		})
-
-	case "tool_result":
-		spanName := evt.Name
-		if spanName == "" {
-			spanName = "tool_result"
-		}
-		metadata := map[string]interface{}{
-			"source": "json",
-			"raw":    raw,
-		}
-		if evt.Output != "" {
-			metadata["output"] = evt.Output
-		}
-		if evt.Error != "" {
-			metadata["error"] = evt.Error
-		}
-		appendTraceSpan(TraceSpan{
-			ID:        uuid.New().String(),
-			Name:      spanName + "_result",
-			Type:      "tool",
-			StartTime: now,
-			EndTime:   now,
-			Metadata:  metadata,
-		})
-
-	case "assistant", "message":
-		// LLM text response
-		metadata := map[string]interface{}{
-			"source": "json",
-		}
-		if evt.Text != "" {
-			metadata["text"] = evt.Text
-		}
-		appendTraceSpan(TraceSpan{
-			ID:        uuid.New().String(),
-			Name:      "llm_response",
-			Type:      "llm",
-			StartTime: now,
-			EndTime:   now,
-			Metadata:  metadata,
-		})
-
-	default:
-		// Log other event types for debugging but don't create spans
-		log.Printf("pi JSON event: type=%s", evt.Type)
-	}
-}
-
-// --- Thinking/input span state for streaming events ---
+// --- Span state for streaming events ---
 var (
 	thinkingSpanMu    sync.Mutex
 	thinkingSpanID    string
 	thinkingSpanStart time.Time
 	inThinkingBlock   bool
+
+	// Current agent context — set by StartAgent, used by span creators
+	currentStageMu sync.RWMutex
+	currentStage   string // "plan", "execute", "verify", ""
+	currentWorkDir string // resolved workspace path for git diffs
+
+	// Git checkpoint state — tracks the last checkpoint commit SHA
+	checkpointMu      sync.Mutex
+	lastCheckpointSHA string
 )
+
+// setCurrentStage updates the package-level stage and workdir for span naming.
+func setCurrentStage(stage, workDir string) {
+	currentStageMu.Lock()
+	defer currentStageMu.Unlock()
+	currentStage = stage
+	currentWorkDir = workDir
+}
+
+// spanPrefix returns "unc" for plan/verify stages, "neph" for execute/single.
+func spanPrefix() string {
+	currentStageMu.RLock()
+	defer currentStageMu.RUnlock()
+	if currentStage == "plan" || currentStage == "verify" {
+		return "unc"
+	}
+	return "neph"
+}
+
+// resolvedWorkDir returns the current resolved workspace for git diffs.
+func resolvedWorkDir() string {
+	currentStageMu.RLock()
+	defer currentStageMu.RUnlock()
+	if currentWorkDir != "" {
+		return currentWorkDir
+	}
+	return "/workspace"
+}
 
 // Active span tracking for open-close matching
 var (
@@ -1223,27 +1191,32 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 	case "tool_execution_end":
 		activeToolSpanMu.Lock()
 		if activeToolSpanID != "" {
+			prefix := spanPrefix()
 			span := TraceSpan{
 				ID:        activeToolSpanID,
-				Name:      "impl." + activeToolSpanName,
+				Name:      prefix + "." + activeToolSpanName,
 				Type:      "tool",
 				StartTime: activeToolSpanStart,
 				EndTime:   now,
 				Metadata: map[string]interface{}{
-					"tool": activeToolSpanName,
+					"tool":  activeToolSpanName,
+					"stage": currentStage,
+					"role":  prefix,
 				},
 			}
-			// Capture git diff for tool execution
-			if diff := captureGitDiff("/workspace"); diff != nil && len(diff.Files) > 0 {
+			// Create git checkpoint and capture diff
+			sha, diff := createGitCheckpoint(resolvedWorkDir(), activeToolSpanName)
+			if diff != nil && len(diff.Files) > 0 {
 				span.HasDiff = true
-				spanDiff := &SpanDiff{}
-				for _, f := range diff.Files {
-					spanDiff.Files = append(spanDiff.Files, FileDiff{
-						Path:  f.Path,
-						Patch: f.Patch,
-					})
+				span.Diff = diff
+			}
+			if sha != "" {
+				span.Metadata["checkpointSHA"] = sha
+				checkpointMu.Lock()
+				if lastCheckpointSHA != sha {
+					span.Metadata["prevCheckpointSHA"] = lastCheckpointSHA
 				}
-				span.Diff = spanDiff
+				checkpointMu.Unlock()
 			}
 			appendTraceSpan(span)
 			activeToolSpanID = ""
@@ -1302,15 +1275,18 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 		// Close LLM span
 		activeLLMSpanMu.Lock()
 		if activeLLMSpanID != "" {
+			prefix := spanPrefix()
 			durationMs := now.Sub(activeLLMSpanStart).Milliseconds()
 			appendTraceSpan(TraceSpan{
 				ID:        activeLLMSpanID,
-				Name:      "impl.thought",
+				Name:      prefix + ".thought",
 				Type:      "llm",
 				StartTime: activeLLMSpanStart,
 				EndTime:   now,
 				Metadata: map[string]interface{}{
 					"durationMs": durationMs,
+					"stage":      currentStage,
+					"role":       prefix,
 				},
 			})
 			activeLLMSpanID = ""
@@ -1361,26 +1337,78 @@ func isLLMResponseLog(payload string) bool {
 	return false
 }
 
-// captureGitDiff runs `git diff HEAD` in the given directory and parses the output
-// into a SpanDiff with per-file patches.
-func captureGitDiff(workDir string) *SpanDiff {
-	cmd := exec.Command("git", "diff", "HEAD")
-	cmd.Dir = workDir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		log.Printf("WARNING: git diff failed in %s: %v (stderr: %s)", workDir, err, stderr.String())
-		return nil
+// createGitCheckpoint stages all changes, commits them as a checkpoint, and returns
+// the commit SHA + diff against the previous checkpoint. Returns ("", nil) if no changes.
+func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
+	// 1. git add -A (stage everything including untracked)
+	addCmd := exec.Command("git", "add", "-A")
+	addCmd.Dir = workDir
+	if err := addCmd.Run(); err != nil {
+		log.Printf("git checkpoint: add failed in %s: %v", workDir, err)
+		return "", nil
 	}
 
-	output := stdout.String()
-	if strings.TrimSpace(output) == "" {
-		return nil
+	// 2. Check if anything to commit
+	statusCmd := exec.Command("git", "status", "--porcelain")
+	statusCmd.Dir = workDir
+	var statusOut bytes.Buffer
+	statusCmd.Stdout = &statusOut
+	_ = statusCmd.Run()
+	if strings.TrimSpace(statusOut.String()) == "" {
+		return "", nil // No changes
 	}
 
-	return parseDiffOutput(output)
+	// 3. Commit with checkpoint message
+	msg := fmt.Sprintf("aot-checkpoint: %s", toolName)
+	commitCmd := exec.Command("git", "commit", "--no-verify", "--allow-empty", "-m", msg)
+	commitCmd.Dir = workDir
+	commitCmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=aot-agent",
+		"GIT_AUTHOR_EMAIL=agent@aot.uncworks.io",
+		"GIT_COMMITTER_NAME=aot-agent",
+		"GIT_COMMITTER_EMAIL=agent@aot.uncworks.io",
+	)
+	if err := commitCmd.Run(); err != nil {
+		log.Printf("git checkpoint: commit failed in %s: %v", workDir, err)
+		return "", nil
+	}
+
+	// 4. Get current SHA
+	shaCmd := exec.Command("git", "rev-parse", "HEAD")
+	shaCmd.Dir = workDir
+	var shaOut bytes.Buffer
+	shaCmd.Stdout = &shaOut
+	if err := shaCmd.Run(); err != nil {
+		return "", nil
+	}
+	currentSHA := strings.TrimSpace(shaOut.String())
+
+	// 5. Compute diff against previous checkpoint
+	checkpointMu.Lock()
+	prevSHA := lastCheckpointSHA
+	lastCheckpointSHA = currentSHA
+	checkpointMu.Unlock()
+
+	var diffCmd *exec.Cmd
+	if prevSHA != "" {
+		diffCmd = exec.Command("git", "diff", prevSHA+".."+currentSHA)
+	} else {
+		diffCmd = exec.Command("git", "diff", "HEAD~1..HEAD")
+	}
+	diffCmd.Dir = workDir
+	var diffOut bytes.Buffer
+	diffCmd.Stdout = &diffOut
+	if err := diffCmd.Run(); err != nil {
+		// diff command failed (e.g., no HEAD~1 for first commit)
+		return currentSHA, nil
+	}
+
+	diffText := diffOut.String()
+	if strings.TrimSpace(diffText) == "" {
+		return currentSHA, nil
+	}
+
+	return currentSHA, parseDiffOutput(diffText)
 }
 
 // parseDiffOutput splits unified diff output into per-file FileDiff entries.
