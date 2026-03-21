@@ -23,6 +23,12 @@ import {
 
 // -- Failed span override styles ----------------------------
 
+const SUCCESS_STYLES = {
+  bar: "bg-emerald-500/20 border-l-2 border-emerald-500",
+  text: "text-emerald-400",
+  dot: "bg-emerald-500",
+};
+
 const FAILED_STYLES = {
   bar: "bg-red-500/20 border-l-2 border-red-500",
   text: "text-red-400",
@@ -202,16 +208,22 @@ function SpanDetail({
 
   useEffect(() => {
     if (!span.hasDiff || !runId) return;
+    setDiffData(null);
     setDiffLoading(true);
-    import("../hooks/apiFetch").then(({ apiFetch }) => {
-      apiFetch(`/api/v1/runs/${runId}/traces/${span.id}/diff`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.files) setDiffData(data.files);
-        })
-        .catch(() => {})
-        .finally(() => setDiffLoading(false));
-    });
+    fetch(`/api/v1/runs/${runId}/traces/${span.id}/diff`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        if (data?.files) setDiffData(data.files);
+        else setDiffData([]);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch diff:", err);
+        setDiffData([]);
+      })
+      .finally(() => setDiffLoading(false));
   }, [span.id, span.hasDiff, runId]);
 
   const durationMs = getDurationMs(span.startTime, span.endTime);
@@ -721,13 +733,20 @@ export default function TraceTimeline({
                         )
                       : 100;
 
+                  const isComplete = !!span.endTime && !isFailed;
                   const barClass = isFailed
                     ? FAILED_STYLES.bar
                     : isActive
                       ? rStyle.barActive
-                      : rStyle.bar;
+                      : isComplete
+                        ? SUCCESS_STYLES.bar
+                        : rStyle.bar;
 
-                  const textClass = isFailed ? FAILED_STYLES.text : rStyle.text;
+                  const textClass = isFailed
+                    ? FAILED_STYLES.text
+                    : isComplete
+                      ? SUCCESS_STYLES.text
+                      : rStyle.text;
 
                   return (
                     <div
@@ -771,7 +790,7 @@ export default function TraceTimeline({
                           <span
                             className={cn(
                               "inline-block h-2 w-2 rounded-sm flex-shrink-0",
-                              isFailed ? FAILED_STYLES.dot : rStyle.dot
+                              isFailed ? FAILED_STYLES.dot : isComplete ? SUCCESS_STYLES.dot : rStyle.dot
                             )}
                           />
 
