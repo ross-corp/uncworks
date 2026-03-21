@@ -1130,14 +1130,14 @@ func setCurrentStage(stage, workDir string) {
 	currentWorkDir = workDir
 }
 
-// spanPrefix returns "unc" for plan/verify stages, "neph" for execute/single.
+// spanPrefix returns "manage" for plan/verify stages, "implement" for execute/single.
 func spanPrefix() string {
 	currentStageMu.RLock()
 	defer currentStageMu.RUnlock()
 	if currentStage == "plan" || currentStage == "verify" {
-		return "unc"
+		return "manage"
 	}
-	return "neph"
+	return "implement"
 }
 
 // resolvedWorkDir returns the current resolved workspace for git diffs.
@@ -1152,10 +1152,11 @@ func resolvedWorkDir() string {
 
 // Active span tracking for open-close matching
 var (
-	activeToolSpanMu    sync.Mutex
-	activeToolSpanID    string
-	activeToolSpanStart time.Time
-	activeToolSpanName  string
+	activeToolSpanMu       sync.Mutex
+	activeToolSpanID       string
+	activeToolSpanStart    time.Time
+	activeToolSpanName     string
+	activeToolInputSummary string
 
 	activeLLMSpanMu    sync.Mutex
 	activeLLMSpanID    string
@@ -1190,9 +1191,10 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 				StartTime: activeToolSpanStart,
 				EndTime:   now,
 				Metadata: map[string]interface{}{
-					"tool":  activeToolSpanName,
-					"stage": currentStage,
-					"role":  prefix,
+					"tool":      activeToolSpanName,
+					"toolInput": activeToolInputSummary,
+					"stage":     currentStage,
+					"role":      prefix,
 				},
 			}
 			// Create git checkpoint and capture diff
@@ -1211,6 +1213,7 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 			}
 			appendTraceSpan(span)
 			activeToolSpanID = ""
+			activeToolInputSummary = ""
 		}
 		activeToolSpanMu.Unlock()
 
@@ -1257,6 +1260,17 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 			if json.Unmarshal(ame.Tool, &tool) == nil && tool.Name != "" {
 				activeToolSpanMu.Lock()
 				activeToolSpanName = tool.Name
+				// Capture tool input summary for span metadata
+				if tool.Input != nil {
+					inputJSON, _ := json.Marshal(tool.Input)
+					if len(inputJSON) > 200 {
+						activeToolInputSummary = string(inputJSON[:200]) + "..."
+					} else {
+						activeToolInputSummary = string(inputJSON)
+					}
+				} else {
+					activeToolInputSummary = ""
+				}
 				activeToolSpanMu.Unlock()
 			}
 		}

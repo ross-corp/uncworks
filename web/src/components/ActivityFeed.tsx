@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { apiFetch } from "../hooks/apiFetch";
 import type { AgentRunPhase } from "../types/agent-run";
+import { ROLE_STYLES } from "../lib/role-styles";
 
 interface LogEntry {
   timestamp: string;
@@ -17,8 +18,8 @@ interface DisplayEntry {
   entry: LogEntry;
   /** For tool_call entries, the paired tool_result (if any). */
   pairedResult?: LogEntry;
-  /** Synthetic label override: "user" | "manage" | "impl" | "system" | "delegate" */
-  label: "user" | "manage" | "impl" | "system" | "delegate";
+  /** Synthetic label override: "user" | "manage" | "implement" | "system" | "delegate" */
+  label: "user" | "manage" | "implement" | "system" | "delegate";
 }
 
 interface ThinkingState {
@@ -345,12 +346,12 @@ function buildDisplayEntries(entries: LogEntry[]): DisplayEntry[] {
         }
         if (entries[j].type === "tool_call" || entries[j].type === "delegate") break;
       }
-      result.push({ entry, pairedResult, label: "impl" });
+      result.push({ entry, pairedResult, label: "implement" });
     } else if (entry.type === "tool_result") {
       // Orphaned tool_result (no preceding tool_call matched)
-      result.push({ entry, label: "impl" });
+      result.push({ entry, label: "implement" });
     } else if (entry.type === "assistant") {
-      result.push({ entry, label: "impl" });
+      result.push({ entry, label: "implement" });
     } else if (entry.type === "system") {
       result.push({ entry, label: "system" });
     } else {
@@ -365,11 +366,11 @@ function ThinkingEntry({ text, toolName }: { text: string; toolName?: string }) 
   return (
     <div className="flex gap-3 py-1">
       <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">
-        <span className="animate-pulse text-green-400">--</span>
+        <span className={`animate-pulse ${ROLE_STYLES.implement.text}`}>--</span>
       </span>
-      <span className="w-14 shrink-0 text-xs font-medium text-green-500/50">impl</span>
+      <span className={`w-[72px] shrink-0 text-xs font-medium ${ROLE_STYLES.implement.text} opacity-50`}>implement</span>
       <span className="text-sm italic text-muted-foreground/50 whitespace-pre-wrap">
-        {toolName && <span className="text-green-400/50">[{toolName}] </span>}
+        {toolName && <span className={`${ROLE_STYLES.implement.text} opacity-50`}>[{toolName}] </span>}
         {text}
       </span>
     </div>
@@ -441,7 +442,7 @@ function EntryRow({ display }: { display: DisplayEntry }) {
       return (
         <div className="flex gap-3 py-1">
           <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
-          <span className="w-14 shrink-0 text-xs font-medium text-blue-500">user{spanBadge}</span>
+          <span className={`w-[72px] shrink-0 text-xs font-medium ${ROLE_STYLES.user.text}`}>user{spanBadge}</span>
           <ExpandableContent content={entry.content} />
         </div>
       );
@@ -450,7 +451,7 @@ function EntryRow({ display }: { display: DisplayEntry }) {
       return (
         <div className="flex gap-3 py-1">
           <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
-          <span className="w-14 shrink-0 text-xs font-medium text-blue-500">manage{spanBadge}</span>
+          <span className={`w-[72px] shrink-0 text-xs font-medium ${ROLE_STYLES.manage.text}`}>manage{spanBadge}</span>
           <ExpandableContent content={entry.content} />
         </div>
       );
@@ -459,7 +460,7 @@ function EntryRow({ display }: { display: DisplayEntry }) {
       return (
         <div className="flex gap-3 py-1">
           <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
-          <span className="w-14 shrink-0 text-xs text-yellow-500">system{spanBadge}</span>
+          <span className={`w-[72px] shrink-0 text-xs ${ROLE_STYLES.system.text}`}>system{spanBadge}</span>
           <span className="text-xs italic text-muted-foreground">{entry.content}</span>
         </div>
       );
@@ -478,11 +479,11 @@ function EntryRow({ display }: { display: DisplayEntry }) {
         }
       }
       return (
-        <div className="flex gap-3 py-1 pl-4 border-l-2 border-purple-500/30">
+        <div className={`flex gap-3 py-1 pl-4 border-l-2 ${ROLE_STYLES.delegate.border}`}>
           <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
-          <span className="w-14 shrink-0 text-xs font-medium text-purple-400">deleg{spanBadge}</span>
+          <span className={`w-[72px] shrink-0 text-xs font-medium ${ROLE_STYLES.delegate.text}`}>delegate{spanBadge}</span>
           <div className="min-w-0">
-            <div className="text-sm text-purple-300">
+            <div className={`text-sm ${ROLE_STYLES.delegate.text}`}>
               {taskDesc || "delegate_task"}
             </div>
             {contextDesc && (
@@ -498,13 +499,13 @@ function EntryRow({ display }: { display: DisplayEntry }) {
       );
     }
 
-    case "impl": {
+    case "implement": {
       // Assistant text (no tool)
       if (entry.type === "assistant") {
         return (
           <div className="flex gap-3 py-1">
             <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
-            <span className="w-14 shrink-0 text-xs font-medium text-green-500">impl{spanBadge}</span>
+            <span className={`w-[72px] shrink-0 text-xs font-medium ${ROLE_STYLES.implement.text}`}>implement{spanBadge}</span>
             <ExpandableContent content={entry.content} className="text-foreground" />
           </div>
         );
@@ -519,17 +520,17 @@ function EntryRow({ display }: { display: DisplayEntry }) {
         return (
           <div className="flex gap-3 py-1">
             <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
-            <span className="w-14 shrink-0 text-xs font-medium text-green-500">impl{spanBadge}</span>
+            <span className={`w-[72px] shrink-0 text-xs font-medium ${ROLE_STYLES.implement.text}`}>implement{spanBadge}</span>
             <div className="min-w-0">
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="text-sm text-green-400 hover:text-green-300"
+                className={`text-sm ${ROLE_STYLES.implement.text} hover:opacity-80`}
               >
                 {expanded ? "v" : ">"} {entry.toolName}
               </button>
               {/* Inline result summary (always visible, muted) */}
               {pairedResult && !expanded && (
-                <span className={`ml-2 text-xs ${resultFailed ? "text-red-400" : "text-muted-foreground/60"}`}>
+                <span className={`ml-2 text-xs ${resultFailed ? ROLE_STYLES.error.text : "text-muted-foreground/60"}`}>
                   {truncate(pairedResult.content, 80)}
                 </span>
               )}
@@ -539,7 +540,7 @@ function EntryRow({ display }: { display: DisplayEntry }) {
                     <pre className="p-2 bg-muted text-xs overflow-x-auto rounded">{formatJSON(entry.toolInput)}</pre>
                   )}
                   {pairedResult && (
-                    <div className="border-l-2 border-green-800 pl-2">
+                    <div className={`border-l-2 ${ROLE_STYLES.implement.border} pl-2`}>
                       <ToolResult content={pairedResult.content} failed={resultFailed} />
                     </div>
                   )}
@@ -556,7 +557,7 @@ function EntryRow({ display }: { display: DisplayEntry }) {
         return (
           <div className="flex gap-3 py-1">
             <span className="w-16 shrink-0 text-muted-foreground/50 text-xs">{ts}</span>
-            <span className="w-14 shrink-0 text-xs font-medium text-green-500">impl{spanBadge}</span>
+            <span className={`w-[72px] shrink-0 text-xs font-medium ${ROLE_STYLES.implement.text}`}>implement{spanBadge}</span>
             <ToolResult content={entry.content} failed={failed} />
           </div>
         );

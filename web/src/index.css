@@ -80,6 +80,14 @@
   /* Effect tokens */
   --glow-primary: oklch(0.85 0.15 75 / 0.5);
   --glow-secondary: oklch(0.80 0.18 145 / 0.5);
+
+  /* Role colors */
+  --role-manage: 217 91% 60%;
+  --role-implement: 160 84% 39%;
+  --role-system: 38 92% 50%;
+  --role-user: 215 20% 45%;
+  --role-delegate: 263 70% 50%;
+  --role-error: 0 84% 60%;
 }
 
 .dark {
@@ -93,6 +101,14 @@
   --unc-warning: #fbbf24;
   --unc-error: #f87171;
   --unc-neutral: #6b7280;
+
+  /* Role colors */
+  --role-manage: 213 94% 68%;
+  --role-implement: 160 84% 45%;
+  --role-system: 43 96% 56%;
+  --role-user: 215 20% 65%;
+  --role-delegate: 263 70% 60%;
+  --role-error: 0 84% 60%;
 
   /* Radix/shadcn primitives — dark overrides */
   --background: var(--unc-bg);
