@@ -48,6 +48,7 @@ func TestBoundary_CRDToWorkflowInput_AllFields(t *testing.T) {
 			PRBaseBranch: "staging",
 			Project:      "platform",
 			Feature:      "auth-overhaul",
+			SpecSource:   "editor",
 			Tags:         []string{"backend", "security"},
 			PipelineConfig: &aotv1alpha1.PipelineConfig{
 				Plan: aotv1alpha1.StageConfig{
@@ -95,6 +96,8 @@ func TestBoundary_CRDToWorkflowInput_AllFields(t *testing.T) {
 	assertEqual(t, "PRBaseBranch", got.PRBaseBranch, "staging")
 	assertEqual(t, "Project", got.Project, "platform")
 	assertEqual(t, "Feature", got.Feature, "auth-overhaul")
+	assertEqual(t, "Backend", got.Backend, "Pod")
+	assertEqual(t, "SpecSource", got.SpecSource, "editor")
 	if len(got.Tags) != 2 {
 		t.Fatalf("expected 2 tags, got %d", len(got.Tags))
 	}
@@ -168,6 +171,8 @@ func TestBoundary_CRDToWorkflowInput_NilOptionals(t *testing.T) {
 	assertEqual(t, "AutoPush", got.AutoPush, false)
 	assertEqual(t, "AutoPR", got.AutoPR, false)
 	assertEqual(t, "PRBaseBranch", got.PRBaseBranch, "")
+	assertEqual(t, "Backend", got.Backend, "Pod")
+	assertEqual(t, "SpecSource", got.SpecSource, "")
 
 	if got.PipelineConfig != nil {
 		t.Error("expected nil PipelineConfig for CRD without pipeline config")
@@ -175,6 +180,63 @@ func TestBoundary_CRDToWorkflowInput_NilOptionals(t *testing.T) {
 	if len(got.Orchestration) != 0 {
 		t.Errorf("expected 0 orchestration tasks, got %d", len(got.Orchestration))
 	}
+}
+
+// TestBoundary_CRDWorkflow_BackendMapped verifies BuildWorkflowInput copies
+// Backend for each BackendType variant.
+func TestBoundary_CRDWorkflow_BackendMapped(t *testing.T) {
+	tests := []struct {
+		backend aotv1alpha1.BackendType
+		want    string
+	}{
+		{aotv1alpha1.BackendPod, "Pod"},
+		{aotv1alpha1.BackendKubeVirt, "KubeVirt"},
+		{aotv1alpha1.BackendExternal, "External"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			crd := &aotv1alpha1.AgentRun{
+				ObjectMeta: metav1.ObjectMeta{Name: "run-1", Namespace: "default"},
+				Spec: aotv1alpha1.AgentRunSpec{
+					Backend: tt.backend,
+					Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/org/repo.git"}},
+					Prompt:  "test",
+				},
+			}
+			got := controller.BuildWorkflowInput(crd, "")
+			assertEqual(t, "Backend", got.Backend, tt.want)
+		})
+	}
+}
+
+// TestBoundary_CRDWorkflow_SpecSourceMapped verifies BuildWorkflowInput copies
+// SpecSource when present and returns empty string when absent.
+func TestBoundary_CRDWorkflow_SpecSourceMapped(t *testing.T) {
+	// With SpecSource set
+	crd := &aotv1alpha1.AgentRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "run-1", Namespace: "default"},
+		Spec: aotv1alpha1.AgentRunSpec{
+			Backend:    aotv1alpha1.BackendPod,
+			Repos:      []aotv1alpha1.Repository{{URL: "https://github.com/org/repo.git"}},
+			Prompt:     "test",
+			SpecSource: "github:org/repo/spec.md",
+		},
+	}
+	got := controller.BuildWorkflowInput(crd, "")
+	assertEqual(t, "SpecSource (set)", got.SpecSource, "github:org/repo/spec.md")
+
+	// Without SpecSource
+	crd2 := &aotv1alpha1.AgentRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "run-2", Namespace: "default"},
+		Spec: aotv1alpha1.AgentRunSpec{
+			Backend: aotv1alpha1.BackendPod,
+			Repos:   []aotv1alpha1.Repository{{URL: "https://github.com/org/repo.git"}},
+			Prompt:  "test",
+		},
+	}
+	got2 := controller.BuildWorkflowInput(crd2, "")
+	assertEqual(t, "SpecSource (empty)", got2.SpecSource, "")
 }
 
 func assertWorkflowStageConfig(t *testing.T, name string, got, want aottemporal.StageConfigInput) {
