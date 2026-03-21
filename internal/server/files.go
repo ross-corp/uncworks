@@ -399,7 +399,7 @@ func parseLsOutput(output string) []FileEntry {
 
 // isHiddenDir returns true for internal directories that should be filtered from file listings.
 func isHiddenDir(name string) bool {
-	return name == ".aot" || name == ".bare" || name == ".openspec"
+	return name == ".aot" || name == ".bare" || name == ".openspec" || name == ".pi"
 }
 
 // detectContentType returns a Content-Type based on file extension.

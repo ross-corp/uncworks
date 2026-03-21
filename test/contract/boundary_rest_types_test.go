@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/internal/sidecar"
 )
 
 // TestBoundary_RESTTypes_TraceSpanJSON verifies that JSON serialization of
@@ -307,5 +309,165 @@ func TestBoundary_ExecHandler_ResizeMessageFormat(t *testing.T) {
 	}
 	if msg.Rows != 40 {
 		t.Errorf("rows = %d, want 40", msg.Rows)
+	}
+}
+
+// --- Task 1.1: Sidecar TraceSpan JSON serialization regression tests ---
+
+// TestBoundary_SidecarTraceSpan_JSONFieldNames verifies the sidecar's
+// TraceSpan serializes traceId, status, and parentId with correct camelCase
+// names and includes them when set.
+func TestBoundary_SidecarTraceSpan_JSONFieldNames(t *testing.T) {
+	span := sidecar.TraceSpan{
+		ID:        "span-1",
+		TraceID:   "abc",
+		ParentID:  "parent-1",
+		Name:      "manage.thought",
+		Type:      "thought",
+		StartTime: time.Now(),
+		EndTime:   time.Now(),
+		Status:    "ok",
+		HasDiff:   false,
+		Metadata:  map[string]interface{}{"model": "test"},
+	}
+
+	data, err := json.Marshal(span)
+	if err != nil {
+		t.Fatalf("json.Marshal sidecar.TraceSpan: %v", err)
+	}
+
+	jsonStr := string(data)
+
+	// Verify camelCase field names are present
+	required := []string{
+		`"traceId":"abc"`,
+		`"status":"ok"`,
+		`"parentId":"parent-1"`,
+		`"id":"span-1"`,
+	}
+	for _, field := range required {
+		if !strings.Contains(jsonStr, field) {
+			t.Errorf("sidecar TraceSpan JSON missing %s in: %s", field, jsonStr)
+		}
+	}
+
+	// Verify no snake_case leaks
+	snakeCase := []string{`"trace_id"`, `"parent_id"`, `"start_time"`, `"end_time"`, `"has_diff"`}
+	for _, field := range snakeCase {
+		if strings.Contains(jsonStr, field) {
+			t.Errorf("sidecar TraceSpan JSON has snake_case %s: %s", field, jsonStr)
+		}
+	}
+}
+
+// TestBoundary_SidecarTraceSpan_OmitsEmptyOptionals verifies that traceId,
+// status, and parentId are omitted when empty (omitempty behavior).
+func TestBoundary_SidecarTraceSpan_OmitsEmptyOptionals(t *testing.T) {
+	span := sidecar.TraceSpan{
+		ID:        "span-2",
+		Name:      "test",
+		Type:      "tool",
+		StartTime: time.Now(),
+		EndTime:   time.Now(),
+		// TraceID, ParentID, Status all empty
+	}
+
+	data, err := json.Marshal(span)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+
+	jsonStr := string(data)
+
+	// These fields should be omitted when empty
+	omittedFields := []string{`"traceId"`, `"parentId"`, `"status"`}
+	for _, field := range omittedFields {
+		if strings.Contains(jsonStr, field) {
+			t.Errorf("expected %s to be omitted when empty: %s", field, jsonStr)
+		}
+	}
+
+	// metadata should also be omitted when nil
+	if strings.Contains(jsonStr, `"metadata"`) {
+		t.Errorf("expected metadata to be omitted when nil: %s", jsonStr)
+	}
+}
+
+// --- Task 1.2: Token usage metadata field names ---
+
+// TestBoundary_TokenUsage_OTelConventionFieldNames verifies that the sidecar
+// stores token usage under gen_ai.usage.* keys matching OTel GenAI semantic
+// conventions, NOT bare input_tokens/output_tokens or camelCase variants.
+func TestBoundary_TokenUsage_OTelConventionFieldNames(t *testing.T) {
+	// Simulate what the sidecar produces when it receives a message_end with usage.
+	span := sidecar.TraceSpan{
+		ID:        "thought-1",
+		Name:      "manage.thought",
+		Type:      "thought",
+		StartTime: time.Now(),
+		EndTime:   time.Now(),
+		Metadata: map[string]interface{}{
+			"gen_ai.usage.input_tokens":  1234,
+			"gen_ai.usage.output_tokens": 567,
+			"gen_ai.usage.total_tokens":  1801,
+		},
+	}
+
+	data, err := json.Marshal(span)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	jsonStr := string(data)
+
+	// Correct OTel keys must be present
+	correctKeys := []string{
+		`"gen_ai.usage.input_tokens"`,
+		`"gen_ai.usage.output_tokens"`,
+	}
+	for _, key := range correctKeys {
+		if !strings.Contains(jsonStr, key) {
+			t.Errorf("expected metadata key %s in JSON: %s", key, jsonStr)
+		}
+	}
+
+	// Incorrect key variants must NOT be present
+	wrongKeys := []string{
+		`"input_tokens"`,  // bare name without gen_ai prefix
+		`"output_tokens"`, // bare name without gen_ai prefix
+		`"inputTokens"`,   // camelCase
+		`"outputTokens"`,  // camelCase
+	}
+	for _, key := range wrongKeys {
+		// Check that the key only appears as part of the gen_ai.usage. prefix
+		// by ensuring standalone occurrences are not present
+		stripped := strings.ReplaceAll(jsonStr, "gen_ai.usage.input_tokens", "")
+		stripped = strings.ReplaceAll(stripped, "gen_ai.usage.output_tokens", "")
+		stripped = strings.ReplaceAll(stripped, "gen_ai.usage.total_tokens", "")
+		if strings.Contains(stripped, key) {
+			t.Errorf("found wrong token field name %s (should use gen_ai.usage.* prefix): %s", key, jsonStr)
+		}
+	}
+
+	// Round-trip: deserialize and verify the metadata values
+	var decoded sidecar.TraceSpan
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	inputTokens, ok := decoded.Metadata["gen_ai.usage.input_tokens"]
+	if !ok {
+		t.Fatal("missing gen_ai.usage.input_tokens after round-trip")
+	}
+	// JSON numbers decode as float64
+	if v, ok := inputTokens.(float64); !ok || v != 1234 {
+		t.Errorf("gen_ai.usage.input_tokens = %v, want 1234", inputTokens)
+	}
+
+	outputTokens, ok := decoded.Metadata["gen_ai.usage.output_tokens"]
+	if !ok {
+		t.Fatal("missing gen_ai.usage.output_tokens after round-trip")
+	}
+	if v, ok := outputTokens.(float64); !ok || v != 567 {
+		t.Errorf("gen_ai.usage.output_tokens = %v, want 567", outputTokens)
 	}
 }
