@@ -946,7 +946,7 @@ export default function TraceTimeline({
               className="flex-shrink-0 px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider border-r border-border"
               style={{ width: LABEL_WIDTH }}
             >
-              Span
+              Trace
             </div>
             <div className="flex-1 relative py-1 px-2">
               {timeTicks.map((tick, i) => (
@@ -1115,14 +1115,6 @@ export default function TraceTimeline({
                             </Badge>
                           )}
 
-                          {/* Diff line count indicator */}
-                          {span.hasDiff && (
-                            <span className="ml-auto flex-shrink-0 text-[9px] font-mono text-muted-foreground">
-                              <span className="text-emerald-400">+{String(span.metadata?.["diff.additions"] ?? "?")}</span>
-                              <span className="text-muted-foreground/40">/</span>
-                              <span className="text-red-400">-{String(span.metadata?.["diff.deletions"] ?? "?")}</span>
-                            </span>
-                          )}
                         </div>
 
                         {/* Waterfall bar column */}
@@ -1153,30 +1145,33 @@ export default function TraceTimeline({
                                   minWidth: MIN_BAR_WIDTH_PX,
                                 }}
                               />
-                              {/* Stats label after the bar */}
+                              {/* Stats label — after bar, or inside if near right edge */}
                               <span
-                                className="absolute text-[10px] font-mono text-muted-foreground whitespace-nowrap flex items-center gap-2"
-                                style={{
-                                  left: `calc(${Math.min(barLeftPct + barWidthPct, 100)}% + 4px)`,
-                                }}
+                                className="absolute text-[10px] font-mono text-muted-foreground whitespace-nowrap"
+                                style={barLeftPct + barWidthPct > 75
+                                  ? { left: `calc(${barLeftPct}% + 8px)` }
+                                  : { left: `calc(${Math.min(barLeftPct + barWidthPct, 100)}% + 4px)` }
+                                }
                               >
-                                <span>{formatDuration(durationMs)}</span>
-                                {stageAgg && (
+                                <span className="text-foreground/70">{formatDuration(durationMs)}</span>
+                                {stageAgg && stageAgg.inputTokens > 0 && (
                                   <>
-                                    <span className="text-border">·</span>
-                                    <span>{stageAgg.childCount} spans</span>
-                                    {stageAgg.estimatedCostUsd > 0 && (
-                                      <>
-                                        <span className="text-border">·</span>
-                                        <span>{formatCost(stageAgg.estimatedCostUsd)}</span>
-                                      </>
-                                    )}
-                                    {stageAgg.toolErrors > 0 && (
-                                      <>
-                                        <span className="text-border">·</span>
-                                        <span className="text-red-400">{stageAgg.toolErrors} err</span>
-                                      </>
-                                    )}
+                                    <span className="text-border mx-1">·</span>
+                                    <span className="text-blue-400/70">{Math.round(stageAgg.inputTokens / 1000)}k in</span>
+                                    <span className="text-border mx-0.5">·</span>
+                                    <span className="text-violet-400/70">{stageAgg.outputTokens} out</span>
+                                  </>
+                                )}
+                                {stageAgg && stageAgg.estimatedCostUsd > 0 && (
+                                  <>
+                                    <span className="text-border mx-0.5">·</span>
+                                    <span className="text-amber-400/70">{formatCost(stageAgg.estimatedCostUsd)}</span>
+                                  </>
+                                )}
+                                {stageAgg && stageAgg.toolErrors > 0 && (
+                                  <>
+                                    <span className="text-border mx-0.5">·</span>
+                                    <span className="text-red-400">{stageAgg.toolErrors} err</span>
                                   </>
                                 )}
                               </span>
