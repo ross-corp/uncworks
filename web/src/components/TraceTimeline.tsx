@@ -112,15 +112,6 @@ function computeStageAggregates(
   };
 }
 
-// -- Legend entries for roles --------------------------------
-
-const LEGEND_ROLES: { role: RoleName; label: string }[] = [
-  { role: "manage", label: "MANAGE" },
-  { role: "implement", label: "IMPLEMENT" },
-  { role: "system", label: "SYSTEM" },
-  { role: "delegate", label: "DELEGATE" },
-];
-
 // -- Helpers ------------------------------------------------
 
 function getDurationMs(startTime: string, endTime: string): number {
@@ -902,21 +893,9 @@ export default function TraceTimeline({
             {spans.length} span{spans.length !== 1 ? "s" : ""}
           </span>
         </div>
-        {/* Legend — role-based */}
-        <div className="flex items-center gap-3">
-          {LEGEND_ROLES.map(({ role, label }) => (
-            <div key={role} className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "inline-block h-2 w-2 rounded-sm",
-                  ROLE_STYLES[role].dot
-                )}
-              />
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                {label}
-              </span>
-            </div>
-          ))}
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> ok</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-red-500" /> error</span>
         </div>
       </div>
 

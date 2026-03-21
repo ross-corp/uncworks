@@ -128,11 +128,13 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 
 	log.Printf("[PlanRun %s] starting plan agent in workDir=%s", input.AgentRunName, workDir)
 	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
-		AgentRunId: input.AgentRunName,
-		Prompt:     prompt,
-		RepoPath:   workDir,
-		Stage:      "plan",
-		EnvVars:    envVars,
+		AgentRunId:   input.AgentRunName,
+		Prompt:       prompt,
+		RepoPath:     workDir,
+		Stage:        "plan",
+		EnvVars:      envVars,
+		ParentSpanId: input.ParentSpanID,
+		TraceId:      input.TraceID,
 	}))
 	if err != nil {
 		return PlanRunOutput{}, fmt.Errorf("start plan agent: %w", err)
@@ -387,8 +389,10 @@ Read the spec files at /workspace/openspec/changes/%s/ and evaluate each WHEN/TH
 Check that all tasks in tasks.md are marked complete.
 Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}`,
 			input.ChangeName, gitDiff, input.ChangeName),
-		RepoPath: workDir,
-		Stage:    "verify",
+		RepoPath:     workDir,
+		Stage:        "verify",
+		ParentSpanId: input.ParentSpanID,
+		TraceId:      input.TraceID,
 	}))
 	if err != nil {
 		log.Printf("LLM judge failed to start: %v", err)
