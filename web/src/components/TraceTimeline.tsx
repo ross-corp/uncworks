@@ -8,7 +8,7 @@ import {
 } from "./ui/collapsible";
 import { cn } from "../lib/utils";
 import { ROLE_STYLES, roleFromSpanName, displaySpanName } from "../lib/role-styles";
-import type { RoleName } from "../lib/role-styles";
+
 import {
   ChevronRightIcon,
   ChevronDownIcon,
@@ -24,40 +24,44 @@ import {
 
 // -- Failed span override styles ----------------------------
 
-const SUCCESS_STYLES = {
-  bar: "bg-emerald-500/20 border-l-2 border-emerald-500",
-  text: "text-emerald-400",
-  dot: "bg-emerald-500",
-};
-
 const FAILED_STYLES = {
   bar: "bg-red-500/20 border-l-2 border-red-500",
   text: "text-red-400",
   dot: "bg-red-500",
 };
 
-// -- Role-based bar styles ----------------------------------
+// -- Operation-based bar colors (by span name suffix) -------
 
-function roleBarStyles(role: RoleName) {
-  const s = ROLE_STYLES[role];
-  return {
-    bar: cn(s.bg, "border-l-2", s.border),
-    barActive: cn(s.bg, "border-l-2", s.border),
-    text: s.text,
-    dot: s.dot,
-  };
+function resolveOperation(span: TraceSpan): string {
+  // Use span name's last segment, but fall back to metadata.tool for old "*.tool" spans
+  const op = span.name.split(".").pop() || "";
+  if (op === "tool" && span.metadata?.tool) {
+    return String(span.metadata.tool);
+  }
+  return op;
 }
 
-// -- Stage span bar styles (bold, taller, system/amber color) -
+const OP_COLORS: Record<string, { bar: string; text: string }> = {
+  thought: { bar: "bg-blue-500/30 border-l-2 border-blue-500",     text: "text-blue-400" },
+  bash:    { bar: "bg-emerald-500/30 border-l-2 border-emerald-500", text: "text-emerald-400" },
+  write:   { bar: "bg-violet-500/30 border-l-2 border-violet-500", text: "text-violet-400" },
+  read:    { bar: "bg-slate-400/20 border-l-2 border-slate-400",   text: "text-slate-400" },
+  started: { bar: "bg-amber-500/30 border-l-2 border-amber-500",   text: "text-amber-400" },
+};
+const DEFAULT_OP = { bar: "bg-emerald-500/30 border-l-2 border-emerald-500", text: "text-emerald-400" };
 
-function stageBarStyles() {
-  const s = ROLE_STYLES["system"];
-  return {
-    bar: cn(s.bg, "border-l-2", s.border),
-    barActive: cn(s.bg, "border-l-2", s.border),
-    text: s.text,
-    dot: s.dot,
-  };
+function getOperationColor(span: TraceSpan): string {
+  return (OP_COLORS[resolveOperation(span)] ?? DEFAULT_OP).bar;
+}
+
+function getOperationTextColor(span: TraceSpan): string {
+  return (OP_COLORS[resolveOperation(span)] ?? DEFAULT_OP).text;
+}
+
+function formatCost(usd: number): string {
+  if (usd <= 0) return "";
+  if (usd < 0.001) return "<$0.001";
+  return `$${usd.toFixed(3)}`;
 }
 
 // -- Stage span aggregation (client-side, tasks 7.4/7.5) -----
@@ -140,6 +144,8 @@ interface FlatSpan {
   durationMs: number;
   offsetMs: number;
   hasChildren?: boolean;
+  parentDurationMs: number;  // duration of the immediate parent span
+  offsetInParentMs: number;  // offset from parent's start time
 }
 
 function buildFlatTree(
@@ -194,16 +200,20 @@ function buildFlatTree(
   const traceDurationMs = Math.max(1, traceEndMs - traceStartMs);
 
   const flat: FlatSpan[] = [];
-  function walk(node: TraceSpan, depth: number) {
+  function walk(node: TraceSpan, depth: number, parentStartMs?: number, parentDurMs?: number) {
     const startMs = new Date(node.startTime).getTime();
     const durationMs = getDurationMs(node.startTime, node.endTime);
     const hasChildren = (childrenOf.get(node.id) ?? []).length > 0;
+    const pDur = parentDurMs ?? traceDurationMs;
+    const pStart = parentStartMs ?? traceStartMs;
     flat.push({
       span: node,
       depth,
       durationMs,
       offsetMs: startMs - traceStartMs,
       hasChildren,
+      parentDurationMs: pDur,
+      offsetInParentMs: startMs - pStart,
     });
     // Skip children if this span is collapsed
     if (collapsedSpanIds.has(node.id)) return;
@@ -213,7 +223,7 @@ function buildFlatTree(
         new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
     for (const child of children) {
-      walk(child, depth + 1);
+      walk(child, depth + 1, startMs, durationMs);
     }
   }
   for (const root of roots) {
@@ -901,7 +911,10 @@ export default function TraceTimeline({
           </span>
         </div>
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> ok</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-blue-500" /> thought</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> bash</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-violet-500" /> write</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-slate-400" /> read</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-red-500" /> error</span>
         </div>
       </div>
@@ -941,13 +954,9 @@ export default function TraceTimeline({
               {rowPositions
                 .slice(visibleRange.startIdx, visibleRange.endIdx)
                 .map((pos) => {
-                  const { span, depth, durationMs, offsetMs, hasChildren } =
+                  const { span, depth, durationMs, hasChildren, parentDurationMs, offsetInParentMs } =
                     flat[pos.flatIndex];
                   const isStageSpan = span.type === "stage";
-                  const role = roleFromSpanName(span.name);
-                  const rStyle = isStageSpan
-                    ? stageBarStyles()
-                    : roleBarStyles(role);
                   const isActive = !span.endTime;
                   const isSelected = span.id === selectedSpanId;
                   const isFailed =
@@ -957,40 +966,37 @@ export default function TraceTimeline({
                       span.metadata?.exitCode !== 0 &&
                       span.metadata?.exitCode !== undefined);
                   const isCollapsed = collapsedSpanIds.has(span.id);
-
-                  // Bar positioning within the waterfall
-                  const barLeftPct =
-                    traceDurationMs > 0
-                      ? (offsetMs / traceDurationMs) * 100
-                      : 0;
-                  const barWidthPct =
-                    traceDurationMs > 0
-                      ? Math.max(
-                          (MIN_BAR_WIDTH_PX /
-                            (containerRef.current?.clientWidth ?? 600)) *
-                            100,
-                          (durationMs / traceDurationMs) * 100
-                        )
-                      : 100;
-
                   const isComplete = !!span.endTime && !isFailed;
+
+                  // Parent-relative bar positioning
+                  const barLeftPct = parentDurationMs > 0
+                    ? (offsetInParentMs / parentDurationMs) * 100
+                    : 0;
+                  const barWidthPct = parentDurationMs > 0
+                    ? Math.max(3, (durationMs / parentDurationMs) * 100)
+                    : 100;
+
+                  // Operation-based coloring (error overrides)
                   const barClass = isFailed
                     ? FAILED_STYLES.bar
-                    : isActive
-                      ? rStyle.barActive
-                      : isComplete
-                        ? SUCCESS_STYLES.bar
-                        : rStyle.bar;
+                    : isStageSpan
+                      ? "" // stages don't get bars
+                      : getOperationColor(span);
 
                   const textClass = isFailed
                     ? FAILED_STYLES.text
-                    : isComplete
-                      ? SUCCESS_STYLES.text
-                      : rStyle.text;
+                    : isStageSpan
+                      ? "text-foreground"
+                      : getOperationTextColor(span);
 
                   const rowHeight = isStageSpan
                     ? STAGE_ROW_HEIGHT
                     : SPAN_ROW_HEIGHT;
+
+                  // Stage aggregates for header display
+                  const stageAgg = isStageSpan
+                    ? computeStageAggregates(span, spans)
+                    : null;
 
                   return (
                     <div
@@ -1010,7 +1016,7 @@ export default function TraceTimeline({
                           isSelected
                             ? "bg-accent/10 ring-1 ring-inset ring-accent/20"
                             : "hover:bg-muted/40",
-                          isStageSpan && "bg-muted/20"
+                          isStageSpan && "bg-muted/10 border-b border-border/50"
                         )}
                         style={{ height: rowHeight }}
                       >
@@ -1041,15 +1047,15 @@ export default function TraceTimeline({
                             <span className="inline-block w-3 flex-shrink-0" />
                           )}
 
-                          {/* Role dot */}
+                          {/* Status dot: green=ok, red=error, gray=running */}
                           <span
                             className={cn(
-                              "inline-block h-2 w-2 rounded-sm flex-shrink-0",
+                              "inline-block h-2 w-2 rounded-full flex-shrink-0",
                               isFailed
                                 ? FAILED_STYLES.dot
                                 : isComplete
-                                  ? SUCCESS_STYLES.dot
-                                  : rStyle.dot
+                                  ? "bg-emerald-500"
+                                  : "bg-muted-foreground/40"
                             )}
                           />
 
@@ -1057,14 +1063,13 @@ export default function TraceTimeline({
                           <span
                             className={cn(
                               "text-[11px] font-mono truncate",
-                              isStageSpan ? "font-bold" : "",
-                              textClass
+                              isStageSpan ? "font-bold text-foreground" : textClass
                             )}
                           >
                             {displaySpanName(span.name)}
                           </span>
 
-                          {/* Stage status badge (Task 7.3) */}
+                          {/* Stage status badge */}
                           {isStageSpan && span.status && (
                             <Badge
                               variant="outline"
@@ -1107,42 +1112,55 @@ export default function TraceTimeline({
                             />
                           ))}
 
-                          {/* Duration bar */}
-                          <div
-                            className={cn(
-                              "absolute rounded-sm transition-all",
-                              isStageSpan ? "h-6" : "h-5",
-                              barClass,
-                              isActive && "animate-pulse"
-                            )}
-                            style={{
-                              left: `${barLeftPct}%`,
-                              width: `${barWidthPct}%`,
-                              minWidth: MIN_BAR_WIDTH_PX,
-                            }}
-                          >
-                            {barWidthPct > 8 && (
-                              <span
+                          {isStageSpan ? (
+                            /* Stage row: section header with summary stats, no waterfall bar */
+                            <div className="flex items-center gap-3 px-2 text-[10px] font-mono text-muted-foreground w-full">
+                              <span>{formatDuration(durationMs)}</span>
+                              {stageAgg && (
+                                <>
+                                  <span className="text-border">·</span>
+                                  <span>{stageAgg.childCount} span{stageAgg.childCount !== 1 ? "s" : ""}</span>
+                                  {stageAgg.estimatedCostUsd > 0 && (
+                                    <>
+                                      <span className="text-border">·</span>
+                                      <span>{formatCost(stageAgg.estimatedCostUsd)}</span>
+                                    </>
+                                  )}
+                                  {stageAgg.toolErrors > 0 && (
+                                    <>
+                                      <span className="text-border">·</span>
+                                      <span className="text-red-400">{stageAgg.toolErrors} err</span>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            /* Leaf span: waterfall bar positioned relative to parent */
+                            <>
+                              <div
                                 className={cn(
-                                  "absolute inset-0 flex items-center px-1.5 text-[10px] font-mono truncate",
-                                  textClass
+                                  "absolute rounded-sm transition-all h-5",
+                                  barClass,
+                                  isActive && "animate-pulse"
                                 )}
+                                style={{
+                                  left: `${Math.min(barLeftPct, 97)}%`,
+                                  width: `${Math.min(barWidthPct, 100 - Math.min(barLeftPct, 97))}%`,
+                                  minWidth: MIN_BAR_WIDTH_PX,
+                                }}
+                              />
+
+                              {/* Duration label — positioned after the bar end to avoid overlap */}
+                              <span
+                                className="absolute text-[10px] font-mono text-muted-foreground whitespace-nowrap"
+                                style={{
+                                  left: `calc(${Math.min(barLeftPct + barWidthPct, 100)}% + 4px)`,
+                                }}
                               >
                                 {formatDuration(durationMs)}
                               </span>
-                            )}
-                          </div>
-
-                          {/* Duration label outside bar if narrow */}
-                          {barWidthPct <= 8 && (
-                            <span
-                              className="absolute text-[10px] font-mono text-muted-foreground whitespace-nowrap"
-                              style={{
-                                left: `calc(${barLeftPct + barWidthPct}% + 4px)`,
-                              }}
-                            >
-                              {formatDuration(durationMs)}
-                            </span>
+                            </>
                           )}
                         </div>
                       </button>

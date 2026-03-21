@@ -458,6 +458,64 @@ func TestExtractToolFromEvent_LegacyToolNoInput(t *testing.T) {
 	}
 }
 
+// --- Task 2.3: Span naming convention (spanPrefix) ---
+
+func TestSpanPrefix_PlanReturnsManage(t *testing.T) {
+	setCurrentStage("plan", "/workspace")
+	got := spanPrefix()
+	if got != "manage" {
+		t.Errorf("spanPrefix() for plan = %q, want %q", got, "manage")
+	}
+}
+
+func TestSpanPrefix_VerifyReturnsManage(t *testing.T) {
+	setCurrentStage("verify", "/workspace")
+	got := spanPrefix()
+	if got != "manage" {
+		t.Errorf("spanPrefix() for verify = %q, want %q", got, "manage")
+	}
+}
+
+func TestSpanPrefix_ExecuteReturnsImplement(t *testing.T) {
+	setCurrentStage("execute", "/workspace")
+	got := spanPrefix()
+	if got != "implement" {
+		t.Errorf("spanPrefix() for execute = %q, want %q", got, "implement")
+	}
+}
+
+func TestSpanPrefix_SingleReturnsImplement(t *testing.T) {
+	setCurrentStage("", "/workspace")
+	got := spanPrefix()
+	if got != "implement" {
+		t.Errorf("spanPrefix() for empty/single = %q, want %q", got, "implement")
+	}
+}
+
+func TestSpanPrefix_ToolSpanName(t *testing.T) {
+	// Verify that the convention {prefix}.{toolName} produces correct span names.
+	setCurrentStage("execute", "/workspace")
+	prefix := spanPrefix()
+	spanName := prefix + ".bash"
+	if spanName != "implement.bash" {
+		t.Errorf("span name = %q, want %q", spanName, "implement.bash")
+	}
+	// Verify it does NOT produce generic name
+	if spanName == "implement.tool" {
+		t.Error("span name should be implement.bash, not implement.tool")
+	}
+
+	setCurrentStage("plan", "/workspace")
+	prefix = spanPrefix()
+	spanName = prefix + ".write"
+	if spanName != "manage.write" {
+		t.Errorf("span name = %q, want %q", spanName, "manage.write")
+	}
+	if spanName == "manage.tool" {
+		t.Error("span name should be manage.write, not manage.tool")
+	}
+}
+
 // --- resolveWorkDir regression tests ---
 
 func TestResolveWorkDirAt_RepoGitDetected(t *testing.T) {

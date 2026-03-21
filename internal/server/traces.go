@@ -142,6 +142,9 @@ func (t *TraceHandler) getPVCHostPath(ctx context.Context, runID string) (string
 }
 
 // readSpansFile reads a JSONL file of trace spans and returns them as a slice.
+// When the same span ID appears multiple times (e.g., open then close), the
+// later entry wins — this deduplicates stage spans that are written twice
+// (once at start without endTime, once at close with endTime).
 func readSpansFile(path string) ([]TraceSpan, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -149,6 +152,8 @@ func readSpansFile(path string) ([]TraceSpan, error) {
 	}
 	defer func() { _ = file.Close() }()
 
+	// Use a map to deduplicate by ID — later entries override earlier ones
+	byID := make(map[string]int) // span ID → index in spans slice
 	var spans []TraceSpan
 	scanner := bufio.NewScanner(file)
 	// Allow up to 1MB per line for spans with large diffs.
@@ -164,7 +169,13 @@ func readSpansFile(path string) ([]TraceSpan, error) {
 			log.Printf("skipping malformed span line: %v", err)
 			continue
 		}
-		spans = append(spans, span)
+		if idx, exists := byID[span.ID]; exists {
+			// Replace earlier version with later (closed) version
+			spans[idx] = span
+		} else {
+			byID[span.ID] = len(spans)
+			spans = append(spans, span)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
