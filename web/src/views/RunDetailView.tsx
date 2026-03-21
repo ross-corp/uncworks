@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { useToast } from "../components/Toast";
-import { useThemeNew } from "../hooks/useThemeNew";
 import RunStatusBadge from "../components/RunStatusBadge";
 import ActivityFeed from "../components/ActivityFeed";
 import StageProgress from "../components/StageProgress";
@@ -34,7 +33,6 @@ export default function RunDetailView() {
   const navigate = useNavigate();
   const client = useClient();
   const { toast } = useToast();
-  const { mode, toggleMode } = useThemeNew();
   const [run, setRun] = useState<AgentRun | null>(null);
   const [tab, setTab] = useState<Tab>("logs");
   const [showInfo, setShowInfo] = useState(false);
@@ -123,14 +121,6 @@ export default function RunDetailView() {
   const isRunning = run.status.phase === "running" || run.status.phase === "waiting_for_input";
   const isFailed = run.status.phase === "failed" || run.status.phase === "cancelled";
 
-  // Resolve current mode for theme toggle icon
-  const resolvedMode =
-    mode === "system"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"
-      : mode;
-
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -169,15 +159,6 @@ export default function RunDetailView() {
               Retry
             </button>
           )}
-
-          {/* Theme toggle */}
-          <button
-            onClick={toggleMode}
-            className="px-1.5 py-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            title={`Switch to ${resolvedMode === "dark" ? "light" : "dark"} mode`}
-          >
-            {resolvedMode === "dark" ? "\u2600" : "\u263E"}
-          </button>
 
           <span className="text-xs text-muted-foreground">esc back · 1-4 tabs · i info</span>
         </div>
