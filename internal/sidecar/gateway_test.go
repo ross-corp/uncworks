@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -321,5 +323,138 @@ func TestExtractToolCallSignature_DifferentCallsDifferentSig(t *testing.T) {
 	}
 	if sig1 == sig2 {
 		t.Errorf("different tool calls produced same signature: %q", sig1)
+	}
+}
+
+// --- resolveWorkDir regression tests ---
+
+func TestResolveWorkDirAt_RepoGitDetected(t *testing.T) {
+	// When /workspace/<repo>/.git exists, returns /workspace/<repo>.
+	base := t.TempDir()
+	repoDir := filepath.Join(base, "myrepo")
+	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ResolveWorkDirAt(base, base)
+	if got != repoDir {
+		t.Errorf("ResolveWorkDirAt = %q, want %q", got, repoDir)
+	}
+}
+
+func TestResolveWorkDirAt_RootClone(t *testing.T) {
+	// When /workspace/.git exists (root clone), returns /workspace.
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ResolveWorkDirAt(base, base)
+	if got != base {
+		t.Errorf("ResolveWorkDirAt = %q, want %q (root clone)", got, base)
+	}
+}
+
+func TestResolveWorkDirAt_SkipsBare(t *testing.T) {
+	// .bare directories must be skipped even if they contain .git.
+	base := t.TempDir()
+
+	// .bare/repo/.git — should be skipped
+	if err := os.MkdirAll(filepath.Join(base, ".bare", "repo", ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// No actual repo dir with .git
+
+	got := ResolveWorkDirAt(base, base)
+	if got != base {
+		t.Errorf("ResolveWorkDirAt = %q, want %q (.bare should be skipped)", got, base)
+	}
+}
+
+func TestResolveWorkDirAt_SkipsAot(t *testing.T) {
+	// .aot directories must be skipped.
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, ".aot", ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ResolveWorkDirAt(base, base)
+	if got != base {
+		t.Errorf("ResolveWorkDirAt = %q, want %q (.aot should be skipped)", got, base)
+	}
+}
+
+func TestResolveWorkDirAt_SkipsDevcontainer(t *testing.T) {
+	// .devcontainer directories must be skipped.
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, ".devcontainer", ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ResolveWorkDirAt(base, base)
+	if got != base {
+		t.Errorf("ResolveWorkDirAt = %q, want %q (.devcontainer should be skipped)", got, base)
+	}
+}
+
+func TestResolveWorkDirAt_SkipsOpenspecAndSpec(t *testing.T) {
+	// "openspec" and "spec" directories must be skipped.
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "openspec", ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(base, "spec", ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ResolveWorkDirAt(base, base)
+	if got != base {
+		t.Errorf("ResolveWorkDirAt = %q, want %q (openspec/spec should be skipped)", got, base)
+	}
+}
+
+func TestResolveWorkDirAt_DetectsGitFile(t *testing.T) {
+	// Worktrees create a .git *file* (not directory). ResolveWorkDirAt should
+	// detect it via os.Stat (which works for both files and directories).
+	base := t.TempDir()
+	repoDir := filepath.Join(base, "myrepo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// .git as a file (worktree pointer)
+	if err := os.WriteFile(filepath.Join(repoDir, ".git"), []byte("gitdir: /workspace/.bare/myrepo"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ResolveWorkDirAt(base, base)
+	if got != repoDir {
+		t.Errorf("ResolveWorkDirAt = %q, want %q (should detect .git file)", got, repoDir)
+	}
+}
+
+func TestResolveWorkDirAt_BareSkippedRealRepoFound(t *testing.T) {
+	// Full debug pod layout: .bare exists but is skipped, real worktree is found.
+	base := t.TempDir()
+
+	// .bare/repo — should be skipped
+	if err := os.MkdirAll(filepath.Join(base, ".bare", "repo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// .aot — should be skipped
+	if err := os.MkdirAll(filepath.Join(base, ".aot"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The actual repo worktree
+	repoDir := filepath.Join(base, "repo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, ".git"), []byte("gitdir: "+filepath.Join(base, ".bare", "repo")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ResolveWorkDirAt(base, base)
+	if got != repoDir {
+		t.Errorf("ResolveWorkDirAt = %q, want %q", got, repoDir)
 	}
 }

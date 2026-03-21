@@ -1,19 +1,101 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { apiWsUrl } from "../hooks/apiFetch";
+import { apiFetch, apiWsUrl } from "../hooks/apiFetch";
+import type { AgentRunPhase } from "../types/agent-run";
 import "@xterm/xterm/css/xterm.css";
 
-type ConnectionStatus = "connecting" | "connected" | "disconnected";
+type ConnectionStatus =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "pod_down"
+  | "starting_debug";
 
-export default function ShellTerminalInner({ runId }: { runId: string }) {
+export default function ShellTerminalInner({
+  runId,
+  phase,
+}: {
+  runId: string;
+  phase: AgentRunPhase;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const dataDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
+  const everConnectedRef = useRef(false);
 
+  const podIsDown =
+    phase === "succeeded" || phase === "failed" || phase === "cancelled";
+
+  const connectWs = useCallback(() => {
+    const term = termRef.current;
+    if (!term) return;
+
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.close();
+    }
+
+    // Clean up old data handler to prevent stacking
+    if (dataDisposableRef.current) {
+      dataDisposableRef.current.dispose();
+      dataDisposableRef.current = null;
+    }
+
+    setStatus("connecting");
+    const wsUrl = apiWsUrl(`/api/v1/runs/${runId}/exec`);
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = "arraybuffer"; // Receive binary as ArrayBuffer, not Blob
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      everConnectedRef.current = true;
+      setStatus("connected");
+      // Send initial resize
+      const dims = { type: "resize", cols: term.cols, rows: term.rows };
+      ws.send(JSON.stringify(dims));
+    };
+
+    ws.onmessage = (event) => {
+      // Backend sends BinaryMessage — decode ArrayBuffer to string for xterm
+      if (event.data instanceof ArrayBuffer) {
+        const text = new TextDecoder().decode(event.data);
+        term.write(text);
+      } else {
+        term.write(event.data);
+      }
+    };
+
+    ws.onerror = () => {
+      if (!everConnectedRef.current) {
+        setStatus("pod_down");
+      }
+    };
+
+    ws.onclose = () => {
+      if (!everConnectedRef.current) {
+        setStatus("pod_down");
+      } else {
+        setStatus("disconnected");
+        term.write("\r\n\x1b[33m[Disconnected — press Reconnect to resume]\x1b[0m\r\n");
+      }
+    };
+
+    // Register keystroke handler (dispose old one first)
+    dataDisposableRef.current = term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+  }, [runId]);
+
+  // Initialize terminal + connect
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -40,42 +122,17 @@ export default function ShellTerminalInner({ runId }: { runId: string }) {
     termRef.current = term;
     fitRef.current = fit;
 
-    // Connect WebSocket
-    const wsUrl = apiWsUrl(`/api/v1/runs/${runId}/exec`);
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    // Only auto-connect if pod should be running
+    if (!podIsDown) {
+      connectWs();
+    } else {
+      setStatus("pod_down");
+    }
 
-    ws.onopen = () => {
-      setStatus("connected");
-      // Send initial resize
-      const dims = { type: "resize", cols: term.cols, rows: term.rows };
-      ws.send(JSON.stringify(dims));
-    };
-
-    ws.onmessage = (event) => {
-      term.write(event.data);
-    };
-
-    ws.onerror = () => {
-      setStatus("disconnected");
-    };
-
-    ws.onclose = () => {
-      setStatus("disconnected");
-      term.write("\r\n\x1b[33m[Disconnected]\x1b[0m\r\n");
-    };
-
-    // Send keystrokes to WebSocket
-    term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
-      }
-    });
-
-    // Handle resize
     const resizeObserver = new ResizeObserver(() => {
       fit.fit();
-      if (ws.readyState === WebSocket.OPEN) {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
         const dims = { type: "resize", cols: term.cols, rows: term.rows };
         ws.send(JSON.stringify(dims));
       }
@@ -84,38 +141,122 @@ export default function ShellTerminalInner({ runId }: { runId: string }) {
 
     return () => {
       resizeObserver.disconnect();
-      ws.close();
+      if (dataDisposableRef.current) {
+        dataDisposableRef.current.dispose();
+        dataDisposableRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
       wsRef.current = null;
     };
+  }, [runId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const reconnect = useCallback(() => {
+    termRef.current?.write("\r\n\x1b[36m[Reconnecting...]\x1b[0m\r\n");
+    everConnectedRef.current = false;
+    connectWs();
+  }, [connectWs]);
+
+  const startDebug = useCallback(async () => {
+    try {
+      setStatus("starting_debug");
+      termRef.current?.write("\r\n\x1b[36m[Starting debug session...]\x1b[0m\r\n");
+      const res = await apiFetch(`/api/v1/runs/${runId}/debug`, { method: "POST" });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "unknown error");
+        termRef.current?.write(`\r\n\x1b[31m[Failed: ${msg}]\x1b[0m\r\n`);
+        setStatus("pod_down");
+        return;
+      }
+      termRef.current?.write("\r\n\x1b[36m[Pod starting, connecting in 5s...]\x1b[0m\r\n");
+      setTimeout(() => {
+        everConnectedRef.current = false;
+        connectWs();
+      }, 5000);
+    } catch {
+      termRef.current?.write("\r\n\x1b[31m[Failed to start debug session]\x1b[0m\r\n");
+      setStatus("pod_down");
+    }
+  }, [runId, connectWs]);
+
+  const stopDebug = useCallback(async () => {
+    try {
+      await apiFetch(`/api/v1/runs/${runId}/debug`, { method: "DELETE" });
+      termRef.current?.write("\r\n\x1b[33m[Debug session stopped]\x1b[0m\r\n");
+      if (wsRef.current) wsRef.current.close();
+      setStatus("pod_down");
+    } catch {
+      termRef.current?.write("\r\n\x1b[31m[Failed to stop debug session]\x1b[0m\r\n");
+    }
   }, [runId]);
-
-  const statusLabel: Record<ConnectionStatus, string> = {
-    connecting: "Connecting...",
-    connected: "Connected",
-    disconnected: "Disconnected",
-  };
-
-  const statusColor: Record<ConnectionStatus, string> = {
-    connecting: "text-primary",
-    connected: "text-secondary",
-    disconnected: "text-destructive",
-  };
 
   return (
     <div className="flex h-full flex-col">
       {/* Status bar */}
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-1">
-        <span className="text-xs text-muted-foreground/60">Shell</span>
-        <span className={`text-xs ${statusColor[status]}`}>
-          {statusLabel[status]}
+        <span className="text-xs text-muted-foreground/60">
+          Shell &mdash; {runId}
         </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs ${
+            status === "connected" ? "text-green-500" :
+            status === "connecting" || status === "starting_debug" ? "text-yellow-500" :
+            "text-red-400"
+          }`}>
+            {status === "connecting" && "Connecting..."}
+            {status === "connected" && "Connected"}
+            {status === "disconnected" && "Disconnected"}
+            {status === "pod_down" && (podIsDown ? `Pod stopped (${phase})` : "Pod not running")}
+            {status === "starting_debug" && "Starting pod..."}
+          </span>
+          {status === "disconnected" && (
+            <button
+              onClick={reconnect}
+              className="px-2 py-0.5 text-xs bg-primary text-primary-foreground hover:opacity-90"
+            >
+              Reconnect
+            </button>
+          )}
+          {status === "connected" && (
+            <button
+              onClick={stopDebug}
+              className="px-2 py-0.5 text-xs bg-red-600 text-white hover:bg-red-700"
+            >
+              Stop
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Terminal container */}
-      <div ref={containerRef} className="flex-1" />
+      <div ref={containerRef} className="flex-1 relative">
+        {/* Overlay for pod_down state */}
+        {status === "pod_down" && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/80">
+            <p className="text-sm text-amber-400">
+              {podIsDown
+                ? `Run ${phase}. Start a debug session to explore the workspace.`
+                : "Pod is not running."}
+            </p>
+            <button
+              onClick={startDebug}
+              className="px-3 py-1.5 text-sm bg-primary text-primary-foreground hover:opacity-90"
+            >
+              Start Debug Session
+            </button>
+          </div>
+        )}
+        {status === "starting_debug" && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/80">
+            <p className="text-sm text-cyan-400 animate-pulse">Starting pod...</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

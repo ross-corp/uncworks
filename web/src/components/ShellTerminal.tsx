@@ -1,8 +1,9 @@
 import { Suspense, lazy } from "react";
+import type { AgentRunPhase } from "../types/agent-run";
 
 const ShellTerminalInner = lazy(() => import("./ShellTerminalInner"));
 
-export default function ShellTerminal({ runId }: { runId: string }) {
+export default function ShellTerminal({ runId, phase }: { runId: string; phase: AgentRunPhase }) {
   return (
     <div
       data-testid="shell-terminal"
@@ -16,7 +17,7 @@ export default function ShellTerminal({ runId }: { runId: string }) {
           </div>
         }
       >
-        <ShellTerminalInner runId={runId} />
+        <ShellTerminalInner runId={runId} phase={phase} />
       </Suspense>
     </div>
   );

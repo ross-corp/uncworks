@@ -115,6 +115,18 @@ message AgentRunSpec {
   string display_name = 19;
   // PipelineConfig provides per-stage configuration for spec-driven runs.
   PipelineConfig pipeline_config = 20;
+  // AutoPush controls whether changes are pushed to a feature branch after successful verification.
+  bool auto_push = 21;
+  // AutoPR controls whether a GitHub PR is created after pushing changes.
+  bool auto_pr = 22;
+  // PRBaseBranch is the base branch for the PR (default: "main").
+  string pr_base_branch = 23;
+  // Project is the project this run belongs to.
+  string project = 27;
+  // Feature is the feature/unit-of-work this run contributes to.
+  string feature = 28;
+  // Tags are freeform labels for cross-cutting filtering.
+  repeated string tags = 29;
 }
 
 // PipelineConfig provides per-stage configuration for the spec-driven pipeline.
@@ -167,6 +179,8 @@ message AgentRunStatus {
   int32 retry_count = 13;
   // VerificationResult is the JSON-encoded verdict from the verification stage.
   string verification_result = 14;
+  // PRUrl is the URL of the GitHub PR created by the pipeline.
+  string pr_url = 15;
 }
 
 message CreateAgentRunRequest {
@@ -191,6 +205,12 @@ message ListAgentRunsRequest {
   string parent_run_id = 5;
   // StageFilter filters by pipeline stage (planning, executing, verifying).
   string stage_filter = 6;
+  // ProjectFilter filters runs belonging to a specific project.
+  string project_filter = 7;
+  // FeatureFilter filters runs belonging to a specific feature.
+  string feature_filter = 8;
+  // TagFilter filters runs that have this tag.
+  string tag_filter = 9;
 }
 
 message ListAgentRunsResponse {

@@ -11,7 +11,9 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -82,6 +84,25 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 	crd.Status.Phase = aotv1alpha1.AgentRunPhasePending
 	crd.Status.Message = "Queued"
 
+	// Auto-set labels for project, feature, tags, and repo
+	labels := crd.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	if crd.Spec.Project != "" {
+		labels["aot.uncworks.io/project"] = crd.Spec.Project
+	}
+	if crd.Spec.Feature != "" {
+		labels["aot.uncworks.io/feature"] = crd.Spec.Feature
+	}
+	if len(crd.Spec.Tags) > 0 {
+		labels["aot.uncworks.io/tags"] = strings.Join(crd.Spec.Tags, ",")
+	}
+	if len(crd.Spec.Repos) > 0 {
+		labels["aot.uncworks.io/repo"] = repoNameFromURL(crd.Spec.Repos[0].URL)
+	}
+	crd.Labels = labels
+
 	if err := s.K8sClient.Create(ctx, crd); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create agentrun CRD: %w", err))
 	}
@@ -140,6 +161,20 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 		})
 	}
 
+	// Apply project label filter if provided
+	if req.Msg.ProjectFilter != "" {
+		listOpts = append(listOpts, client.MatchingLabels{
+			"aot.uncworks.io/project": req.Msg.ProjectFilter,
+		})
+	}
+
+	// Apply feature label filter if provided
+	if req.Msg.FeatureFilter != "" {
+		listOpts = append(listOpts, client.MatchingLabels{
+			"aot.uncworks.io/feature": req.Msg.FeatureFilter,
+		})
+	}
+
 	var list aotv1alpha1.AgentRunList
 	if err := s.K8sClient.List(ctx, &list, listOpts...); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list agentruns: %w", err))
@@ -169,6 +204,20 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 		// Apply stage filter
 		if req.Msg.StageFilter != "" && crd.Status.Stage != req.Msg.StageFilter {
 			continue
+		}
+
+		// Apply tag filter (check if the requested tag is present in the CRD's tags)
+		if req.Msg.TagFilter != "" {
+			found := false
+			for _, t := range crd.Spec.Tags {
+				if t == req.Msg.TagFilter {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
 		}
 
 		runs = append(runs, run)
@@ -427,6 +476,16 @@ func (s *AOTServiceHandler) SearchPastWork(ctx context.Context, req *connect.Req
 	return connect.NewResponse(&apiv1.SearchPastWorkResponse{Results: protoResults}), nil
 }
 
+// repoNameFromURL derives a directory name from a git URL.
+func repoNameFromURL(repoURL string) string {
+	if u, err := url.Parse(repoURL); err == nil && u.Path != "" {
+		base := filepath.Base(u.Path)
+		return strings.TrimSuffix(base, ".git")
+	}
+	base := filepath.Base(repoURL)
+	return strings.TrimSuffix(base, ".git")
+}
+
 // isTerminalPhase returns true for phases that indicate a completed run.
 func isTerminalPhase(phase apiv1.AgentRunPhase) bool {
 	switch phase {
@@ -610,6 +669,12 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 		OrchestrationMode: protoOrchModeToCRD(spec.OrchestrationMode),
 		SpecRunID:         spec.SpecRunId,
 		DisplayName:       spec.DisplayName,
+		AutoPush:          spec.AutoPush,
+		AutoPR:            spec.AutoPr,
+		PRBaseBranch:      spec.PrBaseBranch,
+		Project:           spec.Project,
+		Feature:           spec.Feature,
+		Tags:              spec.Tags,
 	}
 	if spec.PipelineConfig != nil {
 		crdSpec.PipelineConfig = &aotv1alpha1.PipelineConfig{
@@ -707,6 +772,12 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		OrchestrationMode: crdOrchModeToProto(crd.Spec.OrchestrationMode),
 		SpecRunId:         crd.Spec.SpecRunID,
 		DisplayName:       crd.Spec.DisplayName,
+		AutoPush:          crd.Spec.AutoPush,
+		AutoPr:            crd.Spec.AutoPR,
+		PrBaseBranch:      crd.Spec.PRBaseBranch,
+		Project:           crd.Spec.Project,
+		Feature:           crd.Spec.Feature,
+		Tags:              crd.Spec.Tags,
 	}
 	if crd.Spec.PipelineConfig != nil {
 		protoSpec.PipelineConfig = &apiv1.PipelineConfig{
@@ -743,6 +814,7 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 			Stage:              crd.Status.Stage,
 			RetryCount:         crd.Status.RetryCount,
 			VerificationResult: crd.Status.VerificationResult,
+			PrUrl:              crd.Status.PRUrl,
 		},
 		CreatedAt: timestamppb.New(crd.CreationTimestamp.Time),
 	}
@@ -803,5 +875,6 @@ func mapWorkflowStateToProto(state aottemporal.WorkflowState) *apiv1.AgentRunSta
 		Phase:   phase,
 		Message: state.Message,
 		PodName: state.PodName,
+		PrUrl:   state.PRUrl,
 	}
 }

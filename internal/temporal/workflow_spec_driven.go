@@ -2,6 +2,7 @@ package temporal
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -356,10 +357,10 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		// --- EXECUTE ---
 		state.Message = fmt.Sprintf("Executing: attempt %d/%d", attempt, maxRetries)
 
-		prompt := fmt.Sprintf("Implement the OpenSpec change '%s'. Read the specs at /workspace/openspec/changes/%s/ for requirements and tasks.\n\n%s",
+		prompt := fmt.Sprintf("Implement the OpenSpec change '%s'.\n\nRead specs at /workspace/openspec/changes/%s/ for requirements.\nRead tasks.md for your checklist. Mark each task [x] as you complete it.\n\nOriginal task: %s",
 			changeName, changeName, input.Prompt)
 		if lastFailureReport != "" {
-			prompt = fmt.Sprintf("PREVIOUS ATTEMPT FAILED VERIFICATION:\n%s\n\nImplement the OpenSpec change '%s'. Read specs at /workspace/openspec/changes/%s/\n\nOriginal task: %s",
+			prompt = fmt.Sprintf("PREVIOUS ATTEMPT FAILED:\n%s\n\nFix the issues and complete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
 				lastFailureReport, changeName, changeName, input.Prompt)
 		}
 
@@ -423,8 +424,38 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		}
 
 		if verifyOutput.Result.Pass {
+			// --- POST-VERIFY: Enrich tags from diff ---
+			enrichCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+				StartToCloseTimeout: 30 * time.Second,
+			})
+			repoPath := "/workspace"
+			if len(input.Repos) > 0 {
+				rp := input.Repos[0].Path
+				if rp == "" {
+					rp = repoNameFromURL(input.Repos[0].URL)
+				}
+				repoPath = "/workspace/" + rp
+			}
+			if enrichErr := workflow.ExecuteActivity(enrichCtx, ActivityEnrichRunTags, EnrichRunTagsInput{
+				AgentRunName: input.AgentRunName,
+				Namespace:    input.Namespace,
+				PodIP:        podIP,
+				RepoPath:     repoPath,
+			}).Get(ctx, nil); enrichErr != nil {
+				workflow.GetLogger(ctx).Warn("Tag enrichment failed", "error", enrichErr)
+			}
+
+			// --- POST-VERIFY: Push and PR ---
+			if err := postVerifyPushAndPR(ctx, input, state, podIP, changeName, attempt); err != nil {
+				workflow.GetLogger(ctx).Warn("Post-verify push/PR failed", "error", err)
+				// Push/PR failure is not a pipeline failure
+			}
+
 			state.Phase = "Succeeded"
 			state.Message = fmt.Sprintf("Spec-driven pipeline: verified and archived (attempt %d)", attempt)
+			if state.PRUrl != "" {
+				state.Message += fmt.Sprintf(", PR: %s", state.PRUrl)
+			}
 			return nil
 		}
 
@@ -442,6 +473,144 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	state.Message = fmt.Sprintf("Spec-driven pipeline: failed verification after %d attempts. %s",
 		maxRetries, lastFailureReport)
 	return nil
+}
+
+// postVerifyPushAndPR handles the post-verification push and PR creation steps.
+// It is a no-op if neither AutoPush nor AutoPR is enabled.
+func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *WorkflowState, podIP, changeName string, attempt int) error {
+	if !input.AutoPush && !input.AutoPR {
+		return nil
+	}
+
+	gitOpts := workflow.ActivityOptions{
+		StartToCloseTimeout: 2 * time.Minute,
+		HeartbeatTimeout:    30 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    5 * time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    30 * time.Second,
+			MaximumAttempts:    3,
+		},
+	}
+	gitCtx := workflow.WithActivityOptions(ctx, gitOpts)
+
+	branchName := fmt.Sprintf("aot/%s", input.AgentRunName)
+	commitMsg := fmt.Sprintf("feat(%s): implement spec-driven change\n\nAgentRun: %s\nChange: %s\nAttempt: %d",
+		changeName, input.AgentRunName, changeName, attempt)
+
+	// Determine repo path — use first repo if available
+	repoPath := "/workspace"
+	if len(input.Repos) > 0 {
+		rp := input.Repos[0].Path
+		if rp == "" {
+			rp = repoNameFromURL(input.Repos[0].URL)
+		}
+		repoPath = "/workspace/" + rp
+	}
+
+	state.Message = "Pushing changes to feature branch"
+
+	var pushOutput PushChangesOutput
+	if err := workflow.ExecuteActivity(gitCtx, ActivityPushChanges, PushChangesInput{
+		AgentRunName:  input.AgentRunName,
+		PodIP:         podIP,
+		RepoPath:      repoPath,
+		BranchName:    branchName,
+		CommitMessage: commitMsg,
+	}).Get(ctx, &pushOutput); err != nil {
+		return fmt.Errorf("push changes: %w", err)
+	}
+
+	if !input.AutoPR {
+		return nil
+	}
+
+	// Parse owner/repo from the first repo URL
+	if len(input.Repos) == 0 {
+		return fmt.Errorf("no repos configured, cannot create PR")
+	}
+	owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
+	if err != nil {
+		return fmt.Errorf("parse repo URL for PR: %w", err)
+	}
+
+	baseBranch := input.PRBaseBranch
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+
+	state.Message = "Creating GitHub PR"
+
+	prOpts := workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 2,
+		},
+	}
+	prCtx := workflow.WithActivityOptions(ctx, prOpts)
+
+	var prOutput CreatePROutput
+	if err := workflow.ExecuteActivity(prCtx, ActivityCreatePR, CreatePRInput{
+		RepoOwner:    owner,
+		RepoName:     repo,
+		BranchName:   branchName,
+		BaseBranch:   baseBranch,
+		Title:        fmt.Sprintf("feat(%s): %s", changeName, truncateForTitle(input.Prompt, 50)),
+		Body:         fmt.Sprintf("## Automated PR from AOT Pipeline\n\n**AgentRun:** `%s`\n**Change:** `%s`\n**Commit:** `%s`\n\nThis PR was automatically created by the spec-driven pipeline after verification passed.", input.AgentRunName, changeName, pushOutput.CommitSHA),
+		AgentRunName: input.AgentRunName,
+	}).Get(ctx, &prOutput); err != nil {
+		return fmt.Errorf("create PR: %w", err)
+	}
+
+	state.PRUrl = prOutput.PRUrl
+	return nil
+}
+
+// parseGitHubOwnerRepo extracts owner and repo from a GitHub URL.
+// Supports both HTTPS and SSH formats:
+//   - https://github.com/owner/repo.git
+//   - git@github.com:owner/repo.git
+func parseGitHubOwnerRepo(repoURL string) (owner, repo string, err error) {
+	// Handle SSH format
+	if strings.HasPrefix(repoURL, "git@") {
+		// git@github.com:owner/repo.git
+		parts := strings.SplitN(repoURL, ":", 2)
+		if len(parts) != 2 {
+			return "", "", fmt.Errorf("invalid SSH URL: %s", repoURL)
+		}
+		pathStr := strings.TrimSuffix(parts[1], ".git")
+		segments := strings.SplitN(pathStr, "/", 2)
+		if len(segments) != 2 {
+			return "", "", fmt.Errorf("cannot parse owner/repo from SSH URL: %s", repoURL)
+		}
+		return segments[0], segments[1], nil
+	}
+
+	// Handle HTTPS format
+	u, parseErr := url.Parse(repoURL)
+	if parseErr != nil {
+		return "", "", fmt.Errorf("parse URL: %w", parseErr)
+	}
+	pathStr := strings.TrimSuffix(u.Path, ".git")
+	pathStr = strings.TrimPrefix(pathStr, "/")
+	segments := strings.SplitN(pathStr, "/", 3)
+	if len(segments) < 2 {
+		return "", "", fmt.Errorf("cannot parse owner/repo from URL path: %s", u.Path)
+	}
+	return segments[0], segments[1], nil
+}
+
+// truncateForTitle truncates a string for use in a PR title, breaking at word boundaries.
+func truncateForTitle(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	// Break at last space before max
+	truncated := s[:max]
+	if idx := strings.LastIndex(truncated, " "); idx > 0 {
+		truncated = truncated[:idx]
+	}
+	return truncated + "..."
 }
 
 // pollAgentStatus reuses the existing agent status polling logic from the

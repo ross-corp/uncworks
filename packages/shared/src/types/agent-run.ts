@@ -1,5 +1,5 @@
 /** Backend type for an AgentRun. */
-export type Backend = "Pod" | "KubeVirt" | "External";
+export type Backend = "pod" | "kubevirt" | "external";
 
 /** Lifecycle phase of an AgentRun. */
 export type AgentRunPhase =
@@ -50,6 +50,9 @@ export interface AgentRunSpec {
   orchestration?: Orchestration;
   specRunId?: string;
   displayName?: string;
+  project?: string;
+  feature?: string;
+  tags?: string[];
   pipelineConfig?: {
     plan?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };
     execute?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };
@@ -72,6 +75,7 @@ export interface AgentRunStatus {
   stage?: string;
   retryCount?: number;
   verificationResult?: string;
+  prUrl?: string;
 }
 
 /** Full AgentRun object. */

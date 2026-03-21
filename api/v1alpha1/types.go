@@ -147,6 +147,31 @@ type AgentRunSpec struct {
 	// PipelineConfig provides per-stage configuration for spec-driven runs.
 	// +optional
 	PipelineConfig *PipelineConfig `json:"pipelineConfig,omitempty"`
+
+	// AutoPush controls whether changes are pushed to a feature branch after successful verification.
+	// +optional
+	AutoPush bool `json:"autoPush,omitempty"`
+
+	// AutoPR controls whether a GitHub PR is created after pushing changes.
+	// Requires AutoPush to be true.
+	// +optional
+	AutoPR bool `json:"autoPR,omitempty"`
+
+	// PRBaseBranch is the base branch for the PR (default: "main").
+	// +optional
+	PRBaseBranch string `json:"prBaseBranch,omitempty"`
+
+	// Project is the project this run belongs to.
+	// +optional
+	Project string `json:"project,omitempty"`
+
+	// Feature is the feature/unit-of-work this run contributes to.
+	// +optional
+	Feature string `json:"feature,omitempty"`
+
+	// Tags are freeform labels for cross-cutting filtering.
+	// +optional
+	Tags []string `json:"tags,omitempty"`
 }
 
 // PipelineConfig provides per-stage configuration for the spec-driven pipeline.
@@ -265,6 +290,10 @@ type AgentRunStatus struct {
 	// VerificationResult is the JSON-encoded verdict from the verification stage.
 	// +optional
 	VerificationResult string `json:"verificationResult,omitempty"`
+
+	// PRUrl is the URL of the GitHub PR created by the pipeline.
+	// +optional
+	PRUrl string `json:"prUrl,omitempty"`
 }
 
 // +kubebuilder:object:root=true

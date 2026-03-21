@@ -1041,3 +1041,13 @@ func formatTimestamp(ts interface{}, fallback string) string {
 		return fallback
 	}
 }
+
+// ParseAgentJSONL is the exported wrapper of parseAgentJSONL for integration testing.
+func ParseAgentJSONL(raw string) []AgentLogEntry {
+	return parseAgentJSONL(raw)
+}
+
+// ParseThinkingFromLines is the exported wrapper of parseThinkingFromLines for integration testing.
+func ParseThinkingFromLines(lines []string) ThinkingResponse {
+	return parseThinkingFromLines(lines)
+}

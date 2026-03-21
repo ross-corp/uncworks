@@ -10,7 +10,6 @@ import StageProgress from "../components/StageProgress";
 import FileExplorer from "../components/FileExplorer";
 import ShellTerminal from "../components/ShellTerminal";
 import TraceTimeline from "../components/TraceTimeline";
-import VerificationPanel from "../components/VerificationPanel";
 import { useTraces } from "../hooks/useTraces";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import {
@@ -21,14 +20,13 @@ import {
   SheetDescription,
 } from "../components/ui/sheet";
 
-type Tab = "activity" | "files" | "shell" | "traces" | "verify";
+type Tab = "logs" | "traces" | "files" | "shell";
 
 const TABS: { key: Tab; label: string; num: string }[] = [
-  { key: "activity", label: "Activity", num: "1" },
-  { key: "files", label: "Files", num: "2" },
-  { key: "shell", label: "Shell", num: "3" },
-  { key: "traces", label: "Traces", num: "4" },
-  { key: "verify", label: "Verify", num: "5" },
+  { key: "logs", label: "Logs", num: "1" },
+  { key: "traces", label: "Traces", num: "2" },
+  { key: "files", label: "Files", num: "3" },
+  { key: "shell", label: "Shell", num: "4" },
 ];
 
 export default function RunDetailView() {
@@ -38,7 +36,7 @@ export default function RunDetailView() {
   const { toast } = useToast();
   const { mode, toggleMode } = useThemeNew();
   const [run, setRun] = useState<AgentRun | null>(null);
-  const [tab, setTab] = useState<Tab>("activity");
+  const [tab, setTab] = useState<Tab>("logs");
   const [showInfo, setShowInfo] = useState(false);
   const [hitlInput, setHitlInput] = useState("");
   const { spans } = useTraces(id || "");
@@ -181,7 +179,7 @@ export default function RunDetailView() {
             {resolvedMode === "dark" ? "\u2600" : "\u263E"}
           </button>
 
-          <span className="text-xs text-muted-foreground">esc back · 1-5 tabs · i info</span>
+          <span className="text-xs text-muted-foreground">esc back · 1-4 tabs · i info</span>
         </div>
       </div>
 
@@ -211,22 +209,19 @@ export default function RunDetailView() {
           ))}
         </TabsList>
 
-        <TabsContent value="activity" className="flex-1 min-h-0 overflow-hidden">
+        <TabsContent value="logs" className="flex-1 min-h-0 overflow-hidden">
           <ActivityFeed runId={run.id} phase={run.status.phase} />
-        </TabsContent>
-        <TabsContent value="files" className="flex-1 min-h-0 overflow-hidden">
-          <FileExplorer runId={run.id} />
-        </TabsContent>
-        <TabsContent value="shell" className="flex-1 min-h-0 overflow-hidden">
-          <ShellTerminal runId={run.id} />
         </TabsContent>
         <TabsContent value="traces" className="flex-1 min-h-0 overflow-hidden">
           <div className="h-full overflow-y-auto">
             <TraceTimeline spans={spans} onSelectSpan={() => {}} />
           </div>
         </TabsContent>
-        <TabsContent value="verify" className="flex-1 min-h-0 overflow-hidden">
-          <VerificationPanel runId={run.id} />
+        <TabsContent value="files" className="flex-1 min-h-0 overflow-hidden">
+          <FileExplorer runId={run.id} />
+        </TabsContent>
+        <TabsContent value="shell" className="flex-1 min-h-0 overflow-hidden">
+          <ShellTerminal runId={run.id} phase={run.status.phase} />
         </TabsContent>
       </Tabs>
 
@@ -301,7 +296,7 @@ export default function RunDetailView() {
 
       {/* Footer */}
       <div className="border-t px-4 py-1 text-xs text-muted-foreground">
-        1 activity · 2 files · 3 shell · 4 traces · 5 verify · i info · esc back
+        1 logs · 2 traces · 3 files · 4 shell · i info · esc back
       </div>
     </div>
   );

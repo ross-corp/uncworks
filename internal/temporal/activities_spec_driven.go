@@ -48,7 +48,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 
 	// Step 3: Scaffold the change BEFORE starting the agent (idempotent — skip if already exists)
 	activity.RecordHeartbeat(ctx, "scaffolding openspec change")
-	checkCmd := fmt.Sprintf("test -d openspec/changes/%s && echo exists || echo missing", input.AgentRunName)
+	checkCmd := fmt.Sprintf("test -d openspec/changes/%q && echo exists || echo missing", input.AgentRunName)
 	checkOut, _ := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir, checkCmd)
 	if strings.TrimSpace(checkOut) == "exists" {
 		log.Printf("[PlanRun %s] change directory already exists, skipping scaffold", input.AgentRunName)
@@ -149,7 +149,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 
 	// Validate the change structure (in specDir, not repoDir)
 	validateOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir,
-		fmt.Sprintf("openspec validate \"%s\" --json", input.AgentRunName))
+		fmt.Sprintf("openspec validate %q --json", input.AgentRunName))
 	if err != nil {
 		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("openspec validate failed: %v (stderr: %s)", err, validateOut))
 		return output, nil
@@ -169,7 +169,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 
 	// Check artifact completion status (in specDir)
 	statusOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir,
-		fmt.Sprintf("openspec status --change \"%s\" --json", input.AgentRunName))
+		fmt.Sprintf("openspec status --change %q --json", input.AgentRunName))
 	if err != nil {
 		output.ValidationErrors = append(output.ValidationErrors, fmt.Sprintf("openspec status failed: %v", err))
 		return output, nil
@@ -283,7 +283,7 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	activity.RecordHeartbeat(ctx, "validating spec structure")
 
 	valOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir,
-		fmt.Sprintf("openspec validate \"%s\" --json", input.ChangeName))
+		fmt.Sprintf("openspec validate %q --json", input.ChangeName))
 	if err != nil {
 		result.Pass = false
 		result.FailureReport = fmt.Sprintf("openspec validate failed: %v (output: %s)", err, valOut)
@@ -423,7 +423,7 @@ Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...
 	activity.RecordHeartbeat(ctx, "archiving change")
 
 	archiveOut, archiveErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir,
-		fmt.Sprintf("openspec archive \"%s\" --yes", input.ChangeName))
+		fmt.Sprintf("openspec archive %q --yes", input.ChangeName))
 	if archiveErr != nil {
 		// Fix 8: report archive errors (was swallowed with || true)
 		// Archive failure is informational, not a gate blocker
@@ -685,14 +685,21 @@ func writeVerificationResult(repoPath, changeName string, result VerificationRes
 
 	for _, dir := range candidates {
 		if _, err := os.Stat(dir); err == nil {
-			_ = os.WriteFile(filepath.Join(dir, "verification-result.json"), data, 0o644)
+			if writeErr := os.WriteFile(filepath.Join(dir, "verification-result.json"), data, 0o644); writeErr != nil {
+				log.Printf("failed to write verification result to %s: %v", dir, writeErr)
+			}
 			return
 		}
 	}
 
 	fallbackDir := filepath.Join(repoPath, ".aot", "verification")
-	_ = os.MkdirAll(fallbackDir, 0o755)
-	_ = os.WriteFile(filepath.Join(fallbackDir, changeName+"-result.json"), data, 0o644)
+	if mkdirErr := os.MkdirAll(fallbackDir, 0o755); mkdirErr != nil {
+		log.Printf("failed to create fallback verification dir %s: %v", fallbackDir, mkdirErr)
+		return
+	}
+	if writeErr := os.WriteFile(filepath.Join(fallbackDir, changeName+"-result.json"), data, 0o644); writeErr != nil {
+		log.Printf("failed to write fallback verification result to %s: %v", fallbackDir, writeErr)
+	}
 }
 
 // execInSidecar runs a bash command via the sidecar's ExecCommand RPC.

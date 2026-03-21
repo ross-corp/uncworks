@@ -134,15 +134,15 @@ export class AOTClient {
 // --- Proto <-> Domain mappings ---
 
 const backendFromProtoMap: Record<number, Backend> = {
-  [PbBackend.POD]: "Pod",
-  [PbBackend.KUBEVIRT]: "KubeVirt",
-  [PbBackend.EXTERNAL]: "External",
+  [PbBackend.POD]: "pod",
+  [PbBackend.KUBEVIRT]: "kubevirt",
+  [PbBackend.EXTERNAL]: "external",
 };
 
 const backendToProtoMap: Record<Backend, PbBackend> = {
-  Pod: PbBackend.POD,
-  KubeVirt: PbBackend.KUBEVIRT,
-  External: PbBackend.EXTERNAL,
+  pod: PbBackend.POD,
+  kubevirt: PbBackend.KUBEVIRT,
+  external: PbBackend.EXTERNAL,
 };
 
 function backendToProto(b: Backend): PbBackend {
@@ -150,7 +150,7 @@ function backendToProto(b: Backend): PbBackend {
 }
 
 function backendFromProto(b: PbBackend): Backend {
-  return backendFromProtoMap[b] ?? "Pod";
+  return backendFromProtoMap[b] ?? "pod";
 }
 
 const phaseFromProtoMap: Record<number, AgentRunPhase> = {
@@ -214,6 +214,9 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       orchestrationMode: (pb.spec as Record<string, unknown>)?.orchestrationMode as string | undefined as AgentRunSpec["orchestrationMode"],
       specRunId: (pb.spec as Record<string, unknown>)?.specRunId as string | undefined,
       displayName: pb.spec?.displayName || undefined,
+      project: (pb.spec as Record<string, unknown>)?.project as string | undefined,
+      feature: (pb.spec as Record<string, unknown>)?.feature as string | undefined,
+      tags: ((pb.spec as Record<string, unknown>)?.tags as string[] | undefined) || undefined,
     },
     status: {
       phase: phaseFromProto(pb.status?.phase ?? PbAgentRunPhase.UNSPECIFIED),
@@ -226,6 +229,7 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       retainUntil: pb.status?.retainUntil ? timestampToISO(pb.status.retainUntil) : undefined,
       deploymentName: pb.status?.deploymentName || undefined,
       debugActive: pb.status?.debugActive || false,
+      prUrl: (pb.status as Record<string, unknown>)?.prUrl as string | undefined,
     },
     createdAt: timestampToISO(pb.createdAt),
     updatedAt: timestampToISO(pb.updatedAt),

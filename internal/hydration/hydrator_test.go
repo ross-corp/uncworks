@@ -635,6 +635,128 @@ func TestHydrator_ComposeDevbox_ExplicitOverride(t *testing.T) {
 	}
 }
 
+// --- Idempotent worktree creation regression test ---
+
+// TestHydrator_CreateWorktree_Idempotent verifies that running hydration twice
+// (simulating a debug pod restart) succeeds without error. This is a regression
+// test for the bug where createWorktree failed on "worktree already exists"
+// when the pod restarted and the PVC still had the worktree from the first run.
+func TestHydrator_CreateWorktree_Idempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+	bareDir := filepath.Join(tmpDir, ".bare", "myrepo")
+	worktreeDir := filepath.Join(tmpDir, "myrepo")
+
+	// Set up a real bare repo so worktree operations work.
+	runner := &ExecRunner{}
+	ctx := context.Background()
+
+	// Create a bare repository with an initial commit.
+	if err := os.MkdirAll(bareDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Run(ctx, bareDir, "git", "init", "--bare"); err != nil {
+		t.Fatalf("git init --bare: %v", err)
+	}
+
+	// Detect the default branch name (may be "master" or "main" depending on git config).
+	defaultBranch, err := runner.Run(ctx, bareDir, "git", "symbolic-ref", "--short", "HEAD")
+	if err != nil || defaultBranch == "" {
+		defaultBranch = "master"
+	}
+
+	// We need at least one commit for worktree add to work.
+	// Create a temp clone, make a commit, then push back to bare.
+	tmpClone := filepath.Join(tmpDir, "_clone")
+	if _, err := runner.Run(ctx, tmpDir, "git", "clone", bareDir, tmpClone); err != nil {
+		t.Fatalf("git clone: %v", err)
+	}
+	if _, err := runner.Run(ctx, tmpClone, "git", "config", "user.email", "test@test.com"); err != nil {
+		t.Fatalf("git config email: %v", err)
+	}
+	if _, err := runner.Run(ctx, tmpClone, "git", "config", "user.name", "Test"); err != nil {
+		t.Fatalf("git config name: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpClone, "README.md"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Run(ctx, tmpClone, "git", "add", "."); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if _, err := runner.Run(ctx, tmpClone, "git", "commit", "-m", "initial"); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
+	if _, err := runner.Run(ctx, tmpClone, "git", "push"); err != nil {
+		t.Fatalf("git push: %v", err)
+	}
+
+	// Use the detected default branch so the test works regardless of git version.
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/org/myrepo.git", Branch: defaultBranch}},
+		WorkspaceDir: tmpDir,
+	}
+
+	// First run: should create the worktree.
+	h := NewHydrator(config, runner)
+	if err := h.Run(ctx); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+
+	// Verify worktree was created.
+	if _, err := os.Stat(filepath.Join(worktreeDir, ".git")); err != nil {
+		t.Fatalf("worktree .git should exist after first run: %v", err)
+	}
+
+	// Second run: should succeed without error (idempotent).
+	h2 := NewHydrator(config, runner)
+	if err := h2.Run(ctx); err != nil {
+		t.Fatalf("second Run (idempotent) should succeed, got: %v", err)
+	}
+
+	// Verify the worktree still works (file is still there).
+	if _, err := os.Stat(filepath.Join(worktreeDir, "README.md")); err != nil {
+		t.Errorf("README.md should still exist after idempotent re-run: %v", err)
+	}
+}
+
+// TestHydrator_CloneRepo_Idempotent verifies that cloneRepo is idempotent:
+// if the bare dir already exists, it skips cloning.
+func TestHydrator_CloneRepo_Idempotent(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+
+	// Pre-create the bare dir to simulate a restart scenario.
+	bareDir := filepath.Join(tmpDir, ".bare", "repo")
+	if err := os.MkdirAll(bareDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Also pre-create the worktree dir with .git to skip worktree creation.
+	worktreeDir := filepath.Join(tmpDir, "repo")
+	if err := os.MkdirAll(worktreeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worktreeDir, ".git"), []byte("gitdir: ../bare/repo"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/org/repo.git", Branch: "main"}},
+		WorkspaceDir: tmpDir,
+	}
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run should succeed when bare dir already exists: %v", err)
+	}
+
+	// No git commands should have been run — both clone and worktree were skipped.
+	for _, cmd := range runner.commands {
+		if cmd.Name == "git" {
+			t.Errorf("expected no git commands (idempotent skip), got: git %v", cmd.Args)
+		}
+	}
+}
+
 func TestHydrator_ComposeDevbox_InstallFailure(t *testing.T) {
 	runner := NewMockRunner()
 	runner.On("devbox", MockResult{Err: fmt.Errorf("devbox install failed")})

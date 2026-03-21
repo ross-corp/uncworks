@@ -66,6 +66,13 @@ const SPAN_TYPE_STYLES: Record<
     text: "text-purple-400",
     dot: "bg-purple-500",
   },
+  lifecycle: {
+    label: "LIFECYCLE",
+    bar: "bg-yellow-500/20 border-l-2 border-yellow-500",
+    barActive: "bg-yellow-500/30 border-l-2 border-yellow-500",
+    text: "text-yellow-400",
+    dot: "bg-yellow-500",
+  },
 };
 
 const FAILED_STYLES = {
@@ -178,78 +185,58 @@ function buildFlatTree(spans: TraceSpan[]): {
 // -- Diff viewer --------------------------------------------
 
 function DiffViewer({ files }: { files: FileDiff[] }) {
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(
-    () => new Set(files.map((f) => f.path))
-  );
-
-  const toggleFile = (path: string) => {
-    setExpandedFiles((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  };
-
   return (
-    <div className="space-y-1">
-      {files.map((file) => {
-        const isExpanded = expandedFiles.has(file.path);
-        const lines = file.patch.split("\n");
-
-        return (
-          <div
-            key={file.path}
-            className="rounded border border-border bg-background"
-          >
-            <button
-              onClick={() => toggleFile(file.path)}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs font-mono hover:bg-muted/50 transition-colors"
-            >
-              {isExpanded ? (
-                <ChevronDownIcon className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              ) : (
-                <ChevronRightIcon className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              )}
-              <FileIcon className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              <span className="text-foreground truncate">{file.path}</span>
-            </button>
-            {isExpanded && (
-              <div className="border-t border-border overflow-x-auto">
-                <pre className="text-[11px] leading-[18px] font-mono">
-                  {lines.map((line, idx) => {
-                    let lineClass = "px-3 ";
-                    if (line.startsWith("+") && !line.startsWith("+++")) {
-                      lineClass += "bg-green-500/10 text-green-400";
-                    } else if (
-                      line.startsWith("-") &&
-                      !line.startsWith("---")
-                    ) {
-                      lineClass += "bg-red-500/10 text-red-400";
-                    } else if (line.startsWith("@@")) {
-                      lineClass += "bg-blue-500/10 text-blue-400";
-                    } else {
-                      lineClass += "text-muted-foreground";
-                    }
-                    return (
-                      <div key={idx} className={lineClass}>
-                        {line}
-                      </div>
-                    );
-                  })}
-                </pre>
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div className="space-y-2">
+      {files.map((file) => (
+        <Collapsible key={file.path} defaultOpen>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs font-mono hover:bg-muted/50 transition-colors rounded border border-border bg-background group">
+            <ChevronRightIcon className="h-3 w-3 text-muted-foreground flex-shrink-0 group-data-[state=open]:rotate-90 transition-transform" />
+            <FileIcon className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <span className="text-foreground truncate">{file.path}</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="border border-border rounded mt-1 overflow-x-auto">
+              <pre className="text-[11px] leading-[18px] font-mono">
+                {file.patch.split("\n").map((line, idx) => {
+                  let cls = "px-3 ";
+                  if (line.startsWith("+") && !line.startsWith("+++"))
+                    cls += "bg-green-500/10 text-green-400";
+                  else if (line.startsWith("-") && !line.startsWith("---"))
+                    cls += "bg-red-500/10 text-red-400";
+                  else if (line.startsWith("@@"))
+                    cls += "bg-blue-500/10 text-blue-400";
+                  else cls += "text-muted-foreground";
+                  return <div key={idx} className={cls}>{line}</div>;
+                })}
+              </pre>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      ))}
     </div>
   );
 }
 
 // -- Span detail panel --------------------------------------
 
-function SpanDetail({ span }: { span: TraceSpan }) {
+function SpanDetail({ span, runId }: { span: TraceSpan; runId?: string }) {
+  const [diffData, setDiffData] = useState<FileDiff[] | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+
+  // Fetch diff on mount if span has diff
+  useEffect(() => {
+    if (!span.hasDiff || !runId) return;
+    setDiffLoading(true);
+    import("../hooks/apiFetch").then(({ apiFetch }) => {
+      apiFetch(`/api/v1/runs/${runId}/traces/${span.id}/diff`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.files) setDiffData(data.files);
+        })
+        .catch(() => {})
+        .finally(() => setDiffLoading(false));
+    });
+  }, [span.id, span.hasDiff, runId]);
   const durationMs = getDurationMs(span.startTime, span.endTime);
   const isFailed = span.metadata?.error !== undefined;
 
@@ -321,13 +308,23 @@ function SpanDetail({ span }: { span: TraceSpan }) {
         )}
 
       {/* Diff viewer */}
-      {span.hasDiff && span.diff && span.diff.files.length > 0 && (
+      {span.hasDiff && (
         <div className="space-y-1.5">
-          <div className="text-xs font-medium text-foreground">
-            Changes ({span.diff.files.length}{" "}
-            {span.diff.files.length === 1 ? "file" : "files"})
-          </div>
-          <DiffViewer files={span.diff.files} />
+          {diffLoading && (
+            <div className="text-xs text-muted-foreground">Loading diff...</div>
+          )}
+          {diffData && diffData.length > 0 && (
+            <>
+              <div className="text-xs font-medium text-foreground">
+                Changes ({diffData.length}{" "}
+                {diffData.length === 1 ? "file" : "files"})
+              </div>
+              <DiffViewer files={diffData} />
+            </>
+          )}
+          {diffData && diffData.length === 0 && (
+            <div className="text-xs text-muted-foreground">No file changes in this span</div>
+          )}
         </div>
       )}
     </div>
@@ -714,7 +711,7 @@ export default function TraceTimeline({
                 </button>
 
                 {/* Expanded detail section */}
-                {isExpanded && <SpanDetail span={span} />}
+                {isExpanded && <SpanDetail span={span} runId={runId} />}
               </div>
             );
           })}

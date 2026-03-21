@@ -189,13 +189,18 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 	g.process = proc
 
 	// Write an initial trace span so the traces tab has data immediately.
+	// Use stage to determine if this is manager (unc) or implementer (neph).
+	stageName := "neph.started"
+	if req.Msg.Stage == "plan" || req.Msg.Stage == "verify" {
+		stageName = "unc.started"
+	}
 	appendTraceSpan(TraceSpan{
 		ID:        uuid.New().String(),
-		Name:      "agent_started",
-		Type:      "lifecycle",
+		Name:      stageName,
+		Type:      "input",
 		StartTime: time.Now(),
 		EndTime:   time.Now(),
-		Metadata:  map[string]interface{}{"prompt": req.Msg.Prompt, "agentRunId": req.Msg.AgentRunId},
+		Metadata:  map[string]interface{}{"stage": req.Msg.Stage, "agentRunId": req.Msg.AgentRunId},
 	})
 
 	// CRITICAL: Start pipe readers NOW, before releasing the mutex.
@@ -306,43 +311,51 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 func stageSystemPrompt(stage string) string {
 	switch stage {
 	case "plan":
-		return `You are a manage agent. Create an OpenSpec change following the instructions in your prompt.
+		return `You are a manage agent (unc). Create an OpenSpec change following the instructions in your prompt.
 
 Key rules:
 - The OpenSpec workspace is at /workspace — run ALL openspec commands from /workspace (cd /workspace && openspec ...)
-- The repo source code is in /workspace/src/ — read code there to understand the codebase
+- The repo source code is in /workspace/<reponame>/ — read code there to understand the codebase
 - Use openspec CLI to get templates: openspec instructions proposal/specs/tasks --change <name>
 - Write spec files to the paths specified in your prompt (under /workspace/openspec/changes/)
 - After writing, run openspec validate to check your work and fix any errors
 - Each requirement MUST use SHALL or MUST. Each MUST have WHEN/THEN scenarios.
 - Do NOT implement any code. Only create spec artifacts.
+- Keep task count proportional to scope. A simple change: 3-8 tasks. Complex: 10-20.
 - Be thorough in acceptance criteria — they will be used to verify the implementation.`
 
 	case "execute":
-		return `You are an implement agent implementing a spec-driven change. Your work will be verified by a manage agent against the spec's acceptance criteria.
+		return `You are an implement agent (neph). Implement a spec-driven change.
 
-1. Read the change artifacts at /workspace/openspec/changes/ to understand what to implement
-2. Read proposal.md for the change overview and design.md for architecture decisions
-3. Read the specs under /workspace/openspec/changes/<change-name>/specs/ for detailed WHEN/THEN acceptance criteria
-4. Read tasks.md for your implementation checklist
-5. Implement each task in the source code (under /workspace/src/), marking them as [x] in tasks.md as you complete them
-6. Ensure your changes satisfy all WHEN/THEN scenarios in the spec files
-7. Run any test/build commands referenced in the specs to verify your work before finishing
+Use the openspec CLI to understand your work:
+  cd /workspace && openspec instructions tasks --change <change-name>   # see your task checklist
+  cd /workspace && openspec show <change-name>                          # see full change details
+  cd /workspace && openspec list --json                                 # check task completion status
 
-Focus on completing ALL tasks. Your work will be verified programmatically and by LLM judge.`
+Steps:
+1. Run: ls /workspace/ to find the repo and the openspec change name
+2. Run: cd /workspace && openspec show <change-name> to understand the full spec
+3. Read the specs at /workspace/openspec/changes/<change-name>/specs/*/spec.md for WHEN/THEN acceptance criteria
+4. Read /workspace/openspec/changes/<change-name>/tasks.md for your implementation checklist
+5. Implement each task in the repo code
+6. After completing each task, mark it [x] in tasks.md (openspec tracks completion via these checkboxes)
+7. Run: cd /workspace && openspec list --json to verify all tasks show as complete
+8. Run any test/build commands referenced in the specs
+
+The repo is at /workspace/<reponame>/. OpenSpec artifacts are at /workspace/openspec/.
+Verification checks openspec list for task completion — tasks not marked [x] will fail verification.`
 
 	case "verify":
-		return `You are a manage agent performing verification. Evaluate whether the implementation satisfies the spec's acceptance criteria.
+		return `You are a manage agent (unc) performing verification.
 
-1. Read the spec files in the openspec/changes/ directory
-2. For each WHEN/THEN scenario, check if the implementation satisfies it
-3. Run any test/build commands referenced in the scenarios
-4. Check that all tasks in tasks.md are marked [x]
-5. Run: openspec validate --json to verify spec structure
-6. Run: openspec list --json to verify task completion
+1. Read specs at /workspace/openspec/changes/*/specs/*/spec.md
+2. For each WHEN/THEN scenario, check the implementation
+3. Run any test/build commands referenced in scenarios
+4. Check /workspace/openspec/changes/*/tasks.md — all tasks must be [x]
+5. Run: cd /workspace && openspec validate --json
+6. Run: cd /workspace && openspec list --json
 
-Output a JSON verdict with this structure:
-{"pass": true/false, "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}`
+Output JSON: {"pass": true/false, "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}`
 
 	default:
 		return ""
@@ -364,6 +377,9 @@ func stageToRole(stage string) string {
 // maxRepeatedToolCalls is the number of identical consecutive tool calls before
 // the agent is killed to prevent infinite loops (e.g., rewriting the same file).
 const maxRepeatedToolCalls = 5
+
+// MaxRepeatedToolCalls is the exported value of maxRepeatedToolCalls for testing.
+const MaxRepeatedToolCalls = maxRepeatedToolCalls
 
 // startReaders begins scanning stdout/stderr pipes immediately.
 // MUST be called while the pipe is still open (before the process exits).
@@ -722,7 +738,7 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 		appendTraceSpan(TraceSpan{
 			ID:        uuid.New().String(),
 			Name:      "agent_resumed",
-			Type:      "lifecycle",
+			Type:      "input",
 			StartTime: now,
 			EndTime:   now,
 		})
@@ -1042,11 +1058,12 @@ func maybeCaptureStdoutSpan(line string) {
 		return
 	}
 
-	// Try to parse as a pi JSON-mode event first (--mode json output).
+	// Parse as pi streaming event (message_start, tool_execution_start, etc.)
+	// This is the primary format pi emits with --mode json.
 	if len(trimmed) > 0 && trimmed[0] == '{' {
-		var evt piJSONEvent
-		if err := json.Unmarshal([]byte(trimmed), &evt); err == nil && evt.Type != "" {
-			maybeCaptureJSONEvent(&evt, trimmed)
+		var streamEvt piEvent
+		if err := json.Unmarshal([]byte(trimmed), &streamEvt); err == nil && streamEvt.Type != "" {
+			maybeCaptureStreamEvent(&streamEvt, trimmed)
 			return
 		}
 	}
@@ -1128,7 +1145,7 @@ func maybeCaptureJSONEvent(evt *piJSONEvent, raw string) {
 		appendTraceSpan(TraceSpan{
 			ID:        uuid.New().String(),
 			Name:      spanName + "_result",
-			Type:      "tool_result",
+			Type:      "tool",
 			StartTime: now,
 			EndTime:   now,
 			Metadata:  metadata,
@@ -1155,6 +1172,169 @@ func maybeCaptureJSONEvent(evt *piJSONEvent, raw string) {
 		// Log other event types for debugging but don't create spans
 		log.Printf("pi JSON event: type=%s", evt.Type)
 	}
+}
+
+// --- Thinking/input span state for streaming events ---
+var (
+	thinkingSpanMu    sync.Mutex
+	thinkingSpanID    string
+	thinkingSpanStart time.Time
+	inThinkingBlock   bool
+)
+
+// Active span tracking for open-close matching
+var (
+	activeToolSpanMu    sync.Mutex
+	activeToolSpanID    string
+	activeToolSpanStart time.Time
+	activeToolSpanName  string
+
+	activeLLMSpanMu    sync.Mutex
+	activeLLMSpanID    string
+	activeLLMSpanStart time.Time
+)
+
+// maybeCaptureStreamEvent processes pi streaming events and creates trace spans
+// for tool executions, LLM turns, and thinking blocks.
+func maybeCaptureStreamEvent(evt *piEvent, raw string) {
+	now := time.Now()
+
+	switch evt.Type {
+	case "tool_execution_start":
+		// Extract tool name from the event
+		toolName := "tool"
+		if len(evt.AssistantMsgEvent) > 0 {
+			var ame piAssistantEvent
+			if json.Unmarshal(evt.AssistantMsgEvent, &ame) == nil {
+				if ame.Type == "tool_use" {
+					var tool piToolInfo
+					if json.Unmarshal(ame.Tool, &tool) == nil && tool.Name != "" {
+						toolName = tool.Name
+					}
+				}
+			}
+		}
+		activeToolSpanMu.Lock()
+		activeToolSpanID = uuid.New().String()
+		activeToolSpanStart = now
+		activeToolSpanName = toolName
+		activeToolSpanMu.Unlock()
+
+	case "tool_execution_end":
+		activeToolSpanMu.Lock()
+		if activeToolSpanID != "" {
+			span := TraceSpan{
+				ID:        activeToolSpanID,
+				Name:      "impl." + activeToolSpanName,
+				Type:      "tool",
+				StartTime: activeToolSpanStart,
+				EndTime:   now,
+				Metadata: map[string]interface{}{
+					"tool": activeToolSpanName,
+				},
+			}
+			// Capture git diff for tool execution
+			if diff := captureGitDiff("/workspace"); diff != nil && len(diff.Files) > 0 {
+				span.HasDiff = true
+				spanDiff := &SpanDiff{}
+				for _, f := range diff.Files {
+					spanDiff.Files = append(spanDiff.Files, FileDiff{
+						Path:  f.Path,
+						Patch: f.Patch,
+					})
+				}
+				span.Diff = spanDiff
+			}
+			appendTraceSpan(span)
+			activeToolSpanID = ""
+		}
+		activeToolSpanMu.Unlock()
+
+	case "message_start":
+		// Check if this is an assistant message (LLM turn)
+		if len(evt.Message) > 0 {
+			var msg struct {
+				Role string `json:"role"`
+			}
+			if json.Unmarshal(evt.Message, &msg) == nil && msg.Role == "assistant" {
+				activeLLMSpanMu.Lock()
+				activeLLMSpanID = uuid.New().String()
+				activeLLMSpanStart = now
+				activeLLMSpanMu.Unlock()
+			}
+		}
+
+	case "message_update":
+		if len(evt.AssistantMsgEvent) == 0 {
+			return
+		}
+		var ame piAssistantEvent
+		if err := json.Unmarshal(evt.AssistantMsgEvent, &ame); err != nil {
+			return
+		}
+
+		switch ame.Type {
+		case "thinking_delta":
+			thinkingSpanMu.Lock()
+			if !inThinkingBlock {
+				inThinkingBlock = true
+				thinkingSpanID = uuid.New().String()
+				thinkingSpanStart = now
+			}
+			thinkingSpanMu.Unlock()
+
+		case "text_delta", "text_end":
+			closeThinkingSpan()
+
+		case "tool_use":
+			closeThinkingSpan()
+			// Capture tool name for the upcoming tool_execution_start
+			var tool piToolInfo
+			if json.Unmarshal(ame.Tool, &tool) == nil && tool.Name != "" {
+				activeToolSpanMu.Lock()
+				activeToolSpanName = tool.Name
+				activeToolSpanMu.Unlock()
+			}
+		}
+
+	case "message_end":
+		closeThinkingSpan()
+		// Close LLM span
+		activeLLMSpanMu.Lock()
+		if activeLLMSpanID != "" {
+			durationMs := now.Sub(activeLLMSpanStart).Milliseconds()
+			appendTraceSpan(TraceSpan{
+				ID:        activeLLMSpanID,
+				Name:      "impl.thought",
+				Type:      "llm",
+				StartTime: activeLLMSpanStart,
+				EndTime:   now,
+				Metadata: map[string]interface{}{
+					"durationMs": durationMs,
+				},
+			})
+			activeLLMSpanID = ""
+		}
+		activeLLMSpanMu.Unlock()
+	}
+}
+
+// closeThinkingSpan closes an active thinking span if one is open.
+func closeThinkingSpan() {
+	thinkingSpanMu.Lock()
+	defer thinkingSpanMu.Unlock()
+	if !inThinkingBlock {
+		return
+	}
+	inThinkingBlock = false
+	appendTraceSpan(TraceSpan{
+		ID:        thinkingSpanID,
+		Name:      "thinking",
+		Type:      "thought",
+		StartTime: thinkingSpanStart,
+		EndTime:   time.Now(),
+	})
+	thinkingSpanID = ""
 }
 
 // --- Trace helpers (Section 10) ---
@@ -1262,29 +1442,38 @@ func resolveWorkDir(repoPath string) string {
 	if repoPath == "" {
 		repoPath = "/workspace"
 	}
-	if repoPath != "/workspace" {
+	return ResolveWorkDirAt(repoPath, "/workspace")
+}
+
+// ResolveWorkDirAt resolves the working directory for the agent, relative to
+// the given defaultBase. If repoPath differs from defaultBase, it is returned
+// unchanged. Otherwise it scans for a git repo at defaultBase or in its
+// immediate subdirectories (skipping .bare, .aot, .devcontainer, openspec,
+// spec).
+func ResolveWorkDirAt(repoPath, defaultBase string) string {
+	if repoPath != defaultBase {
 		return repoPath
 	}
 	// Check if this is already a repo (single-repo clone into root)
-	if _, err := os.Stat("/workspace/.git"); err == nil {
-		return "/workspace"
+	if _, err := os.Stat(filepath.Join(defaultBase, ".git")); err == nil {
+		return defaultBase
 	}
-	// Check for repo subdirs in /workspace/ (worktrees at /workspace/<repoName>/)
-	entries, err := os.ReadDir("/workspace")
+	// Check for repo subdirs in defaultBase/ (worktrees at defaultBase/<repoName>/)
+	entries, err := os.ReadDir(defaultBase)
 	if err != nil {
 		return repoPath
 	}
 	for _, e := range entries {
 		if e.IsDir() && e.Name() != ".bare" && e.Name() != ".aot" && e.Name() != ".devcontainer" && e.Name() != "openspec" && e.Name() != "spec" {
-			gitPath := "/workspace/" + e.Name() + "/.git"
+			gitPath := filepath.Join(defaultBase, e.Name(), ".git")
 			if _, err := os.Stat(gitPath); err == nil {
-				resolved := "/workspace/" + e.Name()
-				log.Printf("resolveWorkDir: /workspace → %s", resolved)
+				resolved := filepath.Join(defaultBase, e.Name())
+				log.Printf("resolveWorkDir: %s → %s", defaultBase, resolved)
 				return resolved
 			}
 		}
 	}
-	return "/workspace"
+	return defaultBase
 }
 
 // extractToolCallSignature returns a short signature for a tool call JSONL event,
@@ -1317,4 +1506,10 @@ func extractToolCallSignature(line string) string {
 		}
 	}
 	return ""
+}
+
+// ExtractToolCallSignature is the exported wrapper of extractToolCallSignature
+// for integration testing.
+func ExtractToolCallSignature(line string) string {
+	return extractToolCallSignature(line)
 }
