@@ -2,10 +2,10 @@
 
 ### 1. Project CRD Definition
 
-- [ ] 1.1 Create `api/v1alpha1/project_types.go` with `Project` and `ProjectSpec`/`ProjectStatus` structs (repos, devbox packages, defaults, IDE config, SSH keys, status fields)
-- [ ] 1.2 Create `deploy/crds/project-crd.yaml` with full OpenAPI schema matching the Go types
-- [ ] 1.3 Add `ProjectRef` and `SpecRef` fields to `AgentRunSpec` in `types.go` and `agentrun-crd.yaml`
-- [ ] 1.4 Generate deepcopy for Project types
+- [x] 1.1 Create `api/v1alpha1/project_types.go` with `Project` and `ProjectSpec`/`ProjectStatus` structs (repos, devbox packages, defaults, IDE config, SSH keys, status fields)
+- [x] 1.2 Create `deploy/crds/project-crd.yaml` with full OpenAPI schema matching the Go types
+- [x] 1.3 Add `ProjectRef` and `SpecRef` fields to `AgentRunSpec` in `types.go` and `agentrun-crd.yaml`
+- [x] 1.4 Generate deepcopy for Project types
 - [ ] 1.5 Add Project CRD contract test in `test/contract/` — verify Go types match YAML schema
 
 ### 2. Deploy soft-serve

@@ -119,6 +119,17 @@ type AgentRunSpec struct {
 	// +optional
 	SpecSource string `json:"specSource,omitempty"`
 
+	// ProjectRef is the name of the Project CRD this run belongs to.
+	// When set, empty run fields are inherited from the project's defaults.
+	// +optional
+	ProjectRef string `json:"projectRef,omitempty"`
+
+	// SpecRef is the name of a spec in the project's config repo (e.g., "add-comments").
+	// Resolves to openspec/specs/{specRef}/spec.md in the project's soft-serve repo.
+	// Requires ProjectRef to be set.
+	// +optional
+	SpecRef string `json:"specRef,omitempty"`
+
 	// WorkspaceName is the name of the workspace preset used for this run.
 	// +optional
 	WorkspaceName string `json:"workspaceName,omitempty"`
