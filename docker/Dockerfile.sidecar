@@ -23,9 +23,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pi-coding-agent, openspec CLI, and pi-compaxxt extension globally.
-# Pi auto-discovers npm packages with "pi-package" keyword for extensions.
-RUN npm install -g @mariozechner/pi-coding-agent @fission-ai/openspec @ssweens/pi-compaxxt
+# Install pi-coding-agent and openspec CLI globally
+RUN npm install -g @mariozechner/pi-coding-agent @fission-ai/openspec
+
+# Install pi-compaxxt extension via pi's package manager (npm: prefix installs
+# globally AND registers in ~/.pi/agent/settings.json so pi discovers it)
+RUN PI_ACCEPT_TOS=1 pi install npm:@ssweens/pi-compaxxt
 
 # Install pi-dcp extension for dynamic context pruning
 # Use --ignore-scripts to skip bun-dependent postinstall (bun not in sidecar image)
