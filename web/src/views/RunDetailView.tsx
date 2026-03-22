@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
+import { apiFetch } from "../hooks/apiFetch";
 import { useToast } from "../components/Toast";
 import RunStatusBadge from "../components/RunStatusBadge";
 import ActivityFeed from "../components/ActivityFeed";
@@ -157,6 +158,25 @@ export default function RunDetailView() {
               className="px-2 py-0.5 text-xs bg-primary text-primary-foreground hover:opacity-90 transition-colors"
             >
               Retry
+            </button>
+          )}
+
+          {/* Archive button - visible when not running */}
+          {!isRunning && !run.status.archived && (
+            <button
+              onClick={async () => {
+                if (!window.confirm("Archive this run? The workspace will be deleted.")) return;
+                await apiFetch(`/api/v1/runs/${id}/archive`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ archived: true }),
+                });
+                toast("Run archived", "success");
+                navigate("/");
+              }}
+              className="px-2 py-0.5 text-xs border text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Archive
             </button>
           )}
 
