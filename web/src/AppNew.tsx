@@ -4,10 +4,11 @@ import RunListView from "./views/RunListView";
 import NewRunView from "./views/NewRunView";
 import RunDetailView from "./views/RunDetailView";
 import FeatureDetailView from "./views/FeatureDetailView";
+import ProjectListView from "./views/ProjectListView";
+import ProjectDetailView from "./views/ProjectDetailView";
 
 /**
- * New app shell — four views with URL routing.
- * Replaces the old dashboard App.tsx.
+ * App shell — views with URL routing.
  */
 export default function AppNew() {
   return (
@@ -18,6 +19,8 @@ export default function AppNew() {
           <Route path="/new" element={<NewRunView />} />
           <Route path="/run/:id" element={<RunDetailView />} />
           <Route path="/feature/:name" element={<FeatureDetailView />} />
+          <Route path="/projects" element={<ProjectListView />} />
+          <Route path="/projects/:name" element={<ProjectDetailView />} />
         </Route>
       </Routes>
     </BrowserRouter>

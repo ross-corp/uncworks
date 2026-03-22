@@ -371,6 +371,9 @@ export default function RunListView() {
           >
             {selectMode ? "done" : "select"}
           </button>
+          <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => navigate("/projects")}>
+            Projects
+          </Button>
           <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => navigate("/new")}>
             + new
           </Button>

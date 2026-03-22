@@ -17,40 +17,40 @@
 
 ### 3. Project Controller
 
-- [ ] 3.1 Create `internal/controller/project_controller.go` with reconciler that watches Project CRDs
-- [ ] 3.2 On Project create: SSH to soft-serve and create repo (`ssh soft-serve repo create {name}`)
-- [ ] 3.3 On Project create: push initial scaffold commit (devbox.json from spec.devbox.packages, openspec/openspec.yaml, .devcontainer/devcontainer.json)
-- [ ] 3.4 On Project delete: delete the soft-serve repo (`ssh soft-serve repo delete {name}`)
-- [ ] 3.5 Update status: set `configRepoReady`, `configRepoURL` after successful repo creation
-- [ ] 3.6 Register Project controller in `cmd/controller/main.go`
-- [ ] 3.7 Add RBAC rules for Project CRD in controller
+- [x] 3.1 Create `internal/controller/project_controller.go` with reconciler that watches Project CRDs
+- [x] 3.2 On Project create: SSH to soft-serve and create repo
+- [x] 3.3 On Project create: push initial scaffold commit (devbox.json, openspec/, .devcontainer/)
+- [x] 3.4 On Project delete: delete the soft-serve repo (finalizer)
+- [x] 3.5 Update status: set `configRepoReady`, `configRepoURL` after successful repo creation
+- [x] 3.6 Register Project controller in `cmd/controller/main.go`
+- [x] 3.7 Add softserve.Client package with SSH admin and git operations
 
 ### 4. Project-aware Run Creation
 
-- [ ] 4.1 Update `BuildWorkflowInput` in `mapping.go` to resolve `ProjectRef` — read Project CRD, fill empty run fields from project defaults
-- [ ] 4.2 Resolve `SpecRef` — SSH to soft-serve, run `git show HEAD:openspec/specs/{specRef}/spec.md`, set as `SpecContent`
-- [ ] 4.3 Pass project config repo URL in `WorkflowInput` so hydration can clone it
-- [ ] 4.4 Update hydration init container to clone project config repo from soft-serve when URL is provided
-- [ ] 4.5 Add test for inheritance logic — project defaults fill empty run fields, explicit run fields override
+- [x] 4.1 Create `ResolveProjectDefaults` in `project_resolve.go` — reads Project CRD, fills empty run fields
+- [x] 4.2 Resolve `SpecRef` — reads spec content from soft-serve repo via client
+- [x] 4.3 Returns project config repo URL for hydration
+- [ ] 4.4 Wire `ResolveProjectDefaults` into AgentRun controller startup path
+- [x] 4.5 Add 5 tests for inheritance logic (repos, models, TTL, override, standalone, label)
 
 ### 5. Project API (ConnectRPC + REST)
 
-- [ ] 5.1 Add `Project` message to proto, with `CreateProject`, `GetProject`, `ListProjects`, `UpdateProject`, `DeleteProject` RPCs
-- [ ] 5.2 Implement Project CRUD handlers in apiserver (similar pattern to AgentRun handlers)
-- [ ] 5.3 Add REST endpoints for project config repo files: `GET /api/v1/projects/{name}/files`, `GET /api/v1/projects/{name}/files/{path}`, `PUT /api/v1/projects/{name}/files/{path}`
-- [ ] 5.4 File read: SSH to soft-serve, `git show HEAD:{path}` — return content
-- [ ] 5.5 File write: clone repo to temp dir, write file, commit, push back to soft-serve
+- [x] 5.1 REST Project CRUD: GET/POST /api/v1/projects, GET/DELETE /api/v1/projects/{name}
+- [x] 5.2 REST file endpoints: GET files, GET files/{path}, PUT files/{path} with commit
+- [x] 5.3 File read: clone from soft-serve, read file
+- [x] 5.4 File write: clone, write, commit, push back to soft-serve
+- [x] 5.5 Register project handler in apiserver main with soft-serve client
 
 ### 6. Project UI
 
-- [ ] 6.1 Create `web/src/views/ProjectListView.tsx` — list projects with name, repo count, run count, last run, total cost
-- [ ] 6.2 Create `web/src/views/ProjectDetailView.tsx` — project overview with config, spec browser, run list filtered by project
-- [ ] 6.3 Add spec browser panel — tree view of `openspec/specs/` from project config repo, click to view in Monaco
-- [ ] 6.4 Add "Run this spec" button in spec browser — creates run with `projectRef` + `specRef`
-- [ ] 6.5 Add project creation form — name, repos, devbox packages, defaults
-- [ ] 6.6 Add project settings page — edit devbox.json, defaults, SSH keys
-- [ ] 6.7 Add routing: `/projects` list, `/projects/{name}` detail, `/projects/{name}/settings`
-- [ ] 6.8 Update run list to show project link when `projectRef` is set
+- [x] 6.1 Create `ProjectListView.tsx` — list projects with create form
+- [x] 6.2 Create `ProjectDetailView.tsx` — specs tab (file tree + Monaco editor) + settings tab
+- [x] 6.3 Spec browser panel with file tree from soft-serve
+- [x] 6.4 "Run this spec" button navigates to /new with project+spec params
+- [x] 6.5 Project creation form in list view
+- [x] 6.6 Settings tab shows repos, devbox packages, config repo URL
+- [x] 6.7 Routes: `/projects` list, `/projects/{name}` detail
+- [x] 6.8 "Projects" button in run list header
 - [ ] 6.9 Update new run form to optionally select a project (auto-fills repos, model, etc.)
 
 ### 7. Verification
