@@ -6,6 +6,14 @@ import { apiFetch } from "../hooks/apiFetch";
 import RunStatusBadge from "../components/RunStatusBadge";
 
 type ViewMode = "features" | "all";
+type FilterField = "name" | "state" | "stage" | "model" | null;
+
+const FILTER_KEYS: Record<string, { field: FilterField; label: string; placeholder: string }> = {
+  "/": { field: "name", label: "/", placeholder: "filter by name..." },
+  "?": { field: "state", label: "?", placeholder: "filter by state (running, failed, succeeded)..." },
+  "'": { field: "stage", label: "'", placeholder: "filter by stage (plan, execute, verify)..." },
+  '"': { field: "model", label: '"', placeholder: "filter by model..." },
+};
 
 /** Compute aggregate status for a group of runs. */
 function aggregatePhase(runs: AgentRun[]): AgentRunPhase {
@@ -74,7 +82,7 @@ export default function RunListView() {
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [selected, setSelected] = useState(0);
   const [filter, setFilter] = useState("");
-  const [filterMode, setFilterMode] = useState(false);
+  const [filterField, setFilterField] = useState<FilterField>(null);
   const [loading, setLoading] = useState(true);
   const [activeProject, setActiveProject] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("features");
@@ -115,24 +123,36 @@ export default function RunListView() {
     return runs.filter((r) => r.spec.project === activeProject);
   }, [runs, activeProject]);
 
-  // Text-filtered runs
+  // Filtered runs (status + field-specific text filter)
   const filtered = useMemo(() => {
     return projectFiltered.filter((r) => {
-      // Status filter
+      // Status button filter
       if (statusFilter === "running" && r.status.phase !== "running" && r.status.phase !== "waiting_for_input" && r.status.phase !== "pending") return false;
       if (statusFilter === "failed" && r.status.phase !== "failed") return false;
       if (statusFilter === "succeeded" && r.status.phase !== "succeeded") return false;
       // Text filter
       if (!filter) return true;
       const q = filter.toLowerCase();
-      return (
-        (r.spec.displayName || r.name).toLowerCase().includes(q) ||
-        r.status.phase.toLowerCase().includes(q) ||
-        (r.spec.modelTier || "").toLowerCase().includes(q) ||
-        (r.spec.feature || "").toLowerCase().includes(q)
-      );
+      switch (filterField) {
+        case "name":
+          return (r.spec.displayName || r.name).toLowerCase().includes(q);
+        case "state":
+          return r.status.phase.toLowerCase().includes(q);
+        case "stage":
+          return (r.status.stage || "").toLowerCase().includes(q);
+        case "model":
+          return (r.spec.modelTier || "").toLowerCase().includes(q);
+        default:
+          // General search across all fields
+          return (
+            (r.spec.displayName || r.name).toLowerCase().includes(q) ||
+            r.status.phase.toLowerCase().includes(q) ||
+            (r.spec.modelTier || "").toLowerCase().includes(q) ||
+            (r.spec.feature || "").toLowerCase().includes(q)
+          );
+      }
     });
-  }, [projectFiltered, filter, statusFilter]);
+  }, [projectFiltered, filter, filterField, statusFilter]);
 
   // Feature groups for features view
   const featureGroups = useMemo((): FeatureGroup[] => {
@@ -144,7 +164,6 @@ export default function RunListView() {
       else map.set(key, [r]);
     }
     const groups: FeatureGroup[] = [];
-    // Named features first, sorted alphabetically
     const named = Array.from(map.entries())
       .filter(([k]) => k !== "")
       .sort(([a], [b]) => a.localeCompare(b));
@@ -152,7 +171,6 @@ export default function RunListView() {
       const prUrl = groupRuns.find((r) => r.status.prUrl)?.status.prUrl;
       groups.push({ feature, runs: groupRuns, phase: aggregatePhase(groupRuns), prUrl });
     }
-    // Unassigned at the bottom
     const unassigned = map.get("");
     if (unassigned) {
       const prUrl = unassigned.find((r) => r.status.prUrl)?.status.prUrl;
@@ -193,11 +211,19 @@ export default function RunListView() {
         return;
       }
 
-      if (filterMode) {
+      if (filterField !== null) {
         if (e.key === "Escape") {
           setFilter("");
-          setFilterMode(false);
+          setFilterField(null);
         }
+        return;
+      }
+
+      // Check for filter shortcuts
+      const filterDef = FILTER_KEYS[e.key];
+      if (filterDef) {
+        e.preventDefault();
+        setFilterField(filterDef.field);
         return;
       }
 
@@ -213,10 +239,6 @@ export default function RunListView() {
           break;
         case "n":
           navigate("/new");
-          break;
-        case "/":
-          e.preventDefault();
-          setFilterMode(true);
           break;
         case "p":
           setProjectPickerOpen(true);
@@ -247,7 +269,7 @@ export default function RunListView() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [visibleRuns, selected, filterMode, projectPickerOpen, navigate, fetchRuns]);
+  }, [visibleRuns, selected, filterField, projectPickerOpen, navigate, fetchRuns]);
 
   // Keep selection in bounds
   useEffect(() => {
@@ -279,6 +301,10 @@ export default function RunListView() {
     return visibleRuns.indexOf(run);
   }
 
+  const activeFilterDef = filterField
+    ? Object.values(FILTER_KEYS).find((d) => d.field === filterField)
+    : null;
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -305,7 +331,7 @@ export default function RunListView() {
             [p] {activeProject || "all"}
           </span>
         </div>
-        <span className="text-xs text-muted-foreground">p project · 1 features · 2 all · / filter · n new</span>
+        <span className="text-xs text-muted-foreground">/ name · ? state · ' stage · " model · n new</span>
       </div>
 
       {/* Project picker overlay */}
@@ -344,18 +370,19 @@ export default function RunListView() {
       )}
 
       {/* Filter bar */}
-      {filterMode && (
-        <div className="border-b px-4 py-1">
+      {filterField !== null && (
+        <div className="border-b px-4 py-1 flex items-center gap-2">
+          <span className="text-xs text-muted-foreground font-mono">{activeFilterDef?.label}</span>
           <input
             autoFocus
             className="w-full bg-transparent text-sm outline-none"
-            placeholder="/ filter runs..."
+            placeholder={activeFilterDef?.placeholder}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 setFilter("");
-                setFilterMode(false);
+                setFilterField(null);
               }
             }}
           />
@@ -406,7 +433,7 @@ export default function RunListView() {
 
       {/* Footer shortcuts */}
       <div className="border-t px-4 py-1 text-xs text-muted-foreground">
-        j/k navigate · enter detail · n new · d delete · c clone · / filter · p project · 1 features · 2 all
+        j/k navigate · enter detail · n new · d delete · c clone · / name · ? state · ' stage · " model · p project
       </div>
     </div>
   );
