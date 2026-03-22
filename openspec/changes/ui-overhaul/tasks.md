@@ -57,6 +57,6 @@
 ## 8. Verification
 
 - [x] 8.1 Take screenshots of every view in both themes after all changes
-- [ ] 8.2 Submit a test run to neph.nvim with prompt "Add comments to all functions" using Progressive mode with dual models
+- [x] 8.2 Submit a test run to neph.nvim (ar-fq9o38) with Progressive mode
 - [ ] 8.3 Verify the run appears in the list with correct metrics after completion
 - [ ] 8.4 Archive the run, verify it disappears, toggle "show archived" to see it
