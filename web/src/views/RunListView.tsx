@@ -5,6 +5,7 @@ import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
 import RunStatusBadge from "../components/RunStatusBadge";
 import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 
 type ViewMode = "features" | "all";
 type FilterField = "name" | "state" | "stage" | "model" | null;
@@ -16,7 +17,6 @@ const FILTER_KEYS: Record<string, { field: FilterField; label: string; placehold
   '"': { field: "model", label: '"', placeholder: "filter by model..." },
 };
 
-/** Compute aggregate status for a group of runs. */
 function aggregatePhase(runs: AgentRun[]): AgentRunPhase {
   if (runs.some((r) => r.status.phase === "succeeded")) return "succeeded";
   if (runs.some((r) => r.status.phase === "running")) return "running";
@@ -53,15 +53,14 @@ function FeatureHeader({
       <span className="text-xs text-muted-foreground">{expanded ? "\u25BC" : "\u25B6"}</span>
       <span
         className="font-bold truncate hover:underline"
-        onClick={(e) => {
-          e.stopPropagation();
-          onNavigate();
-        }}
+        onClick={(e) => { e.stopPropagation(); onNavigate(); }}
       >
         {group.feature}
       </span>
       <RunStatusBadge phase={group.phase} />
-      <span className="text-xs text-muted-foreground">{group.runs.length} run{group.runs.length !== 1 ? "s" : ""}</span>
+      <span className="text-xs text-muted-foreground">
+        {group.runs.length} run{group.runs.length !== 1 ? "s" : ""}
+      </span>
       {group.prUrl && (
         <a
           href={group.prUrl}
@@ -105,14 +104,12 @@ export default function RunListView() {
     }
   }, [client]);
 
-  // Poll every 5s
   useEffect(() => {
     fetchRuns();
     const interval = setInterval(fetchRuns, 5000);
     return () => clearInterval(interval);
   }, [fetchRuns]);
 
-  // Derive unique project list from runs
   const projects = useMemo(() => {
     const set = new Set<string>();
     for (const r of runs) {
@@ -121,35 +118,25 @@ export default function RunListView() {
     return Array.from(set).sort();
   }, [runs]);
 
-  // Project-filtered runs
   const projectFiltered = useMemo(() => {
     if (!activeProject) return runs;
     return runs.filter((r) => r.spec.project === activeProject);
   }, [runs, activeProject]);
 
-  // Filtered runs (archived + status + field-specific text filter)
   const filtered = useMemo(() => {
     return projectFiltered.filter((r) => {
-      // Archive filter
       if (!showArchived && r.status.archived) return false;
-      // Status button filter
       if (statusFilter === "running" && r.status.phase !== "running" && r.status.phase !== "waiting_for_input" && r.status.phase !== "pending") return false;
       if (statusFilter === "failed" && r.status.phase !== "failed") return false;
       if (statusFilter === "succeeded" && r.status.phase !== "succeeded") return false;
-      // Text filter
       if (!filter) return true;
       const q = filter.toLowerCase();
       switch (filterField) {
-        case "name":
-          return (r.spec.displayName || r.name).toLowerCase().includes(q);
-        case "state":
-          return r.status.phase.toLowerCase().includes(q);
-        case "stage":
-          return (r.status.stage || "").toLowerCase().includes(q);
-        case "model":
-          return (r.spec.modelTier || "").toLowerCase().includes(q);
+        case "name": return (r.spec.displayName || r.name).toLowerCase().includes(q);
+        case "state": return r.status.phase.toLowerCase().includes(q);
+        case "stage": return (r.status.stage || "").toLowerCase().includes(q);
+        case "model": return (r.spec.modelTier || "").toLowerCase().includes(q);
         default:
-          // General search across all fields
           return (
             (r.spec.displayName || r.name).toLowerCase().includes(q) ||
             r.status.phase.toLowerCase().includes(q) ||
@@ -158,41 +145,32 @@ export default function RunListView() {
           );
       }
     });
-  }, [projectFiltered, filter, filterField, statusFilter]);
+  }, [projectFiltered, filter, filterField, statusFilter, showArchived]);
 
-  // Feature groups for features view
   const featureGroups = useMemo((): FeatureGroup[] => {
     const map = new Map<string, AgentRun[]>();
     for (const r of filtered) {
       const key = r.spec.feature || "";
       const arr = map.get(key);
-      if (arr) arr.push(r);
-      else map.set(key, [r]);
+      if (arr) arr.push(r); else map.set(key, [r]);
     }
     const groups: FeatureGroup[] = [];
-    const named = Array.from(map.entries())
-      .filter(([k]) => k !== "")
-      .sort(([a], [b]) => a.localeCompare(b));
+    const named = Array.from(map.entries()).filter(([k]) => k !== "").sort(([a], [b]) => a.localeCompare(b));
     for (const [feature, groupRuns] of named) {
-      const prUrl = groupRuns.find((r) => r.status.prUrl)?.status.prUrl;
-      groups.push({ feature, runs: groupRuns, phase: aggregatePhase(groupRuns), prUrl });
+      groups.push({ feature, runs: groupRuns, phase: aggregatePhase(groupRuns), prUrl: groupRuns.find((r) => r.status.prUrl)?.status.prUrl });
     }
     const unassigned = map.get("");
     if (unassigned) {
-      const prUrl = unassigned.find((r) => r.status.prUrl)?.status.prUrl;
-      groups.push({ feature: "Unassigned", runs: unassigned, phase: aggregatePhase(unassigned), prUrl });
+      groups.push({ feature: "Unassigned", runs: unassigned, phase: aggregatePhase(unassigned), prUrl: unassigned.find((r) => r.status.prUrl)?.status.prUrl });
     }
     return groups;
   }, [filtered]);
 
-  // Flat list of visible runs in features mode (respecting collapsed state)
   const visibleRuns = useMemo((): AgentRun[] => {
     if (viewMode === "all") return filtered;
     const result: AgentRun[] = [];
     for (const group of featureGroups) {
-      if (!collapsedFeatures.has(group.feature)) {
-        result.push(...group.runs);
-      }
+      if (!collapsedFeatures.has(group.feature)) result.push(...group.runs);
     }
     return result;
   }, [viewMode, filtered, featureGroups, collapsedFeatures]);
@@ -200,93 +178,15 @@ export default function RunListView() {
   const toggleFeature = useCallback((feature: string) => {
     setCollapsedFeatures((prev) => {
       const next = new Set(prev);
-      if (next.has(feature)) next.delete(feature);
-      else next.add(feature);
+      if (next.has(feature)) next.delete(feature); else next.add(feature);
       return next;
     });
   }, []);
 
-  // Keyboard navigation
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      // Project picker takes precedence
-      if (projectPickerOpen) {
-        if (e.key === "Escape") {
-          setProjectPickerOpen(false);
-        }
-        return;
-      }
-
-      if (filterField !== null) {
-        if (e.key === "Escape") {
-          setFilter("");
-          setFilterField(null);
-        }
-        return;
-      }
-
-      // Check for filter shortcuts
-      const filterDef = FILTER_KEYS[e.key];
-      if (filterDef) {
-        e.preventDefault();
-        setFilterField(filterDef.field);
-        return;
-      }
-
-      switch (e.key) {
-        case "j":
-          setSelected((s) => Math.min(s + 1, visibleRuns.length - 1));
-          break;
-        case "k":
-          setSelected((s) => Math.max(s - 1, 0));
-          break;
-        case "Enter":
-          if (visibleRuns[selected]) navigate(`/run/${visibleRuns[selected].id}`);
-          break;
-        case "n":
-          navigate("/new");
-          break;
-        case "p":
-          setProjectPickerOpen(true);
-          break;
-        case "1":
-          setViewMode("features");
-          setSelected(0);
-          break;
-        case "2":
-          setViewMode("all");
-          setSelected(0);
-          break;
-        case "d":
-          if (visibleRuns[selected]) {
-            const run = visibleRuns[selected];
-            const name = run.spec.displayName || run.name;
-            if (window.confirm(`Delete run ${name}?`)) {
-              apiFetch(`/api/v1/runs/${run.id}`, { method: "DELETE" }).then(() => fetchRuns());
-            }
-          }
-          break;
-        case "c":
-          if (visibleRuns[selected]) {
-            navigate(`/new?clone=${visibleRuns[selected].id}`);
-          }
-          break;
-      }
-    }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [visibleRuns, selected, filterField, projectPickerOpen, navigate, fetchRuns]);
-
-  // Keep selection in bounds
-  useEffect(() => {
-    if (selected >= visibleRuns.length) setSelected(Math.max(0, visibleRuns.length - 1));
-  }, [visibleRuns.length, selected]);
-
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }
@@ -304,57 +204,120 @@ export default function RunListView() {
     fetchRuns();
   }
 
-  // Render a single run row
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (projectPickerOpen) {
+        if (e.key === "Escape") setProjectPickerOpen(false);
+        return;
+      }
+      if (filterField !== null) {
+        if (e.key === "Escape") { setFilter(""); setFilterField(null); }
+        return;
+      }
+      const filterDef = FILTER_KEYS[e.key];
+      if (filterDef) { e.preventDefault(); setFilterField(filterDef.field); return; }
+
+      switch (e.key) {
+        case "j": setSelected((s) => Math.min(s + 1, visibleRuns.length - 1)); break;
+        case "k": setSelected((s) => Math.max(s - 1, 0)); break;
+        case "Enter": if (visibleRuns[selected]) navigate(`/run/${visibleRuns[selected].id}`); break;
+        case "n": navigate("/new"); break;
+        case "p": setProjectPickerOpen(true); break;
+        case "x": setSelectMode(!selectMode); setSelectedIds(new Set()); break;
+        case "a":
+          if (selectMode) { setShowArchived(!showArchived); }
+          break;
+        case "1": setViewMode("features"); setSelected(0); break;
+        case "2": setViewMode("all"); setSelected(0); break;
+        case "d":
+          if (visibleRuns[selected]) {
+            const run = visibleRuns[selected];
+            if (window.confirm(`Delete ${run.spec.displayName || run.name}?`)) {
+              apiFetch(`/api/v1/runs/${run.id}`, { method: "DELETE" }).then(() => fetchRuns());
+            }
+          }
+          break;
+        case "c":
+          if (visibleRuns[selected]) navigate(`/new?clone=${visibleRuns[selected].id}`);
+          break;
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [visibleRuns, selected, filterField, projectPickerOpen, selectMode, showArchived, navigate, fetchRuns]);
+
+  useEffect(() => {
+    if (selected >= visibleRuns.length) setSelected(Math.max(0, visibleRuns.length - 1));
+  }, [visibleRuns.length, selected]);
+
   function RunRow({ run, index }: { run: AgentRun; index: number }) {
-    const isArchived = run.status.archived;
+    const hasDiff = !!(run.status.totalAdditions || run.status.totalDeletions);
     return (
       <div
-        key={run.id}
         data-testid={`run-row-${run.id}`}
-        className={`grid grid-cols-[1fr_80px_90px_55px_55px_24px_45px] gap-2 px-4 py-2 text-sm cursor-pointer transition-colors ${
-          index === selected ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-        } ${isArchived ? "opacity-50" : ""}`}
+        className={`flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-b border-border/50 transition-colors ${
+          index === selected ? "bg-accent/50" : "hover:bg-muted/30"
+        } ${run.status.archived ? "opacity-40" : ""}`}
         onClick={() => selectMode ? toggleSelect(run.id) : navigate(`/run/${run.id}`)}
       >
+        {/* Checkbox (select mode) */}
         {selectMode && (
           <input
             type="checkbox"
             checked={selectedIds.has(run.id)}
             onChange={() => toggleSelect(run.id)}
-            className="accent-primary"
+            className="shrink-0"
           />
         )}
-        <span className="truncate">{run.spec.displayName || run.name}</span>
+
+        {/* Status dot */}
         <RunStatusBadge phase={run.status.phase} />
-        <span className="text-muted-foreground text-xs truncate">{run.spec.modelTier || ""}</span>
-        <span className="text-muted-foreground text-xs">
-          {run.status.totalCost || "—"}
-        </span>
-        <span className="text-xs">
-          {(run.status.totalAdditions || run.status.totalDeletions) ? (
-            <>
-              <span className="text-green-500">+{run.status.totalAdditions || 0}</span>
-              <span className="text-red-500">/-{run.status.totalDeletions || 0}</span>
-            </>
-          ) : ""}
-        </span>
-        {run.status.prUrl ? (
-          <a
-            href={run.status.prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-500 text-xs hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            PR
-          </a>
-        ) : <span />}
-        <span className="text-muted-foreground text-xs">{formatAge(run.createdAt)}</span>
+
+        {/* Name + inline metadata */}
+        <div className="flex-1 min-w-0">
+          <span className="truncate block">{run.spec.displayName || run.name}</span>
+        </div>
+
+        {/* Inline metadata pills */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Model */}
+          <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            {run.spec.modelTier || "default"}
+          </span>
+
+          {/* Cost */}
+          {run.status.totalCost && (
+            <span className="text-[11px] text-muted-foreground">{run.status.totalCost}</span>
+          )}
+
+          {/* Diff stats */}
+          {hasDiff && (
+            <span className="text-[11px] font-mono">
+              <span className="text-green-600 dark:text-green-400">+{run.status.totalAdditions || 0}</span>
+              <span className="text-red-600 dark:text-red-400"> -{run.status.totalDeletions || 0}</span>
+            </span>
+          )}
+
+          {/* PR link */}
+          {run.status.prUrl && (
+            <a
+              href={run.status.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-blue-500 hover:text-blue-400 font-medium"
+              onClick={(e) => e.stopPropagation()}
+            >
+              PR
+            </a>
+          )}
+
+          {/* Age */}
+          <span className="text-[11px] text-muted-foreground w-8 text-right">{formatAge(run.createdAt)}</span>
+        </div>
       </div>
     );
   }
 
-  // Track which index a run maps to in the visibleRuns flat list
   function getVisibleIndex(run: AgentRun): number {
     return visibleRuns.indexOf(run);
   }
@@ -367,121 +330,102 @@ export default function RunListView() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span className="font-semibold">UNCWORKS</span>
-          <span className="text-muted-foreground">({filtered.length})</span>
-          <div className="flex items-center gap-1 ml-2">
+          <span className="text-muted-foreground text-xs">({filtered.length})</span>
+
+          {/* Status filter */}
+          <div className="flex items-center gap-0.5 border rounded px-0.5 py-0.5">
             {(["all", "running", "failed", "succeeded"] as const).map((s) => (
-              <Badge
+              <button
                 key={s}
-                variant={statusFilter === s ? "default" : "outline"}
-                className="cursor-pointer text-[10px] px-1.5 py-0"
                 onClick={() => setStatusFilter(s)}
+                className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
+                  statusFilter === s
+                    ? "bg-foreground text-background font-medium"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
                 {s}
-              </Badge>
+              </button>
             ))}
           </div>
-          <span className="text-xs text-muted-foreground ml-2">
-            [p] {activeProject || "all"}
-          </span>
-          <Badge
-            variant={showArchived ? "default" : "outline"}
-            className="cursor-pointer text-[10px] px-1.5 py-0 ml-2"
-            onClick={() => setShowArchived(!showArchived)}
-          >
-            {showArchived ? "hide archived" : "show archived"}
-          </Badge>
-          <Badge
-            variant={selectMode ? "default" : "outline"}
-            className="cursor-pointer text-[10px] px-1.5 py-0"
-            onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-          >
-            {selectMode ? "cancel select" : "select"}
-          </Badge>
         </div>
-        <span className="text-xs text-muted-foreground">/ name · ? state · ' stage · " model · n new</span>
+
+        {/* Right side actions */}
+        <div className="flex items-center gap-2">
+          {activeProject && (
+            <Badge variant="secondary" className="text-[10px] cursor-pointer" onClick={() => setActiveProject("")}>
+              {activeProject} &times;
+            </Badge>
+          )}
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={`text-[11px] px-2 py-0.5 rounded transition-colors ${showArchived ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {showArchived ? "hiding archived" : "archived"}
+          </button>
+          <button
+            onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+            className={`text-[11px] px-2 py-0.5 rounded transition-colors ${selectMode ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {selectMode ? "done" : "select"}
+          </button>
+          <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => navigate("/new")}>
+            + new
+          </Button>
+        </div>
       </div>
 
-      {/* Project picker overlay */}
+      {/* Project picker */}
       {projectPickerOpen && (
         <div className="border-b bg-background px-4 py-2">
-          <div className="text-xs text-muted-foreground mb-1">Select project:</div>
+          <div className="text-xs text-muted-foreground mb-1">Select project (esc to close):</div>
           <div
-            className={`cursor-pointer px-2 py-1 text-sm rounded ${
-              !activeProject ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-            }`}
-            onClick={() => {
-              setActiveProject("");
-              setProjectPickerOpen(false);
-              setSelected(0);
-            }}
+            className={`cursor-pointer px-2 py-1 text-sm rounded ${!activeProject ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"}`}
+            onClick={() => { setActiveProject(""); setProjectPickerOpen(false); setSelected(0); }}
           >
-            (all projects)
+            all projects
           </div>
           {projects.map((p) => (
             <div
               key={p}
-              className={`cursor-pointer px-2 py-1 text-sm rounded ${
-                activeProject === p ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-              }`}
-              onClick={() => {
-                setActiveProject(p);
-                setProjectPickerOpen(false);
-                setSelected(0);
-              }}
+              className={`cursor-pointer px-2 py-1 text-sm rounded ${activeProject === p ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"}`}
+              onClick={() => { setActiveProject(p); setProjectPickerOpen(false); setSelected(0); }}
             >
               {p}
             </div>
           ))}
-          <div className="text-xs text-muted-foreground mt-1">esc to close</div>
         </div>
       )}
 
       {/* Filter bar */}
       {filterField !== null && (
-        <div className="border-b px-4 py-1 flex items-center gap-2">
-          <span className="text-xs text-muted-foreground font-mono">{activeFilterDef?.label}</span>
+        <div className="border-b px-4 py-1.5 flex items-center gap-2 bg-muted/30">
+          <span className="text-xs font-mono text-muted-foreground">{activeFilterDef?.label}</span>
           <input
             autoFocus
-            className="w-full bg-transparent text-sm outline-none"
+            className="flex-1 bg-transparent text-sm outline-none"
             placeholder={activeFilterDef?.placeholder}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                setFilter("");
-                setFilterField(null);
-              }
-            }}
+            onKeyDown={(e) => { if (e.key === "Escape") { setFilter(""); setFilterField(null); } }}
           />
         </div>
       )}
 
       {/* Mass select action bar */}
       {selectMode && selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-1.5">
+        <div className="flex items-center gap-3 border-b bg-blue-500/10 px-4 py-1.5">
           <span className="text-xs font-medium">{selectedIds.size} selected</span>
-          <Badge variant="destructive" className="cursor-pointer text-[10px]" onClick={archiveSelected}>
+          <Button size="sm" variant="destructive" className="h-6 text-[11px]" onClick={archiveSelected}>
             Archive
-          </Badge>
-          <Badge variant="outline" className="cursor-pointer text-[10px]" onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}>
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}>
             Cancel
-          </Badge>
+          </Button>
         </div>
       )}
-
-      {/* Table header */}
-      <div className={`grid grid-cols-[1fr_80px_90px_55px_55px_24px_45px] gap-2 border-b px-4 py-1 text-xs text-muted-foreground uppercase tracking-wider`}>
-        {selectMode && <span />}
-        <span>Name</span>
-        <span>Status</span>
-        <span>Model</span>
-        <span>Cost</span>
-        <span>+/-</span>
-        <span>PR</span>
-        <span>Age</span>
-      </div>
 
       {/* Run rows */}
       <div className="flex-1 overflow-y-auto">
@@ -516,9 +460,10 @@ export default function RunListView() {
           : filtered.map((run, i) => <RunRow key={run.id} run={run} index={i} />)}
       </div>
 
-      {/* Footer shortcuts */}
-      <div className="border-t px-4 py-1 text-xs text-muted-foreground">
-        j/k navigate · enter detail · n new · d delete · c clone · / name · ? state · ' stage · " model · p project
+      {/* Footer */}
+      <div className="border-t px-4 py-1 text-[10px] text-muted-foreground flex items-center justify-between">
+        <span>j/k nav · enter open · n new · d delete · c clone · x select · p project · 1/2 view</span>
+        <span>/ name · ? state · ' stage · " model</span>
       </div>
     </div>
   );
