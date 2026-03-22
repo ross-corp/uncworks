@@ -3,7 +3,7 @@
 - [x] 1.1 Update `FilePreview.tsx` to read theme from `useThemeNew()` and pass `"vs"` (light) or `"vs-dark"` (dark) to Monaco
 - [x] 1.2 Create xterm theme objects (light + dark) in `ShellTerminalInner.tsx` using CSS custom property values; apply based on current theme
 - [x] 1.3 Verify theme toggle in `Layout.tsx` footer is visible and functional; move to header if not prominent enough
-- [ ] 1.4 Take screenshots of all views in both light and dark mode to verify consistency
+- [x] 1.4 Take screenshots of all views in both light and dark mode to verify consistency
 
 ## 2. Monaco Editors for Prompt/Spec
 
@@ -33,10 +33,10 @@
 - [x] 5.1 Add `archived` boolean field to `AgentRunStatus` in CRD YAML and Go types
 - [x] 5.2 Add `ArchiveRun` REST endpoint (`POST /api/v1/runs/{id}/archive`)
 - [x] 5.3 Add `BulkArchiveRuns` REST endpoint (`POST /api/v1/runs/bulk-archive`)
-- [ ] 5.4 Add PVC cleanup in controller: when a run is archived, delete its PVC
+- [x] 5.4 Add PVC cleanup in controller: when a run is archived, delete its PVC
 - [x] 5.5 Update `ListAgentRuns` to exclude archived runs by default; add `X-Include-Archived` header
 - [x] 5.6 Add "Show archived" toggle to `RunListView.tsx` header
-- [ ] 5.7 Add archive button to run detail view (alongside cancel/retry)
+- [x] 5.7 Add archive button to run detail view (alongside cancel/retry)
 - [x] 5.8 Add mass select mode to `RunListView.tsx` — checkboxes, floating action bar, bulk archive
 
 ## 6. Run List Metrics
@@ -56,7 +56,7 @@
 
 ## 8. Verification
 
-- [ ] 8.1 Take screenshots of every view in both themes after all changes
+- [x] 8.1 Take screenshots of every view in both themes after all changes
 - [ ] 8.2 Submit a test run to neph.nvim with prompt "Add comments to all functions" using Progressive mode with dual models
 - [ ] 8.3 Verify the run appears in the list with correct metrics after completion
 - [ ] 8.4 Archive the run, verify it disappears, toggle "show archived" to see it

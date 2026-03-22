@@ -110,6 +110,32 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
+	// Handle archive: delete Deployment + PVC when status.archived transitions to true
+	if agentRun.Status.Archived {
+		if agentRun.Status.DeploymentName != "" {
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentRun.Status.DeploymentName,
+					Namespace: agentRun.Namespace,
+				},
+			}
+			if err := r.Delete(ctx, dep); err != nil && !errors.IsNotFound(err) {
+				logger.Error(err, "Failed to delete Deployment on archive", "deployment", agentRun.Status.DeploymentName)
+			}
+		}
+		pvcName := fmt.Sprintf("aot-ws-%s", agentRun.Name)
+		pvc := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pvcName,
+				Namespace: agentRun.Namespace,
+			},
+		}
+		if err := r.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
+			logger.Error(err, "Failed to delete PVC on archive", "pvc", pvcName)
+		}
+		return ctrl.Result{}, nil
+	}
+
 	// Check for workflow ID annotation
 	workflowID := agentRun.Annotations[annotationWorkflowID]
 

@@ -311,7 +311,7 @@ export default function RunListView() {
       <div
         key={run.id}
         data-testid={`run-row-${run.id}`}
-        className={`grid grid-cols-[${selectMode ? "24px_" : ""}1fr_80px_100px_60px_60px_30px_50px] gap-2 px-4 py-2 text-sm cursor-pointer transition-colors ${
+        className={`grid grid-cols-[1fr_80px_90px_55px_55px_24px_45px] gap-2 px-4 py-2 text-sm cursor-pointer transition-colors ${
           index === selected ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
         } ${isArchived ? "opacity-50" : ""}`}
         onClick={() => selectMode ? toggleSelect(run.id) : navigate(`/run/${run.id}`)}
@@ -472,7 +472,7 @@ export default function RunListView() {
       )}
 
       {/* Table header */}
-      <div className={`grid grid-cols-[${selectMode ? "24px_" : ""}1fr_80px_100px_60px_60px_30px_50px] gap-2 border-b px-4 py-1 text-xs text-muted-foreground uppercase tracking-wider`}>
+      <div className={`grid grid-cols-[1fr_80px_90px_55px_55px_24px_45px] gap-2 border-b px-4 py-1 text-xs text-muted-foreground uppercase tracking-wider`}>
         {selectMode && <span />}
         <span>Name</span>
         <span>Status</span>
