@@ -1,27 +1,37 @@
 package server
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
+
+	aotgithub "github.com/uncworks/aot/internal/github"
 )
 
 // GitHubClient communicates with the GitHub Contents API.
 type GitHubClient struct {
-	token      string
+	provider   aotgithub.TokenProvider
 	httpClient *http.Client
 }
 
-// NewGitHubClient creates a GitHubClient using the GITHUB_TOKEN environment variable.
-func NewGitHubClient() *GitHubClient {
+// NewGitHubClient creates a GitHubClient using the given TokenProvider.
+func NewGitHubClient(provider aotgithub.TokenProvider) *GitHubClient {
 	return &GitHubClient{
-		token:      os.Getenv("GITHUB_TOKEN"),
+		provider:   provider,
 		httpClient: &http.Client{},
 	}
+}
+
+// getToken retrieves the current token from the provider.
+func (g *GitHubClient) getToken(ctx context.Context) (string, error) {
+	if g.provider == nil {
+		return "", fmt.Errorf("GITHUB_TOKEN not configured")
+	}
+	return g.provider.Token(ctx)
 }
 
 // --- request / response types ---
@@ -72,8 +82,9 @@ func (g *GitHubClient) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
-	if g.token == "" {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "GITHUB_TOKEN not configured"})
+	token, err := g.getToken(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
 	}
 
@@ -98,7 +109,7 @@ func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
 	// Check if file already exists so we can supply the sha for an update.
 	existingSHA := ""
 	getReq, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, apiURL, nil)
-	g.setAuthHeaders(getReq)
+	setAuthHeaders(getReq, token)
 	getResp, err := g.httpClient.Do(getReq)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, errorResponse{Error: "failed to reach GitHub API: " + err.Error()})
@@ -125,7 +136,7 @@ func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, _ := json.Marshal(putBody)
 
 	putReq, _ := http.NewRequestWithContext(r.Context(), http.MethodPut, apiURL, strings.NewReader(string(bodyBytes)))
-	g.setAuthHeaders(putReq)
+	setAuthHeaders(putReq, token)
 	putReq.Header.Set("Content-Type", "application/json")
 
 	putResp, err := g.httpClient.Do(putReq)
@@ -150,8 +161,9 @@ func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *GitHubClient) handlePull(w http.ResponseWriter, r *http.Request) {
-	if g.token == "" {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "GITHUB_TOKEN not configured"})
+	token, err := g.getToken(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
 	}
 
@@ -171,7 +183,7 @@ func (g *GitHubClient) handlePull(w http.ResponseWriter, r *http.Request) {
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, pathParam)
 
 	getReq, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, apiURL, nil)
-	g.setAuthHeaders(getReq)
+	setAuthHeaders(getReq, token)
 
 	getResp, err := g.httpClient.Do(getReq)
 	if err != nil {
@@ -204,8 +216,8 @@ func (g *GitHubClient) handlePull(w http.ResponseWriter, r *http.Request) {
 
 // --- helpers ---
 
-func (g *GitHubClient) setAuthHeaders(req *http.Request) {
-	req.Header.Set("Authorization", "Bearer "+g.token)
+func setAuthHeaders(req *http.Request, token string) {
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 }

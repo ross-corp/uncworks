@@ -32,6 +32,12 @@ spec:
               value: {{ .Values.temporal.namespace | quote }}
             - name: METRICS_ADDR
               value: ":{{ .Values.controller.metricsPort }}"
+            - name: AOT_RETENTION_DAYS
+              value: {{ .Values.controller.retentionDays | quote }}
+            {{- if .Values.github.tokenSecretName }}
+            - name: GITHUB_TOKEN_SECRET_NAME
+              value: {{ .Values.github.tokenSecretName | quote }}
+            {{- end }}
           ports:
             - name: metrics
               containerPort: {{ .Values.controller.metricsPort }}

@@ -87,8 +87,6 @@ type Backend int32
 const (
 	Backend_BACKEND_UNSPECIFIED Backend = 0
 	Backend_BACKEND_POD         Backend = 1
-	Backend_BACKEND_KUBEVIRT    Backend = 2
-	Backend_BACKEND_EXTERNAL    Backend = 3
 )
 
 // Enum value maps for Backend.
@@ -96,14 +94,10 @@ var (
 	Backend_name = map[int32]string{
 		0: "BACKEND_UNSPECIFIED",
 		1: "BACKEND_POD",
-		2: "BACKEND_KUBEVIRT",
-		3: "BACKEND_EXTERNAL",
 	}
 	Backend_value = map[string]int32{
 		"BACKEND_UNSPECIFIED": 0,
 		"BACKEND_POD":         1,
-		"BACKEND_KUBEVIRT":    2,
-		"BACKEND_EXTERNAL":    3,
 	}
 )
 
@@ -2359,12 +2353,10 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x19ORCHESTRATION_MODE_SINGLE\x10\x01\x12\x1b\n" +
 	"\x17ORCHESTRATION_MODE_AUTO\x10\x02\x12\x1d\n" +
 	"\x19ORCHESTRATION_MODE_MANUAL\x10\x03\x12\"\n" +
-	"\x1eORCHESTRATION_MODE_SPEC_DRIVEN\x10\x04*_\n" +
+	"\x1eORCHESTRATION_MODE_SPEC_DRIVEN\x10\x04*3\n" +
 	"\aBackend\x12\x17\n" +
 	"\x13BACKEND_UNSPECIFIED\x10\x00\x12\x0f\n" +
-	"\vBACKEND_POD\x10\x01\x12\x14\n" +
-	"\x10BACKEND_KUBEVIRT\x10\x02\x12\x14\n" +
-	"\x10BACKEND_EXTERNAL\x10\x03*\xeb\x01\n" +
+	"\vBACKEND_POD\x10\x01*\xeb\x01\n" +
 	"\rAgentRunPhase\x12\x1f\n" +
 	"\x1bAGENT_RUN_PHASE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17AGENT_RUN_PHASE_PENDING\x10\x01\x12\x1b\n" +

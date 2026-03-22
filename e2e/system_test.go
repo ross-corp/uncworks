@@ -108,36 +108,3 @@ func TestE2E_AgentRunLifecycle(t *testing.T) {
 		t.Errorf("Delete AgentRun: %v", err)
 	}
 }
-
-func TestE2E_KubeVirtBackendRejection(t *testing.T) {
-	k8sClient := getE2EClient(t)
-	ctx := context.Background()
-
-	runName := fmt.Sprintf("e2e-kubevirt-%d", time.Now().Unix())
-	agentRun := &aotv1alpha1.AgentRun{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      runName,
-			Namespace: "default",
-		},
-		Spec: aotv1alpha1.AgentRunSpec{
-			Backend: aotv1alpha1.BackendKubeVirt,
-			Repos:   []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo")}},
-			Prompt:  "E2E test: KubeVirt should be stubbed",
-			KubeVirtConfig: &aotv1alpha1.KubeVirtBackendConfig{
-				CPUs:     2,
-				MemoryMB: 4096,
-				DiskGB:   20,
-			},
-		},
-	}
-
-	// Should create (CRD accepts it), controller would reject
-	if err := k8sClient.Create(ctx, agentRun); err != nil {
-		t.Fatalf("Create KubeVirt AgentRun: %v", err)
-	}
-
-	t.Logf("KubeVirt AgentRun created (CRD accepted, controller would reject)")
-
-	// Cleanup
-	_ = k8sClient.Delete(ctx, agentRun)
-}

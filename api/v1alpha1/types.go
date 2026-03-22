@@ -34,13 +34,11 @@ type Orchestration struct {
 }
 
 // BackendType specifies the execution backend for an AgentRun.
-// +kubebuilder:validation:Enum=Pod;KubeVirt;External
+// +kubebuilder:validation:Enum=Pod
 type BackendType string
 
 const (
-	BackendPod      BackendType = "Pod"
-	BackendKubeVirt BackendType = "KubeVirt"
-	BackendExternal BackendType = "External"
+	BackendPod BackendType = "Pod"
 )
 
 // AgentRunPhase represents the lifecycle phase of an AgentRun.
@@ -70,7 +68,7 @@ type Repository struct {
 
 // AgentRunSpec defines the desired state of an AgentRun.
 type AgentRunSpec struct {
-	// Backend specifies the execution backend (Pod, KubeVirt, or External).
+	// Backend specifies the execution backend.
 	// +kubebuilder:default=Pod
 	Backend BackendType `json:"backend"`
 
@@ -96,14 +94,6 @@ type AgentRunSpec struct {
 	// Image overrides the default agent container image.
 	// +optional
 	Image string `json:"image,omitempty"`
-
-	// ExternalConfig is the configuration for External backend (SSH/Lima).
-	// +optional
-	ExternalConfig *ExternalBackendConfig `json:"externalConfig,omitempty"`
-
-	// KubeVirtConfig is the configuration for KubeVirt backend.
-	// +optional
-	KubeVirtConfig *KubeVirtBackendConfig `json:"kubeVirtConfig,omitempty"`
 
 	// ModelTier controls LLM model routing through LiteLLM.
 	// Options: "default" (Ollama local), "default-cloud" (OpenRouter free), "premium" (Anthropic/OpenAI).
@@ -205,32 +195,6 @@ type StageConfig struct {
 	// OnFailure controls behavior when retries are exhausted: "retry", "fail", or "skip".
 	// +optional
 	OnFailure string `json:"onFailure,omitempty"`
-}
-
-// ExternalBackendConfig holds configuration for the External (SSH/Lima) backend.
-type ExternalBackendConfig struct {
-	// Host is the SSH host address.
-	Host string `json:"host"`
-	// Port is the SSH port.
-	// +kubebuilder:default=22
-	Port int32 `json:"port,omitempty"`
-	// User is the SSH user.
-	User string `json:"user"`
-	// SSHKeySecret references a Secret containing the SSH private key.
-	SSHKeySecret string `json:"sshKeySecret"`
-}
-
-// KubeVirtBackendConfig holds configuration for the KubeVirt backend.
-type KubeVirtBackendConfig struct {
-	// CPUs is the number of vCPUs for the VM.
-	// +kubebuilder:default=2
-	CPUs int32 `json:"cpus,omitempty"`
-	// MemoryMB is the memory in MB for the VM.
-	// +kubebuilder:default=4096
-	MemoryMB int32 `json:"memoryMB,omitempty"`
-	// DiskGB is the disk size in GB for the VM.
-	// +kubebuilder:default=20
-	DiskGB int32 `json:"diskGB,omitempty"`
 }
 
 // AgentRunStatus defines the observed state of an AgentRun.

@@ -1,4 +1,4 @@
-# AOT Helm Chart
+# UNCWORKS Helm Chart
 
 Autonomous Orchestration of Tasks on Kubernetes.
 
@@ -114,4 +114,4 @@ helm upgrade aot oci://ghcr.io/uncworks/charts/aot --namespace aot
 
 ### Version Compatibility
 
-The chart's `appVersion` tracks the AOT release version. All container images (controlplane, init, sidecar, agent, web) are tagged with the same version by default.
+The chart's `appVersion` tracks the UNCWORKS release version. All container images (controlplane, init, sidecar, agent, web) are tagged with the same version by default.

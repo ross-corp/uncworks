@@ -20,6 +20,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/litellm"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
@@ -77,11 +78,17 @@ func run() error {
 		envOrDefault("AOT_SIDECAR_IMAGE", "ghcr.io/uncworks/aot-sidecar:latest"),
 		envOrDefault("AOT_INIT_IMAGE", "ghcr.io/uncworks/aot-init:latest"))
 
+	// Create GitHub token provider from environment
+	ghProvider := aotgithub.NewPATProvider(os.Getenv("GITHUB_TOKEN"))
+	ghTokenSecretName := os.Getenv("GITHUB_TOKEN_SECRET_NAME")
+
 	// Create activities with dependencies
 	activities := &aottemporal.Activities{
-		K8sClient:     k8sClient,
-		LiteLLMClient: litellmClient,
-		HTTPClient:    &http.Client{Timeout: 30 * time.Second},
+		K8sClient:             k8sClient,
+		LiteLLMClient:         litellmClient,
+		HTTPClient:            &http.Client{Timeout: 30 * time.Second},
+		GitHubProvider:        ghProvider,
+		GitHubTokenSecretName: ghTokenSecretName,
 	}
 
 	// Create worker

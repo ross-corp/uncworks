@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,11 +34,21 @@ const (
 	// annotationWorkflowID stores the Temporal workflow ID on the AgentRun CRD.
 	annotationWorkflowID = "aot.uncworks.io/workflow-id"
 
+	// annotationArchived marks a run whose Deployment and PVC have been cleaned up.
+	annotationArchived = "aot.uncworks.io/archived"
+
 	// finalizerName ensures the controller cancels the Temporal workflow before the CRD is deleted.
 	finalizerName = "aot.uncworks.io/workflow-cleanup"
 
 	// reconcileInterval is the requeue interval for syncing workflow state.
 	reconcileInterval = 30 * time.Second
+
+	// cleanupInterval is how often the archive-cleanup loop runs.
+	cleanupInterval = 5 * time.Minute
+
+	// DefaultRetentionDays is the default number of days to retain Deployments and PVCs
+	// for completed runs before cleanup.
+	DefaultRetentionDays = 7
 
 	// Labels and annotations for orchestration
 	labelSpecRunID   = "aot.uncworks.io/spec-run-id"
@@ -47,12 +59,14 @@ const (
 // AgentRunReconciler reconciles AgentRun objects by bridging to Temporal workflows.
 type AgentRunReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	TemporalClient temporalclient.Client
-	TaskQueue      string
-	LiteLLMBaseURL string
-	EventBus       eventbus.EventBus
-	eventBusWarned bool
+	Scheme                *runtime.Scheme
+	TemporalClient        temporalclient.Client
+	TaskQueue             string
+	LiteLLMBaseURL        string
+	GitHubTokenSecretName string
+	EventBus              eventbus.EventBus
+	RetentionDays         int
+	eventBusWarned        bool
 }
 
 // +kubebuilder:rbac:groups=aot.uncworks.io,resources=agentruns,verbs=get;list;watch;create;update;patch;delete
@@ -113,15 +127,7 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1alpha1.AgentRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Handle unsupported backends
-	switch agentRun.Spec.Backend {
-	case aotv1alpha1.BackendKubeVirt:
-		return r.handleNotImplemented(ctx, agentRun, "KubeVirt")
-	case aotv1alpha1.BackendExternal:
-		return r.handleNotImplemented(ctx, agentRun, "External")
-	}
-
-	workflowInput := BuildWorkflowInput(agentRun, r.LiteLLMBaseURL)
+	workflowInput := BuildWorkflowInput(agentRun, r.LiteLLMBaseURL, r.GitHubTokenSecretName)
 
 	// Set orchestration labels
 	if agentRun.Labels == nil {
@@ -341,16 +347,6 @@ func (r *AgentRunReconciler) cancelWorkflow(ctx context.Context, agentRun *aotv1
 	return nil
 }
 
-func (r *AgentRunReconciler) handleNotImplemented(ctx context.Context, agentRun *aotv1alpha1.AgentRun, backend string) (ctrl.Result, error) {
-	agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
-	agentRun.Status.Message = fmt.Sprintf("%s backend is not yet implemented", backend)
-	if err := r.Status().Update(ctx, agentRun); err != nil {
-		return ctrl.Result{}, err
-	}
-	r.emitPhaseEvent(agentRun, apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED)
-	return ctrl.Result{}, nil
-}
-
 // mapPhase converts workflow state phase strings to CRD phase constants.
 func mapPhase(workflowPhase string) aotv1alpha1.AgentRunPhase {
 	switch workflowPhase {
@@ -393,15 +389,142 @@ func (r *AgentRunReconciler) emitPhaseEvent(agentRun *aotv1alpha1.AgentRun, even
 	})
 }
 
-// TODO(persistent-workspace): Archive cleanup — delete Deployment + PVC for runs with
-// completedAt older than 7 days. This should be implemented as either:
-//   - A separate CronJob that lists AgentRuns with completedAt > 7d and calls ArchiveAndCleanup, or
-//   - An additional reconciliation pass in this controller that checks retention expiry.
-// The ArchiveAndCleanup Temporal activity already exists in internal/temporal/activities.go.
-// For now, completed runs retain their Deployment (replicas=0) and PVC indefinitely.
+// retentionPeriod returns the configured retention duration.
+func (r *AgentRunReconciler) retentionPeriod() time.Duration {
+	days := r.RetentionDays
+	if days <= 0 {
+		days = DefaultRetentionDays
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
+// cleanupExpiredRuns lists all terminal AgentRuns and deletes the Deployment + PVC
+// for those whose completedAt is older than the retention period. The CRD itself
+// is preserved; only the annotation aot.uncworks.io/archived is set.
+func (r *AgentRunReconciler) cleanupExpiredRuns(ctx context.Context) error {
+	logger := log.FromContext(ctx).WithName("archive-cleanup")
+
+	var runList aotv1alpha1.AgentRunList
+	if err := r.List(ctx, &runList); err != nil {
+		return fmt.Errorf("list AgentRuns: %w", err)
+	}
+
+	retention := r.retentionPeriod()
+	now := time.Now()
+	cleaned := 0
+
+	for i := range runList.Items {
+		ar := &runList.Items[i]
+
+		// Skip non-terminal runs
+		if !isTerminal(ar.Status.Phase) {
+			continue
+		}
+
+		// Skip already-archived runs
+		if ar.Annotations != nil && ar.Annotations[annotationArchived] == "true" {
+			continue
+		}
+
+		// Skip runs without a completedAt timestamp
+		if ar.Status.CompletedAt == nil {
+			continue
+		}
+
+		// Skip runs within the retention window
+		if now.Sub(ar.Status.CompletedAt.Time) < retention {
+			continue
+		}
+
+		logger.Info("Cleaning up expired run",
+			"agentrun", ar.Name,
+			"namespace", ar.Namespace,
+			"completedAt", ar.Status.CompletedAt.Time,
+		)
+
+		// Delete Deployment
+		if ar.Status.DeploymentName != "" {
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ar.Status.DeploymentName,
+					Namespace: ar.Namespace,
+				},
+			}
+			if err := r.Delete(ctx, dep); err != nil && !errors.IsNotFound(err) {
+				logger.Error(err, "Failed to delete Deployment", "deployment", ar.Status.DeploymentName)
+				continue
+			}
+		}
+
+		// Delete PVC (naming convention: aot-ws-<agentrun-name>)
+		pvcName := fmt.Sprintf("aot-ws-%s", ar.Name)
+		pvc := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pvcName,
+				Namespace: ar.Namespace,
+			},
+		}
+		if err := r.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
+			logger.Error(err, "Failed to delete PVC", "pvc", pvcName)
+			continue
+		}
+
+		// Mark as archived
+		if ar.Annotations == nil {
+			ar.Annotations = make(map[string]string)
+		}
+		ar.Annotations[annotationArchived] = "true"
+		if err := r.Update(ctx, ar); err != nil {
+			logger.Error(err, "Failed to annotate AgentRun as archived", "agentrun", ar.Name)
+			continue
+		}
+
+		cleaned++
+	}
+
+	if cleaned > 0 {
+		logger.Info("Archive cleanup completed", "cleaned", cleaned)
+	}
+	return nil
+}
+
+// archiveCleanupRunnable implements manager.Runnable to run the cleanup loop
+// as a background goroutine managed by the controller manager.
+type archiveCleanupRunnable struct {
+	reconciler *AgentRunReconciler
+}
+
+// Start runs the cleanup loop until the context is cancelled.
+func (a *archiveCleanupRunnable) Start(ctx context.Context) error {
+	logger := log.FromContext(ctx).WithName("archive-cleanup")
+	logger.Info("Starting archive cleanup loop",
+		"interval", cleanupInterval,
+		"retentionDays", a.reconciler.RetentionDays,
+	)
+
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Stopping archive cleanup loop")
+			return nil
+		case <-ticker.C:
+			if err := a.reconciler.cleanupExpiredRuns(ctx); err != nil {
+				logger.Error(err, "Archive cleanup failed")
+			}
+		}
+	}
+}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AgentRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Register the archive-cleanup background loop
+	if err := mgr.Add(&archiveCleanupRunnable{reconciler: r}); err != nil {
+		return fmt.Errorf("register archive cleanup runnable: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.AgentRun{}).
 		Complete(r)

@@ -1,0 +1,52 @@
+{{- if .Values.bff.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aot.fullname" . }}-bff
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: bff
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: bff
+    spec:
+      containers:
+        - name: bff
+          image: "{{ .Values.images.bff.repository }}:{{ .Values.images.bff.tag }}"
+          imagePullPolicy: {{ .Values.images.bff.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: APISERVER_URL
+              value: "http://{{ include "aot.fullname" . }}-apiserver:{{ .Values.apiserver.port }}"
+            - name: AUTH_MODE
+              value: {{ .Values.bff.authMode | default "open" | quote }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aot.fullname" . }}-bff
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: {{ .Values.bff.service.type | default "NodePort" }}
+  selector:
+    app.kubernetes.io/component: bff
+  ports:
+    - port: 3000
+      targetPort: 3000
+      {{- if .Values.bff.service.nodePort }}
+      nodePort: {{ .Values.bff.service.nodePort }}
+      {{- end }}
+{{- end }}

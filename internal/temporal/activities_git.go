@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -15,6 +14,7 @@ import (
 
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
+	aotgithub "github.com/uncworks/aot/internal/github"
 )
 
 // PushChangesInput contains parameters for committing and pushing changes.
@@ -24,15 +24,21 @@ type PushChangesInput struct {
 	RepoPath      string
 	BranchName    string // e.g., "aot/ar-xxxxx"
 	CommitMessage string
+	RepoURL       string // e.g., "https://github.com/org/repo.git" — used for authenticated push
+	ChangeName    string // e.g., "git-push-and-pr" — used to locate proposal.md
 }
 
 // PushChangesOutput contains the result of the push operation.
 type PushChangesOutput struct {
-	BranchName string
-	CommitSHA  string
+	BranchName      string
+	CommitSHA       string
+	DiffStat        string // output of `git diff --stat HEAD~1`
+	ProposalContent string // contents of openspec/changes/{changeName}/proposal.md
 }
 
 // PushChanges commits all workspace changes and pushes to a feature branch via the sidecar.
+// It injects the GitHub token into the remote URL for authentication, then restores the
+// original URL after the push to avoid persisting credentials.
 func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*PushChangesOutput, error) {
 	activity.RecordHeartbeat(ctx, "pushing changes to feature branch")
 
@@ -77,15 +83,44 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		return nil, fmt.Errorf("get commit sha: %w", err)
 	}
 
-	// Push to remote
-	pushCmd := fmt.Sprintf("git push origin %s", input.BranchName)
+	// Capture diff stats for PR body
+	diffStat, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, "git diff --stat HEAD~1")
+
+	// Read proposal.md for PR body (best-effort, ignore errors)
+	var proposalContent string
+	if input.ChangeName != "" {
+		catCmd := fmt.Sprintf("cat openspec/changes/%s/proposal.md 2>/dev/null || echo ''", input.ChangeName)
+		proposalContent, _ = gitExec(ctx, sc, input.AgentRunName, input.RepoPath, catCmd)
+	}
+
+	// Inject token into remote URL for authenticated push
+	if a.GitHubProvider != nil && input.RepoURL != "" {
+		token, tokenErr := a.GitHubProvider.Token(ctx)
+		if tokenErr == nil && token != "" {
+			authedURL := aotgithub.InjectTokenInURL(input.RepoURL, token)
+			setURLCmd := fmt.Sprintf("git remote set-url origin %s", authedURL)
+			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, setURLCmd); err != nil {
+				return nil, fmt.Errorf("set authenticated remote URL: %w", err)
+			}
+			// Restore original URL after push (regardless of push success)
+			defer func() {
+				restoreCmd := fmt.Sprintf("git remote set-url origin %s", input.RepoURL)
+				_, _ = gitExec(ctx, sc, input.AgentRunName, input.RepoPath, restoreCmd)
+			}()
+		}
+	}
+
+	// Push to remote (force to handle re-runs reusing the same branch)
+	pushCmd := fmt.Sprintf("git push --force origin %s", input.BranchName)
 	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, pushCmd); err != nil {
 		return nil, fmt.Errorf("git push: %w", err)
 	}
 
 	return &PushChangesOutput{
-		BranchName: input.BranchName,
-		CommitSHA:  strings.TrimSpace(sha),
+		BranchName:      input.BranchName,
+		CommitSHA:       strings.TrimSpace(sha),
+		DiffStat:        strings.TrimSpace(diffStat),
+		ProposalContent: strings.TrimSpace(proposalContent),
 	}, nil
 }
 
@@ -107,13 +142,16 @@ type CreatePROutput struct {
 }
 
 // CreatePR creates a GitHub pull request using the GitHub REST API.
-// Requires GITHUB_TOKEN to be set in the worker environment.
+// Requires a GitHubProvider to be configured on the Activities struct.
 func (a *Activities) CreatePR(ctx context.Context, input CreatePRInput) (*CreatePROutput, error) {
 	activity.RecordHeartbeat(ctx, "creating GitHub PR")
 
-	token := os.Getenv("GITHUB_TOKEN")
-	if token == "" {
-		return nil, fmt.Errorf("GITHUB_TOKEN not set in worker environment")
+	if a.GitHubProvider == nil {
+		return nil, fmt.Errorf("no GitHub token provider configured")
+	}
+	token, err := a.GitHubProvider.Token(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get GitHub token for PR creation: %w", err)
 	}
 
 	baseBranch := input.BaseBranch

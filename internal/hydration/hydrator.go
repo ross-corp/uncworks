@@ -369,9 +369,29 @@ func (h *Hydrator) cloneRepo(ctx context.Context, repoURL, bareDir string) error
 		return fmt.Errorf("create bare parent dir: %w", err)
 	}
 
-	args := []string{"clone", "--bare", repoURL, bareDir}
+	// Inject GITHUB_TOKEN into clone URL for private repo authentication.
+	// The init container receives GITHUB_TOKEN from a k8s Secret (scoped to init only).
+	cloneURL := repoURL
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		cloneURL = injectTokenInURL(repoURL, token)
+	}
+
+	args := []string{"clone", "--bare", cloneURL, bareDir}
 	_, err := h.runner.Run(ctx, h.config.WorkspaceDir, "git", args...)
 	return err
+}
+
+// injectTokenInURL embeds a token into an HTTPS git URL for authentication.
+func injectTokenInURL(repoURL, token string) string {
+	const prefix = "https://github.com/"
+	if len(repoURL) > len(prefix) && repoURL[:len(prefix)] == prefix {
+		return "https://x-access-token:" + token + "@github.com/" + repoURL[len(prefix):]
+	}
+	const httpsPrefix = "https://"
+	if len(repoURL) > len(httpsPrefix) && repoURL[:len(httpsPrefix)] == httpsPrefix {
+		return httpsPrefix + "x-access-token:" + token + "@" + repoURL[len(httpsPrefix):]
+	}
+	return repoURL
 }
 
 func (h *Hydrator) createWorktree(ctx context.Context, bareDir, worktreeDir, branch string) error {

@@ -255,52 +255,6 @@ func TestE2E_Temporal_DeleteCRDCancelsWorkflow(t *testing.T) {
 	}
 }
 
-func TestE2E_Temporal_KubeVirtRejection(t *testing.T) {
-	k8s := getE2EClient(t)
-	tc := getTemporalClient(t)
-	defer tc.Close()
-	ctx := context.Background()
-
-	runName := fmt.Sprintf("e2e-wf-kubevirt-%d", time.Now().Unix())
-
-	ar := &aotv1alpha1.AgentRun{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      runName,
-			Namespace: "default",
-		},
-		Spec: aotv1alpha1.AgentRunSpec{
-			Backend: aotv1alpha1.BackendKubeVirt,
-			Repos:   []aotv1alpha1.Repository{{URL: getSoftServeRepoURL("e2e-repo")}},
-			Prompt:  "E2E: KubeVirt should fail with message",
-			KubeVirtConfig: &aotv1alpha1.KubeVirtBackendConfig{
-				CPUs:     2,
-				MemoryMB: 4096,
-				DiskGB:   20,
-			},
-		},
-	}
-
-	if err := k8s.Create(ctx, ar); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	defer k8s.Delete(ctx, ar)
-
-	// Should reach Failed quickly — no workflow should be created
-	fetched := waitForPhase(ctx, t, k8s, runName, "default", aotv1alpha1.AgentRunPhaseFailed, 30*time.Second)
-	t.Logf("Phase: %s, Message: %s", fetched.Status.Phase, fetched.Status.Message)
-
-	if fetched.Status.Message != "KubeVirt backend is not yet implemented" {
-		t.Errorf("unexpected message: %s", fetched.Status.Message)
-	}
-
-	// Verify no Temporal workflow was created
-	workflowID := fmt.Sprintf("agentrun-%s", runName)
-	_, err := tc.DescribeWorkflowExecution(ctx, workflowID, "")
-	if err == nil {
-		t.Error("expected no workflow for KubeVirt backend, but found one")
-	}
-}
-
 func TestE2E_Temporal_StateSync(t *testing.T) {
 	k8s := getE2EClient(t)
 	tc := getTemporalClient(t)

@@ -30,6 +30,7 @@ import (
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
 	"github.com/uncworks/aot/internal/eventbus"
+	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/server"
 )
 
@@ -118,8 +119,11 @@ func main() {
 		_ = writeJSONResponse(w, map[string]interface{}{"status": status, "checks": checks})
 	})
 
+	// Create GitHub token provider from environment
+	ghProvider := aotgithub.NewPATProvider(os.Getenv("GITHUB_TOKEN"))
+
 	// Register GitHub integration REST endpoints
-	ghClient := server.NewGitHubClient()
+	ghClient := server.NewGitHubClient(ghProvider)
 	ghClient.RegisterHandlers(mux)
 
 	// Register file explorer REST endpoints (dual-mode: exec or disk)
@@ -147,7 +151,7 @@ func main() {
 	execHandler.RegisterExecHandlers(mux)
 
 	// Register GitHub webhook receiver (webhooks use their own HMAC auth, skip API key)
-	webhookHandler := server.NewWebhookHandler(k8sClient, namespace)
+	webhookHandler := server.NewWebhookHandler(k8sClient, namespace, ghProvider)
 	mux.Handle("/api/v1/webhooks/github", webhookHandler)
 
 	// Register AOTService handler
@@ -180,7 +184,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("AOT API server listening on %s (gRPC + Connect + gRPC-Web)", addr)
+		log.Printf("UNCWORKS API server listening on %s (gRPC + Connect + gRPC-Web)", addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}
@@ -199,17 +203,10 @@ func main() {
 }
 
 // parseAllowedOrigins parses a comma-separated list of allowed origins.
-// Returns a default set for local development if empty.
+// If the input is empty, defaults to "*" (permissive dev mode).
+// Production deployments should set AOT_ALLOWED_ORIGINS explicitly.
 func parseAllowedOrigins(raw string) []string {
-	if raw == "" {
-		return []string{
-			"http://localhost:3000",
-			"http://localhost:5173",
-			"http://127.0.0.1:3000",
-			"http://127.0.0.1:5173",
-		}
-	}
-	if raw == "*" {
+	if raw == "" || raw == "*" {
 		return []string{"*"}
 	}
 	var origins []string

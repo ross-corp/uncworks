@@ -46,7 +46,8 @@ const OP_COLORS: Record<string, { bar: string; text: string }> = {
   bash:    { bar: "bg-emerald-500/30 border-l-2 border-emerald-500", text: "text-emerald-400" },
   write:   { bar: "bg-violet-500/30 border-l-2 border-violet-500", text: "text-violet-400" },
   read:    { bar: "bg-slate-400/20 border-l-2 border-slate-400",   text: "text-slate-400" },
-  started: { bar: "bg-amber-500/30 border-l-2 border-amber-500",   text: "text-amber-400" },
+  started:    { bar: "bg-amber-500/30 border-l-2 border-amber-500",   text: "text-amber-400" },
+  compaction: { bar: "bg-orange-500/30 border-l-2 border-orange-500", text: "text-orange-400" },
 };
 const DEFAULT_OP = { bar: "bg-emerald-500/30 border-l-2 border-emerald-500", text: "text-emerald-400" };
 
@@ -515,6 +516,49 @@ function SpanDetail({
           )}
         </div>
 
+        {/* Compaction details */}
+        {span.type === "compaction" && (
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-orange-400">
+              Context Compaction
+            </div>
+            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 pl-2">
+              {(meta["compaction.tokens_before"] as number) > 0 && (
+                <>
+                  <div className="text-muted-foreground">Tokens Before</div>
+                  <div className="font-mono text-foreground">
+                    {(meta["compaction.tokens_before"] as number).toLocaleString()}
+                  </div>
+                </>
+              )}
+              {(meta["compaction.tokens_after"] as number) >= 0 && (meta["compaction.tokens_before"] as number) > 0 && (
+                <>
+                  <div className="text-muted-foreground">Tokens After</div>
+                  <div className="font-mono text-foreground">
+                    {(meta["compaction.tokens_after"] as number).toLocaleString()}
+                  </div>
+                </>
+              )}
+              {(meta["compaction.tokens_saved"] as number) > 0 && (
+                <>
+                  <div className="text-muted-foreground">Tokens Saved</div>
+                  <div className="font-mono text-emerald-400">
+                    {(meta["compaction.tokens_saved"] as number).toLocaleString()}
+                  </div>
+                </>
+              )}
+              {(meta["compaction.reduction_pct"] as number) > 0 && (
+                <>
+                  <div className="text-muted-foreground">Reduction</div>
+                  <div className="font-mono text-orange-400">
+                    {String(meta["compaction.reduction_pct"])}%
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Stage aggregate stats (tasks 7.4/7.5) */}
         {agg && (agg.inputTokens > 0 || agg.toolCount > 0) && (
           <div className="space-y-2">
@@ -623,7 +667,7 @@ function SpanDetail({
         {meta &&
           Object.keys(meta).filter(
             (k) =>
-              !["error", "toolInput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result"].includes(k)
+              !["error", "toolInput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result", "compaction.tokens_before", "compaction.tokens_after", "compaction.tokens_saved", "compaction.reduction_pct"].includes(k)
           ).length > 0 && (
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group">
@@ -636,7 +680,7 @@ function SpanDetail({
                     Object.fromEntries(
                       Object.entries(meta).filter(
                         ([k]) =>
-                          !["error", "toolInput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result"].includes(k)
+                          !["error", "toolInput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result", "compaction.tokens_before", "compaction.tokens_after", "compaction.tokens_saved", "compaction.reduction_pct"].includes(k)
                       )
                     ),
                     null,
@@ -926,13 +970,6 @@ export default function TraceTimeline({
           <span className="text-xs text-muted-foreground">
             {spans.length} span{spans.length !== 1 ? "s" : ""}
           </span>
-        </div>
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-blue-500" /> thought</span>
-          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> bash</span>
-          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-violet-500" /> write</span>
-          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-slate-400" /> read</span>
-          <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-red-500" /> error</span>
         </div>
       </div>
 
@@ -1236,6 +1273,22 @@ export default function TraceTimeline({
                                           <span className="text-amber-400/70">{formatCost(cost)}</span>
                                         </>
                                       )}
+                                    </>
+                                  );
+                                })()}
+                                {/* Inline metrics for compaction spans */}
+                                {span.type === "compaction" && (() => {
+                                  const before = (span.metadata?.["compaction.tokens_before"] as number) || 0;
+                                  const after = (span.metadata?.["compaction.tokens_after"] as number) || 0;
+                                  if (before <= 0 && after <= 0) return null;
+                                  return (
+                                    <>
+                                      <span className="text-border mx-1">·</span>
+                                      <span className="text-orange-400/70">
+                                        {before >= 1000 ? `${Math.round(before / 1000)}k` : before}
+                                        {" → "}
+                                        {after >= 1000 ? `${Math.round(after / 1000)}k` : after}
+                                      </span>
                                     </>
                                   );
                                 })()}

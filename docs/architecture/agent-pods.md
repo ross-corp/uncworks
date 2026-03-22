@@ -28,7 +28,7 @@ graph LR
 `pi` is an open-source LLM coding agent (from `@mariozechner/pi-coding-agent`). It runs in non-interactive mode (`-p --mode json --no-session`) and streams all events (tool calls, tool results, text responses) as JSONL to stdout. The sidecar captures this output and writes it to `agent.log` (human-readable) and `agent.jsonl` (machine-parseable).
 
 Key flags set by the sidecar:
-- `--extension /opt/aot/extensions/aot-determinism.ts` -- loads the AOT determinism extension
+- `--extension /opt/aot/extensions/aot-determinism.ts` -- loads the UNCWORKS determinism extension
 - `--system-prompt <stage-prompt>` -- injects stage-specific instructions (plan/execute/verify)
 - `--model <model>` -- model selection via `PI_MODEL` environment variable
 

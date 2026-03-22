@@ -74,7 +74,7 @@ func TestBoundary_CRDToWorkflowInput_AllFields(t *testing.T) {
 	}
 
 	liteLLMURL := "http://litellm:4000"
-	got := controller.BuildWorkflowInput(crd, liteLLMURL)
+	got := controller.BuildWorkflowInput(crd, liteLLMURL, "")
 
 	// Scalar fields
 	assertEqual(t, "AgentRunName", got.AgentRunName, "test-run-123")
@@ -164,7 +164,7 @@ func TestBoundary_CRDToWorkflowInput_NilOptionals(t *testing.T) {
 		},
 	}
 
-	got := controller.BuildWorkflowInput(crd, "")
+	got := controller.BuildWorkflowInput(crd, "", "")
 
 	assertEqual(t, "AgentRunName", got.AgentRunName, "minimal-run")
 	assertEqual(t, "Prompt", got.Prompt, "Just do it")
@@ -190,8 +190,6 @@ func TestBoundary_CRDWorkflow_BackendMapped(t *testing.T) {
 		want    string
 	}{
 		{aotv1alpha1.BackendPod, "Pod"},
-		{aotv1alpha1.BackendKubeVirt, "KubeVirt"},
-		{aotv1alpha1.BackendExternal, "External"},
 	}
 
 	for _, tt := range tests {
@@ -204,7 +202,7 @@ func TestBoundary_CRDWorkflow_BackendMapped(t *testing.T) {
 					Prompt:  "test",
 				},
 			}
-			got := controller.BuildWorkflowInput(crd, "")
+			got := controller.BuildWorkflowInput(crd, "", "")
 			assertEqual(t, "Backend", got.Backend, tt.want)
 		})
 	}
@@ -223,7 +221,7 @@ func TestBoundary_CRDWorkflow_SpecSourceMapped(t *testing.T) {
 			SpecSource: "github:org/repo/spec.md",
 		},
 	}
-	got := controller.BuildWorkflowInput(crd, "")
+	got := controller.BuildWorkflowInput(crd, "", "")
 	assertEqual(t, "SpecSource (set)", got.SpecSource, "github:org/repo/spec.md")
 
 	// Without SpecSource
@@ -235,7 +233,7 @@ func TestBoundary_CRDWorkflow_SpecSourceMapped(t *testing.T) {
 			Prompt:  "test",
 		},
 	}
-	got2 := controller.BuildWorkflowInput(crd2, "")
+	got2 := controller.BuildWorkflowInput(crd2, "", "")
 	assertEqual(t, "SpecSource (empty)", got2.SpecSource, "")
 }
 

@@ -1,6 +1,6 @@
 # Extension Architecture
 
-The AOT platform has two extension implementations that serve different purposes. This document explains what each one does, which one the sidecar loads at runtime, and how they relate.
+The UNCWORKS platform has two extension implementations that serve different purposes. This document explains what each one does, which one the sidecar loads at runtime, and how they relate.
 
 ## Overview
 

@@ -1,3 +1,5 @@
+# Legacy nginx-based web deployment. Replaced by BFF (see bff.yaml).
+# Keep for rollback purposes. Set web.enabled: true to re-enable.
 {{- if .Values.web.enabled }}
 apiVersion: v1
 kind: ConfigMap

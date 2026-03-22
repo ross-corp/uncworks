@@ -757,6 +757,75 @@ func TestHydrator_CloneRepo_Idempotent(t *testing.T) {
 	}
 }
 
+// --- Token injection in clone URL ---
+
+func TestInjectTokenInURL_GitHub(t *testing.T) {
+	got := injectTokenInURL("https://github.com/org/repo.git", "ghp_test123")
+	want := "https://x-access-token:ghp_test123@github.com/org/repo.git"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestInjectTokenInURL_NonHTTPS(t *testing.T) {
+	// SSH URLs should be returned unchanged
+	got := injectTokenInURL("git@github.com:org/repo.git", "ghp_test123")
+	if got != "git@github.com:org/repo.git" {
+		t.Errorf("SSH URL should be unchanged, got %q", got)
+	}
+}
+
+func TestHydrator_CloneRepo_WithToken(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/org/private-repo.git", Branch: "main"}},
+		WorkspaceDir: tmpDir,
+	}
+
+	// Set GITHUB_TOKEN for this test
+	t.Setenv("GITHUB_TOKEN", "ghp_test_token")
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Verify clone command uses the token-injected URL
+	clone := runner.commands[0]
+	if clone.Name != "git" || clone.Args[0] != "clone" {
+		t.Fatalf("expected git clone, got %s %v", clone.Name, clone.Args)
+	}
+	cloneURL := clone.Args[2] // args are: clone --bare <url> <dir>
+	if !strings.Contains(cloneURL, "x-access-token:ghp_test_token@") {
+		t.Errorf("clone URL should contain token, got %q", cloneURL)
+	}
+}
+
+func TestHydrator_CloneRepo_WithoutToken(t *testing.T) {
+	runner := NewMockRunner()
+	tmpDir := t.TempDir()
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/org/public-repo.git", Branch: "main"}},
+		WorkspaceDir: tmpDir,
+	}
+
+	// Ensure GITHUB_TOKEN is not set
+	t.Setenv("GITHUB_TOKEN", "")
+
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Verify clone command uses the original URL (no token injection)
+	clone := runner.commands[0]
+	cloneURL := clone.Args[2]
+	if cloneURL != "https://github.com/org/public-repo.git" {
+		t.Errorf("clone URL should be unchanged, got %q", cloneURL)
+	}
+}
+
 func TestHydrator_ComposeDevbox_InstallFailure(t *testing.T) {
 	runner := NewMockRunner()
 	runner.On("devbox", MockResult{Err: fmt.Errorf("devbox install failed")})

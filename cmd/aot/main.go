@@ -35,11 +35,11 @@ func cmdOpen() {
 	}
 
 	if len(worktrees) == 0 {
-		fmt.Println("No AOT worktrees found.")
+		fmt.Println("No UNCWORKS worktrees found.")
 		os.Exit(0)
 	}
 
-	fmt.Println("AOT Worktrees:")
+	fmt.Println("UNCWORKS Worktrees:")
 	for i, wt := range worktrees {
 		fmt.Printf("  [%d] %s\n", i+1, wt)
 	}

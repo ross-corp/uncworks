@@ -8,7 +8,8 @@ import (
 // BuildWorkflowInput maps a CRD AgentRun to a Temporal WorkflowInput.
 // Extracted from startWorkflow for testability.
 // The liteLLMBaseURL parameter corresponds to the reconciler's LiteLLMBaseURL field.
-func BuildWorkflowInput(agentRun *aotv1alpha1.AgentRun, liteLLMBaseURL string) aottemporal.WorkflowInput {
+// The gitHubTokenSecretName parameter is the k8s Secret name for the GitHub token.
+func BuildWorkflowInput(agentRun *aotv1alpha1.AgentRun, liteLLMBaseURL, gitHubTokenSecretName string) aottemporal.WorkflowInput {
 	var repos []aottemporal.Repository
 	for _, repo := range agentRun.Spec.Repos {
 		repos = append(repos, aottemporal.Repository{
@@ -30,31 +31,32 @@ func BuildWorkflowInput(agentRun *aotv1alpha1.AgentRun, liteLLMBaseURL string) a
 	}
 
 	input := aottemporal.WorkflowInput{
-		AgentRunName:      agentRun.Name,
-		Namespace:         agentRun.Namespace,
-		Repos:             repos,
-		Prompt:            agentRun.Spec.Prompt,
-		DevboxConfig:      agentRun.Spec.DevboxConfig,
-		TTLSeconds:        agentRun.Spec.TTLSeconds,
-		Image:             agentRun.Spec.Image,
-		EnvVars:           agentRun.Spec.EnvVars,
-		ModelTier:         agentRun.Spec.ModelTier,
-		LiteLLMBaseURL:    liteLLMBaseURL,
-		SpecContent:       agentRun.Spec.SpecContent,
-		WorkspaceName:     agentRun.Spec.WorkspaceName,
-		OrchestrationMode: aottemporal.OrchestrationMode(agentRun.Spec.OrchestrationMode),
-		Orchestration:     orchTasks,
-		ParentRunID:       agentRun.Spec.ParentRunID,
-		SpecRunID:         agentRun.Spec.SpecRunID,
-		MaxBudget:         agentRun.Spec.MaxBudget,
-		AutoPush:          agentRun.Spec.AutoPush,
-		AutoPR:            agentRun.Spec.AutoPR,
-		PRBaseBranch:      agentRun.Spec.PRBaseBranch,
-		Project:           agentRun.Spec.Project,
-		Feature:           agentRun.Spec.Feature,
-		Tags:              agentRun.Spec.Tags,
-		Backend:           string(agentRun.Spec.Backend),
-		SpecSource:        agentRun.Spec.SpecSource,
+		AgentRunName:          agentRun.Name,
+		Namespace:             agentRun.Namespace,
+		Repos:                 repos,
+		Prompt:                agentRun.Spec.Prompt,
+		DevboxConfig:          agentRun.Spec.DevboxConfig,
+		TTLSeconds:            agentRun.Spec.TTLSeconds,
+		Image:                 agentRun.Spec.Image,
+		EnvVars:               agentRun.Spec.EnvVars,
+		ModelTier:             agentRun.Spec.ModelTier,
+		LiteLLMBaseURL:        liteLLMBaseURL,
+		SpecContent:           agentRun.Spec.SpecContent,
+		WorkspaceName:         agentRun.Spec.WorkspaceName,
+		OrchestrationMode:     aottemporal.OrchestrationMode(agentRun.Spec.OrchestrationMode),
+		Orchestration:         orchTasks,
+		ParentRunID:           agentRun.Spec.ParentRunID,
+		SpecRunID:             agentRun.Spec.SpecRunID,
+		MaxBudget:             agentRun.Spec.MaxBudget,
+		AutoPush:              agentRun.Spec.AutoPush,
+		AutoPR:                agentRun.Spec.AutoPR,
+		PRBaseBranch:          agentRun.Spec.PRBaseBranch,
+		Project:               agentRun.Spec.Project,
+		Feature:               agentRun.Spec.Feature,
+		Tags:                  agentRun.Spec.Tags,
+		Backend:               string(agentRun.Spec.Backend),
+		SpecSource:            agentRun.Spec.SpecSource,
+		GitHubTokenSecretName: gitHubTokenSecretName,
 	}
 
 	if agentRun.Spec.PipelineConfig != nil {

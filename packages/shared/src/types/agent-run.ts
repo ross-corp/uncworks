@@ -1,5 +1,5 @@
 /** Backend type for an AgentRun. */
-export type Backend = "pod" | "kubevirt" | "external";
+export type Backend = "pod";
 
 /** Lifecycle phase of an AgentRun. */
 export type AgentRunPhase =

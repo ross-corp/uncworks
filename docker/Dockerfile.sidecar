@@ -26,6 +26,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Install pi-coding-agent and openspec CLI globally
 RUN npm install -g @mariozechner/pi-coding-agent @fission-ai/openspec
 
+# Install pi-compaxxt extension for enhanced compaction (session context, LLM-judged important files)
+RUN PI_ACCEPT_TOS=1 pi install @ssweens/pi-compaxxt
+
+# Install pi-dcp extension for dynamic context pruning
+RUN git clone --depth 1 https://github.com/zenobi-us/pi-dcp.git /root/.pi/agent/extensions/pi-dcp \
+    && cd /root/.pi/agent/extensions/pi-dcp && npm install --omit=dev
+
 # Verify
 RUN pi --version && openspec --version
 

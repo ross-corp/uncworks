@@ -16,15 +16,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	aotgithub "github.com/uncworks/aot/internal/github"
 )
 
 // WebhookHandler handles incoming GitHub webhook events.
 type WebhookHandler struct {
-	secret       string
-	allowedRepos []string
-	githubToken  string
-	k8sClient    client.Client
-	namespace    string
+	secret         string
+	allowedRepos   []string
+	githubProvider aotgithub.TokenProvider
+	k8sClient      client.Client
+	namespace      string
 	// httpClient is used for fetching file content from the GitHub API.
 	// Defaults to http.DefaultClient if nil.
 	httpClient *http.Client
@@ -34,8 +35,9 @@ type WebhookHandler struct {
 // environment variables:
 //   - GITHUB_WEBHOOK_SECRET: shared secret for HMAC-SHA256 signature validation
 //   - GITHUB_WEBHOOK_REPOS: comma-separated allowlist of "owner/repo" strings
-//   - GITHUB_TOKEN: personal access token for fetching file content
-func NewWebhookHandler(k8sClient client.Client, namespace string) *WebhookHandler {
+//
+// The GitHub token for fetching file content is provided via the TokenProvider.
+func NewWebhookHandler(k8sClient client.Client, namespace string, provider aotgithub.TokenProvider) *WebhookHandler {
 	var repos []string
 	if raw := os.Getenv("GITHUB_WEBHOOK_REPOS"); raw != "" {
 		for _, r := range strings.Split(raw, ",") {
@@ -52,11 +54,11 @@ func NewWebhookHandler(k8sClient client.Client, namespace string) *WebhookHandle
 	}
 
 	return &WebhookHandler{
-		secret:       secret,
-		allowedRepos: repos,
-		githubToken:  os.Getenv("GITHUB_TOKEN"),
-		k8sClient:    k8sClient,
-		namespace:    namespace,
+		secret:         secret,
+		allowedRepos:   repos,
+		githubProvider: provider,
+		k8sClient:      k8sClient,
+		namespace:      namespace,
 	}
 }
 
@@ -207,8 +209,10 @@ func (wh *WebhookHandler) fetchFileContent(ctx context.Context, repo, path, sha 
 		return "", err
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3.raw")
-	if wh.githubToken != "" {
-		req.Header.Set("Authorization", "Bearer "+wh.githubToken)
+	if wh.githubProvider != nil {
+		if token, tokenErr := wh.githubProvider.Token(ctx); tokenErr == nil && token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 	}
 
 	resp, err := wh.httpDo(req)

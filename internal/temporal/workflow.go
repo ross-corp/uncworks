@@ -85,32 +85,33 @@ type DecompositionTask struct {
 
 // WorkflowInput contains the parameters for starting an AgentRunWorkflow.
 type WorkflowInput struct {
-	AgentRunName      string
-	Namespace         string
-	Repos             []Repository
-	Prompt            string
-	DevboxConfig      string
-	TTLSeconds        int32
-	Image             string
-	EnvVars           map[string]string
-	ModelTier         string
-	MaxBudget         float64
-	LiteLLMBaseURL    string
-	SpecContent       string
-	WorkspaceName     string
-	OrchestrationMode OrchestrationMode
-	Orchestration     []OrchestrationTask
-	ParentRunID       string
-	SpecRunID         string
-	PipelineConfig    *PipelineConfigInput
-	AutoPush          bool
-	AutoPR            bool
-	PRBaseBranch      string
-	Project           string
-	Feature           string
-	Tags              []string
-	Backend           string
-	SpecSource        string
+	AgentRunName          string
+	Namespace             string
+	Repos                 []Repository
+	Prompt                string
+	DevboxConfig          string
+	TTLSeconds            int32
+	Image                 string
+	EnvVars               map[string]string
+	ModelTier             string
+	MaxBudget             float64
+	LiteLLMBaseURL        string
+	SpecContent           string
+	WorkspaceName         string
+	OrchestrationMode     OrchestrationMode
+	Orchestration         []OrchestrationTask
+	ParentRunID           string
+	SpecRunID             string
+	PipelineConfig        *PipelineConfigInput
+	AutoPush              bool
+	AutoPR                bool
+	GitHubTokenSecretName string
+	PRBaseBranch          string
+	Project               string
+	Feature               string
+	Tags                  []string
+	Backend               string
+	SpecSource            string
 }
 
 // PipelineConfigInput contains per-stage configuration for spec-driven runs.
@@ -316,18 +317,19 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	state.Message = "Creating agent deployment"
 
 	deployInput := CreateAgentDeploymentInput{
-		Name:           fmt.Sprintf("agentrun-%s", input.AgentRunName),
-		Namespace:      input.Namespace,
-		AgentRunName:   input.AgentRunName,
-		Repos:          input.Repos,
-		Prompt:         input.Prompt,
-		DevboxConfig:   input.DevboxConfig,
-		Image:          input.Image,
-		EnvVars:        input.EnvVars,
-		LLMKey:         llmKey,
-		LiteLLMBaseURL: input.LiteLLMBaseURL,
-		ModelID:        modelIDFromTier(input.ModelTier),
-		SpecContent:    input.SpecContent,
+		Name:                  fmt.Sprintf("agentrun-%s", input.AgentRunName),
+		Namespace:             input.Namespace,
+		AgentRunName:          input.AgentRunName,
+		Repos:                 input.Repos,
+		Prompt:                input.Prompt,
+		DevboxConfig:          input.DevboxConfig,
+		Image:                 input.Image,
+		EnvVars:               input.EnvVars,
+		LLMKey:                llmKey,
+		LiteLLMBaseURL:        input.LiteLLMBaseURL,
+		ModelID:               modelIDFromTier(input.ModelTier),
+		SpecContent:           input.SpecContent,
+		GitHubTokenSecretName: input.GitHubTokenSecretName,
 	}
 
 	var deployOutput CreateAgentDeploymentOutput
@@ -569,20 +571,21 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 // SpawnJuniorInput contains parameters for spawning a child workflow.
 type SpawnJuniorInput struct {
-	ParentRunName  string
-	Namespace      string
-	Task           string
-	TaskName       string
-	Repos          []Repository
-	DevboxConfig   string
-	TTLSeconds     int32
-	Image          string
-	EnvVars        map[string]string
-	Blocking       bool
-	ModelTier      string
-	MaxBudget      float64
-	LiteLLMBaseURL string
-	SpecRunID      string
+	ParentRunName         string
+	Namespace             string
+	Task                  string
+	TaskName              string
+	Repos                 []Repository
+	DevboxConfig          string
+	TTLSeconds            int32
+	Image                 string
+	EnvVars               map[string]string
+	Blocking              bool
+	ModelTier             string
+	MaxBudget             float64
+	LiteLLMBaseURL        string
+	SpecRunID             string
+	GitHubTokenSecretName string
 }
 
 // SpawnJuniorWorkflow starts a child AgentRunWorkflow for a junior agent.
@@ -600,20 +603,21 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 	childCtx := workflow.WithChildOptions(ctx, childOpts)
 
 	childInput := WorkflowInput{
-		AgentRunName:      juniorName,
-		Namespace:         input.Namespace,
-		Repos:             input.Repos,
-		Prompt:            input.Task,
-		DevboxConfig:      input.DevboxConfig,
-		TTLSeconds:        input.TTLSeconds,
-		Image:             input.Image,
-		EnvVars:           input.EnvVars,
-		ModelTier:         input.ModelTier,
-		MaxBudget:         input.MaxBudget,
-		LiteLLMBaseURL:    input.LiteLLMBaseURL,
-		ParentRunID:       input.ParentRunName,
-		SpecRunID:         input.SpecRunID,
-		OrchestrationMode: OrchestrationModeSingle, // juniors always run as single
+		AgentRunName:          juniorName,
+		Namespace:             input.Namespace,
+		Repos:                 input.Repos,
+		Prompt:                input.Task,
+		DevboxConfig:          input.DevboxConfig,
+		TTLSeconds:            input.TTLSeconds,
+		Image:                 input.Image,
+		EnvVars:               input.EnvVars,
+		ModelTier:             input.ModelTier,
+		MaxBudget:             input.MaxBudget,
+		LiteLLMBaseURL:        input.LiteLLMBaseURL,
+		ParentRunID:           input.ParentRunName,
+		SpecRunID:             input.SpecRunID,
+		GitHubTokenSecretName: input.GitHubTokenSecretName,
+		OrchestrationMode:     OrchestrationModeSingle, // juniors always run as single
 	}
 
 	future := workflow.ExecuteChildWorkflow(childCtx, AgentRunWorkflow, childInput)
@@ -677,20 +681,21 @@ func runManualOrchestration(ctx workflow.Context, input WorkflowInput) error {
 		childCtx := workflow.WithChildOptions(ctx, childOpts)
 
 		childInput := WorkflowInput{
-			AgentRunName:      juniorName,
-			Namespace:         input.Namespace,
-			Repos:             repos,
-			Prompt:            task.Prompt,
-			DevboxConfig:      input.DevboxConfig,
-			TTLSeconds:        input.TTLSeconds,
-			Image:             input.Image,
-			EnvVars:           input.EnvVars,
-			ModelTier:         input.ModelTier,
-			MaxBudget:         input.MaxBudget,
-			LiteLLMBaseURL:    input.LiteLLMBaseURL,
-			ParentRunID:       input.AgentRunName,
-			SpecRunID:         specRunID,
-			OrchestrationMode: OrchestrationModeSingle,
+			AgentRunName:          juniorName,
+			Namespace:             input.Namespace,
+			Repos:                 repos,
+			Prompt:                task.Prompt,
+			DevboxConfig:          input.DevboxConfig,
+			TTLSeconds:            input.TTLSeconds,
+			Image:                 input.Image,
+			EnvVars:               input.EnvVars,
+			ModelTier:             input.ModelTier,
+			MaxBudget:             input.MaxBudget,
+			LiteLLMBaseURL:        input.LiteLLMBaseURL,
+			ParentRunID:           input.AgentRunName,
+			SpecRunID:             specRunID,
+			GitHubTokenSecretName: input.GitHubTokenSecretName,
+			OrchestrationMode:     OrchestrationModeSingle,
 		}
 
 		future := workflow.ExecuteChildWorkflow(childCtx, AgentRunWorkflow, childInput)

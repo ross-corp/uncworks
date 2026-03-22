@@ -243,18 +243,19 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	if err := workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, executeOpts),
 		ActivityCreateAgentDeployment, CreateAgentDeploymentInput{
-			Name:           fmt.Sprintf("agentrun-%s", input.AgentRunName),
-			Namespace:      input.Namespace,
-			AgentRunName:   input.AgentRunName,
-			Repos:          input.Repos,
-			Prompt:         input.Prompt,
-			DevboxConfig:   input.DevboxConfig,
-			Image:          input.Image,
-			EnvVars:        input.EnvVars,
-			LLMKey:         llmKey,
-			LiteLLMBaseURL: input.LiteLLMBaseURL,
-			ModelID:        modelIDFromTier(input.ModelTier),
-			SpecContent:    input.SpecContent,
+			Name:                  fmt.Sprintf("agentrun-%s", input.AgentRunName),
+			Namespace:             input.Namespace,
+			AgentRunName:          input.AgentRunName,
+			Repos:                 input.Repos,
+			Prompt:                input.Prompt,
+			DevboxConfig:          input.DevboxConfig,
+			Image:                 input.Image,
+			EnvVars:               input.EnvVars,
+			LLMKey:                llmKey,
+			LiteLLMBaseURL:        input.LiteLLMBaseURL,
+			ModelID:               modelIDFromTier(input.ModelTier),
+			SpecContent:           input.SpecContent,
+			GitHubTokenSecretName: input.GitHubTokenSecretName,
 		},
 	).Get(ctx, &deployOutput); err != nil {
 		if temporal.IsCanceledError(err) {
@@ -721,12 +722,18 @@ func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *Workf
 	state.Message = "Pushing changes to feature branch"
 
 	var pushOutput PushChangesOutput
+	var repoURL string
+	if len(input.Repos) > 0 {
+		repoURL = input.Repos[0].URL
+	}
 	if err := workflow.ExecuteActivity(gitCtx, ActivityPushChanges, PushChangesInput{
 		AgentRunName:  input.AgentRunName,
 		PodIP:         podIP,
 		RepoPath:      repoPath,
 		BranchName:    branchName,
 		CommitMessage: commitMsg,
+		RepoURL:       repoURL,
+		ChangeName:    changeName,
 	}).Get(ctx, &pushOutput); err != nil {
 		return fmt.Errorf("push changes: %w", err)
 	}
@@ -759,6 +766,32 @@ func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *Workf
 	}
 	prCtx := workflow.WithActivityOptions(ctx, prOpts)
 
+	// Build enhanced PR body with proposal content, diff stats, and pipeline metadata
+	prBody := fmt.Sprintf(`## Summary
+
+%s
+
+## Changes
+
+%s
+
+## Pipeline
+
+- **Run:** %s
+- **Change:** %s
+- **Model:** %s
+- **Attempt:** %d
+
+---
+*This PR was automatically created by the UNCWORKS spec-driven pipeline.*`,
+		pushOutput.ProposalContent,
+		pushOutput.DiffStat,
+		input.AgentRunName,
+		changeName,
+		input.ModelTier,
+		attempt,
+	)
+
 	var prOutput CreatePROutput
 	if err := workflow.ExecuteActivity(prCtx, ActivityCreatePR, CreatePRInput{
 		RepoOwner:    owner,
@@ -766,7 +799,7 @@ func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *Workf
 		BranchName:   branchName,
 		BaseBranch:   baseBranch,
 		Title:        fmt.Sprintf("feat(%s): %s", changeName, truncateForTitle(input.Prompt, 50)),
-		Body:         fmt.Sprintf("## Automated PR from AOT Pipeline\n\n**AgentRun:** `%s`\n**Change:** `%s`\n**Commit:** `%s`\n\nThis PR was automatically created by the spec-driven pipeline after verification passed.", input.AgentRunName, changeName, pushOutput.CommitSHA),
+		Body:         prBody,
 		AgentRunName: input.AgentRunName,
 	}).Get(ctx, &prOutput); err != nil {
 		return fmt.Errorf("create PR: %w", err)

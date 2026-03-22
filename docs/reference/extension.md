@@ -1,12 +1,12 @@
 # Determinism Extension Reference
 
-The AOT determinism extension (`extensions/aot-determinism.ts`) enforces guardrails on agent behavior within the spec-driven pipeline. It registers custom tools and applies policies to prevent runaway execution.
+The UNCWORKS determinism extension (`extensions/aot-determinism.ts`) enforces guardrails on agent behavior within the spec-driven pipeline. It registers custom tools and applies policies to prevent runaway execution.
 
 ## Custom Tools
 
 ### ask_user
 
-Pauses the agent and asks the human operator a question via the AOT dashboard.
+Pauses the agent and asks the human operator a question via the UNCWORKS dashboard.
 
 **Parameters:**
 | Name | Type | Required | Description |

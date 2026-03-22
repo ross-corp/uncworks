@@ -31,8 +31,6 @@ const phaseMap: Record<string, AgentRunPhase> = {
 
 const backendMap: Record<string, Backend> = {
   pod: "pod",
-  kubevirt: "kubevirt",
-  external: "external",
 };
 
 /** Map shared AgentRun → web UI AgentRun */

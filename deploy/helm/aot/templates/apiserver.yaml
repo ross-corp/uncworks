@@ -50,6 +50,13 @@ spec:
             - name: LITELLM_BASE_URL
               value: {{ .Values.llm.baseUrl | quote }}
             {{- end }}
+            {{- if .Values.github.tokenSecretName }}
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.github.tokenSecretName }}
+                  key: token
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

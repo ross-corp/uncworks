@@ -298,4 +298,26 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.notify(`AOT determinism: max ${MAX_TURNS} turns, loop detection active, ask_user + delegate_task tools registered`, "info");
     }
   });
+
+  // Emit compaction trace event when pi compacts context.
+  // Pi-compaxxt (if installed) handles the actual compaction with richer summaries;
+  // this hook emits metadata so the sidecar creates a trace span.
+  pi.on("session_before_compact", async (event) => {
+    const tokensBefore = event.preparation?.tokensBefore ?? 0;
+    const messagesToSummarize = event.preparation?.messagesToSummarize?.length ?? 0;
+    // Emit a structured JSONL event matching piEvent format (type + message payload).
+    // The sidecar's maybeCaptureStreamEvent parses evt.Message for token counts.
+    const compactionEvent = {
+      type: "context_compaction",
+      message: {
+        tokensBefore,
+        tokensAfter: 0, // not yet known pre-compaction; updated by post-compact if available
+        messagesToSummarize,
+        hasPreviousSummary: !!event.preparation?.previousSummary,
+      },
+    };
+    console.log(JSON.stringify(compactionEvent));
+    // Return undefined to let pi-compaxxt (or pi's default) handle the actual compaction
+    return undefined;
+  });
 }

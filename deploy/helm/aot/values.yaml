@@ -12,6 +12,13 @@ llm:
   # -- API key for the LLM endpoint
   apiKey: ""
 
+# -- GitHub integration
+github:
+  # -- Name of the k8s Secret containing the GitHub token.
+  # Secret must have a key named "token".
+  # Create with: kubectl -n aot create secret generic github-token --from-literal=token=ghp_xxx
+  tokenSecretName: ""
+
 # -- Container image references
 images:
   controlplane:
@@ -34,11 +41,17 @@ images:
     repository: ghcr.io/uncworks/aot-web
     tag: ""
     pullPolicy: IfNotPresent
+  bff:
+    repository: ghcr.io/uncworks/aot-bff
+    tag: ""
+    pullPolicy: IfNotPresent
 
 # -- Controller configuration
 controller:
   replicas: 1
   metricsPort: 8095
+  # -- Number of days to retain Deployments and PVCs for completed runs before cleanup
+  retentionDays: 7
   resources: {}
 
 # -- Temporal Worker configuration
@@ -69,7 +82,21 @@ pipeline:
   # -- Model to use for the verification LLM judge (defaults to same as execution model)
   verifyModel: ""
 
+# -- BFF (Backend for Frontend) configuration
+# When enabled, replaces the nginx web deployment with a Go BFF that
+# serves the SPA and proxies API/ConnectRPC requests to the apiserver.
+bff:
+  # -- Enable the BFF. Start disabled; enable when ready to switch from nginx.
+  enabled: false
+  authMode: "open"
+  service:
+    type: NodePort
+    nodePort: ""
+
 # -- Web Dashboard configuration
+# TODO(7.4): The nginx web deployment will be removed once the BFF is
+# production-ready and fully replaces it. Until then, both templates
+# coexist and are toggled independently via web.enabled / bff.enabled.
 web:
   # -- Enable the web dashboard
   enabled: true
