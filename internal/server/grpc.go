@@ -645,26 +645,12 @@ func deriveNameFromPrompt(prompt string) string {
 
 // protoBackendToCRD maps the proto Backend enum to the CRD BackendType.
 func protoBackendToCRD(b apiv1.Backend) aotv1alpha1.BackendType {
-	switch b {
-	case apiv1.Backend_BACKEND_KUBEVIRT:
-		return aotv1alpha1.BackendKubeVirt
-	case apiv1.Backend_BACKEND_EXTERNAL:
-		return aotv1alpha1.BackendExternal
-	default:
-		return aotv1alpha1.BackendPod
-	}
+	return aotv1alpha1.BackendPod
 }
 
 // crdBackendToProto maps the CRD BackendType to the proto Backend enum.
 func crdBackendToProto(b aotv1alpha1.BackendType) apiv1.Backend {
-	switch b {
-	case aotv1alpha1.BackendKubeVirt:
-		return apiv1.Backend_BACKEND_KUBEVIRT
-	case aotv1alpha1.BackendExternal:
-		return apiv1.Backend_BACKEND_EXTERNAL
-	default:
-		return apiv1.Backend_BACKEND_POD
-	}
+	return apiv1.Backend_BACKEND_POD
 }
 
 // specProtoToCRD converts a proto AgentRunSpec to a CRD AgentRunSpec.

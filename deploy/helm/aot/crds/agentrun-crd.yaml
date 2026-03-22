@@ -43,8 +43,6 @@ spec:
                   type: string
                   enum:
                     - Pod
-                    - KubeVirt
-                    - External
                   default: Pod
                 repos:
                   type: array
@@ -73,41 +71,9 @@ spec:
                   type: object
                   additionalProperties:
                     type: string
-                externalConfig:
-                  type: object
-                  properties:
-                    host:
-                      type: string
-                    port:
-                      type: integer
-                      format: int32
-                      default: 22
-                    user:
-                      type: string
-                    sshKeySecret:
-                      type: string
-                  required:
-                    - host
-                    - user
-                    - sshKeySecret
                 modelTier:
                   type: string
                   default: default
-                kubeVirtConfig:
-                  type: object
-                  properties:
-                    cpus:
-                      type: integer
-                      format: int32
-                      default: 2
-                    memoryMB:
-                      type: integer
-                      format: int32
-                      default: 4096
-                    diskGB:
-                      type: integer
-                      format: int32
-                      default: 20
                 parentRunID:
                   type: string
                 orchestrationMode:

@@ -320,7 +320,7 @@ tasks:
       - echo "  kubectl exec deploy/ollama -- ollama pull qwen2.5:0.5b"
 
   cluster:status:
-    desc: Show health of all AOT services and ports
+    desc: Show health of all UNCWORKS services and ports
     cmds:
       - echo "=== Systemd Units ==="
       - systemctl --user list-units 'aot-*' --no-pager
@@ -332,15 +332,15 @@ tasks:
       - sudo k0s kubectl get pods -A 2>/dev/null || echo "(k0s not running)"
 
   cluster:teardown:
-    desc: Stop all AOT services and remove systemd units
+    desc: Stop all UNCWORKS services and remove systemd units
     cmds:
       - systemctl --user stop aot-cluster.target 2>/dev/null || true
       - systemctl --user disable aot-cluster.target 2>/dev/null || true
       - rm -f ~/.config/systemd/user/aot-*.service ~/.config/systemd/user/aot-cluster.target
       - systemctl --user daemon-reload
-      - echo "All AOT services stopped and units removed."
+      - echo "All UNCWORKS services stopped and units removed."
 
   cluster:logs:
-    desc: Show combined logs from all AOT services
+    desc: Show combined logs from all UNCWORKS services
     cmds:
       - journalctl --user -u 'aot-*' --no-pager -n 100 {{.CLI_ARGS}}

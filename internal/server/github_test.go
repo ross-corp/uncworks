@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	aotgithub "github.com/uncworks/aot/internal/github"
 )
 
 func TestSplitRepo(t *testing.T) {
@@ -141,7 +143,7 @@ func TestHandlePull(t *testing.T) {
 
 	// Create a GitHubClient pointing at the mock.
 	gc := &GitHubClient{
-		token:      "test-token",
+		provider:   aotgithub.NewPATProvider("test-token"),
 		httpClient: ghServer.Client(),
 	}
 
@@ -161,7 +163,7 @@ func TestHandlePull(t *testing.T) {
 	})
 
 	t.Run("pull without token returns error", func(t *testing.T) {
-		gc2 := &GitHubClient{token: "", httpClient: ghServer.Client()}
+		gc2 := &GitHubClient{provider: aotgithub.NewPATProvider(""), httpClient: ghServer.Client()}
 		mux2 := http.NewServeMux()
 		gc2.RegisterHandlers(mux2)
 
@@ -182,7 +184,7 @@ func TestHandlePull(t *testing.T) {
 }
 
 func TestHandlePush(t *testing.T) {
-	gc := &GitHubClient{token: "", httpClient: &http.Client{}}
+	gc := &GitHubClient{provider: aotgithub.NewPATProvider(""), httpClient: &http.Client{}}
 	mux := http.NewServeMux()
 	gc.RegisterHandlers(mux)
 
@@ -198,7 +200,7 @@ func TestHandlePush(t *testing.T) {
 	})
 
 	t.Run("push with missing fields", func(t *testing.T) {
-		gc2 := &GitHubClient{token: "test-token", httpClient: &http.Client{}}
+		gc2 := &GitHubClient{provider: aotgithub.NewPATProvider("test-token"), httpClient: &http.Client{}}
 		mux2 := http.NewServeMux()
 		gc2.RegisterHandlers(mux2)
 
@@ -213,7 +215,7 @@ func TestHandlePush(t *testing.T) {
 	})
 
 	t.Run("push with bad repo format", func(t *testing.T) {
-		gc2 := &GitHubClient{token: "test-token", httpClient: &http.Client{}}
+		gc2 := &GitHubClient{provider: aotgithub.NewPATProvider("test-token"), httpClient: &http.Client{}}
 		mux2 := http.NewServeMux()
 		gc2.RegisterHandlers(mux2)
 
@@ -228,7 +230,7 @@ func TestHandlePush(t *testing.T) {
 	})
 
 	t.Run("push with invalid JSON", func(t *testing.T) {
-		gc2 := &GitHubClient{token: "test-token", httpClient: &http.Client{}}
+		gc2 := &GitHubClient{provider: aotgithub.NewPATProvider("test-token"), httpClient: &http.Client{}}
 		mux2 := http.NewServeMux()
 		gc2.RegisterHandlers(mux2)
 

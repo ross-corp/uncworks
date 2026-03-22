@@ -1,6 +1,6 @@
 # Temporal Deployment
 
-AOT uses [Temporal](https://temporal.io/) for durable workflow orchestration. Temporal is an **external dependency** — it is not bundled in AOT's Helm chart.
+UNCWORKS uses [Temporal](https://temporal.io/) for durable workflow orchestration. Temporal is an **external dependency** — it is not bundled in the UNCWORKS Helm chart.
 
 ## Local Development
 
@@ -42,7 +42,7 @@ helm install temporal temporal/temporal \
 
 ### Database Setup
 
-Temporal requires two PostgreSQL databases. These can share the same PostgreSQL instance as AOT's brain store:
+Temporal requires two PostgreSQL databases. These can share the same PostgreSQL instance as UNCWORKS's brain store:
 
 ```sql
 CREATE DATABASE temporal;

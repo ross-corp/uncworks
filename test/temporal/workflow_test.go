@@ -33,11 +33,26 @@ func setupEnv(t *testing.T) *testsuite.TestWorkflowEnvironment {
 	env := suite.NewTestWorkflowEnvironment()
 	// Register the activities struct so method names are known
 	env.RegisterActivity(&aottemporal.Activities{})
+	// Mock lifecycle activities that ALL workflow paths call
+	mockLifecycleActivities(env)
 	return env
 }
 
+// mockLifecycleActivities registers default mocks for activities that every
+// workflow execution path calls (LLM key provisioning, tag enrichment, cleanup).
+func mockLifecycleActivities(env *testsuite.TestWorkflowEnvironment) {
+	env.OnActivity((*aottemporal.Activities).ProvisionLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.ProvisionLLMKeyOutput{Key: "test-key"}, nil,
+	).Maybe()
+	env.OnActivity((*aottemporal.Activities).RevokeLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	env.OnActivity((*aottemporal.Activities).EnrichRunTags, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	env.OnActivity((*aottemporal.Activities).WriteTraceSpan, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	env.OnActivity((*aottemporal.Activities).PushChanges, mock.Anything, mock.Anything, mock.Anything).Return(aottemporal.PushChangesOutput{}, nil).Maybe()
+	env.OnActivity((*aottemporal.Activities).CreatePR, mock.Anything, mock.Anything, mock.Anything).Return(aottemporal.CreatePROutput{}, nil).Maybe()
+}
+
 // TestWorkflow_HappyPath verifies the complete lifecycle:
-// CreateAgentDeployment → WaitForHydration → StartAgent → poll completed → ScaleDownDeployment
+// ProvisionLLMKey → CreateAgentDeployment → WaitForHydration → StartAgent → poll completed → EnrichRunTags → ScaleDownDeployment → RevokeLLMKey
 func TestWorkflow_HappyPath(t *testing.T) {
 	env := setupEnv(t)
 
@@ -178,7 +193,7 @@ func TestWorkflow_SpawnJunior(t *testing.T) {
 	env := setupEnv(t)
 	env.RegisterWorkflow(aottemporal.AgentRunWorkflow)
 
-	// Mock the child workflow's activities (it runs as AgentRunWorkflow)
+	// Mock all activities used by the child workflow
 	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-junior", PVCName: "aot-ws-junior"}, nil,
 	)
@@ -277,9 +292,6 @@ func TestWorkflow_SpecDrivenPrompt(t *testing.T) {
 	input.SpecContent = "# MyConverter\nConverts CSV to JSON."
 	input.Prompt = "" // Should be auto-generated
 
-	env.OnActivity((*aottemporal.Activities).ProvisionLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.ProvisionLLMKeyOutput{}, nil,
-	)
 	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
@@ -298,7 +310,6 @@ func TestWorkflow_SpecDrivenPrompt(t *testing.T) {
 		aottemporal.VerifyRunOutput{Result: aottemporal.VerificationResult{Pass: true}}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	env.OnActivity((*aottemporal.Activities).RevokeLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
 
@@ -314,9 +325,6 @@ func TestWorkflow_SpecWithExplicitPrompt(t *testing.T) {
 	input.SpecContent = "# MyConverter"
 	input.Prompt = "custom prompt"
 
-	env.OnActivity((*aottemporal.Activities).ProvisionLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(
-		&aottemporal.ProvisionLLMKeyOutput{}, nil,
-	)
 	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
 		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
 	)
@@ -334,7 +342,6 @@ func TestWorkflow_SpecWithExplicitPrompt(t *testing.T) {
 		aottemporal.VerifyRunOutput{Result: aottemporal.VerificationResult{Pass: true}}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	env.OnActivity((*aottemporal.Activities).RevokeLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
 

@@ -1,0 +1,16 @@
+# Build Go binary
+FROM golang:1.25-bookworm AS builder
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# Copy pre-built web assets into the embed directory
+COPY cmd/bff/dist/ cmd/bff/dist/
+RUN CGO_ENABLED=0 go build -o /bff ./cmd/bff
+
+# Runtime
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /bff /usr/local/bin/bff
+EXPOSE 3000
+CMD ["bff"]

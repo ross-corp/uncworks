@@ -6,7 +6,7 @@ export type AgentRunPhase =
   | "failed"
   | "cancelled";
 
-export type Backend = "pod" | "kubevirt" | "external";
+export type Backend = "pod";
 
 export type ModelTier = "default" | "default-cloud" | "premium" | string;
 
@@ -128,8 +128,6 @@ export const PHASE_OPTIONS: { value: AgentRunPhase; label: string }[] = [
 
 export const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
   { value: "pod", label: "Pod" },
-  { value: "kubevirt", label: "KubeVirt" },
-  { value: "external", label: "External" },
 ];
 
 export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string; description: string }[] = [
@@ -155,7 +153,7 @@ export interface TraceSpan {
   traceId?: string;
   parentId?: string;
   name: string;
-  type: "llm" | "tool" | "thought" | "input" | "delegate" | "lifecycle" | "stage";
+  type: "llm" | "tool" | "thought" | "input" | "delegate" | "lifecycle" | "stage" | "compaction";
   startTime: string;
   endTime: string;
   status?: "ok" | "error" | "unset";

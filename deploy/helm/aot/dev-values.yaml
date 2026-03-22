@@ -1,0 +1,4 @@
+# Development overrides for local k0s cluster.
+# Usage: helm install aot ./deploy/helm/aot -f deploy/helm/aot/dev-values.yaml
+github:
+  tokenSecretName: "github-token"

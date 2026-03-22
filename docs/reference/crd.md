@@ -8,7 +8,7 @@ Source: `api/v1alpha1/types.go`
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `backend` | `BackendType` | `Pod` | Execution backend: `Pod`, `KubeVirt`, or `External` |
+| `backend` | `BackendType` | `Pod` | Execution backend: `Pod` |
 | `repos` | `[]Repository` | -- | Git repositories to clone (required) |
 | `prompt` | `string` | -- | Task description for the agent (required) |
 | `modelTier` | `string` | `default` | LiteLLM model name for LLM routing |
@@ -25,8 +25,6 @@ Source: `api/v1alpha1/types.go`
 | `displayName` | `string` | -- | Human-readable name (LLM-generated from prompt) |
 | `workspaceName` | `string` | -- | Workspace preset name |
 | `pipelineConfig` | `*PipelineConfig` | -- | Per-stage config for spec-driven runs |
-| `externalConfig` | `*ExternalBackendConfig` | -- | SSH config for External backend |
-| `kubeVirtConfig` | `*KubeVirtBackendConfig` | -- | VM config for KubeVirt backend |
 
 ## Repository
 

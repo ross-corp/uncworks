@@ -13,6 +13,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1113,6 +1115,32 @@ func maybeCaptureStdoutSpan(line string) {
 		}
 	}
 
+	// Detect pi-dcp pruning events: "[pi-dcp] Pruned 5 / 20 messages"
+	if strings.Contains(trimmed, "[pi-dcp] Pruned") {
+		now := time.Now()
+		pruned, total := parsePiDcpPruned(trimmed)
+		prefix := spanPrefix()
+		appendTraceSpan(TraceSpan{
+			ID:        uuid.New().String(),
+			TraceID:   getTraceID(),
+			ParentID:  getParentSpanID(),
+			Name:      prefix + ".compaction",
+			Type:      "compaction",
+			StartTime: now,
+			EndTime:   now,
+			Metadata: map[string]interface{}{
+				"compaction.tokens_before": total,
+				"compaction.tokens_after":  total - pruned,
+				"compaction.tokens_saved":  pruned,
+				"source":                   "pi-dcp",
+				"stage":                    currentStage,
+				"role":                     prefix,
+				"raw":                      trimmed,
+			},
+		})
+		return
+	}
+
 	// Also detect LLM response lines from stdout
 	lower := strings.ToLower(trimmed)
 	if strings.HasPrefix(lower, "[llm]") || strings.HasPrefix(lower, "llm response:") {
@@ -1126,6 +1154,20 @@ func maybeCaptureStdoutSpan(line string) {
 			Metadata:  map[string]interface{}{"source": "stdout", "raw": trimmed},
 		})
 	}
+}
+
+// piDcpPrunedRe matches "[pi-dcp] Pruned N / M messages"
+var piDcpPrunedRe = regexp.MustCompile(`\[pi-dcp\] Pruned (\d+)\s*/\s*(\d+)`)
+
+// parsePiDcpPruned extracts the pruned and total counts from a pi-dcp pruning line.
+func parsePiDcpPruned(line string) (pruned, total int) {
+	m := piDcpPrunedRe.FindStringSubmatch(line)
+	if len(m) < 3 {
+		return 0, 0
+	}
+	pruned, _ = strconv.Atoi(m[1])
+	total, _ = strconv.Atoi(m[2])
+	return
 }
 
 // --- Span state for streaming events ---
@@ -1356,6 +1398,42 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 				activeToolSpanMu.Unlock()
 			}
 		}
+
+	case "context_compaction", "compaction":
+		// Pi/pi-compaxxt compaction event — context was pruned to fit model window.
+		var payload struct {
+			TokensBefore        int `json:"tokensBefore"`
+			TokensAfter         int `json:"tokensAfter"`
+			MessagesToSummarize int `json:"messagesToSummarize"`
+		}
+		if len(evt.Message) > 0 {
+			_ = json.Unmarshal(evt.Message, &payload)
+		}
+		meta := map[string]interface{}{
+			"compaction.tokens_before": payload.TokensBefore,
+			"compaction.tokens_after":  payload.TokensAfter,
+			"stage":                    currentStage,
+			"role":                     spanPrefix(),
+		}
+		if payload.TokensBefore > 0 && payload.TokensAfter > 0 {
+			tokensSaved := payload.TokensBefore - payload.TokensAfter
+			meta["compaction.tokens_saved"] = tokensSaved
+			meta["compaction.reduction_pct"] = int(float64(tokensSaved) / float64(payload.TokensBefore) * 100)
+		}
+		if payload.MessagesToSummarize > 0 {
+			meta["compaction.messages_summarized"] = payload.MessagesToSummarize
+		}
+		prefix := spanPrefix()
+		appendTraceSpan(TraceSpan{
+			ID:        uuid.New().String(),
+			TraceID:   getTraceID(),
+			ParentID:  getParentSpanID(),
+			Name:      prefix + ".compaction",
+			Type:      "compaction",
+			StartTime: now,
+			EndTime:   now,
+			Metadata:  meta,
+		})
 
 	case "message_end":
 		closeThinkingSpan()

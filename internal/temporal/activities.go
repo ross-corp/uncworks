@@ -24,6 +24,7 @@ import (
 
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
+	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/litellm"
 )
 
@@ -53,9 +54,13 @@ func imagePullPolicy(image string) corev1.PullPolicy {
 
 // Activities holds the dependencies needed by Temporal activity implementations.
 type Activities struct {
-	K8sClient     client.Client
-	LiteLLMClient *litellm.Client
-	HTTPClient    *http.Client
+	K8sClient      client.Client
+	LiteLLMClient  *litellm.Client
+	HTTPClient     *http.Client
+	GitHubProvider aotgithub.TokenProvider
+	// GitHubTokenSecretName is the k8s Secret name containing the GitHub token.
+	// When set, the init container gets GITHUB_TOKEN from this Secret.
+	GitHubTokenSecretName string
 }
 
 // WaitForHydrationInput contains the parameters for waiting on hydration.
@@ -297,6 +302,23 @@ func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
 	}
 	agentEnvVars := append(envVars, llmEnvVars...) //nolint:gocritic // intentional new slice
 
+	// Init container env: base env vars + optional GITHUB_TOKEN from Secret
+	initEnvVars := make([]corev1.EnvVar, len(envVars))
+	copy(initEnvVars, envVars)
+	if input.GitHubTokenSecretName != "" {
+		initEnvVars = append(initEnvVars, corev1.EnvVar{
+			Name: "GITHUB_TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: input.GitHubTokenSecretName,
+					},
+					Key: "token",
+				},
+			},
+		})
+	}
+
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      input.Name,
@@ -314,7 +336,7 @@ func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
 					Name:            "hydration",
 					Image:           initImage,
 					ImagePullPolicy: imagePullPolicy(initImage),
-					Env:             envVars,
+					Env:             initEnvVars,
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "workspace", MountPath: "/workspace"},
 					},
@@ -480,18 +502,19 @@ func (a *Activities) findPod(ctx context.Context, namespace, agentRunName, podNa
 
 // CreateAgentDeploymentInput contains parameters for creating an agent Deployment + PVC.
 type CreateAgentDeploymentInput struct {
-	Name           string
-	Namespace      string
-	AgentRunName   string
-	Repos          []Repository
-	Prompt         string
-	DevboxConfig   string
-	Image          string
-	EnvVars        map[string]string
-	LLMKey         string
-	LiteLLMBaseURL string
-	ModelID        string
-	SpecContent    string
+	Name                  string
+	Namespace             string
+	AgentRunName          string
+	Repos                 []Repository
+	Prompt                string
+	DevboxConfig          string
+	Image                 string
+	EnvVars               map[string]string
+	LLMKey                string
+	LiteLLMBaseURL        string
+	ModelID               string
+	SpecContent           string
+	GitHubTokenSecretName string // k8s Secret name for GITHUB_TOKEN (init container only)
 }
 
 // CreateAgentDeploymentOutput contains the result of creating an agent Deployment + PVC.

@@ -32,7 +32,7 @@ export const mockRuns: AgentRun[] = [
     name: "add-user-search",
     createdAt: oneHourAgo,
     spec: {
-      backend: "kubevirt",
+      backend: "pod",
       repos: [{ url: "https://github.com/acme/frontend.git", branch: "feat/search" }],
       prompt: "Add a user search component with autocomplete.",
       devboxConfig: "",
@@ -76,7 +76,7 @@ export const mockRuns: AgentRun[] = [
     name: "update-ci-pipeline",
     createdAt: now,
     spec: {
-      backend: "external",
+      backend: "pod",
       repos: [{ url: "https://github.com/acme/infra.git", branch: "main" }],
       prompt: "Update the CI pipeline to use Node 20.",
       devboxConfig: "",

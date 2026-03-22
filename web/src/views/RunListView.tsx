@@ -80,6 +80,7 @@ export default function RunListView() {
   const [viewMode, setViewMode] = useState<ViewMode>("features");
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [collapsedFeatures, setCollapsedFeatures] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const fetchRuns = useCallback(async () => {
     try {
@@ -117,6 +118,11 @@ export default function RunListView() {
   // Text-filtered runs
   const filtered = useMemo(() => {
     return projectFiltered.filter((r) => {
+      // Status filter
+      if (statusFilter === "running" && r.status.phase !== "running" && r.status.phase !== "waiting_for_input" && r.status.phase !== "pending") return false;
+      if (statusFilter === "failed" && r.status.phase !== "failed") return false;
+      if (statusFilter === "succeeded" && r.status.phase !== "succeeded") return false;
+      // Text filter
       if (!filter) return true;
       const q = filter.toLowerCase();
       return (
@@ -126,7 +132,7 @@ export default function RunListView() {
         (r.spec.feature || "").toLowerCase().includes(q)
       );
     });
-  }, [projectFiltered, filter]);
+  }, [projectFiltered, filter, statusFilter]);
 
   // Feature groups for features view
   const featureGroups = useMemo((): FeatureGroup[] => {
@@ -278,13 +284,25 @@ export default function RunListView() {
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-2">
-          <span className="font-semibold">AOT</span>
-          <span className="text-muted-foreground">Runs ({filtered.length})</span>
-          <span className="text-xs text-muted-foreground">
-            [p] {activeProject || "all"}
-          </span>
+          <span className="font-semibold">UNCWORKS</span>
+          <span className="text-muted-foreground">({filtered.length})</span>
+          <div className="flex items-center gap-1 ml-2">
+            {(["all", "running", "failed", "succeeded"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-2 py-0.5 text-xs transition-colors ${
+                  statusFilter === s
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
           <span className="text-xs text-muted-foreground ml-2">
-            {viewMode === "features" ? "[1] features" : "[2] all"}
+            [p] {activeProject || "all"}
           </span>
         </div>
         <span className="text-xs text-muted-foreground">p project · 1 features · 2 all · / filter · n new</span>

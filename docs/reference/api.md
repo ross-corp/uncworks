@@ -16,7 +16,7 @@ rpc CreateAgentRun(CreateAgentRunRequest) returns (CreateAgentRunResponse)
 ```
 CreateAgentRunRequest {
   spec: AgentRunSpec {
-    backend: Backend          // POD, KUBEVIRT, or EXTERNAL (required)
+    backend: Backend          // POD (required)
     repos: [Repository]       // At least one repository (required)
     prompt: string            // Task description (required)
     model_tier: string        // LiteLLM model name (default: "default")

@@ -14,13 +14,14 @@ import (
 //
 //	type: "llm" | "tool" | "thought" | "input" | "delegate" | "lifecycle"
 var validSpanTypes = map[string]bool{
-	"llm":       true,
-	"tool":      true,
-	"thought":   true,
-	"input":     true,
-	"delegate":  true,
-	"stage":     true,
-	"lifecycle": true,
+	"llm":        true,
+	"tool":       true,
+	"thought":    true,
+	"input":      true,
+	"delegate":   true,
+	"stage":      true,
+	"lifecycle":  true,
+	"compaction": true,
 }
 
 // TestBoundary_SpanTypes_GatewayUsesValidTypes reads the sidecar gateway.go
@@ -56,7 +57,7 @@ func TestBoundary_SpanTypes_GatewayUsesValidTypes(t *testing.T) {
 
 	// Also verify we found all the types the gateway actually uses.
 	// Known types from source inspection: "llm", "tool", "thought", "input"
-	expectedGatewayTypes := []string{"llm", "tool", "thought", "input"}
+	expectedGatewayTypes := []string{"llm", "tool", "thought", "input", "compaction"}
 	for _, exp := range expectedGatewayTypes {
 		if !seen[exp] {
 			t.Errorf("expected gateway.go to use span type %q but it was not found", exp)

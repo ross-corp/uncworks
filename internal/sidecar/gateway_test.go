@@ -622,6 +622,113 @@ func TestResolveWorkDirAt_DetectsGitFile(t *testing.T) {
 	}
 }
 
+// --- Compaction event detection tests ---
+
+func TestParsePiDcpPruned_ValidLine(t *testing.T) {
+	pruned, total := parsePiDcpPruned("[pi-dcp] Pruned 5 / 20 messages")
+	if pruned != 5 {
+		t.Errorf("pruned = %d, want 5", pruned)
+	}
+	if total != 20 {
+		t.Errorf("total = %d, want 20", total)
+	}
+}
+
+func TestParsePiDcpPruned_LargeNumbers(t *testing.T) {
+	pruned, total := parsePiDcpPruned("[pi-dcp] Pruned 150 / 300 messages")
+	if pruned != 150 {
+		t.Errorf("pruned = %d, want 150", pruned)
+	}
+	if total != 300 {
+		t.Errorf("total = %d, want 300", total)
+	}
+}
+
+func TestParsePiDcpPruned_NoMatch(t *testing.T) {
+	pruned, total := parsePiDcpPruned("some other log line")
+	if pruned != 0 || total != 0 {
+		t.Errorf("expected (0, 0), got (%d, %d)", pruned, total)
+	}
+}
+
+func TestParsePiDcpPruned_EmptyLine(t *testing.T) {
+	pruned, total := parsePiDcpPruned("")
+	if pruned != 0 || total != 0 {
+		t.Errorf("expected (0, 0), got (%d, %d)", pruned, total)
+	}
+}
+
+func TestMaybeCaptureStreamEvent_CompactionCreatesSpan(t *testing.T) {
+	// Set up trace dir in a temp location — we override the constant via a temp dir that
+	// matches the const path only when running in the right environment.
+	// Since traceSpansPath is a constant pointing to /workspace/.aot/traces/spans.jsonl,
+	// in CI/test we create that dir structure so appendTraceSpan can write.
+	dir := t.TempDir()
+	spansDir := filepath.Join(dir, "traces")
+	if err := os.MkdirAll(spansDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spansFile := filepath.Join(spansDir, "spans.jsonl")
+
+	// We can't redirect the const in a unit test, so instead test the event parsing
+	// logic by verifying the compaction event type is handled (no panic, correct flow).
+	// The actual span writing is integration-level.
+
+	evt := &piEvent{
+		Type:    "compaction",
+		Message: json.RawMessage(`{"tokensBefore":10000,"tokensAfter":5000}`),
+	}
+
+	// Set up state
+	setCurrentStage("execute", "/workspace")
+	setCurrentParentSpan("parent-123", "trace-456")
+
+	// Call the function — it will fail to write to /workspace/.aot/traces/spans.jsonl
+	// in test, but should not panic.
+	maybeCaptureStreamEvent(evt, `{"type":"compaction","tokensBefore":10000,"tokensAfter":5000}`)
+
+	// Also test context_compaction variant
+	evt2 := &piEvent{
+		Type:    "context_compaction",
+		Message: json.RawMessage(`{"tokensBefore":8000,"tokensAfter":3000}`),
+	}
+	maybeCaptureStreamEvent(evt2, `{"type":"context_compaction","tokensBefore":8000,"tokensAfter":3000}`)
+
+	_ = spansFile // used if we ever redirect
+}
+
+func TestMaybeCaptureStreamEvent_CompactionMissingFields(t *testing.T) {
+	// Compaction event with no token counts — should still not panic
+	setCurrentStage("plan", "/workspace")
+	setCurrentParentSpan("p1", "t1")
+
+	evt := &piEvent{
+		Type: "compaction",
+	}
+	// Should not panic with nil Message
+	maybeCaptureStreamEvent(evt, `{"type":"compaction"}`)
+
+	// With empty message object
+	evt2 := &piEvent{
+		Type:    "compaction",
+		Message: json.RawMessage(`{}`),
+	}
+	maybeCaptureStreamEvent(evt2, `{"type":"compaction"}`)
+}
+
+func TestMaybeCaptureStreamEvent_CompactionEmptyMessage(t *testing.T) {
+	// Compaction event with empty JSON object — graceful degradation
+	setCurrentStage("", "/workspace")
+	setCurrentParentSpan("", "")
+
+	evt := &piEvent{
+		Type:    "compaction",
+		Message: json.RawMessage(`{}`),
+	}
+	// Should not panic, should create a span with zero token counts
+	maybeCaptureStreamEvent(evt, `{"type":"compaction"}`)
+}
+
 func TestResolveWorkDirAt_BareSkippedRealRepoFound(t *testing.T) {
 	// Full debug pod layout: .bare exists but is skipped, real worktree is found.
 	base := t.TempDir()

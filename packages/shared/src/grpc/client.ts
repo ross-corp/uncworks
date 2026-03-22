@@ -135,14 +135,10 @@ export class AOTClient {
 
 const backendFromProtoMap: Record<number, Backend> = {
   [PbBackend.POD]: "pod",
-  [PbBackend.KUBEVIRT]: "kubevirt",
-  [PbBackend.EXTERNAL]: "external",
 };
 
 const backendToProtoMap: Record<Backend, PbBackend> = {
   pod: PbBackend.POD,
-  kubevirt: PbBackend.KUBEVIRT,
-  external: PbBackend.EXTERNAL,
 };
 
 function backendToProto(b: Backend): PbBackend {

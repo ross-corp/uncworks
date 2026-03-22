@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -63,13 +64,22 @@ func run() error {
 	}
 
 	bus := eventbus.NewChannelBus()
+	ghTokenSecretName := os.Getenv("GITHUB_TOKEN_SECRET_NAME")
+	retentionDays := controller.DefaultRetentionDays
+	if v := os.Getenv("AOT_RETENTION_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			retentionDays = n
+		}
+	}
 	if err = (&controller.AgentRunReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		TemporalClient: tc,
-		TaskQueue:      taskQueue,
-		LiteLLMBaseURL: litellmBaseURL,
-		EventBus:       bus,
+		Client:                mgr.GetClient(),
+		Scheme:                mgr.GetScheme(),
+		TemporalClient:        tc,
+		TaskQueue:             taskQueue,
+		LiteLLMBaseURL:        litellmBaseURL,
+		GitHubTokenSecretName: ghTokenSecretName,
+		EventBus:              bus,
+		RetentionDays:         retentionDays,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("create controller: %w", err)
 	}

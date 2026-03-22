@@ -7,8 +7,8 @@ UNCWORKS uses a k0s-based local cluster managed through the `aot-local/` directo
 The local dev environment runs on a single k0s node with:
 - **Temporal** -- Workflow engine (SQLite-backed dev server)
 - **Ollama** -- Local LLM inference
-- **AOT Control Plane** -- API server, controller, temporal worker (single image)
-- **AOT Web** -- Dashboard (Vite + React, served via nginx)
+- **UNCWORKS Control Plane** -- API server, controller, temporal worker (single image)
+- **UNCWORKS Web** -- Dashboard (Vite + React, served via nginx)
 - **Agent Pods** -- Ephemeral pods with init, sidecar, and agent containers
 
 ## Taskfile Commands (aot-local/)
@@ -25,8 +25,8 @@ Run these from the `aot-local/` directory:
 | `task import` | Import images into k0s runtime |
 | `task deploy` | Apply CRDs, manifests, and Helm chart |
 | `task status` | Show pod status and access URLs |
-| `task logs` | Tail logs from all AOT pods |
-| `task down` | Remove all AOT resources |
+| `task logs` | Tail logs from all UNCWORKS pods |
+| `task down` | Remove all UNCWORKS resources |
 | `task pull-model` | Pull `qwen2.5:0.5b` into Ollama |
 
 ## Taskfile Commands (uncworks/)

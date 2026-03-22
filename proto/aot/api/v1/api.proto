@@ -48,8 +48,6 @@ enum OrchestrationMode {
 enum Backend {
   BACKEND_UNSPECIFIED = 0;
   BACKEND_POD = 1;
-  BACKEND_KUBEVIRT = 2;
-  BACKEND_EXTERNAL = 3;
 }
 
 // AgentRunPhase represents the lifecycle phase of an agent run.

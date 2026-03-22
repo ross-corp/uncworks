@@ -275,10 +275,6 @@ export default function RunDetailView() {
         </SheetContent>
       </Sheet>
 
-      {/* Footer */}
-      <div className="border-t px-4 py-1 text-xs text-muted-foreground">
-        1 logs · 2 traces · 3 files · 4 shell · i info · esc back
-      </div>
     </div>
   );
 }

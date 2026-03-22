@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -248,69 +247,7 @@ func TestBuildAgentPod_NoLLMEnvVars(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. handleNotImplemented
-// ---------------------------------------------------------------------------
-
-func TestHandleNotImplemented_KubeVirt(t *testing.T) {
-	reconciler, k8sClient, cleanup := setupReconciler(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	ar := newAgentRun("not-impl-kv", func(a *aotv1alpha1.AgentRun) {
-		a.Spec.Backend = aotv1alpha1.BackendKubeVirt
-	})
-	if err := k8sClient.Create(ctx, ar); err != nil {
-		t.Fatalf("create agentrun: %v", err)
-	}
-
-	_, err := reconciler.handleNotImplemented(ctx, ar, "KubeVirt")
-	if err != nil {
-		t.Fatalf("handleNotImplemented: %v", err)
-	}
-
-	var updated aotv1alpha1.AgentRun
-	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ar), &updated); err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if updated.Status.Phase != aotv1alpha1.AgentRunPhaseFailed {
-		t.Errorf("expected Failed, got %s", updated.Status.Phase)
-	}
-	if updated.Status.Message != "KubeVirt backend is not yet implemented" {
-		t.Errorf("unexpected message: %s", updated.Status.Message)
-	}
-}
-
-func TestHandleNotImplemented_External(t *testing.T) {
-	reconciler, k8sClient, cleanup := setupReconciler(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	ar := newAgentRun("not-impl-ext", func(a *aotv1alpha1.AgentRun) {
-		a.Spec.Backend = aotv1alpha1.BackendExternal
-	})
-	if err := k8sClient.Create(ctx, ar); err != nil {
-		t.Fatalf("create agentrun: %v", err)
-	}
-
-	_, err := reconciler.handleNotImplemented(ctx, ar, "External")
-	if err != nil {
-		t.Fatalf("handleNotImplemented: %v", err)
-	}
-
-	var updated aotv1alpha1.AgentRun
-	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ar), &updated); err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if updated.Status.Phase != aotv1alpha1.AgentRunPhaseFailed {
-		t.Errorf("expected Failed, got %s", updated.Status.Phase)
-	}
-	if updated.Status.Message != "External backend is not yet implemented" {
-		t.Errorf("unexpected message: %s", updated.Status.Message)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 3. mapPhase
+// 2. mapPhase
 // ---------------------------------------------------------------------------
 
 func TestMapPhase(t *testing.T) {
@@ -358,7 +295,7 @@ func TestIsTerminal(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. EventBus integration
+// 3. EventBus integration
 // ---------------------------------------------------------------------------
 
 // recordingBus captures published events for test assertions.
@@ -387,56 +324,12 @@ func (r *recordingBus) getEvents() []*apiv1.AgentRunEvent {
 	return out
 }
 
-func TestEventBus_HandleNotImplementedEmitsEvent(t *testing.T) {
-	reconciler, k8sClient, cleanup := setupReconciler(t)
-	defer cleanup()
-
-	bus := &recordingBus{}
-	reconciler.EventBus = bus
-
-	ctx := context.Background()
-	ar := newAgentRun("event-test", func(a *aotv1alpha1.AgentRun) {
-		a.Spec.Backend = aotv1alpha1.BackendKubeVirt
-	})
-	if err := k8sClient.Create(ctx, ar); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-
-	_, err := reconciler.handleNotImplemented(ctx, ar, "KubeVirt")
-	if err != nil {
-		t.Fatalf("handleNotImplemented: %v", err)
-	}
-
-	events := bus.getEvents()
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-	if events[0].Type != apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED {
-		t.Errorf("expected COMPLETED event type, got %v", events[0].Type)
-	}
-	if events[0].AgentRunId != "event-test" {
-		t.Errorf("expected agent run ID event-test, got %s", events[0].AgentRunId)
-	}
-}
-
 func TestEventBus_NilBusDoesNotPanic(t *testing.T) {
-	reconciler, k8sClient, cleanup := setupReconciler(t)
-	defer cleanup()
-	// EventBus is nil by default
-	ctx := context.Background()
-
-	ar := newAgentRun("no-bus", func(a *aotv1alpha1.AgentRun) {
-		a.Spec.Backend = aotv1alpha1.BackendKubeVirt
-	})
-	if err := k8sClient.Create(ctx, ar); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-
-	// Should not panic with nil EventBus
-	_, err := reconciler.handleNotImplemented(ctx, ar, "KubeVirt")
-	if err != nil {
-		t.Fatalf("handleNotImplemented: %v", err)
-	}
+	reconciler := &AgentRunReconciler{}
+	// EventBus is nil by default — emitPhaseEvent should not panic
+	ar := newAgentRun("no-bus")
+	reconciler.emitPhaseEvent(ar, apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED)
+	// No panic means pass
 }
 
 // Verify the interface is satisfied at compile time.

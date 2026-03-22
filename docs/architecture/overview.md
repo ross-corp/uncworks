@@ -27,8 +27,6 @@ graph TB
                 Sidecar["RPC Gateway\nsidecar"]
                 PVC["Workspace PVC\n/workspace"]
             end
-            ExtAgent["External Agent (planned)"]
-            KubeVirt["KubeVirt VM (planned)"]
         end
 
         subgraph Deps["Dependencies"]
@@ -49,8 +47,6 @@ graph TB
     LiteLLM --> Ollama
     LiteLLM -->|OpenRouter| Cloud["Cloud LLMs"]
 
-    style ExtAgent stroke-dasharray: 5 5
-    style KubeVirt stroke-dasharray: 5 5
 ```
 
 ## Components
@@ -74,8 +70,6 @@ graph TB
 | Component | Description |
 |-----------|-------------|
 | **Agent Pod** | One pod per run. Three containers: hydration init (git worktree + devbox), pi-coding-agent (with determinism extension), RPC gateway sidecar. Workspace on a PVC at `/workspace`. |
-| **External Agent** | (Planned) Run agents on external infrastructure outside the cluster. |
-| **KubeVirt VM** | (Planned) Run agents in full VMs for stronger isolation. |
 
 ### Dependencies
 

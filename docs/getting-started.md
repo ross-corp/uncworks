@@ -31,7 +31,7 @@ This single command:
 1. Builds all Docker images (init, sidecar, agent, controlplane, web)
 2. Imports them into the k0s container runtime
 3. Applies the AgentRun CRD
-4. Deploys Temporal, Ollama, and the AOT Helm chart
+4. Deploys Temporal, Ollama, and the UNCWORKS Helm chart
 5. Waits for all deployments to become ready
 
 ## Pull a Model
