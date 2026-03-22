@@ -77,6 +77,10 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       verificationResult: r.status.verificationResult,
       debugActive: r.status.debugActive ?? false,
       prUrl: r.status.prUrl,
+      archived: (r.status as unknown as { archived?: boolean }).archived,
+      totalCost: (r.status as unknown as { totalCost?: string }).totalCost,
+      totalAdditions: (r.status as unknown as { totalAdditions?: number }).totalAdditions,
+      totalDeletions: (r.status as unknown as { totalDeletions?: number }).totalDeletions,
     },
     createdAt: r.createdAt,
   };

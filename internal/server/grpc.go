@@ -190,6 +190,11 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 		crd := &list.Items[i]
 		run := crdToProto(crd)
 
+		// Filter archived runs (unless includeArchived is set via header)
+		if crd.Status.Archived && req.Header().Get("X-Include-Archived") != "true" {
+			continue
+		}
+
 		// Apply phase filter
 		if req.Msg.PhaseFilter != apiv1.AgentRunPhase_AGENT_RUN_PHASE_UNSPECIFIED &&
 			run.Status.Phase != req.Msg.PhaseFilter {

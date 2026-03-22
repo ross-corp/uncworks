@@ -106,6 +106,12 @@ spec:
                   type: string
                   default: default
                   maxLength: 64
+                manageModelTier:
+                  type: string
+                  maxLength: 64
+                implementModelTier:
+                  type: string
+                  maxLength: 64
                 parentRunID:
                   type: string
                   maxLength: 63
@@ -238,6 +244,18 @@ spec:
                     - executing
                     - verifying
                     - ""
+                archived:
+                  type: boolean
+                prUrl:
+                  type: string
+                totalCost:
+                  type: string
+                totalAdditions:
+                  type: integer
+                  format: int32
+                totalDeletions:
+                  type: integer
+                  format: int32
                 retryCount:
                   type: integer
                   format: int32

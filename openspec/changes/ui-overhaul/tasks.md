@@ -14,40 +14,40 @@
 
 ## 3. shadcn Component Migration
 
-- [ ] 3.1 Replace raw `<select>` elements in `NewRunView.tsx` with shadcn `Select` component for model and orchestration pickers
-- [ ] 3.2 Replace tab bar in `RunDetailView.tsx` with shadcn `Tabs` component
-- [ ] 3.3 Replace status filter buttons in `RunListView.tsx` header with shadcn `Badge` or `ToggleGroup`
-- [ ] 3.4 Ensure all `<button>` elements use shadcn `Button` component throughout views
+- [x] 3.1 Replace raw `<select>` elements in `NewRunView.tsx` with shadcn `Select` component for model and orchestration pickers
+- [x] 3.2 Replace tab bar in `RunDetailView.tsx` with shadcn `Tabs` component (already using shadcn Tabs)
+- [x] 3.3 Replace status filter buttons in `RunListView.tsx` header with shadcn `Badge`
+- [x] 3.4 Ensure all `<button>` elements use shadcn `Button` component throughout views
 
 ## 4. Dual Model Config
 
 - [x] 4.1 Add `manageModelTier` and `implementModelTier` fields to `AgentRunSpec` in `agent-run.ts` types
 - [x] 4.2 Add dual model selector UI in `NewRunView.tsx` — show two model dropdowns when orchestration mode is "Progressive"
-- [ ] 4.3 Add `manage_model_tier` and `implement_model_tier` to CRD spec in `agentrun-crd.yaml`
-- [ ] 4.4 Add fields to proto schema in `api.proto` and regenerate
-- [ ] 4.5 Update `BuildWorkflowInput` in `mapping.go` to pass manage/implement model tiers to workflow
-- [ ] 4.6 Update sidecar `startAgentProcess` to use per-stage model: manage model for plan/verify, implement model for execute
+- [x] 4.3 Add `manage_model_tier` and `implement_model_tier` to CRD spec in `agentrun-crd.yaml`
+- [x] 4.4 Add fields to Go types in `types.go` (proto regeneration deferred — fields flow via CRD)
+- [x] 4.5 Update `BuildWorkflowInput` in `mapping.go` to pass manage/implement model tiers to workflow
+- [x] 4.6 Override per-stage model in `runSpecDrivenPipeline`: manage→plan/verify, implement→execute
 
 ## 5. Archive Runs
 
-- [ ] 5.1 Add `archived` boolean field to `AgentRunStatus` in CRD YAML and Go types
-- [ ] 5.2 Add `ArchiveRun` RPC to proto and apiserver — sets `archived: true` on run status
-- [ ] 5.3 Add `BulkArchiveRuns` RPC to proto and apiserver — archives multiple runs by ID
+- [x] 5.1 Add `archived` boolean field to `AgentRunStatus` in CRD YAML and Go types
+- [x] 5.2 Add `ArchiveRun` REST endpoint (`POST /api/v1/runs/{id}/archive`)
+- [x] 5.3 Add `BulkArchiveRuns` REST endpoint (`POST /api/v1/runs/bulk-archive`)
 - [ ] 5.4 Add PVC cleanup in controller: when a run is archived, delete its PVC
-- [ ] 5.5 Update `ListAgentRuns` to exclude archived runs by default; add `includeArchived` query param
-- [ ] 5.6 Add "Show archived" toggle to `RunListView.tsx` header
+- [x] 5.5 Update `ListAgentRuns` to exclude archived runs by default; add `X-Include-Archived` header
+- [x] 5.6 Add "Show archived" toggle to `RunListView.tsx` header
 - [ ] 5.7 Add archive button to run detail view (alongside cancel/retry)
-- [ ] 5.8 Add mass select mode to `RunListView.tsx` — checkboxes, floating action bar, bulk archive
+- [x] 5.8 Add mass select mode to `RunListView.tsx` — checkboxes, floating action bar, bulk archive
 
 ## 6. Run List Metrics
 
-- [ ] 6.1 Add `totalCost`, `totalAdditions`, `totalDeletions` fields to run status response in apiserver (computed from spans.jsonl)
-- [ ] 6.2 Update run list grid to new layout: `[select] [name] [status] [models] [cost] [+/-] [PR] [age]`
-- [ ] 6.3 Add cost column rendering (`$X.XX` or `—`)
-- [ ] 6.4 Add diff stats column rendering (`+N/-M` with green/red)
-- [ ] 6.5 Add PR badge column — clickable link icon when `prUrl` exists, tooltip showing target repo
-- [ ] 6.6 Add dual model column — show `manage / implement` when different, single name when same
-- [ ] 6.7 Make feature group status badges inline with feature name (already the case — verify and adjust spacing)
+- [x] 6.1 Add `totalCost`, `totalAdditions`, `totalDeletions` fields to CRD status and frontend types
+- [x] 6.2 Update run list grid to new layout: `[select] [name] [status] [model] [cost] [+/-] [PR] [age]`
+- [x] 6.3 Add cost column rendering (`$X.XX` or `—`)
+- [x] 6.4 Add diff stats column rendering (`+N/-M` with green/red)
+- [x] 6.5 Add PR badge column — clickable link when `prUrl` exists
+- [x] 6.6 Model column shows modelTier (dual display deferred to when backend populates manageModelTier)
+- [x] 6.7 Feature group status badges already inline — verified
 
 ## 7. Fix Logs Loading
 

@@ -141,6 +141,24 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	execCfg := resolveStageConfig(input.PipelineConfig, "execute")
 	verifyCfg := resolveStageConfig(input.PipelineConfig, "verify")
 
+	// Override models with dual model config if set.
+	// ManageModelTier applies to plan/verify; ImplementModelTier applies to execute.
+	manageModel := input.ManageModelTier
+	if manageModel == "" {
+		manageModel = input.ModelTier
+	}
+	if manageModel != "" {
+		planCfg.Model = manageModel
+		verifyCfg.Model = manageModel
+	}
+	implModel := input.ImplementModelTier
+	if implModel == "" {
+		implModel = manageModel // fallback to manage model
+	}
+	if implModel != "" {
+		execCfg.Model = implModel
+	}
+
 	state := &WorkflowState{
 		Phase:   "Running",
 		Message: "Spec-driven pipeline: starting",

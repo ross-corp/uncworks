@@ -40,6 +40,8 @@ func BuildWorkflowInput(agentRun *aotv1alpha1.AgentRun, liteLLMBaseURL, gitHubTo
 		Image:                 agentRun.Spec.Image,
 		EnvVars:               agentRun.Spec.EnvVars,
 		ModelTier:             agentRun.Spec.ModelTier,
+		ManageModelTier:       agentRun.Spec.ManageModelTier,
+		ImplementModelTier:    agentRun.Spec.ImplementModelTier,
 		LiteLLMBaseURL:        liteLLMBaseURL,
 		SpecContent:           agentRun.Spec.SpecContent,
 		WorkspaceName:         agentRun.Spec.WorkspaceName,

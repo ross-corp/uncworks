@@ -150,6 +150,10 @@ func main() {
 	execHandler := server.NewExecHandler(k8sClient, restConfig, namespace, allowedOrigins)
 	execHandler.RegisterExecHandlers(mux)
 
+	// Register archive endpoints
+	archiveHandler := &server.ArchiveHandler{K8sClient: k8sClient, Namespace: namespace}
+	archiveHandler.RegisterArchiveHandlers(mux)
+
 	// Register GitHub webhook receiver (webhooks use their own HMAC auth, skip API key)
 	webhookHandler := server.NewWebhookHandler(k8sClient, namespace, ghProvider)
 	mux.Handle("/api/v1/webhooks/github", webhookHandler)

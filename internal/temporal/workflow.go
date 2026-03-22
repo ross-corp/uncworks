@@ -94,6 +94,8 @@ type WorkflowInput struct {
 	Image                 string
 	EnvVars               map[string]string
 	ModelTier             string
+	ManageModelTier       string
+	ImplementModelTier    string
 	MaxBudget             float64
 	LiteLLMBaseURL        string
 	SpecContent           string
