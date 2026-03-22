@@ -5,6 +5,7 @@ import { apiFetch } from "../hooks/apiFetch";
 import { useToast } from "../components/Toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import MarkdownEditor from "../components/MarkdownEditor";
 import {
   MODEL_TIER_OPTIONS,
   ORCHESTRATION_MODE_OPTIONS,
@@ -28,6 +29,7 @@ export default function NewRunView() {
   const [modelTier, setModelTier] = useState("default");
   const [ttlMinutes, setTtlMinutes] = useState(15);
   const [orchestrationMode, setOrchestrationMode] = useState<OrchestrationMode>("single");
+  const [implementModelTier, setImplementModelTier] = useState("");
 
   // Auto-classification fields
   const [project, setProject] = useState("");
@@ -83,8 +85,8 @@ export default function NewRunView() {
     }
   }, [mode]);
 
-  // Auto-classify prompt on blur
-  const handlePromptBlur = useCallback(async () => {
+  // Auto-classify prompt (called when prompt changes significantly)
+  const classifyPrompt = useCallback(async () => {
     if (prompt.trim().length <= 10) return;
     if (userEditedProject.current && userEditedFeature.current && userEditedTags.current) return;
 
@@ -120,6 +122,8 @@ export default function NewRunView() {
   async function handleRun() {
     if (!canRun) return;
     setSubmitting(true);
+    // Best-effort classification before submit
+    await classifyPrompt();
     try {
       const parsedTags = tags
         .split(",")
@@ -202,31 +206,24 @@ export default function NewRunView() {
           <label className="mb-1 block text-xs text-muted-foreground">
             {mode === "prompt" ? "Prompt" : "Prompt (optional — spec content is used if empty)"}
           </label>
-          <textarea
-            autoFocus
-            className={`w-full resize-none border bg-background p-3 text-sm outline-none focus:border-primary ${mode === "spec" ? "min-h-[80px]" : "h-full min-h-[200px]"}`}
+          <MarkdownEditor
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onBlur={handlePromptBlur}
-            placeholder={mode === "spec" ? "Optional override prompt (spec content used by default)" : "What should the agent do?"}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
-            }}
+            onChange={(v) => { setPrompt(v); }}
+            placeholder={mode === "spec" ? "Optional override prompt" : "What should the agent do?"}
+            minHeight={mode === "spec" ? "80px" : "200px"}
+            autoFocus
           />
         </div>
 
-        {/* Spec textarea (visible in spec mode) */}
+        {/* Spec editor (visible in spec mode) */}
         {mode === "spec" && (
           <div className="flex-1">
             <label className="mb-1 block text-xs text-muted-foreground">Spec</label>
-            <textarea
-              className="h-full min-h-[300px] w-full resize-none border bg-background p-3 text-sm font-mono outline-none focus:border-primary"
+            <MarkdownEditor
               value={specContent}
-              onChange={(e) => setSpecContent(e.target.value)}
+              onChange={(v) => setSpecContent(v)}
               placeholder="Paste your spec (markdown)..."
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
-              }}
+              minHeight="300px"
             />
           </div>
         )}
@@ -283,10 +280,38 @@ export default function NewRunView() {
 
           {/* Config descriptions */}
           <div className="mt-1 flex gap-2 text-[10px] text-muted-foreground">
-            <span className="flex-1 truncate">{selectedModel?.description}</span>
+            <span className="flex-1 truncate">
+              {orchestrationMode === "spec-driven" ? "Manage: " : ""}{selectedModel?.description}
+            </span>
             <span className="w-24" />
             <span className="flex-1 truncate">{selectedMode?.description}</span>
           </div>
+
+          {/* Implement model (Progressive mode only) */}
+          {orchestrationMode === "spec-driven" && (
+            <div className="mt-2">
+              <div className="flex gap-2 items-center">
+                <label className="text-[10px] text-muted-foreground w-24 shrink-0">Implement model</label>
+                <select
+                  className="flex-1 border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
+                  value={implementModelTier}
+                  onChange={(e) => setImplementModelTier(e.target.value)}
+                >
+                  <option value="">Same as manage</option>
+                  {MODEL_TIER_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {implementModelTier && (
+                <div className="mt-0.5 text-[10px] text-muted-foreground ml-24 pl-2">
+                  {MODEL_TIER_OPTIONS.find((m) => m.value === implementModelTier)?.description}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Classification fields */}

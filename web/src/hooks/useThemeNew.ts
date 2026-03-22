@@ -44,5 +44,8 @@ export function useThemeNew() {
     setMode(next);
   }, [mode, setMode]);
 
-  return { mode, setMode, toggleMode };
+  const resolvedTheme: "light" | "dark" =
+    mode === "system" ? getSystemMode() : mode;
+
+  return { mode, setMode, toggleMode, resolvedTheme };
 }
