@@ -458,7 +458,7 @@ func detectContentType(path string) string {
 func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 	runID := r.PathValue("id")
 	if runID == "" {
-		http.Error(w, `{"error":"missing run id"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing run id"})
 		return
 	}
 
@@ -469,13 +469,13 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		// Pod is running — stream container logs (current behavior).
 		podName, err := f.lookupPodName(r.Context(), runID)
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: err.Error()})
 			return
 		}
 
 		clientset, err := kubernetes.NewForConfig(f.restConfig)
 		if err != nil {
-			http.Error(w, `{"error":"k8s client error"}`, http.StatusInternalServerError)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "k8s client error"})
 			return
 		}
 
@@ -488,7 +488,7 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		stream, err := logReq.Stream(r.Context())
 		if err != nil {
 			log.Printf("Failed to stream logs for pod %s: %v", podName, err)
-			http.Error(w, fmt.Sprintf(`{"error":"failed to get logs: %s"}`, err.Error()), http.StatusInternalServerError)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("failed to get logs: %s", err.Error())})
 			return
 		}
 		defer func() { _ = stream.Close() }()
@@ -519,7 +519,7 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("failed to read log file %s: %v", logPath, err)
-		http.Error(w, fmt.Sprintf(`{"error":"failed to read logs: %s"}`, err.Error()), http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("failed to read logs: %s", err.Error())})
 		return
 	}
 
