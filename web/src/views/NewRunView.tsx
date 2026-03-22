@@ -5,7 +5,11 @@ import { apiFetch } from "../hooks/apiFetch";
 import { useToast } from "../components/Toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import type { OrchestrationMode } from "../types/agent-run";
+import {
+  MODEL_TIER_OPTIONS,
+  ORCHESTRATION_MODE_OPTIONS,
+  type OrchestrationMode,
+} from "../types/agent-run";
 
 export default function NewRunView() {
   const client = useClient();
@@ -19,6 +23,11 @@ export default function NewRunView() {
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<"prompt" | "spec">("prompt");
   const [specContent, setSpecContent] = useState("");
+
+  // Configurable settings
+  const [modelTier, setModelTier] = useState("default");
+  const [ttlMinutes, setTtlMinutes] = useState(15);
+  const [orchestrationMode, setOrchestrationMode] = useState<OrchestrationMode>("single");
 
   // Auto-classification fields
   const [project, setProject] = useState("");
@@ -46,6 +55,12 @@ export default function NewRunView() {
         setSpecContent(run.spec.specContent);
         setMode("spec");
       }
+      if (run.spec.orchestrationMode) {
+        setOrchestrationMode(run.spec.orchestrationMode);
+      }
+      if (run.spec.modelTier) {
+        setModelTier(run.spec.modelTier);
+      }
       if (run.spec.project) {
         setProject(run.spec.project);
         userEditedProject.current = true;
@@ -61,10 +76,16 @@ export default function NewRunView() {
     }).catch(() => {});
   }, [searchParams, client]);
 
+  // When switching to spec mode, default to progressive orchestration
+  useEffect(() => {
+    if (mode === "spec") {
+      setOrchestrationMode("spec-driven");
+    }
+  }, [mode]);
+
   // Auto-classify prompt on blur
   const handlePromptBlur = useCallback(async () => {
     if (prompt.trim().length <= 10) return;
-    // Don't classify if all fields already have user edits
     if (userEditedProject.current && userEditedFeature.current && userEditedTags.current) return;
 
     setClassifying(true);
@@ -83,14 +104,21 @@ export default function NewRunView() {
       if (data.feature && !userEditedFeature.current) setFeature(data.feature);
       if (data.tags?.length && !userEditedTags.current) setTags(data.tags.join(", "));
     } catch {
-      // Classification is best-effort — silently ignore errors
+      // Classification is best-effort
     } finally {
       setClassifying(false);
     }
   }, [prompt, repo, branch]);
 
+  // Determine the effective prompt: for spec mode, spec content is the prompt if prompt is empty
+  const effectivePrompt = mode === "spec" && !prompt.trim() && specContent.trim()
+    ? specContent.trim()
+    : prompt.trim();
+
+  const canRun = effectivePrompt && repo.trim();
+
   async function handleRun() {
-    if (!prompt.trim() || !repo.trim()) return;
+    if (!canRun) return;
     setSubmitting(true);
     try {
       const parsedTags = tags
@@ -101,14 +129,15 @@ export default function NewRunView() {
       const run = await client.createAgentRun({
         backend: "pod",
         repos: [{ url: repo.trim(), branch: branch.trim() || "main" }],
-        prompt: prompt.trim(),
-        ttlSeconds: 900,
-        modelTier: "default",
+        prompt: effectivePrompt,
+        ttlSeconds: ttlMinutes * 60,
+        modelTier,
+        orchestrationMode,
         ...(project.trim() ? { project: project.trim() } : {}),
         ...(feature.trim() ? { feature: feature.trim() } : {}),
         ...(parsedTags.length > 0 ? { tags: parsedTags } : {}),
         ...(mode === "spec" && specContent.trim()
-          ? { specContent: specContent.trim(), orchestrationMode: "spec-driven" as OrchestrationMode }
+          ? { specContent: specContent.trim() }
           : {}),
       });
       toast("Run created", "success");
@@ -119,6 +148,9 @@ export default function NewRunView() {
       setSubmitting(false);
     }
   }
+
+  const selectedModel = MODEL_TIER_OPTIONS.find((m) => m.value === modelTier);
+  const selectedMode = ORCHESTRATION_MODE_OPTIONS.find((m) => m.value === orchestrationMode);
 
   return (
     <div className="flex h-full flex-col">
@@ -166,9 +198,9 @@ export default function NewRunView() {
         </div>
 
         {/* Prompt */}
-        <div className="flex-1">
+        <div className={mode === "spec" ? "" : "flex-1"}>
           <label className="mb-1 block text-xs text-muted-foreground">
-            {mode === "prompt" ? "Prompt" : "Prompt (still required for spec runs)"}
+            {mode === "prompt" ? "Prompt" : "Prompt (optional — spec content is used if empty)"}
           </label>
           <textarea
             autoFocus
@@ -176,7 +208,7 @@ export default function NewRunView() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onBlur={handlePromptBlur}
-            placeholder="What should the agent do?"
+            placeholder={mode === "spec" ? "Optional override prompt (spec content used by default)" : "What should the agent do?"}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
             }}
@@ -198,6 +230,64 @@ export default function NewRunView() {
             />
           </div>
         )}
+
+        {/* Configuration row: Model, Timeout, Orchestration */}
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Configuration</label>
+          <div className="flex gap-2">
+            {/* Model selector */}
+            <div className="flex-1">
+              <select
+                className="w-full border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
+                value={modelTier}
+                onChange={(e) => setModelTier(e.target.value)}
+              >
+                {MODEL_TIER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Timeout */}
+            <div className="w-24">
+              <div className="flex items-center border bg-background">
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  className="w-full bg-transparent px-2 py-1.5 text-sm outline-none"
+                  value={ttlMinutes}
+                  onChange={(e) => setTtlMinutes(Math.max(1, Math.min(120, Number(e.target.value) || 15)))}
+                />
+                <span className="pr-2 text-xs text-muted-foreground">min</span>
+              </div>
+            </div>
+
+            {/* Orchestration mode */}
+            <div className="flex-1">
+              <select
+                className="w-full border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
+                value={orchestrationMode}
+                onChange={(e) => setOrchestrationMode(e.target.value as OrchestrationMode)}
+              >
+                {ORCHESTRATION_MODE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Config descriptions */}
+          <div className="mt-1 flex gap-2 text-[10px] text-muted-foreground">
+            <span className="flex-1 truncate">{selectedModel?.description}</span>
+            <span className="w-24" />
+            <span className="flex-1 truncate">{selectedMode?.description}</span>
+          </div>
+        </div>
 
         {/* Classification fields */}
         <div>
@@ -238,19 +328,14 @@ export default function NewRunView() {
           />
         </div>
 
-        {/* Config summary + actions */}
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">
-            qwen3:8b · 15m · single
-          </span>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => navigate("/")}>
-              Cancel
-            </Button>
-            <Button onClick={handleRun} disabled={submitting || !prompt.trim()}>
-              {submitting ? "Creating..." : "Run"}
-            </Button>
-          </div>
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="ghost" onClick={() => navigate("/")}>
+            Cancel
+          </Button>
+          <Button onClick={handleRun} disabled={submitting || !canRun}>
+            {submitting ? "Creating..." : "Run"}
+          </Button>
         </div>
       </div>
     </div>
