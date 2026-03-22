@@ -105,8 +105,8 @@ func TestCreateAgentRun_AutoSetsLabels(t *testing.T) {
 	if crd.Labels["aot.uncworks.io/feature"] != "login-fix" {
 		t.Errorf("expected feature label 'login-fix', got %q", crd.Labels["aot.uncworks.io/feature"])
 	}
-	if crd.Labels["aot.uncworks.io/tags"] != "bugfix" {
-		t.Errorf("expected tags label 'bugfix', got %q", crd.Labels["aot.uncworks.io/tags"])
+	if crd.Annotations["aot.uncworks.io/tags"] != "bugfix" {
+		t.Errorf("expected tags annotation 'bugfix', got %q", crd.Annotations["aot.uncworks.io/tags"])
 	}
 	if crd.Labels["aot.uncworks.io/repo"] != "web-app" {
 		t.Errorf("expected repo label 'web-app', got %q", crd.Labels["aot.uncworks.io/repo"])

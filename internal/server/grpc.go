@@ -95,8 +95,12 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 	if crd.Spec.Feature != "" {
 		labels["aot.uncworks.io/feature"] = crd.Spec.Feature
 	}
+	// Tags stored as annotation (not label) because label values can't contain commas
 	if len(crd.Spec.Tags) > 0 {
-		labels["aot.uncworks.io/tags"] = strings.Join(crd.Spec.Tags, ",")
+		if crd.Annotations == nil {
+			crd.Annotations = make(map[string]string)
+		}
+		crd.Annotations["aot.uncworks.io/tags"] = strings.Join(crd.Spec.Tags, ",")
 	}
 	if len(crd.Spec.Repos) > 0 {
 		labels["aot.uncworks.io/repo"] = repoNameFromURL(crd.Spec.Repos[0].URL)
