@@ -46,6 +46,7 @@ spec:
                   default: Pod
                 repos:
                   type: array
+                  maxItems: 20
                   items:
                     type: object
                     required:
@@ -53,20 +54,50 @@ spec:
                     properties:
                       url:
                         type: string
+                        maxLength: 2048
                       branch:
                         type: string
+                        maxLength: 256
                       path:
                         type: string
+                        maxLength: 512
                 prompt:
                   type: string
+                  maxLength: 100000
+                displayName:
+                  type: string
+                  maxLength: 63
+                autoPush:
+                  type: boolean
+                autoPR:
+                  type: boolean
+                prBaseBranch:
+                  type: string
+                  maxLength: 63
+                maxBudget:
+                  type: number
+                project:
+                  type: string
+                  maxLength: 63
+                feature:
+                  type: string
+                  maxLength: 63
+                tags:
+                  type: array
+                  items:
+                    type: string
                 devboxConfig:
                   type: string
+                  maxLength: 512
                 ttlSeconds:
                   type: integer
                   format: int32
                   default: 3600
+                  minimum: 60
+                  maximum: 604800
                 image:
                   type: string
+                  maxLength: 512
                 envVars:
                   type: object
                   additionalProperties:
@@ -74,15 +105,30 @@ spec:
                 modelTier:
                   type: string
                   default: default
+                  maxLength: 64
+                manageModelTier:
+                  type: string
+                  maxLength: 64
+                implementModelTier:
+                  type: string
+                  maxLength: 64
                 parentRunID:
                   type: string
+                  maxLength: 63
                 orchestrationMode:
                   type: string
                   enum:
                     - single
                     - auto
                     - manual
+                    - spec-driven
                   default: single
+                projectRef:
+                  type: string
+                  maxLength: 63
+                specRef:
+                  type: string
+                  maxLength: 128
                 orchestration:
                   type: object
                   properties:
@@ -106,12 +152,61 @@ spec:
                               type: string
                 specRunID:
                   type: string
+                  maxLength: 63
                 specContent:
                   type: string
+                  maxLength: 500000
                 specSource:
                   type: string
+                  maxLength: 512
                 workspaceName:
                   type: string
+                  maxLength: 128
+                pipelineConfig:
+                  type: object
+                  properties:
+                    plan:
+                      type: object
+                      properties:
+                        model:
+                          type: string
+                        timeoutSeconds:
+                          type: integer
+                          format: int32
+                        maxRetries:
+                          type: integer
+                          format: int32
+                        onFailure:
+                          type: string
+                          enum: ["retry", "fail", "skip"]
+                    execute:
+                      type: object
+                      properties:
+                        model:
+                          type: string
+                        timeoutSeconds:
+                          type: integer
+                          format: int32
+                        maxRetries:
+                          type: integer
+                          format: int32
+                        onFailure:
+                          type: string
+                          enum: ["retry", "fail", "skip"]
+                    verify:
+                      type: object
+                      properties:
+                        model:
+                          type: string
+                        timeoutSeconds:
+                          type: integer
+                          format: int32
+                        maxRetries:
+                          type: integer
+                          format: int32
+                        onFailure:
+                          type: string
+                          enum: ["retry", "fail", "skip"]
             status:
               type: object
               properties:
@@ -138,6 +233,41 @@ spec:
                 completedAt:
                   type: string
                   format: date-time
+                logOutput:
+                  type: string
+                  maxLength: 1048576
+                retainUntil:
+                  type: string
+                  format: date-time
+                deploymentName:
+                  type: string
+                debugActive:
+                  type: boolean
+                stage:
+                  type: string
+                  enum:
+                    - planning
+                    - executing
+                    - verifying
+                    - ""
+                archived:
+                  type: boolean
+                prUrl:
+                  type: string
+                totalCost:
+                  type: string
+                totalAdditions:
+                  type: integer
+                  format: int32
+                totalDeletions:
+                  type: integer
+                  format: int32
+                retryCount:
+                  type: integer
+                  format: int32
+                verificationResult:
+                  type: string
+                  maxLength: 1048576
                 conditions:
                   type: array
                   items:
