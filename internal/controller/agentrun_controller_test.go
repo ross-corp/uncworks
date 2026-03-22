@@ -316,14 +316,6 @@ func (r *recordingBus) Subscribe(string) (<-chan *apiv1.AgentRunEvent, int) {
 
 func (r *recordingBus) Unsubscribe(string, int) {}
 
-func (r *recordingBus) getEvents() []*apiv1.AgentRunEvent {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	out := make([]*apiv1.AgentRunEvent, len(r.events))
-	copy(out, r.events)
-	return out
-}
-
 func TestEventBus_NilBusDoesNotPanic(t *testing.T) {
 	reconciler := &AgentRunReconciler{}
 	// EventBus is nil by default — emitPhaseEvent should not panic
