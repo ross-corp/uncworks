@@ -140,11 +140,9 @@ export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string; description:
   { value: "qwen2.5:0.5b", label: "qwen2.5:0.5b", description: "Local · Ollama · CI only" },
 ];
 
-export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string }[] = [
-  { value: "single", label: "Single" },
-  { value: "spec-driven", label: "Spec-Driven" },
-  { value: "auto", label: "Auto" },
-  { value: "manual", label: "Manual" },
+export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string; description: string }[] = [
+  { value: "single", label: "Greedy", description: "One-shot execution — agent runs the prompt to completion in a single pass" },
+  { value: "spec-driven", label: "Progressive", description: "Plan → Execute → Verify loop with OpenSpec artifacts and LLM judge" },
 ];
 
 /** A single trace span from an agent run. */
