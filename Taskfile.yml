@@ -258,6 +258,76 @@ tasks:
       - kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
       - kubectl patch storageclass local-path -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
 
+  k0s:soft-serve:
+    desc: Deploy soft-serve Git server to k0s cluster
+    cmds:
+      - kubectl apply -f deploy/crds/project-crd.yaml
+      - >-
+        kubectl apply -f - <<'YAML'
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: soft-serve-data
+          namespace: aot
+        spec:
+          accessModes: [ReadWriteOnce]
+          storageClassName: local-path
+          resources:
+            requests:
+              storage: 2Gi
+        YAML
+      - >-
+        kubectl apply -f - <<'YAML'
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: soft-serve
+          namespace: aot
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: soft-serve
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: soft-serve
+            spec:
+              containers:
+              - name: soft-serve
+                image: charmcli/soft-serve:latest
+                ports:
+                - {name: ssh, containerPort: 23231}
+                - {name: http, containerPort: 23232}
+                env:
+                - {name: SOFT_SERVE_DATA_PATH, value: /data}
+                volumeMounts:
+                - {name: data, mountPath: /data}
+                resources:
+                  requests: {cpu: 100m, memory: 128Mi}
+                  limits: {cpu: 500m, memory: 256Mi}
+              volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: soft-serve-data
+        YAML
+      - >-
+        kubectl apply -f - <<'YAML'
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: soft-serve
+          namespace: aot
+        spec:
+          selector:
+            app.kubernetes.io/name: soft-serve
+          ports:
+          - {name: ssh, port: 23231, targetPort: ssh}
+          - {name: http, port: 23232, targetPort: http}
+        YAML
+      - kubectl rollout status deploy/soft-serve -n aot --timeout=60s
+      - echo "soft-serve deployed. SSH available at soft-serve.aot.svc:23231"
+
   k0s:deps:
     desc: Deploy all infrastructure dependencies to k0s
     cmds:
@@ -265,6 +335,7 @@ tasks:
       - task: k0s:storage
       - task: k0s:ollama
       - task: k0s:litellm
+      - task: k0s:soft-serve
       - echo "All dependencies deployed. Run 'task k0s:ollama:pull' to pull models."
 
   # --- Development ---
