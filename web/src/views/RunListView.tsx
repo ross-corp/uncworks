@@ -4,6 +4,7 @@ import type { AgentRun, AgentRunPhase } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
 import RunStatusBadge from "../components/RunStatusBadge";
+import { Badge } from "../components/ui/badge";
 
 type ViewMode = "features" | "all";
 type FilterField = "name" | "state" | "stage" | "model" | null;
@@ -89,6 +90,9 @@ export default function RunListView() {
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [collapsedFeatures, setCollapsedFeatures] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showArchived, setShowArchived] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const fetchRuns = useCallback(async () => {
     try {
@@ -123,9 +127,11 @@ export default function RunListView() {
     return runs.filter((r) => r.spec.project === activeProject);
   }, [runs, activeProject]);
 
-  // Filtered runs (status + field-specific text filter)
+  // Filtered runs (archived + status + field-specific text filter)
   const filtered = useMemo(() => {
     return projectFiltered.filter((r) => {
+      // Archive filter
+      if (!showArchived && r.status.archived) return false;
       // Status button filter
       if (statusFilter === "running" && r.status.phase !== "running" && r.status.phase !== "waiting_for_input" && r.status.phase !== "pending") return false;
       if (statusFilter === "failed" && r.status.phase !== "failed") return false;
@@ -276,21 +282,73 @@ export default function RunListView() {
     if (selected >= visibleRuns.length) setSelected(Math.max(0, visibleRuns.length - 1));
   }, [visibleRuns.length, selected]);
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function archiveSelected() {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Archive ${selectedIds.size} run(s)?`)) return;
+    await apiFetch("/api/v1/runs/bulk-archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ runIds: Array.from(selectedIds), archived: true }),
+    });
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    fetchRuns();
+  }
+
   // Render a single run row
   function RunRow({ run, index }: { run: AgentRun; index: number }) {
+    const isArchived = run.status.archived;
     return (
       <div
         key={run.id}
         data-testid={`run-row-${run.id}`}
-        className={`grid grid-cols-[1fr_100px_80px_100px_70px] gap-2 px-4 py-2 text-sm cursor-pointer transition-colors ${
+        className={`grid grid-cols-[${selectMode ? "24px_" : ""}1fr_80px_100px_60px_60px_30px_50px] gap-2 px-4 py-2 text-sm cursor-pointer transition-colors ${
           index === selected ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-        }`}
-        onClick={() => navigate(`/run/${run.id}`)}
+        } ${isArchived ? "opacity-50" : ""}`}
+        onClick={() => selectMode ? toggleSelect(run.id) : navigate(`/run/${run.id}`)}
       >
+        {selectMode && (
+          <input
+            type="checkbox"
+            checked={selectedIds.has(run.id)}
+            onChange={() => toggleSelect(run.id)}
+            className="accent-primary"
+          />
+        )}
         <span className="truncate">{run.spec.displayName || run.name}</span>
         <RunStatusBadge phase={run.status.phase} />
-        <span className="text-muted-foreground text-xs">{run.status.stage || ""}</span>
         <span className="text-muted-foreground text-xs truncate">{run.spec.modelTier || ""}</span>
+        <span className="text-muted-foreground text-xs">
+          {run.status.totalCost || "—"}
+        </span>
+        <span className="text-xs">
+          {(run.status.totalAdditions || run.status.totalDeletions) ? (
+            <>
+              <span className="text-green-500">+{run.status.totalAdditions || 0}</span>
+              <span className="text-red-500">/-{run.status.totalDeletions || 0}</span>
+            </>
+          ) : ""}
+        </span>
+        {run.status.prUrl ? (
+          <a
+            href={run.status.prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 text-xs hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            PR
+          </a>
+        ) : <span />}
         <span className="text-muted-foreground text-xs">{formatAge(run.createdAt)}</span>
       </div>
     );
@@ -314,22 +372,33 @@ export default function RunListView() {
           <span className="text-muted-foreground">({filtered.length})</span>
           <div className="flex items-center gap-1 ml-2">
             {(["all", "running", "failed", "succeeded"] as const).map((s) => (
-              <button
+              <Badge
                 key={s}
+                variant={statusFilter === s ? "default" : "outline"}
+                className="cursor-pointer text-[10px] px-1.5 py-0"
                 onClick={() => setStatusFilter(s)}
-                className={`px-2 py-0.5 text-xs transition-colors ${
-                  statusFilter === s
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
               >
                 {s}
-              </button>
+              </Badge>
             ))}
           </div>
           <span className="text-xs text-muted-foreground ml-2">
             [p] {activeProject || "all"}
           </span>
+          <Badge
+            variant={showArchived ? "default" : "outline"}
+            className="cursor-pointer text-[10px] px-1.5 py-0 ml-2"
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            {showArchived ? "hide archived" : "show archived"}
+          </Badge>
+          <Badge
+            variant={selectMode ? "default" : "outline"}
+            className="cursor-pointer text-[10px] px-1.5 py-0"
+            onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+          >
+            {selectMode ? "cancel select" : "select"}
+          </Badge>
         </div>
         <span className="text-xs text-muted-foreground">/ name · ? state · ' stage · " model · n new</span>
       </div>
@@ -389,12 +458,28 @@ export default function RunListView() {
         </div>
       )}
 
+      {/* Mass select action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-1.5">
+          <span className="text-xs font-medium">{selectedIds.size} selected</span>
+          <Badge variant="destructive" className="cursor-pointer text-[10px]" onClick={archiveSelected}>
+            Archive
+          </Badge>
+          <Badge variant="outline" className="cursor-pointer text-[10px]" onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}>
+            Cancel
+          </Badge>
+        </div>
+      )}
+
       {/* Table header */}
-      <div className="grid grid-cols-[1fr_100px_80px_100px_70px] gap-2 border-b px-4 py-1 text-xs text-muted-foreground uppercase tracking-wider">
+      <div className={`grid grid-cols-[${selectMode ? "24px_" : ""}1fr_80px_100px_60px_60px_30px_50px] gap-2 border-b px-4 py-1 text-xs text-muted-foreground uppercase tracking-wider`}>
+        {selectMode && <span />}
         <span>Name</span>
         <span>Status</span>
-        <span>Stage</span>
         <span>Model</span>
+        <span>Cost</span>
+        <span>+/-</span>
+        <span>PR</span>
         <span>Age</span>
       </div>
 

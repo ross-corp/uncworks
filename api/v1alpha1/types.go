@@ -101,6 +101,16 @@ type AgentRunSpec struct {
 	// +optional
 	ModelTier string `json:"modelTier,omitempty"`
 
+	// ManageModelTier is the model for plan/verify stages in spec-driven runs.
+	// Falls back to ModelTier if empty.
+	// +optional
+	ManageModelTier string `json:"manageModelTier,omitempty"`
+
+	// ImplementModelTier is the model for execute stages in spec-driven runs.
+	// Falls back to ManageModelTier (then ModelTier) if empty.
+	// +optional
+	ImplementModelTier string `json:"implementModelTier,omitempty"`
+
 	// SpecContent is the CodeSpeak .cs.md spec body (markdown).
 	// +optional
 	SpecContent string `json:"specContent,omitempty"`
@@ -262,6 +272,22 @@ type AgentRunStatus struct {
 	// PRUrl is the URL of the GitHub PR created by the pipeline.
 	// +optional
 	PRUrl string `json:"prUrl,omitempty"`
+
+	// Archived indicates whether this run has been archived (hidden from default list).
+	// +optional
+	Archived bool `json:"archived,omitempty"`
+
+	// TotalCost is the estimated total cost of this run (e.g., "$0.12").
+	// +optional
+	TotalCost string `json:"totalCost,omitempty"`
+
+	// TotalAdditions is the aggregate number of lines added across all diffs.
+	// +optional
+	TotalAdditions int32 `json:"totalAdditions,omitempty"`
+
+	// TotalDeletions is the aggregate number of lines deleted across all diffs.
+	// +optional
+	TotalDeletions int32 `json:"totalDeletions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

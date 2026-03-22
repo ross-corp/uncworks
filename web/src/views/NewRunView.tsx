@@ -3,8 +3,16 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
 import { useToast } from "../components/Toast";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import MarkdownEditor from "../components/MarkdownEditor";
 import {
   MODEL_TIER_OPTIONS,
@@ -187,18 +195,20 @@ export default function NewRunView() {
 
         {/* Mode tabs */}
         <div className="flex gap-1">
-          <button
-            className={`px-3 py-1 text-xs border ${mode === "prompt" ? "bg-accent text-accent-foreground" : "text-muted-foreground"}`}
+          <Badge
+            variant={mode === "prompt" ? "default" : "outline"}
+            className="cursor-pointer"
             onClick={() => setMode("prompt")}
           >
             Prompt
-          </button>
-          <button
-            className={`px-3 py-1 text-xs border ${mode === "spec" ? "bg-accent text-accent-foreground" : "text-muted-foreground"}`}
+          </Badge>
+          <Badge
+            variant={mode === "spec" ? "default" : "outline"}
+            className="cursor-pointer"
             onClick={() => setMode("spec")}
           >
             Spec
-          </button>
+          </Badge>
         </div>
 
         {/* Prompt */}
@@ -234,47 +244,46 @@ export default function NewRunView() {
           <div className="flex gap-2">
             {/* Model selector */}
             <div className="flex-1">
-              <select
-                className="w-full border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
-                value={modelTier}
-                onChange={(e) => setModelTier(e.target.value)}
-              >
-                {MODEL_TIER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <Select value={modelTier} onValueChange={setModelTier}>
+                <SelectTrigger size="sm" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MODEL_TIER_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Timeout */}
             <div className="w-24">
-              <div className="flex items-center border bg-background">
-                <input
-                  type="number"
-                  min={1}
-                  max={120}
-                  className="w-full bg-transparent px-2 py-1.5 text-sm outline-none"
-                  value={ttlMinutes}
-                  onChange={(e) => setTtlMinutes(Math.max(1, Math.min(120, Number(e.target.value) || 15)))}
-                />
-                <span className="pr-2 text-xs text-muted-foreground">min</span>
-              </div>
+              <Input
+                type="number"
+                min={1}
+                max={120}
+                className="h-8"
+                value={ttlMinutes}
+                onChange={(e) => setTtlMinutes(Math.max(1, Math.min(120, Number(e.target.value) || 15)))}
+              />
             </div>
 
             {/* Orchestration mode */}
             <div className="flex-1">
-              <select
-                className="w-full border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
-                value={orchestrationMode}
-                onChange={(e) => setOrchestrationMode(e.target.value as OrchestrationMode)}
-              >
-                {ORCHESTRATION_MODE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <Select value={orchestrationMode} onValueChange={(v) => setOrchestrationMode(v as OrchestrationMode)}>
+                <SelectTrigger size="sm" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORCHESTRATION_MODE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -292,18 +301,19 @@ export default function NewRunView() {
             <div className="mt-2">
               <div className="flex gap-2 items-center">
                 <label className="text-[10px] text-muted-foreground w-24 shrink-0">Implement model</label>
-                <select
-                  className="flex-1 border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
-                  value={implementModelTier}
-                  onChange={(e) => setImplementModelTier(e.target.value)}
-                >
-                  <option value="">Same as manage</option>
-                  {MODEL_TIER_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                <Select value={implementModelTier || "__same__"} onValueChange={(v) => setImplementModelTier(v === "__same__" ? "" : v)}>
+                  <SelectTrigger size="sm" className="flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__same__">Same as manage</SelectItem>
+                    {MODEL_TIER_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {implementModelTier && (
                 <div className="mt-0.5 text-[10px] text-muted-foreground ml-24 pl-2">
