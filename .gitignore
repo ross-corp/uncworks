@@ -115,3 +115,4 @@ storybook-static
 /aot
 /bin/
 /bff
+!cmd/bff/dist/.gitkeep
