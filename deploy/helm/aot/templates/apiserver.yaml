@@ -57,6 +57,12 @@ spec:
                   name: {{ .Values.github.tokenSecretName }}
                   key: token
             {{- end }}
+            {{- if .Values.softServe.enabled }}
+            - name: SOFT_SERVE_ADDR
+              value: "soft-serve.{{ .Release.Namespace }}.svc:23231"
+            - name: SOFT_SERVE_KEY_PATH
+              value: "/etc/soft-serve/id_ed25519"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -73,6 +79,11 @@ spec:
             - name: pvc-data
               mountPath: /opt/local-path-provisioner
               readOnly: true
+            {{- if .Values.softServe.enabled }}
+            - name: soft-serve-key
+              mountPath: /etc/soft-serve
+              readOnly: true
+            {{- end }}
           {{- with .Values.apiserver.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -82,6 +93,12 @@ spec:
           hostPath:
             path: /opt/local-path-provisioner
             type: DirectoryOrCreate
+        {{- if .Values.softServe.enabled }}
+        - name: soft-serve-key
+          secret:
+            secretName: soft-serve-admin-key
+            defaultMode: 0600
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

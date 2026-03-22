@@ -38,10 +38,29 @@ spec:
             - name: GITHUB_TOKEN_SECRET_NAME
               value: {{ .Values.github.tokenSecretName | quote }}
             {{- end }}
+            {{- if .Values.softServe.enabled }}
+            - name: SOFT_SERVE_ADDR
+              value: "soft-serve.{{ .Release.Namespace }}.svc:23231"
+            - name: SOFT_SERVE_KEY_PATH
+              value: "/etc/soft-serve/id_ed25519"
+            {{- end }}
           ports:
             - name: metrics
               containerPort: {{ .Values.controller.metricsPort }}
+          {{- if .Values.softServe.enabled }}
+          volumeMounts:
+            - name: soft-serve-key
+              mountPath: /etc/soft-serve
+              readOnly: true
+          {{- end }}
           {{- with .Values.controller.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- if .Values.softServe.enabled }}
+      volumes:
+        - name: soft-serve-key
+          secret:
+            secretName: soft-serve-admin-key
+            defaultMode: 0600
+      {{- end }}
