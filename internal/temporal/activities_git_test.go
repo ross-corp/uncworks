@@ -55,6 +55,23 @@ func TestParseGitHubOwnerRepo(t *testing.T) {
 			url:     "https://github.com/",
 			wantErr: true,
 		},
+		{
+			name:  "HTTPS with token in URL",
+			url:   "https://x-access-token:ghp_abc123@github.com/org/repo.git",
+			owner: "org",
+			repo:  "repo",
+		},
+		{
+			name:    "empty string",
+			url:     "",
+			wantErr: true,
+		},
+		{
+			name:  "SSH with uppercase",
+			url:   "git@github.com:MyOrg/MyRepo.git",
+			owner: "MyOrg",
+			repo:  "MyRepo",
+		},
 	}
 
 	for _, tt := range tests {
