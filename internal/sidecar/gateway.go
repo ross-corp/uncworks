@@ -200,10 +200,12 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 	setCurrentParentSpan(req.Msg.ParentSpanId, req.Msg.TraceId)
 
 	// Store model name for span metadata
+	currentModelMu.Lock()
 	currentModel = os.Getenv("PI_MODEL")
 	if currentModel == "" {
 		currentModel = "default"
 	}
+	currentModelMu.Unlock()
 
 	// Configure git for checkpoint commits
 	gitConfigCmd := exec.Command("git", "config", "user.name", "aot-agent")
@@ -295,28 +297,34 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = devNull.Close()
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
+		_ = devNull.Close()
 		return nil, fmt.Errorf("stderr pipe: %w", err)
 	}
 
 	// Open log file for tee-ing agent output to PVC (5.1)
 	if err := os.MkdirAll(agentLogDir, 0o755); err != nil {
+		_ = devNull.Close()
 		return nil, fmt.Errorf("create log dir: %w", err)
 	}
 	logFile, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
+		_ = devNull.Close()
 		return nil, fmt.Errorf("open agent log: %w", err)
 	}
 	jsonlFile, err := os.OpenFile(agentJSONLPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
+		_ = devNull.Close()
 		_ = logFile.Close()
 		return nil, fmt.Errorf("open agent jsonl: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
+		_ = devNull.Close()
 		_ = logFile.Close()
 		_ = jsonlFile.Close()
 		return nil, fmt.Errorf("start agent: %w", err)
@@ -630,10 +638,12 @@ func restartAgentProcess(origCmd *exec.Cmd) (*AgentProcess, error) {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = devNull.Close()
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
+		_ = devNull.Close()
 		return nil, fmt.Errorf("stderr pipe: %w", err)
 	}
 
@@ -1192,7 +1202,8 @@ var (
 	currentTraceID      string
 
 	// Model tracking — set by StartAgent from PI_MODEL env var
-	currentModel string
+	currentModelMu sync.RWMutex
+	currentModel   string
 
 	// Text accumulator for thought spans — collects text_delta events
 	thoughtTextMu      sync.Mutex
@@ -1225,6 +1236,12 @@ func getTraceID() string {
 	parentSpanMu.RLock()
 	defer parentSpanMu.RUnlock()
 	return currentTraceID
+}
+
+func getCurrentModel() string {
+	currentModelMu.RLock()
+	defer currentModelMu.RUnlock()
+	return currentModel
 }
 
 // setCurrentStage updates the package-level stage and workdir for span naming.
@@ -1454,7 +1471,7 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 					"durationMs":           durationMs,
 					"stage":                currentStage,
 					"role":                 prefix,
-					"gen_ai.request.model": currentModel,
+					"gen_ai.request.model": getCurrentModel(),
 				},
 			}
 
@@ -1490,7 +1507,7 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 					}
 					// Context utilization
 					if msg.Usage.Input > 0 {
-						windowSize := modelContextWindows[currentModel]
+						windowSize := modelContextWindows[getCurrentModel()]
 						if windowSize == 0 {
 							windowSize = 32768
 						}
