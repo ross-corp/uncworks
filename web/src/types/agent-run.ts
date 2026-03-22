@@ -145,8 +145,8 @@ export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string; description:
 ];
 
 export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string; description: string }[] = [
-  { value: "single", label: "Greedy", description: "One-shot execution — agent runs the prompt to completion in a single pass" },
-  { value: "spec-driven", label: "Progressive", description: "Plan → Execute → Verify loop with OpenSpec artifacts and LLM judge" },
+  { value: "single", label: "Greedy", description: "Single-pass execution" },
+  { value: "spec-driven", label: "Progressive", description: "Plan, execute, verify loop" },
 ];
 
 /** A single trace span from an agent run. */

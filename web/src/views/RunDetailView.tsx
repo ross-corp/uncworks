@@ -4,6 +4,7 @@ import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
 import { useToast } from "../components/Toast";
+import { Button } from "../components/ui/button";
 import RunStatusBadge from "../components/RunStatusBadge";
 import ActivityFeed from "../components/ActivityFeed";
 import StageProgress from "../components/StageProgress";
@@ -61,17 +62,25 @@ export default function RunDetailView() {
     }
   }, [id, client, toast]);
 
+  const [loadError, setLoadError] = useState(false);
+
   // Fetch run and poll
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
+    let retries = 0;
 
     async function fetch() {
       try {
         const result = await client.getAgentRun(id!);
-        if (!cancelled) setRun(mapRun(result));
+        if (!cancelled) {
+          setRun(mapRun(result));
+          setLoadError(false);
+          retries = 0;
+        }
       } catch {
-        // silent
+        retries++;
+        if (retries >= 3 && !cancelled) setLoadError(true);
       }
     }
 
@@ -113,7 +122,16 @@ export default function RunDetailView() {
   if (!run) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
-        Loading...
+        {loadError ? (
+          <div className="text-center">
+            <div>Run not found</div>
+            <Button size="sm" variant="ghost" className="mt-2" onClick={() => navigate("/")}>
+              Back to runs
+            </Button>
+          </div>
+        ) : (
+          "Loading..."
+        )}
       </div>
     );
   }
