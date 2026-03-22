@@ -123,6 +123,12 @@ spec:
                     - manual
                     - spec-driven
                   default: single
+                projectRef:
+                  type: string
+                  maxLength: 63
+                specRef:
+                  type: string
+                  maxLength: 128
                 orchestration:
                   type: object
                   properties:
