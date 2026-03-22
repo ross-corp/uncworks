@@ -135,6 +135,11 @@ func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	if dirPath == "" {
 		dirPath = "/workspace"
 	}
+	// Ensure path stays within /workspace to prevent container directory traversal
+	if !strings.HasPrefix(filepath.Clean(dirPath), "/workspace") {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "path must be within /workspace"})
+		return
+	}
 
 	// Check if pod is running (replicas > 0).
 	replicas, replicaErr := f.getDeploymentReplicas(r.Context(), runID)
@@ -231,6 +236,11 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 	filePath := r.URL.Query().Get("path")
 	if filePath == "" {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "path query parameter is required"})
+		return
+	}
+	// Ensure path stays within /workspace
+	if !strings.HasPrefix(filepath.Clean(filePath), "/workspace") {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "path must be within /workspace"})
 		return
 	}
 
