@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import { useThemeNew } from "../hooks/useThemeNew";
 
 const MonacoEditor = lazy(() => import("@monaco-editor/react"));
 
@@ -46,6 +47,8 @@ export default function FilePreview({
   content: string;
 }) {
   const language = detectLanguage(path);
+  const { resolvedTheme } = useThemeNew();
+  const monacoTheme = resolvedTheme === "dark" ? "vs-dark" : "vs";
 
   return (
     <div className="flex h-full flex-col">
@@ -68,7 +71,7 @@ export default function FilePreview({
           <MonacoEditor
             height="100%"
             language={language}
-            theme="vs-dark"
+            theme={monacoTheme}
             value={content}
             options={{
               readOnly: true,

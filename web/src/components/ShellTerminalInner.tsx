@@ -3,8 +3,39 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { apiFetch, apiWsUrl } from "../hooks/apiFetch";
+import { useThemeNew } from "../hooks/useThemeNew";
 import type { AgentRunPhase } from "../types/agent-run";
 import "@xterm/xterm/css/xterm.css";
+
+const DARK_TERMINAL_THEME = {
+  background: "#0a0a0a",
+  foreground: "#e5e5e5",
+  cursor: "#e5e5e5",
+  selectionBackground: "#264f78",
+  black: "#000000",
+  red: "#cd3131",
+  green: "#0dbc79",
+  yellow: "#e5e510",
+  blue: "#2472c8",
+  magenta: "#bc3fbc",
+  cyan: "#11a8cd",
+  white: "#e5e5e5",
+};
+
+const LIGHT_TERMINAL_THEME = {
+  background: "#ffffff",
+  foreground: "#1e1e1e",
+  cursor: "#1e1e1e",
+  selectionBackground: "#add6ff",
+  black: "#000000",
+  red: "#cd3131",
+  green: "#008000",
+  yellow: "#795e26",
+  blue: "#0451a5",
+  magenta: "#bc05bc",
+  cyan: "#0598bc",
+  white: "#1e1e1e",
+};
 
 type ConnectionStatus =
   | "connecting"
@@ -20,6 +51,7 @@ export default function ShellTerminalInner({
   runId: string;
   phase: AgentRunPhase;
 }) {
+  const { resolvedTheme } = useThemeNew();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -99,16 +131,13 @@ export default function ShellTerminalInner({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const termTheme = resolvedTheme === "dark" ? DARK_TERMINAL_THEME : LIGHT_TERMINAL_THEME;
     const term = new Terminal({
       cursorBlink: true,
       convertEol: true,
       fontFamily: "'IoskeleyMono', monospace",
       fontSize: 13,
-      theme: {
-        background: "#000000",
-        foreground: "#FFB000",
-        cursor: "#FFB000",
-      },
+      theme: termTheme,
       scrollback: 5000,
     });
 
@@ -155,6 +184,13 @@ export default function ShellTerminalInner({
       wsRef.current = null;
     };
   }, [runId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update terminal theme when site theme changes
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = resolvedTheme === "dark" ? DARK_TERMINAL_THEME : LIGHT_TERMINAL_THEME;
+    }
+  }, [resolvedTheme]);
 
   const reconnect = useCallback(() => {
     termRef.current?.write("\r\n\x1b[36m[Reconnecting...]\x1b[0m\r\n");
