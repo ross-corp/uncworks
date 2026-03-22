@@ -18,7 +18,7 @@ import (
 // ProjectReconciler reconciles Project objects.
 type ProjectReconciler struct {
 	client.Client
-	SoftServe *softserve.Client
+	SoftServe softserve.RepoManager
 }
 
 func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

@@ -16,7 +16,7 @@ import (
 func ResolveProjectDefaults(
 	ctx context.Context,
 	k8s client.Client,
-	ss *softserve.Client,
+	ss softserve.RepoManager,
 	agentRun *aotv1alpha1.AgentRun,
 	namespace string,
 ) (configRepoURL string, err error) {

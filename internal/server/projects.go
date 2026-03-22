@@ -16,7 +16,7 @@ import (
 type ProjectHandler struct {
 	K8sClient client.Client
 	Namespace string
-	SoftServe *softserve.Client
+	SoftServe softserve.RepoManager
 }
 
 // RegisterProjectHandlers registers Project REST routes.
