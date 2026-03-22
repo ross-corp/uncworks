@@ -32,6 +32,7 @@ import (
 	"github.com/uncworks/aot/internal/eventbus"
 	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/internal/softserve"
 )
 
 var scheme = runtime.NewScheme()
@@ -153,6 +154,16 @@ func main() {
 	// Register archive endpoints
 	archiveHandler := &server.ArchiveHandler{K8sClient: k8sClient, Namespace: namespace}
 	archiveHandler.RegisterArchiveHandlers(mux)
+
+	// Register project endpoints
+	softServeAddr := envOrDefault("SOFT_SERVE_ADDR", "soft-serve.aot.svc:23231")
+	softServeKeyPath := envOrDefault("SOFT_SERVE_KEY_PATH", "/etc/soft-serve/id_ed25519")
+	var ssClient *softserve.Client
+	if _, err := os.Stat(softServeKeyPath); err == nil {
+		ssClient = &softserve.Client{SSHAddr: softServeAddr, KeyPath: softServeKeyPath}
+	}
+	projectHandler := &server.ProjectHandler{K8sClient: k8sClient, Namespace: namespace, SoftServe: ssClient}
+	projectHandler.RegisterProjectHandlers(mux)
 
 	// Register GitHub webhook receiver (webhooks use their own HMAC auth, skip API key)
 	webhookHandler := server.NewWebhookHandler(k8sClient, namespace, ghProvider)
