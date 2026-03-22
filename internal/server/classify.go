@@ -58,11 +58,11 @@ func (h *ClassifyRunHandler) RegisterClassifyHandlers(mux *http.ServeMux) {
 func (h *ClassifyRunHandler) handleClassify(w http.ResponseWriter, r *http.Request) {
 	var req classifyRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
 		return
 	}
 	if req.Prompt == "" {
-		http.Error(w, `{"error":"prompt is required"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "prompt is required"})
 		return
 	}
 
@@ -80,7 +80,7 @@ func (h *ClassifyRunHandler) handleClassify(w http.ResponseWriter, r *http.Reque
 	resp, err := h.callLiteLLM(r.Context(), llmPrompt)
 	if err != nil {
 		log.Printf("ERROR: classify LLM call failed: %v", err)
-		http.Error(w, fmt.Sprintf(`{"error":"LLM classification failed: %s"}`, err.Error()), http.StatusBadGateway)
+		writeJSON(w, http.StatusBadGateway, errorResponse{Error: fmt.Sprintf("LLM classification failed: %s", err.Error())})
 		return
 	}
 
