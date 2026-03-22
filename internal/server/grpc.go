@@ -506,11 +506,18 @@ func crdFieldOrLabel(crd *aotv1alpha1.AgentRun, field, labelKey string) string {
 	return ""
 }
 
-// crdTagsOrLabel returns spec tags if non-empty, otherwise parses the comma-separated label.
+// crdTagsOrLabel returns spec tags if non-empty, otherwise parses from annotation or label.
 func crdTagsOrLabel(crd *aotv1alpha1.AgentRun) []string {
 	if len(crd.Spec.Tags) > 0 {
 		return crd.Spec.Tags
 	}
+	// Check annotation first (new format)
+	if crd.Annotations != nil {
+		if v := crd.Annotations["aot.uncworks.io/tags"]; v != "" {
+			return strings.Split(v, ",")
+		}
+	}
+	// Backwards compat: check label (old format)
 	if crd.Labels != nil {
 		if v := crd.Labels["aot.uncworks.io/tags"]; v != "" {
 			return strings.Split(v, ",")
