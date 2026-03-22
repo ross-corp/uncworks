@@ -531,7 +531,7 @@ func (a *Activities) CreateAgentDeployment(ctx context.Context, input CreateAgen
 	deployName := input.Name
 
 	// Create PVC
-	storageClass := "local-path"
+	storageClass := envOrDefault("AOT_STORAGE_CLASS", "local-path")
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
@@ -547,7 +547,7 @@ func (a *Activities) CreateAgentDeployment(ctx context.Context, input CreateAgen
 			StorageClassName: &storageClass,
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("2Gi"),
+					corev1.ResourceStorage: resource.MustParse(envOrDefault("AOT_PVC_SIZE", "2Gi")),
 				},
 			},
 		},

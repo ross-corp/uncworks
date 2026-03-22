@@ -342,3 +342,29 @@ func TestProjectHandler_ListWithProjects(t *testing.T) {
 		t.Errorf("expected 2 projects, got %d", len(list))
 	}
 }
+
+func TestIsValidRepoPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"devbox.json", true},
+		{"openspec/specs/auth/spec.md", true},
+		{".devcontainer/devcontainer.json", true},
+		{"", false},
+		{"/etc/passwd", false},
+		{"../../../etc/passwd", false},
+		{"foo/../../bar", false},
+		{".git/config", false},
+		{".env", false},
+		{".ssh/id_rsa", false},
+		{"normal/path/file.txt", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			if got := isValidRepoPath(tt.path); got != tt.want {
+				t.Errorf("isValidRepoPath(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}

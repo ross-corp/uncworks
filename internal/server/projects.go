@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -165,6 +167,10 @@ func (h *ProjectHandler) handleListFiles(w http.ResponseWriter, r *http.Request)
 func (h *ProjectHandler) handleReadFile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	path := r.PathValue("path")
+	if !isValidRepoPath(path) {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid file path"})
+		return
+	}
 	if h.SoftServe == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "soft-serve not configured"})
 		return
@@ -180,6 +186,10 @@ func (h *ProjectHandler) handleReadFile(w http.ResponseWriter, r *http.Request) 
 func (h *ProjectHandler) handleWriteFile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	path := r.PathValue("path")
+	if !isValidRepoPath(path) {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid file path"})
+		return
+	}
 	if h.SoftServe == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "soft-serve not configured"})
 		return
@@ -202,4 +212,26 @@ func (h *ProjectHandler) handleWriteFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"path": path, "status": "committed"})
+}
+
+// isValidRepoPath validates a file path within a repo is safe (no traversal).
+func isValidRepoPath(p string) bool {
+	if p == "" {
+		return false
+	}
+	// Reject absolute paths
+	if strings.HasPrefix(p, "/") {
+		return false
+	}
+	// Clean the path and reject traversal
+	cleaned := filepath.Clean(p)
+	if strings.HasPrefix(cleaned, "..") || strings.Contains(cleaned, "/../") {
+		return false
+	}
+	// Reject hidden files at root level (except .devcontainer)
+	parts := strings.Split(cleaned, "/")
+	if len(parts) > 0 && strings.HasPrefix(parts[0], ".") && parts[0] != ".devcontainer" {
+		return false
+	}
+	return true
 }
