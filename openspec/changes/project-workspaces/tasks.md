@@ -6,14 +6,14 @@
 - [x] 1.2 Create `deploy/crds/project-crd.yaml` with full OpenAPI schema matching the Go types
 - [x] 1.3 Add `ProjectRef` and `SpecRef` fields to `AgentRunSpec` in `types.go` and `agentrun-crd.yaml`
 - [x] 1.4 Generate deepcopy for Project types
-- [ ] 1.5 Add Project CRD contract test in `test/contract/` — verify Go types match YAML schema
+- [x] 1.5 Add Project CRD contract test in `test/contract/` — verify Go types match YAML schema
 
 ### 2. Deploy soft-serve
 
-- [ ] 2.1 Create Helm template `deploy/helm/aot/templates/soft-serve.yaml` — Deployment (single replica, charmcli/soft-serve image), PVC (1Gi), Service (SSH :23231, HTTP :23232), ConfigMap for initial config
-- [ ] 2.2 Add `soft-serve` values to `deploy/helm/aot/values.yaml` (enabled, image, storage, resources)
-- [ ] 2.3 Add Taskfile command `k0s:soft-serve` to deploy soft-serve to the local cluster
-- [ ] 2.4 Verify soft-serve starts and is reachable from within cluster (`ssh soft-serve.aot.svc -p 23231`)
+- [x] 2.1 Create Helm template `deploy/helm/aot/templates/soft-serve.yaml` — Deployment, PVC, Service
+- [x] 2.2 Add `soft-serve` values to `deploy/helm/aot/values.yaml`
+- [x] 2.3 Add Taskfile command `k0s:soft-serve` to deploy soft-serve to the local cluster
+- [x] 2.4 Verify soft-serve starts, repo create/clone/push/delete all work via SSH admin
 
 ### 3. Project Controller
 

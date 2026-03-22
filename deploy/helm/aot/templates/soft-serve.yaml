@@ -1,0 +1,100 @@
+{{- if .Values.softServe.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: soft-serve-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: soft-serve
+    app.kubernetes.io/part-of: aot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.softServe.storageClass | default "local-path" }}
+  resources:
+    requests:
+      storage: {{ .Values.softServe.storage | default "2Gi" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: soft-serve
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: soft-serve
+    app.kubernetes.io/part-of: aot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: soft-serve
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: soft-serve
+        app.kubernetes.io/part-of: aot
+    spec:
+      containers:
+        - name: soft-serve
+          image: {{ .Values.softServe.image | default "charmcli/soft-serve:latest" }}
+          ports:
+            - name: ssh
+              containerPort: 23231
+              protocol: TCP
+            - name: http
+              containerPort: 23232
+              protocol: TCP
+            - name: git
+              containerPort: 9418
+              protocol: TCP
+          env:
+            - name: SOFT_SERVE_DATA_PATH
+              value: /data
+            - name: SOFT_SERVE_INITIAL_ADMIN_KEYS
+              value: {{ .Values.softServe.adminKey | default "" | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: {{ .Values.softServe.resources.cpu | default "100m" }}
+              memory: {{ .Values.softServe.resources.memory | default "128Mi" }}
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            tcpSocket:
+              port: ssh
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: soft-serve-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: soft-serve
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: soft-serve
+    app.kubernetes.io/part-of: aot
+spec:
+  selector:
+    app.kubernetes.io/name: soft-serve
+  ports:
+    - name: ssh
+      port: 23231
+      targetPort: ssh
+      protocol: TCP
+    - name: http
+      port: 23232
+      targetPort: http
+      protocol: TCP
+    - name: git
+      port: 9418
+      targetPort: git
+      protocol: TCP
+{{- end }}

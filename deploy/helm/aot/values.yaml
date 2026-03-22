@@ -107,3 +107,14 @@ web:
     type: ClusterIP
     # -- NodePort (only used when type is NodePort)
     nodePort: ""
+
+# -- soft-serve Git server for project config repos
+softServe:
+  enabled: true
+  image: charmcli/soft-serve:latest
+  storage: 2Gi
+  storageClass: local-path
+  adminKey: ""
+  resources:
+    cpu: 100m
+    memory: 128Mi
