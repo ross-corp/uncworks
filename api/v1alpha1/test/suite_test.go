@@ -169,8 +169,8 @@ var _ = Describe("AgentRun CRD", func() {
 		It("should return all created resources", func() {
 			list := &aotv1alpha1.AgentRunList{}
 			Expect(k8sClient.List(ctx, list, client.InNamespace(namespace))).Should(Succeed())
-			// We created several above (some deleted), so at least 3 should remain
-			Expect(len(list.Items)).To(BeNumerically(">=", 3))
+			// We created 3 resources above but deleted 1, so at least 2 should remain
+			Expect(len(list.Items)).To(BeNumerically(">=", 2))
 		})
 	})
 })
