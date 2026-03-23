@@ -133,9 +133,17 @@ func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
 		Content: base64.StdEncoding.EncodeToString([]byte(req.Content)),
 		SHA:     existingSHA,
 	}
-	bodyBytes, _ := json.Marshal(putBody)
+	bodyBytes, err := json.Marshal(putBody)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "marshal request: " + err.Error()})
+		return
+	}
 
-	putReq, _ := http.NewRequestWithContext(r.Context(), http.MethodPut, apiURL, strings.NewReader(string(bodyBytes)))
+	putReq, err := http.NewRequestWithContext(r.Context(), http.MethodPut, apiURL, strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "create request: " + err.Error()})
+		return
+	}
 	setAuthHeaders(putReq, token)
 	putReq.Header.Set("Content-Type", "application/json")
 
