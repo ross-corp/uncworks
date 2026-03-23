@@ -370,40 +370,45 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		result.AutomatedChecks = append(result.AutomatedChecks, check)
 	}
 
-	// ── Gate 4: LLM judge ──
-	activity.RecordHeartbeat(ctx, "running LLM evaluation")
+	// ── Tier 2: Manage agent review (replaces LLM judge) ──
+	activity.RecordHeartbeat(ctx, "structural checks passed, starting manage agent review")
 
+	// Read the full git diff (not just --stat)
 	gitDiff, _ := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
-		"git diff HEAD~1 --stat 2>/dev/null || echo 'no git diff available'")
+		"git diff HEAD~1 2>/dev/null || echo 'no git diff available'")
 
+	// Read spec content for the review prompt
+	specContent, _ := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir,
+		fmt.Sprintf("find openspec/changes/%s/specs -name 'spec.md' -exec cat {} + 2>/dev/null || echo 'no specs'", input.ChangeName))
+
+	// Read implement agent's output log for question routing
+	implementLog := ReadImplementAgentLog(ctx, sidecarClient, input.AgentRunName, workDir)
+
+	// Build the manage agent review prompt
+	reviewPrompt := buildManageReviewPrompt(
+		input.ChangeName, gitDiff, specContent, implementLog, input.PreviousReviewFeedback)
+
+	// Start the manage agent review session
+	manageModel := input.ManageModel
 	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
-		AgentRunId: input.AgentRunName + "-verify",
-		Prompt: fmt.Sprintf(`You are the manage agent verifying the implementation of OpenSpec change '%s'.
-
-You planned this change earlier. Now verify that the implement agent completed it correctly.
-
-Git diff summary:
-%s
-
-Read the spec files at /workspace/openspec/changes/%s/ and evaluate each WHEN/THEN scenario against the implementation.
-Check that all tasks in tasks.md are marked complete.
-Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}`,
-			input.ChangeName, gitDiff, input.ChangeName),
+		AgentRunId:   input.AgentRunName + "-verify",
+		Prompt:       reviewPrompt,
 		RepoPath:     workDir,
 		Stage:        "verify",
 		ParentSpanId: input.ParentSpanID,
 		TraceId:      input.TraceID,
+		EnvVars:      map[string]string{"PI_MODEL": manageModel},
 	}))
 	if err != nil {
-		log.Printf("LLM judge failed to start: %v", err)
+		log.Printf("Manage agent review failed to start: %v", err)
 	} else {
 		if pollErr := pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName+"-verify"); pollErr != nil {
-			log.Printf("LLM judge failed: %v", pollErr)
+			log.Printf("Manage agent review failed: %v", pollErr)
 		} else {
-			activity.RecordHeartbeat(ctx, "parsing LLM verdict")
-			verdictJSON, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
+			activity.RecordHeartbeat(ctx, "parsing manage agent verdict")
+			verdictJSON, readErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
 				"cat .aot/logs/agent.jsonl 2>/dev/null | tail -50")
-			if err == nil {
+			if readErr == nil {
 				verdict := parseLLMVerdict(verdictJSON)
 				if verdict != nil {
 					result.LLMVerdict = verdict
@@ -414,8 +419,10 @@ Output your verdict as JSON: {"pass": true/false, "criteria": [{"scenario": "...
 								failedCriteria = append(failedCriteria, fmt.Sprintf("%s: %s", c.Scenario, c.Explanation))
 							}
 						}
+						// Extract detailed review feedback for the retry loop
+						result.ReviewFeedback = strings.Join(failedCriteria, "\n")
 						result.Pass = false
-						result.FailureReport = fmt.Sprintf("LLM judge failed: %s", strings.Join(failedCriteria, "; "))
+						result.FailureReport = fmt.Sprintf("Manage agent review failed: %s", strings.Join(failedCriteria, "; "))
 						return VerifyRunOutput{Result: result}, nil
 					}
 				}
