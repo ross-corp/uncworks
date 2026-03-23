@@ -11,6 +11,10 @@ func TestBoundary_HelmCRD_MatchesDeployCRD(t *testing.T) {
 	crds := []string{
 		"agentrun-crd.yaml",
 		"project-crd.yaml",
+		"runtemplate-crd.yaml",
+		"chain-crd.yaml",
+		"chainrun-crd.yaml",
+		"schedule-crd.yaml",
 	}
 
 	for _, crd := range crds {
