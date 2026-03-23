@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -264,10 +265,12 @@ func (h *Hydrator) composeDevbox(ctx context.Context) error {
 		return fmt.Errorf("write root devbox.json: %w", err)
 	}
 
-	// Run devbox install from workspace root
+	// Run devbox install from workspace root.
+	// If devbox/nix aren't fully available, log warning but don't fail —
+	// the agent can still work, it just won't have devbox-managed deps.
 	_, err = h.runner.Run(ctx, h.config.WorkspaceDir, "devbox", "install")
 	if err != nil {
-		return fmt.Errorf("compose devbox: %w", err)
+		log.Printf("WARNING: devbox install failed: %v (agent will work without devbox deps)", err)
 	}
 
 	return nil
