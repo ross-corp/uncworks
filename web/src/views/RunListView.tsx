@@ -262,7 +262,7 @@ export default function RunListView() {
         )}
 
         {/* Status dot */}
-        <RunStatusBadge phase={run.status.phase} />
+        <RunStatusBadge phase={run.status.phase} stage={run.status.stage} />
 
         {/* Name + inline metadata */}
         <div className="flex-1 min-w-0">

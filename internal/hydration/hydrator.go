@@ -267,7 +267,7 @@ func (h *Hydrator) composeDevbox(ctx context.Context) error {
 	// Run devbox install from workspace root
 	_, err = h.runner.Run(ctx, h.config.WorkspaceDir, "devbox", "install")
 	if err != nil {
-		return fmt.Errorf("devbox install: %w", err)
+		return fmt.Errorf("compose devbox: %w", err)
 	}
 
 	return nil
