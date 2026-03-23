@@ -38,33 +38,32 @@ var images = []imageSpec{
 	{Name: "aot-web", Dockerfile: "docker/Dockerfile.web", Context: "web"},
 }
 
-// devboxBase returns a container with devbox installed and all packages from devbox.json.
-// Nix store, Go mod, Go build, and npm caches are mounted for fast re-runs.
-func (m *Ci) devboxBase(source *dagger.Directory) *dagger.Container {
-	// Copy devbox config files first (changes rarely) for layer caching
-	devboxConfig := dag.Directory().
-		WithFile("devbox.json", source.File("devbox.json")).
-		WithFile("devbox.lock", source.File("devbox.lock"))
-
+// goBase returns a Go container with the source mounted and modules cached.
+// Versions match devbox.json: go@latest (1.25), golangci-lint@latest.
+func (m *Ci) goBase(source *dagger.Directory) *dagger.Container {
 	return dag.Container().
-		From("jetify/devbox:latest").
-		WithMountedDirectory("/devbox-config", devboxConfig).
-		WithWorkdir("/devbox-config").
-		WithMountedCache("/nix", dag.CacheVolume("nix-store")).
-		WithExec([]string{"devbox", "install"}).
-		// Now mount the full source and work from there
+		From("golang:1.25-bookworm").
 		WithMountedDirectory("/src", source).
 		WithWorkdir("/src").
-		WithMountedCache("/root/go/pkg/mod", dag.CacheVolume("go-mod")).
+		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
 		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
-		WithMountedCache("/root/.npm", dag.CacheVolume("npm-cache")).
 		WithEnvVariable("CGO_ENABLED", "0")
 }
 
-// Build compiles all Go binaries inside devbox.
+// nodeBase returns a Node.js container with the source mounted and npm cached.
+// Versions match devbox.json: nodejs@22.
+func (m *Ci) nodeBase(source *dagger.Directory) *dagger.Container {
+	return dag.Container().
+		From("node:22-bookworm-slim").
+		WithMountedDirectory("/src", source).
+		WithWorkdir("/src").
+		WithMountedCache("/root/.npm", dag.CacheVolume("npm-cache"))
+}
+
+// Build compiles all Go binaries.
 func (m *Ci) Build(ctx context.Context, source *dagger.Directory) (string, error) {
-	_, err := m.devboxBase(source).
-		WithExec([]string{"devbox", "run", "--", "go", "build", "./cmd/...", "./internal/..."}).
+	_, err := m.goBase(source).
+		WithExec([]string{"go", "build", "./cmd/...", "./internal/..."}).
 		Sync(ctx)
 	if err != nil {
 		return "", fmt.Errorf("go build failed: %w", err)
@@ -72,10 +71,11 @@ func (m *Ci) Build(ctx context.Context, source *dagger.Directory) (string, error
 	return "go build: ok", nil
 }
 
-// Lint runs golangci-lint inside devbox (using the version pinned in devbox.json).
+// Lint runs golangci-lint.
 func (m *Ci) Lint(ctx context.Context, source *dagger.Directory) (string, error) {
-	_, err := m.devboxBase(source).
-		WithExec([]string{"devbox", "run", "--", "golangci-lint", "run"}).
+	_, err := m.goBase(source).
+		WithExec([]string{"go", "install", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"}).
+		WithExec([]string{"golangci-lint", "run"}).
 		Sync(ctx)
 	if err != nil {
 		return "", fmt.Errorf("golangci-lint failed: %w", err)
@@ -83,10 +83,11 @@ func (m *Ci) Lint(ctx context.Context, source *dagger.Directory) (string, error)
 	return "golangci-lint: ok", nil
 }
 
-// Test runs Go unit tests with envtest inside devbox.
+// Test runs Go unit tests with envtest.
 func (m *Ci) Test(ctx context.Context, source *dagger.Directory) (string, error) {
-	out, err := m.devboxBase(source).
-		WithExec([]string{"devbox", "run", "--", "bash", "-c", `
+	out, err := m.goBase(source).
+		WithExec([]string{"go", "install", "sigs.k8s.io/controller-runtime/tools/setup-envtest@latest"}).
+		WithExec([]string{"bash", "-c", `
 			ENVTEST_PATH=$(setup-envtest use --print path 2>/dev/null || echo "")
 			if [ -n "$ENVTEST_PATH" ]; then
 				export KUBEBUILDER_ASSETS="$ENVTEST_PATH"
@@ -100,10 +101,10 @@ func (m *Ci) Test(ctx context.Context, source *dagger.Directory) (string, error)
 	return out, nil
 }
 
-// Check runs TypeScript type checking for web, shared, and extension packages inside devbox.
+// Check runs TypeScript type checking for web, shared, and extension packages.
 func (m *Ci) Check(ctx context.Context, source *dagger.Directory) (string, error) {
-	_, err := m.devboxBase(source).
-		WithExec([]string{"devbox", "run", "--", "bash", "-c", `
+	_, err := m.nodeBase(source).
+		WithExec([]string{"bash", "-c", `
 			cd /src/web && npm ci --ignore-scripts && npx tsc --noEmit &&
 			cd /src/packages/shared && npm ci --ignore-scripts && npx tsc --noEmit &&
 			cd /src/packages/pi-aot-extension && npm ci --ignore-scripts && npx tsc --noEmit
@@ -250,7 +251,8 @@ func (m *Ci) PushImages(
 
 // PackageChart packages the Helm chart with the given version.
 func (m *Ci) PackageChart(ctx context.Context, source *dagger.Directory, version string) *dagger.File {
-	return m.devboxBase(source).
+	return m.goBase(source).
+		WithExec([]string{"bash", "-c", "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"}).
 		WithExec([]string{"devbox", "run", "--", "bash", "-c", fmt.Sprintf(`
 			cd /src/deploy/helm/aot
 			sed -i "s/^version:.*/version: %s/" Chart.yaml
@@ -271,7 +273,8 @@ func (m *Ci) PushChart(
 	// +default="oci://ghcr.io/uncworks/charts"
 	registry string,
 ) (string, error) {
-	out, err := m.devboxBase(source).
+	out, err := m.goBase(source).
+		WithExec([]string{"bash", "-c", "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"}).
 		WithExec([]string{"devbox", "run", "--", "bash", "-c", fmt.Sprintf(`
 			cd /src/deploy/helm/aot
 			sed -i "s/^version:.*/version: %s/" Chart.yaml
