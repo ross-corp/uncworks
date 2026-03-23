@@ -848,10 +848,8 @@ func TestHydrator_ComposeDevbox_InstallFailure(t *testing.T) {
 
 	h := NewHydrator(config, runner)
 	err := h.composeDevbox(context.Background())
-	if err == nil {
-		t.Fatal("expected error from devbox install failure")
-	}
-	if !strings.Contains(err.Error(), "devbox install") {
-		t.Errorf("expected devbox install error, got: %v", err)
+	// devbox install failure is now non-fatal (warning only)
+	if err != nil {
+		t.Fatalf("devbox install failure should be non-fatal, got error: %v", err)
 	}
 }
