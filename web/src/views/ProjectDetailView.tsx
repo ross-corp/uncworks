@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiFetch } from "../hooks/apiFetch";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import MarkdownEditor from "../components/MarkdownEditor";
 
@@ -27,13 +28,33 @@ export default function ProjectDetailView() {
   const [fileContent, setFileContent] = useState("");
   const [editedContent, setEditedContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [improving, setImproving] = useState(false);
   const [tab, setTab] = useState<"specs" | "settings">("specs");
+
+  // Settings editing state
+  const [editRepos, setEditRepos] = useState<{ url: string; branch: string }[]>([]);
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // New spec creation
+  const [showNewSpec, setShowNewSpec] = useState(false);
+  const [newSpecName, setNewSpecName] = useState("");
+  const [creatingSpec, setCreatingSpec] = useState(false);
 
   const fetchProject = useCallback(async () => {
     if (!name) return;
     try {
       const resp = await apiFetch(`/api/v1/projects/${name}`);
-      if (resp.ok) setProject(await resp.json());
+      if (resp.ok) {
+        const data = await resp.json();
+        setProject(data);
+        setEditRepos(data.repos || []);
+        setEditDisplayName(data.displayName || "");
+        setEditDescription(data.description || "");
+        setSettingsDirty(false);
+      }
     } catch { /* silent */ }
   }, [name]);
 
@@ -70,14 +91,85 @@ export default function ProjectDetailView() {
       await apiFetch(`/api/v1/projects/${name}/files/${selectedFile}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: editedContent,
-          commitMessage: `update ${selectedFile}`,
-        }),
+        body: JSON.stringify({ content: editedContent, commitMessage: `update ${selectedFile}` }),
       });
       setFileContent(editedContent);
     } catch { /* silent */ }
     setSaving(false);
+  }
+
+  async function improveWithAI() {
+    if (!editedContent.trim()) return;
+    setImproving(true);
+    try {
+      const kind = selectedFile?.endsWith("spec.md") ? "spec" : "prompt";
+      const resp = await apiFetch("/api/v1/improve-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: editedContent, kind }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.improved) setEditedContent(data.improved);
+      }
+    } catch { /* silent */ }
+    setImproving(false);
+  }
+
+  async function createSpec() {
+    if (!name || !newSpecName.trim()) return;
+    const specSlug = newSpecName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const path = `openspec/specs/${specSlug}/spec.md`;
+    setCreatingSpec(true);
+    try {
+      await apiFetch(`/api/v1/projects/${name}/files/${path}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: `# ${newSpecName.trim()}\n\n## Requirements\n\n- \n\n## Acceptance Criteria\n\n- \n`,
+          commitMessage: `create spec: ${specSlug}`,
+        }),
+      });
+      setShowNewSpec(false);
+      setNewSpecName("");
+      await fetchFiles();
+      loadFile(path);
+    } catch { /* silent */ }
+    setCreatingSpec(false);
+  }
+
+  async function saveSettings() {
+    if (!name) return;
+    setSavingSettings(true);
+    try {
+      const resp = await apiFetch(`/api/v1/projects/${name}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName: editDisplayName,
+          description: editDescription,
+          repos: editRepos.filter((r) => r.url.trim()),
+        }),
+      });
+      if (resp.ok) {
+        setProject(await resp.json());
+        setSettingsDirty(false);
+      }
+    } catch { /* silent */ }
+    setSavingSettings(false);
+  }
+
+  function updateRepo(i: number, field: "url" | "branch", value: string) {
+    setEditRepos(editRepos.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
+    setSettingsDirty(true);
+  }
+  function addRepo() {
+    setEditRepos([...editRepos, { url: "", branch: "main" }]);
+    setSettingsDirty(true);
+  }
+  function removeRepo(i: number) {
+    setEditRepos(editRepos.filter((_, idx) => idx !== i));
+    setSettingsDirty(true);
   }
 
   const specFiles = files.filter((f) => f.startsWith("openspec/specs/"));
@@ -111,12 +203,7 @@ export default function ProjectDetailView() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-6 text-[11px]"
-            onClick={() => navigate(`/new?project=${name}`)}
-          >
+          <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => navigate(`/new?project=${name}`)}>
             + new run
           </Button>
         </div>
@@ -124,18 +211,10 @@ export default function ProjectDetailView() {
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 border-b px-4 py-1">
-        <Badge
-          variant={tab === "specs" ? "default" : "outline"}
-          className="cursor-pointer text-[11px]"
-          onClick={() => setTab("specs")}
-        >
+        <Badge variant={tab === "specs" ? "default" : "outline"} className="cursor-pointer text-[11px]" onClick={() => setTab("specs")}>
           Specs
         </Badge>
-        <Badge
-          variant={tab === "settings" ? "default" : "outline"}
-          className="cursor-pointer text-[11px]"
-          onClick={() => setTab("settings")}
-        >
+        <Badge variant={tab === "settings" ? "default" : "outline"} className="cursor-pointer text-[11px]" onClick={() => setTab("settings")}>
           Settings
         </Badge>
       </div>
@@ -146,8 +225,38 @@ export default function ProjectDetailView() {
           <>
             {/* Spec file tree */}
             <div className="w-56 border-r overflow-y-auto p-2">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Specs</div>
-              {specFiles.length === 0 && (
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Specs</span>
+                <button
+                  onClick={() => setShowNewSpec(!showNewSpec)}
+                  className="text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  + new
+                </button>
+              </div>
+
+              {showNewSpec && (
+                <div className="mb-2 space-y-1">
+                  <Input
+                    className="h-6 text-xs"
+                    placeholder="spec-name"
+                    value={newSpecName}
+                    onChange={(e) => setNewSpecName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") createSpec(); if (e.key === "Escape") setShowNewSpec(false); }}
+                    autoFocus
+                  />
+                  <div className="flex gap-1">
+                    <Button size="sm" className="h-5 text-[10px] flex-1" onClick={createSpec} disabled={creatingSpec || !newSpecName.trim()}>
+                      {creatingSpec ? "..." : "Create"}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => setShowNewSpec(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {specFiles.length === 0 && !showNewSpec && (
                 <div className="text-xs text-muted-foreground p-2">No specs yet</div>
               )}
               {specFiles.map((f) => {
@@ -191,6 +300,15 @@ export default function ProjectDetailView() {
                       )}
                       <Button
                         size="sm"
+                        variant="ghost"
+                        className="h-6 text-[11px]"
+                        disabled={!editedContent.trim() || improving}
+                        onClick={improveWithAI}
+                      >
+                        {improving ? "Improving..." : "Improve with AI"}
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="outline"
                         className="h-6 text-[11px]"
                         disabled={!hasChanges || saving}
@@ -213,16 +331,12 @@ export default function ProjectDetailView() {
                     </div>
                   </div>
                   <div className="flex-1 min-h-0">
-                    <MarkdownEditor
-                      value={editedContent}
-                      onChange={setEditedContent}
-                      minHeight="100%"
-                    />
+                    <MarkdownEditor value={editedContent} onChange={setEditedContent} minHeight="100%" />
                   </div>
                 </>
               ) : (
                 <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-                  Select a file to view
+                  Select a file to view or create a new spec
                 </div>
               )}
             </div>
@@ -230,29 +344,50 @@ export default function ProjectDetailView() {
         )}
 
         {tab === "settings" && (
-          <div className="flex-1 p-4 space-y-4 max-w-2xl">
+          <div className="flex-1 p-4 space-y-4 max-w-2xl overflow-y-auto">
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Repositories</label>
-              {project.repos?.map((r, i) => (
-                <div key={i} className="text-sm font-mono bg-muted px-2 py-1 rounded mb-1">
-                  {r.url} ({r.branch})
-                </div>
-              ))}
-              {(!project.repos || project.repos.length === 0) && (
-                <div className="text-xs text-muted-foreground">No repositories configured</div>
-              )}
+              <label className="text-xs text-muted-foreground block mb-1">Display Name</label>
+              <Input
+                className="h-8 text-sm"
+                value={editDisplayName}
+                onChange={(e) => { setEditDisplayName(e.target.value); setSettingsDirty(true); }}
+              />
             </div>
 
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Devbox Packages</label>
-              <div className="flex flex-wrap gap-1">
-                {project.devbox?.packages?.map((pkg) => (
-                  <Badge key={pkg} variant="secondary" className="text-[11px]">{pkg}</Badge>
-                ))}
-                {(!project.devbox?.packages || project.devbox.packages.length === 0) && (
-                  <div className="text-xs text-muted-foreground">No packages</div>
-                )}
-              </div>
+              <label className="text-xs text-muted-foreground block mb-1">Description</label>
+              <Input
+                className="h-8 text-sm"
+                value={editDescription}
+                onChange={(e) => { setEditDescription(e.target.value); setSettingsDirty(true); }}
+                placeholder="Project description"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Repositories</label>
+              {editRepos.map((r, i) => (
+                <div key={i} className="flex gap-2 mb-1">
+                  <Input
+                    className="flex-1 h-8 text-sm"
+                    value={r.url}
+                    onChange={(e) => updateRepo(i, "url", e.target.value)}
+                    placeholder="https://github.com/org/repo"
+                  />
+                  <Input
+                    className="w-20 h-8 text-sm"
+                    value={r.branch}
+                    onChange={(e) => updateRepo(i, "branch", e.target.value)}
+                    placeholder="main"
+                  />
+                  <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={() => removeRepo(i)}>
+                    x
+                  </Button>
+                </div>
+              ))}
+              <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={addRepo}>
+                + add repository
+              </Button>
             </div>
 
             <div>
@@ -261,6 +396,22 @@ export default function ProjectDetailView() {
                 {project.configRepoURL || "Not ready"}
               </div>
             </div>
+
+            {settingsDirty && (
+              <div className="flex items-center gap-2 pt-2">
+                <Button size="sm" onClick={saveSettings} disabled={savingSettings}>
+                  {savingSettings ? "Saving..." : "Save Settings"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setEditRepos(project.repos || []);
+                  setEditDisplayName(project.displayName || "");
+                  setEditDescription(project.description || "");
+                  setSettingsDirty(false);
+                }}>
+                  Discard
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
