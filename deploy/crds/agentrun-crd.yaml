@@ -262,6 +262,13 @@ spec:
                 totalDeletions:
                   type: integer
                   format: int32
+                ciFixAttempts:
+                  type: integer
+                  format: int32
+                lastCIStatus:
+                  type: string
+                parentPRUrl:
+                  type: string
                 retryCount:
                   type: integer
                   format: int32

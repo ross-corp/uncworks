@@ -409,3 +409,40 @@ func TestWorkflow_DeploymentNameInState(t *testing.T) {
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())
 }
+
+// TestWorkflow_CIAutofix_SkipsPlan verifies that CI autofix runs skip the
+// Plan stage and go directly to Execute+Verify.
+func TestWorkflow_CIAutofix_SkipsPlan(t *testing.T) {
+	env := setupEnv(t)
+
+	input := defaultInput()
+	input.SpecSource = "ci-autofix:org/repo#abc123"
+	input.Prompt = "Fix CI failures: Error: expected true but got false"
+	input.OrchestrationMode = aottemporal.OrchestrationModeSpecDriven
+
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
+	)
+	// PlanRun should NOT be called — it's a CI autofix run
+	// StartAgent + GetAgentStatus for the execute stage
+	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).VerifyRun, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.VerifyRunOutput{Result: aottemporal.VerificationResult{Pass: true}}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+
+	// Verify PlanRun was NOT called (it should be skipped for ci-autofix)
+	// The test would panic if an unmocked activity was called, so completing
+	// without error proves PlanRun was skipped.
+}

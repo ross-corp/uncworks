@@ -302,6 +302,26 @@ export default function RunListView() {
             </a>
           )}
 
+          {/* CI fix indicator */}
+          {run.status.parentPRUrl && (
+            <a
+              href={run.status.parentPRUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-orange-500 hover:text-orange-400"
+              onClick={(e) => e.stopPropagation()}
+              title="CI autofix run"
+            >
+              fix
+            </a>
+          )}
+          {run.status.lastCIStatus === "success" && (
+            <span className="text-[10px] text-green-500" title="CI passing">ci ok</span>
+          )}
+          {run.status.lastCIStatus === "failure" && (
+            <span className="text-[10px] text-red-500" title="CI failing">ci fail</span>
+          )}
+
           {/* Age */}
           <span className="text-[11px] text-muted-foreground w-8 text-right">{formatAge(run.createdAt)}</span>
         </div>

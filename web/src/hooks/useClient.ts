@@ -81,6 +81,9 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       totalCost: (r.status as unknown as { totalCost?: string }).totalCost,
       totalAdditions: (r.status as unknown as { totalAdditions?: number }).totalAdditions,
       totalDeletions: (r.status as unknown as { totalDeletions?: number }).totalDeletions,
+      ciFixAttempts: (r.status as unknown as { ciFixAttempts?: number }).ciFixAttempts,
+      lastCIStatus: (r.status as unknown as { lastCIStatus?: string }).lastCIStatus,
+      parentPRUrl: (r.status as unknown as { parentPRUrl?: string }).parentPRUrl,
     },
     createdAt: r.createdAt,
   };
