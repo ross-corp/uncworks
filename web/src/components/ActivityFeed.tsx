@@ -321,7 +321,7 @@ function buildDisplayEntries(entries: LogEntry[]): DisplayEntry[] {
           result.push({ entry, label: "user" });
         }
       } else {
-        result.push({ entry, label: "manage" });
+        result.push({ entry, label: "user" });
       }
     } else if (entry.type === "delegate") {
       // Delegate entries: find the paired tool_result (delegate_task response)

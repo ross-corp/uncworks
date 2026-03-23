@@ -7,6 +7,7 @@ import FeatureDetailView from "./views/FeatureDetailView";
 import ProjectListView from "./views/ProjectListView";
 import ProjectDetailView from "./views/ProjectDetailView";
 import ScheduleListView from "./views/ScheduleListView";
+import ChainListView from "./views/ChainListView";
 import ChainRunDetailView from "./views/ChainRunDetailView";
 
 /**
@@ -24,6 +25,7 @@ export default function AppNew() {
           <Route path="/projects" element={<ProjectListView />} />
           <Route path="/projects/:name" element={<ProjectDetailView />} />
           <Route path="/schedules" element={<ScheduleListView />} />
+          <Route path="/chains" element={<ChainListView />} />
           <Route path="/chainrun/:name" element={<ChainRunDetailView />} />
         </Route>
       </Routes>

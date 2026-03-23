@@ -148,10 +148,12 @@ export default function RunDetailView() {
           <span className="font-semibold">{run.spec.displayName || run.name}</span>
           <RunStatusBadge phase={run.status.phase} stage={run.status.stage} />
           {run.status.message && (
-            <span className="text-xs text-muted-foreground truncate max-w-xs">{run.status.message}</span>
-          )}
-          {run.status.phase === "failed" && run.status.message && (
-            <span className="text-xs text-red-500 truncate max-w-[32rem]" title={run.status.message}>
+            <span
+              className={`text-xs truncate max-w-[32rem] ${
+                run.status.phase === "failed" ? "text-red-500" : "text-muted-foreground"
+              }`}
+              title={run.status.message}
+            >
               {run.status.message.length > 80
                 ? run.status.message.slice(0, 80) + "..."
                 : run.status.message}

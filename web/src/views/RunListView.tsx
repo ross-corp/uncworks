@@ -374,7 +374,7 @@ export default function RunListView() {
             onClick={() => setShowArchived(!showArchived)}
             className={`text-[11px] px-2 py-0.5 rounded transition-colors ${showArchived ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
-            {showArchived ? "hiding archived" : "archived"}
+            {showArchived ? "show archived" : "archived"}
           </button>
           <button
             onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
@@ -384,6 +384,9 @@ export default function RunListView() {
           </button>
           <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => navigate("/projects")}>
             Projects
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => navigate("/chains")}>
+            Chains
           </Button>
           <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => navigate("/schedules")}>
             Schedules
