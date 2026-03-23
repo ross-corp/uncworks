@@ -114,9 +114,9 @@ func (m *Ci) Check(ctx context.Context, source *dagger.Directory) (string, error
 	_, err := m.nodeBase(source).
 		WithExec([]string{"bash", "-c", `
 			set -e
-			cd /src/packages/shared && npm ci --ignore-scripts
-			cd /src/packages/pi-aot-extension && npm ci --ignore-scripts
-			cd /src/web && npm ci --ignore-scripts
+			cd /src/packages/shared && npm ci
+			cd /src/packages/pi-aot-extension && npm ci
+			cd /src/web && npm ci
 			cd /src/packages/shared && npx tsc --noEmit
 			cd /src/packages/pi-aot-extension && npx tsc --noEmit
 			cd /src/web && npx tsc --noEmit
