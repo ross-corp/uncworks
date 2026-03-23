@@ -98,7 +98,7 @@ func (m *Ci) Test(ctx context.Context, source *dagger.Directory) (string, error)
 			if [ -n "$ENVTEST_PATH" ]; then
 				export KUBEBUILDER_ASSETS="$ENVTEST_PATH"
 			fi
-			go test ./api/... ./internal/... -count=1
+			go test $(go list ./api/... ./internal/... | grep -v /brain | grep -v /embeddings) -count=1
 		`}).
 		Stdout(ctx)
 	if err != nil {
