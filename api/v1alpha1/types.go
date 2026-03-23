@@ -299,6 +299,18 @@ type AgentRunStatus struct {
 	// TotalDeletions is the aggregate number of lines deleted across all diffs.
 	// +optional
 	TotalDeletions int32 `json:"totalDeletions,omitempty"`
+
+	// CIFixAttempts is the number of CI autofix attempts for this run's PR.
+	// +optional
+	CIFixAttempts int32 `json:"ciFixAttempts,omitempty"`
+
+	// LastCIStatus is the most recent CI check status ("success", "failure").
+	// +optional
+	LastCIStatus string `json:"lastCIStatus,omitempty"`
+
+	// ParentPRUrl is the URL of the PR this fix run is targeting.
+	// +optional
+	ParentPRUrl string `json:"parentPRUrl,omitempty"`
 }
 
 // +kubebuilder:object:root=true
