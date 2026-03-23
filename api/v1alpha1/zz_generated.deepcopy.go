@@ -275,3 +275,280 @@ func (in *ProjectStatus) DeepCopy() *ProjectStatus {
 	in.DeepCopyInto(out)
 	return out
 }
+
+// --- RunTemplate deepcopy ---
+
+func (in *RunTemplate) DeepCopyInto(out *RunTemplate) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+	in.Status.DeepCopyInto(&out.Status)
+}
+func (in *RunTemplate) DeepCopy() *RunTemplate {
+	if in == nil {
+		return nil
+	}
+	out := new(RunTemplate)
+	in.DeepCopyInto(out)
+	return out
+}
+func (in *RunTemplate) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+func (in *RunTemplateList) DeepCopyInto(out *RunTemplateList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]RunTemplate, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+func (in *RunTemplateList) DeepCopy() *RunTemplateList {
+	if in == nil {
+		return nil
+	}
+	out := new(RunTemplateList)
+	in.DeepCopyInto(out)
+	return out
+}
+func (in *RunTemplateList) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+func (in *RunTemplateSpec) DeepCopyInto(out *RunTemplateSpec) {
+	*out = *in
+	if in.Repos != nil {
+		in, out := &in.Repos, &out.Repos
+		*out = make([]Repository, len(*in))
+		copy(*out, *in)
+	}
+}
+func (in *RunTemplateStatus) DeepCopyInto(out *RunTemplateStatus) {
+	*out = *in
+	if in.LastTriggeredAt != nil {
+		in, out := &in.LastTriggeredAt, &out.LastTriggeredAt
+		*out = (*in).DeepCopy()
+	}
+}
+
+// --- Chain deepcopy ---
+
+func (in *Chain) DeepCopyInto(out *Chain) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+}
+func (in *Chain) DeepCopy() *Chain {
+	if in == nil {
+		return nil
+	}
+	out := new(Chain)
+	in.DeepCopyInto(out)
+	return out
+}
+func (in *Chain) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+func (in *ChainList) DeepCopyInto(out *ChainList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]Chain, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+func (in *ChainList) DeepCopy() *ChainList {
+	if in == nil {
+		return nil
+	}
+	out := new(ChainList)
+	in.DeepCopyInto(out)
+	return out
+}
+func (in *ChainList) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+func (in *ChainSpec) DeepCopyInto(out *ChainSpec) {
+	*out = *in
+	if in.Steps != nil {
+		in, out := &in.Steps, &out.Steps
+		*out = make([]ChainStep, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+func (in *ChainStep) DeepCopyInto(out *ChainStep) {
+	*out = *in
+	if in.DependsOn != nil {
+		in, out := &in.DependsOn, &out.DependsOn
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+}
+
+// --- ChainRun deepcopy ---
+
+func (in *ChainRun) DeepCopyInto(out *ChainRun) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	out.Spec = in.Spec
+	in.Status.DeepCopyInto(&out.Status)
+}
+func (in *ChainRun) DeepCopy() *ChainRun {
+	if in == nil {
+		return nil
+	}
+	out := new(ChainRun)
+	in.DeepCopyInto(out)
+	return out
+}
+func (in *ChainRun) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+func (in *ChainRunList) DeepCopyInto(out *ChainRunList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]ChainRun, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+func (in *ChainRunList) DeepCopy() *ChainRunList {
+	if in == nil {
+		return nil
+	}
+	out := new(ChainRunList)
+	in.DeepCopyInto(out)
+	return out
+}
+func (in *ChainRunList) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+func (in *ChainRunStatus) DeepCopyInto(out *ChainRunStatus) {
+	*out = *in
+	if in.Steps != nil {
+		in, out := &in.Steps, &out.Steps
+		*out = make([]ChainRunStepStatus, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.StartedAt != nil {
+		in, out := &in.StartedAt, &out.StartedAt
+		*out = (*in).DeepCopy()
+	}
+	if in.CompletedAt != nil {
+		in, out := &in.CompletedAt, &out.CompletedAt
+		*out = (*in).DeepCopy()
+	}
+}
+func (in *ChainRunStepStatus) DeepCopyInto(out *ChainRunStepStatus) {
+	*out = *in
+	if in.StartedAt != nil {
+		in, out := &in.StartedAt, &out.StartedAt
+		*out = (*in).DeepCopy()
+	}
+	if in.CompletedAt != nil {
+		in, out := &in.CompletedAt, &out.CompletedAt
+		*out = (*in).DeepCopy()
+	}
+}
+
+// --- Schedule deepcopy ---
+
+func (in *Schedule) DeepCopyInto(out *Schedule) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	out.Spec = in.Spec
+	in.Status.DeepCopyInto(&out.Status)
+}
+func (in *Schedule) DeepCopy() *Schedule {
+	if in == nil {
+		return nil
+	}
+	out := new(Schedule)
+	in.DeepCopyInto(out)
+	return out
+}
+func (in *Schedule) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+func (in *ScheduleList) DeepCopyInto(out *ScheduleList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]Schedule, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+func (in *ScheduleList) DeepCopy() *ScheduleList {
+	if in == nil {
+		return nil
+	}
+	out := new(ScheduleList)
+	in.DeepCopyInto(out)
+	return out
+}
+func (in *ScheduleList) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+func (in *ScheduleStatus) DeepCopyInto(out *ScheduleStatus) {
+	*out = *in
+	if in.LastScheduledTime != nil {
+		in, out := &in.LastScheduledTime, &out.LastScheduledTime
+		*out = (*in).DeepCopy()
+	}
+	if in.NextScheduleTime != nil {
+		in, out := &in.NextScheduleTime, &out.NextScheduleTime
+		*out = (*in).DeepCopy()
+	}
+	if in.Active != nil {
+		in, out := &in.Active, &out.Active
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+}
