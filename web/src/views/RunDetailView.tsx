@@ -146,9 +146,9 @@ export default function RunDetailView() {
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-3">
           <span className="font-semibold">{run.spec.displayName || run.name}</span>
-          <RunStatusBadge phase={run.status.phase} />
-          {run.status.stage && (
-            <span className="text-xs text-muted-foreground">{run.status.stage}</span>
+          <RunStatusBadge phase={run.status.phase} stage={run.status.stage} />
+          {run.status.message && (
+            <span className="text-xs text-muted-foreground truncate max-w-xs">{run.status.message}</span>
           )}
           {run.status.phase === "failed" && run.status.message && (
             <span className="text-xs text-red-500 truncate max-w-[32rem]" title={run.status.message}>

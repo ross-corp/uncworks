@@ -138,25 +138,32 @@ export const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
 ];
 
 export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string; description: string }[] = [
-  // Local models (Ollama)
-  { value: "default", label: "Default (Local)", description: "Ollama · qwen3:8b" },
-  { value: "qwen3:8b", label: "qwen3:8b", description: "Local · 8B coder" },
-  { value: "llama3.1:8b", label: "llama3.1:8b", description: "Local · all-rounder" },
-  // Cloud models (OpenRouter, paid)
-  { value: "default-cloud", label: "Cloud Default", description: "DeepSeek V3.1 · $0.15/M" },
-  { value: "claude-sonnet-4", label: "Claude Sonnet 4", description: "Best quality · $3/M in" },
-  { value: "claude-haiku", label: "Claude Haiku 3.5", description: "Fast Anthropic · $0.80/M" },
-  { value: "gpt-4.1-mini", label: "GPT-4.1 Mini", description: "1M ctx · $0.40/M" },
-  { value: "gemini-flash", label: "Gemini Flash", description: "1M ctx · $0.15/M" },
-  { value: "qwen3-coder", label: "Qwen3 Coder", description: "262K ctx · $0.22/M" },
-  { value: "qwen3-235b", label: "Qwen3 235B", description: "Largest Qwen · $0.20/M" },
-  { value: "deepseek-v3.1", label: "DeepSeek V3.1", description: "Cheapest · $0.15/M" },
-  { value: "deepseek-v3.2", label: "DeepSeek V3.2", description: "164K ctx · $0.26/M" },
-  { value: "mistral-medium", label: "Mistral Medium", description: "131K ctx · $0.40/M" },
-  // Free tier
-  { value: "qwen3-coder-free", label: "Qwen3 Coder (Free)", description: "Rate limited" },
-  // CI
-  { value: "qwen2.5:0.5b", label: "qwen2.5:0.5b", description: "CI only" },
+  // Local
+  { value: "default", label: "Default (Local)", description: "Ollama qwen3:8b" },
+  { value: "qwen3:8b", label: "qwen3:8b", description: "Local 8B coder" },
+  { value: "llama3.1:8b", label: "llama3.1:8b", description: "Local all-rounder" },
+  // Cloud top tier
+  { value: "claude-sonnet-4.6", label: "Claude Sonnet 4.6", description: "Latest Anthropic" },
+  { value: "claude-sonnet-4", label: "Claude Sonnet 4", description: "$3/M in" },
+  { value: "gemini-3-flash", label: "Gemini 3 Flash", description: "Newest Google" },
+  { value: "grok-4.1-fast", label: "Grok 4.1 Fast", description: "xAI" },
+  // Cloud value
+  { value: "default-cloud", label: "Cloud Default", description: "DeepSeek V3.1 $0.15/M" },
+  { value: "deepseek-v3.1", label: "DeepSeek V3.1", description: "$0.15/M cheapest" },
+  { value: "deepseek-v3.2", label: "DeepSeek V3.2", description: "164K ctx $0.26/M" },
+  { value: "gemini-flash", label: "Gemini 2.5 Flash", description: "1M ctx $0.15/M" },
+  { value: "gpt-4.1-mini", label: "GPT-4.1 Mini", description: "1M ctx $0.40/M" },
+  { value: "qwen3-coder", label: "Qwen3 Coder", description: "262K ctx $0.22/M" },
+  { value: "qwen3-235b", label: "Qwen3 235B", description: "$0.20/M" },
+  { value: "kimi-k2.5", label: "Kimi K2.5", description: "Moonshot" },
+  { value: "minimax-m2.5", label: "MiniMax M2.5", description: "MiniMax" },
+  { value: "claude-haiku", label: "Claude Haiku 3.5", description: "$0.80/M" },
+  { value: "mistral-medium", label: "Mistral Medium", description: "$0.40/M" },
+  // Free
+  { value: "nemotron-3-super-free", label: "Nemotron 3 Super", description: "Free NVIDIA 120B" },
+  { value: "step-flash-free", label: "Step 3.5 Flash", description: "Free StepFun" },
+  { value: "trinity-free", label: "Trinity Large", description: "Free Arcee" },
+  { value: "qwen3-coder-free", label: "Qwen3 Coder", description: "Free rate limited" },
 ];
 
 export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string; description: string }[] = [
