@@ -221,6 +221,9 @@ export default function (pi: ExtensionAPI) {
     }
 
     // Role-based tool policies
+    // Manage agent: can read all files, write only openspec/.aot, use ask_user for HITL.
+    // During verify stage, the manage agent uses ask_user to escalate implement agent
+    // questions to the human (tiered verification: implement -> manage -> human).
     if (role === "manage") {
       // Manage agents may not write/edit repo files (only openspec and .aot are allowed)
       if (event.toolName === "write" || event.toolName === "edit") {
