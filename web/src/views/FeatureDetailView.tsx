@@ -130,15 +130,6 @@ export default function FeatureDetailView() {
         <span className="text-xs text-muted-foreground">esc back · r retry · enter detail</span>
       </div>
 
-      {/* Table header */}
-      <div className="grid grid-cols-[1fr_100px_80px_100px_70px] gap-2 border-b px-4 py-1 text-xs text-muted-foreground uppercase tracking-wider">
-        <span>Name</span>
-        <span>Status</span>
-        <span>Stage</span>
-        <span>Model</span>
-        <span>Age</span>
-      </div>
-
       {/* Run rows */}
       <div className="flex-1 overflow-y-auto">
         {loading && featureRuns.length === 0 && (
@@ -153,16 +144,24 @@ export default function FeatureDetailView() {
         {featureRuns.map((run, index) => (
           <div
             key={run.id}
-            className={`grid grid-cols-[1fr_100px_80px_100px_70px] gap-2 px-4 py-2 text-sm cursor-pointer transition-colors ${
-              index === selected ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
+            className={`flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-b border-border/50 transition-colors ${
+              index === selected ? "bg-accent/50" : "hover:bg-muted/30"
             }`}
             onClick={() => navigate(`/run/${run.id}`)}
           >
-            <span className="truncate">{run.spec.displayName || run.name}</span>
-            <RunStatusBadge phase={run.status.phase} />
-            <span className="text-muted-foreground text-xs">{run.status.stage || ""}</span>
-            <span className="text-muted-foreground text-xs truncate">{run.spec.modelTier || ""}</span>
-            <span className="text-muted-foreground text-xs">{formatAge(run.createdAt)}</span>
+            <RunStatusBadge phase={run.status.phase} stage={run.status.stage} />
+            <div className="flex-1 min-w-0">
+              <span className="truncate block">{run.spec.displayName || run.name}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {run.status.stage && (
+                <span className="text-[11px] text-muted-foreground">{run.status.stage}</span>
+              )}
+              <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                {run.spec.modelTier || "default"}
+              </span>
+              <span className="text-[11px] text-muted-foreground w-8 text-right">{formatAge(run.createdAt)}</span>
+            </div>
           </div>
         ))}
       </div>
