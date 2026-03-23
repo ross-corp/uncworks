@@ -51,9 +51,9 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		return nil, fmt.Errorf("configure git user: %w", err)
 	}
 
-	// Create and checkout feature branch
+	// Create and checkout feature branch (force-create to handle re-runs)
 	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
-		fmt.Sprintf("git checkout -b %s", input.BranchName)); err != nil {
+		fmt.Sprintf("git checkout -B %s", input.BranchName)); err != nil {
 		return nil, fmt.Errorf("create branch %s: %w", input.BranchName, err)
 	}
 
