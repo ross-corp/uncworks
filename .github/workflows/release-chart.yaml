@@ -9,30 +9,26 @@ permissions:
   contents: read
   packages: write
 
-env:
-  REGISTRY: ghcr.io
-
 jobs:
-  package-push:
-    name: Package and Push Chart
+  push-chart:
+    name: Package and Push Chart via Dagger
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Helm
-        uses: azure/setup-helm@v4
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Login to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-
-      - name: Set chart version from tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          sed -i "s/^version:.*/version: ${VERSION}/" deploy/helm/aot/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" deploy/helm/aot/Chart.yaml
-
-      - name: Package chart
-        run: helm package deploy/helm/aot -d /tmp
-
-      - name: Push chart to GHCR
-        run: helm push /tmp/aot-*.tgz oci://${{ env.REGISTRY }}/uncworks/charts
+      - uses: dagger/dagger-for-github@v8.4.0
+        with:
+          version: latest
+          module: ./ci
+          call: >-
+            push-chart
+            --source .
+            --version ${{ steps.version.outputs.version }}
+            --registry-user ${{ github.actor }}
+            --registry-pass env:GITHUB_TOKEN
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
