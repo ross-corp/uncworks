@@ -648,19 +648,23 @@ func restartAgentProcess(origCmd *exec.Cmd) (*AgentProcess, error) {
 	}
 
 	if err := os.MkdirAll(agentLogDir, 0o755); err != nil {
+		_ = devNull.Close()
 		return nil, fmt.Errorf("create log dir: %w", err)
 	}
 	logFile, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
+		_ = devNull.Close()
 		return nil, fmt.Errorf("open agent log: %w", err)
 	}
 	jsonlFile, err := os.OpenFile(agentJSONLPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
+		_ = devNull.Close()
 		_ = logFile.Close()
 		return nil, fmt.Errorf("open agent jsonl: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
+		_ = devNull.Close()
 		_ = logFile.Close()
 		_ = jsonlFile.Close()
 		return nil, fmt.Errorf("start agent: %w", err)

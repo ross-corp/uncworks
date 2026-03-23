@@ -97,8 +97,7 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Only handle push events.
 	eventType := r.Header.Get("X-GitHub-Event")
 	if eventType != "push" {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true,"message":"ignored event type"}`))
+		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "message": "ignored event type"})
 		return
 	}
 
@@ -110,8 +109,7 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	repo := payload.Repository.FullName
 	if !wh.isRepoAllowed(repo) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true,"message":"repo not in allowlist"}`))
+		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "message": "repo not in allowlist"})
 		return
 	}
 
