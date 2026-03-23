@@ -971,8 +971,8 @@ func pollAgentStatus(ctx workflow.Context, state *WorkflowState, podName, namesp
 				consecutiveErrors = 0
 				switch statusOutput.State {
 				case "AGENT_PROCESS_STATE_COMPLETED":
-					state.Phase = "Succeeded"
-					state.Message = "implement: completed, starting verification"
+					state.Phase = "Running"
+					state.Message = "Agent completed, proceeding to verification"
 				case "AGENT_PROCESS_STATE_FAILED":
 					state.Phase = "Failed"
 					state.Message = fmt.Sprintf("Agent failed: %s", statusOutput.Error)

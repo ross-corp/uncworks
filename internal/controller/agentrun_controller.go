@@ -447,8 +447,8 @@ func (r *AgentRunReconciler) cleanupExpiredRuns(ctx context.Context) error {
 			continue
 		}
 
-		// Skip already-archived runs
-		if ar.Annotations != nil && ar.Annotations[annotationArchived] == "true" {
+		// Skip already-archived runs (check both status field and legacy annotation)
+		if ar.Status.Archived || (ar.Annotations != nil && ar.Annotations[annotationArchived] == "true") {
 			continue
 		}
 
