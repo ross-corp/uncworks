@@ -26,6 +26,7 @@ func (h *ProjectHandler) RegisterProjectHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects", h.handleListProjects)
 	mux.HandleFunc("POST /api/v1/projects", h.handleCreateProject)
 	mux.HandleFunc("GET /api/v1/projects/{name}", h.handleGetProject)
+	mux.HandleFunc("PUT /api/v1/projects/{name}", h.handleUpdateProject)
 	mux.HandleFunc("DELETE /api/v1/projects/{name}", h.handleDeleteProject)
 	mux.HandleFunc("GET /api/v1/projects/{name}/files", h.handleListFiles)
 	mux.HandleFunc("GET /api/v1/projects/{name}/files/{path...}", h.handleReadFile)
@@ -129,6 +130,51 @@ func (h *ProjectHandler) handleGetProject(w http.ResponseWriter, r *http.Request
 		Namespace: h.Namespace, Name: name,
 	}, project); err != nil {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("project not found: %v", err)})
+		return
+	}
+	writeJSON(w, http.StatusOK, projectToResponse(project))
+}
+
+func (h *ProjectHandler) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	project := &aotv1alpha1.Project{}
+	if err := h.K8sClient.Get(r.Context(), client.ObjectKey{
+		Namespace: h.Namespace, Name: name,
+	}, project); err != nil {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: "project not found"})
+		return
+	}
+
+	var body struct {
+		DisplayName *string                      `json:"displayName,omitempty"`
+		Description *string                      `json:"description,omitempty"`
+		Repos       []aotv1alpha1.Repository     `json:"repos,omitempty"`
+		Devbox      *aotv1alpha1.DevboxConfig    `json:"devbox,omitempty"`
+		Defaults    *aotv1alpha1.ProjectDefaults `json:"defaults,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON"})
+		return
+	}
+
+	if body.DisplayName != nil {
+		project.Spec.DisplayName = *body.DisplayName
+	}
+	if body.Description != nil {
+		project.Spec.Description = *body.Description
+	}
+	if body.Repos != nil {
+		project.Spec.Repos = body.Repos
+	}
+	if body.Devbox != nil {
+		project.Spec.Devbox = body.Devbox
+	}
+	if body.Defaults != nil {
+		project.Spec.Defaults = body.Defaults
+	}
+
+	if err := h.K8sClient.Update(r.Context(), project); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("update failed: %v", err)})
 		return
 	}
 	writeJSON(w, http.StatusOK, projectToResponse(project))

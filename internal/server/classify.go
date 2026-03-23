@@ -50,9 +50,10 @@ type classifyResponse struct {
 	Tags         []string `json:"tags"`
 }
 
-// RegisterClassifyHandlers registers the classify endpoint on the given mux.
+// RegisterClassifyHandlers registers the classify and improve endpoints on the given mux.
 func (h *ClassifyRunHandler) RegisterClassifyHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/classify", h.handleClassify)
+	mux.HandleFunc("POST /api/v1/improve-text", h.handleImproveText)
 }
 
 func (h *ClassifyRunHandler) handleClassify(w http.ResponseWriter, r *http.Request) {
@@ -216,4 +217,107 @@ func (h *ClassifyRunHandler) callLiteLLM(ctx context.Context, prompt string) (*c
 	}
 
 	return &result, nil
+}
+
+// handleImproveText takes text (prompt or spec) and returns an AI-improved version.
+func (h *ClassifyRunHandler) handleImproveText(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Text string `json:"text"`
+		Kind string `json:"kind"` // "prompt" or "spec"
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
+		return
+	}
+	if req.Text == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "text is required"})
+		return
+	}
+	if req.Kind == "" {
+		req.Kind = "prompt"
+	}
+
+	var systemPrompt string
+	if req.Kind == "spec" {
+		systemPrompt = `You are a spec editor. Improve the given specification to be clearer, more structured, and more actionable for an AI coding agent. Keep the same intent but:
+- Add clear acceptance criteria
+- Break vague requirements into specific, testable items
+- Use markdown formatting with headers and bullet points
+- Add edge cases the author may have missed
+Return ONLY the improved spec text, no explanation.`
+	} else {
+		systemPrompt = `You are a prompt editor. Improve the given prompt to be clearer and more effective for an AI coding agent. Keep the same intent but:
+- Be more specific about what to do
+- Clarify success criteria
+- Add relevant constraints or context hints
+- Keep it concise
+Return ONLY the improved prompt text, no explanation.`
+	}
+
+	if h.LiteLLMBaseURL == "" {
+		writeJSON(w, http.StatusBadGateway, errorResponse{Error: "LITELLM_BASE_URL not configured"})
+		return
+	}
+
+	reqBody := map[string]interface{}{
+		"model": "default",
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": req.Text},
+		},
+		"max_tokens": 2000,
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "marshal request"})
+		return
+	}
+
+	llmCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	url := strings.TrimRight(h.LiteLLMBaseURL, "/") + "/v1/chat/completions"
+	httpReq, err := http.NewRequestWithContext(llmCtx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "create request"})
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if masterKey := os.Getenv("LITELLM_MASTER_KEY"); masterKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+masterKey)
+	}
+
+	resp, err := h.HTTPClient.Do(httpReq)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResponse{Error: fmt.Sprintf("LLM request failed: %v", err)})
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		writeJSON(w, http.StatusBadGateway, errorResponse{Error: fmt.Sprintf("LLM error %d: %s", resp.StatusCode, string(body))})
+		return
+	}
+
+	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 32768))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "read LLM response"})
+		return
+	}
+
+	var llmResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(respBytes, &llmResp); err != nil || len(llmResp.Choices) == 0 {
+		writeJSON(w, http.StatusBadGateway, errorResponse{Error: "invalid LLM response"})
+		return
+	}
+
+	improved := strings.TrimSpace(llmResp.Choices[0].Message.Content)
+	writeJSON(w, http.StatusOK, map[string]string{"improved": improved})
 }

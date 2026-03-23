@@ -37,6 +37,10 @@ export default function NewRunView() {
   const [orchestrationMode, setOrchestrationMode] = useState<OrchestrationMode>("single");
   const [implementModelTier, setImplementModelTier] = useState("");
 
+  // AI improvement
+  const [improvingPrompt, setImprovingPrompt] = useState(false);
+  const [improvingSpec, setImprovingSpec] = useState(false);
+
   // Classification
   const [project, setProject] = useState("");
   const [feature, setFeature] = useState("");
@@ -130,6 +134,23 @@ export default function NewRunView() {
       if (data.tags?.length && !userEditedTags.current) setTags(data.tags.join(", "));
     } catch { /* silent */ } finally { setClassifying(false); }
   }, [prompt, repos]);
+
+  async function improveText(text: string, kind: "prompt" | "spec", setter: (v: string) => void, setLoading: (v: boolean) => void) {
+    if (!text.trim()) return;
+    setLoading(true);
+    try {
+      const resp = await apiFetch("/api/v1/improve-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, kind }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.improved) setter(data.improved);
+      }
+    } catch { /* silent */ }
+    setLoading(false);
+  }
 
   const effectivePrompt = mode === "spec" && !prompt.trim() && specContent.trim()
     ? specContent.trim()
@@ -242,6 +263,19 @@ export default function NewRunView() {
               minHeight={mode === "spec" ? "60px" : "120px"}
               autoFocus
             />
+            {prompt.trim().length > 10 && (
+              <div className="flex justify-end mt-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[11px]"
+                  disabled={improvingPrompt}
+                  onClick={() => improveText(prompt, "prompt", setPrompt, setImprovingPrompt)}
+                >
+                  {improvingPrompt ? "Improving..." : "Improve with AI"}
+                </Button>
+              </div>
+            )}
           </section>
 
           {/* Spec editor */}
@@ -254,6 +288,19 @@ export default function NewRunView() {
                 placeholder="Paste or write your spec..."
                 minHeight="180px"
               />
+              {specContent.trim().length > 10 && (
+                <div className="flex justify-end mt-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-[11px]"
+                    disabled={improvingSpec}
+                    onClick={() => improveText(specContent, "spec", setSpecContent, setImprovingSpec)}
+                  >
+                    {improvingSpec ? "Improving..." : "Improve with AI"}
+                  </Button>
+                </div>
+              )}
             </section>
           )}
 
