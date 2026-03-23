@@ -2,3 +2,6 @@
 # Usage: helm install aot ./deploy/helm/aot -f deploy/helm/aot/dev-values.yaml
 github:
   tokenSecretName: "github-token"
+
+softServe:
+  enabled: true

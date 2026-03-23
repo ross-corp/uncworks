@@ -971,7 +971,9 @@ func pollAgentStatus(ctx workflow.Context, state *WorkflowState, podName, namesp
 				consecutiveErrors = 0
 				switch statusOutput.State {
 				case "AGENT_PROCESS_STATE_COMPLETED":
-					state.Phase = "Running"
+					// Don't set phase to Succeeded here — verification hasn't run yet.
+					// Use a sentinel to exit the polling loop.
+					state.Phase = "AgentCompleted"
 					state.Message = "Agent completed, proceeding to verification"
 				case "AGENT_PROCESS_STATE_FAILED":
 					state.Phase = "Failed"
@@ -988,7 +990,12 @@ func pollAgentStatus(ctx workflow.Context, state *WorkflowState, podName, namesp
 		selector.Select(ctx)
 
 		switch state.Phase {
-		case "Succeeded", "Failed", "Cancelled":
+		case "AgentCompleted":
+			// Agent finished — exit polling. Phase will be set by the caller
+			// based on verification result (Succeeded or Failed).
+			state.Phase = "Running"
+			return nil
+		case "Failed", "Cancelled":
 			return nil
 		}
 	}
