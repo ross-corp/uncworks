@@ -77,11 +77,11 @@ func (m *Ci) Build(ctx context.Context, source *dagger.Directory) (string, error
 	return "go build: ok", nil
 }
 
-// Lint runs golangci-lint.
+// Lint runs golangci-lint with timeout and reduced concurrency for CI runners.
 func (m *Ci) Lint(ctx context.Context, source *dagger.Directory) (string, error) {
 	_, err := m.goBase(source).
 		WithExec([]string{"go", "install", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"}).
-		WithExec([]string{"golangci-lint", "run"}).
+		WithExec([]string{"golangci-lint", "run", "--timeout", "5m", "--concurrency", "2"}).
 		Sync(ctx)
 	if err != nil {
 		return "", fmt.Errorf("golangci-lint failed: %w", err)
@@ -108,12 +108,18 @@ func (m *Ci) Test(ctx context.Context, source *dagger.Directory) (string, error)
 }
 
 // Check runs TypeScript type checking.
+// Installs deps for shared first (web imports from it via relative path),
+// then checks all three packages sequentially.
 func (m *Ci) Check(ctx context.Context, source *dagger.Directory) (string, error) {
 	_, err := m.nodeBase(source).
 		WithExec([]string{"bash", "-c", `
-			cd /src/web && npm ci --ignore-scripts && npx tsc --noEmit &&
-			cd /src/packages/shared && npm ci --ignore-scripts && npx tsc --noEmit &&
-			cd /src/packages/pi-aot-extension && npm ci --ignore-scripts && npx tsc --noEmit
+			set -e
+			cd /src/packages/shared && npm ci --ignore-scripts
+			cd /src/packages/pi-aot-extension && npm ci --ignore-scripts
+			cd /src/web && npm ci --ignore-scripts
+			cd /src/packages/shared && npx tsc --noEmit
+			cd /src/packages/pi-aot-extension && npx tsc --noEmit
+			cd /src/web && npx tsc --noEmit
 		`}).
 		Sync(ctx)
 	if err != nil {
