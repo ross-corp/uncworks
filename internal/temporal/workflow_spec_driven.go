@@ -355,6 +355,10 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		Metadata:  map[string]interface{}{"stage": "plan"},
 	})
 
+	// CI autofix runs skip the Plan stage — the branch already has specs
+	// from the original run, and the prompt contains the CI error context.
+	isCIAutofix := strings.HasPrefix(input.SpecSource, "ci-autofix:")
+
 	planInput := PlanRunInput{
 		AgentRunName: input.AgentRunName,
 		Namespace:    input.Namespace,
@@ -369,7 +373,26 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	}
 
 	var planOutput PlanRunOutput
-	if err := workflow.ExecuteActivity(
+	if isCIAutofix {
+		// Skip planning — use a synthetic change name and go to execute
+		planOutput = PlanRunOutput{
+			ChangeName: "ci-autofix",
+			SpecsValid: true,
+			TaskCount:  1,
+		}
+		// Close PLAN span immediately as skipped
+		writeStageSpan(ctx, input.AgentRunName, podIP, TraceSpanData{
+			ID:        planSpanID,
+			TraceID:   traceID,
+			ParentID:  rootSpanID,
+			Name:      "PLAN",
+			Type:      "stage",
+			StartTime: planStartTime.Format(time.RFC3339Nano),
+			EndTime:   workflow.Now(ctx).Format(time.RFC3339Nano),
+			Status:    "ok",
+			Metadata:  map[string]interface{}{"stage": "plan", "skipped": true, "reason": "ci-autofix"},
+		})
+	} else if err := workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, planOpts),
 		ActivityPlanRun, planInput,
 	).Get(ctx, &planOutput); err != nil {

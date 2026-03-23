@@ -202,6 +202,33 @@ export default function RunDetailView() {
         </div>
       </div>
 
+      {/* CI autofix status bar */}
+      {run.status.parentPRUrl && (
+        <div className="flex items-center gap-2 border-b bg-orange-500/10 px-4 py-1">
+          <span className="text-xs">CI Autofix run targeting </span>
+          <a
+            href={run.status.parentPRUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-500 hover:underline"
+          >
+            {run.status.parentPRUrl.split("/").pop()}
+          </a>
+          {run.status.ciFixAttempts && run.status.ciFixAttempts > 0 && (
+            <span className="text-xs text-muted-foreground">(attempt {run.status.ciFixAttempts})</span>
+          )}
+        </div>
+      )}
+      {run.status.lastCIStatus && (
+        <div className={`flex items-center gap-2 border-b px-4 py-1 ${
+          run.status.lastCIStatus === "success" ? "bg-green-500/10" : "bg-red-500/10"
+        }`}>
+          <span className="text-xs">
+            CI: {run.status.lastCIStatus === "success" ? "passing" : "failing"}
+          </span>
+        </div>
+      )}
+
       {/* Stage progress (spec-driven only) */}
       {isSpecDriven && (
         <div className="border-b px-4 py-1">

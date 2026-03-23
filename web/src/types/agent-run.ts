@@ -112,6 +112,9 @@ export interface AgentRunStatus {
   totalCost?: string;
   totalAdditions?: number;
   totalDeletions?: number;
+  ciFixAttempts?: number;
+  lastCIStatus?: string;
+  parentPRUrl?: string;
 }
 
 export interface AgentRunEvent {
