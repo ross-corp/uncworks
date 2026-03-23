@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,6 +30,8 @@ type WebhookHandler struct {
 	// httpClient is used for fetching file content from the GitHub API.
 	// Defaults to http.DefaultClient if nil.
 	httpClient *http.Client
+	// ciAutofix handles CI failure auto-fix (nil if disabled)
+	ciAutofix *CIAutofix
 }
 
 // NewWebhookHandler creates a new WebhookHandler reading configuration from
@@ -53,12 +56,20 @@ func NewWebhookHandler(k8sClient client.Client, namespace string, provider aotgi
 		log.Println("WARNING: GITHUB_WEBHOOK_SECRET not set — webhook signature validation is disabled. Any POST to /api/v1/webhooks/github will be accepted. Set GITHUB_WEBHOOK_SECRET for production use.")
 	}
 
+	maxRetries := 3
+	if v := os.Getenv("CI_AUTOFIX_MAX_RETRIES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxRetries = n
+		}
+	}
+
 	return &WebhookHandler{
 		secret:         secret,
 		allowedRepos:   repos,
 		githubProvider: provider,
 		k8sClient:      k8sClient,
 		namespace:      namespace,
+		ciAutofix:      NewCIAutofix(k8sClient, namespace, provider, maxRetries),
 	}
 }
 
@@ -94,8 +105,19 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Only handle push events.
 	eventType := r.Header.Get("X-GitHub-Event")
+
+	// Handle check_run events for CI autofix
+	if eventType == "check_run" && wh.ciAutofix != nil {
+		triggered, err := wh.ciAutofix.HandleCheckRunEvent(r.Context(), body)
+		if err != nil {
+			log.Printf("ERROR: CI autofix handler: %v", err)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "ci_autofix_triggered": triggered})
+		return
+	}
+
+	// Only handle push events beyond this point.
 	if eventType != "push" {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "message": "ignored event type"})
 		return
