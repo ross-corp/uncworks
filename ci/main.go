@@ -39,7 +39,8 @@ var images = []imageSpec{
 }
 
 // goBase returns a Go container with the source mounted and modules cached.
-// Versions match devbox.json: go@latest (1.25), golangci-lint@latest.
+// TODO: Replace with devbox-in-Dagger once Nix daemon-less containers are solved.
+// Versions are kept in sync with devbox.json manually.
 func (m *Ci) goBase(source *dagger.Directory) *dagger.Container {
 	return dag.Container().
 		From("golang:1.25-bookworm").
@@ -51,13 +52,18 @@ func (m *Ci) goBase(source *dagger.Directory) *dagger.Container {
 }
 
 // nodeBase returns a Node.js container with the source mounted and npm cached.
-// Versions match devbox.json: nodejs@22.
 func (m *Ci) nodeBase(source *dagger.Directory) *dagger.Container {
 	return dag.Container().
 		From("node:22-bookworm-slim").
 		WithMountedDirectory("/src", source).
 		WithWorkdir("/src").
 		WithMountedCache("/root/.npm", dag.CacheVolume("npm-cache"))
+}
+
+// helmBase returns a Go container with Helm installed for chart operations.
+func (m *Ci) helmBase(source *dagger.Directory) *dagger.Container {
+	return m.goBase(source).
+		WithExec([]string{"bash", "-c", "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"})
 }
 
 // Build compiles all Go binaries.
@@ -101,7 +107,7 @@ func (m *Ci) Test(ctx context.Context, source *dagger.Directory) (string, error)
 	return out, nil
 }
 
-// Check runs TypeScript type checking for web, shared, and extension packages.
+// Check runs TypeScript type checking.
 func (m *Ci) Check(ctx context.Context, source *dagger.Directory) (string, error) {
 	_, err := m.nodeBase(source).
 		WithExec([]string{"bash", "-c", `
@@ -251,8 +257,7 @@ func (m *Ci) PushImages(
 
 // PackageChart packages the Helm chart with the given version.
 func (m *Ci) PackageChart(ctx context.Context, source *dagger.Directory, version string) *dagger.File {
-	return m.goBase(source).
-		WithExec([]string{"bash", "-c", "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"}).
+	return m.helmBase(source).
 		WithExec([]string{"devbox", "run", "--", "bash", "-c", fmt.Sprintf(`
 			cd /src/deploy/helm/aot
 			sed -i "s/^version:.*/version: %s/" Chart.yaml
@@ -273,8 +278,7 @@ func (m *Ci) PushChart(
 	// +default="oci://ghcr.io/uncworks/charts"
 	registry string,
 ) (string, error) {
-	out, err := m.goBase(source).
-		WithExec([]string{"bash", "-c", "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"}).
+	out, err := m.helmBase(source).
 		WithExec([]string{"devbox", "run", "--", "bash", "-c", fmt.Sprintf(`
 			cd /src/deploy/helm/aot
 			sed -i "s/^version:.*/version: %s/" Chart.yaml
