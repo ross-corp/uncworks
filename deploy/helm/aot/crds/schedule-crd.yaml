@@ -1,0 +1,102 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: schedules.aot.uncworks.io
+spec:
+  group: aot.uncworks.io
+  names:
+    kind: Schedule
+    listKind: ScheduleList
+    plural: schedules
+    singular: schedule
+    shortNames:
+      - sched
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Cron
+          type: string
+          jsonPath: .spec.cron
+        - name: Suspended
+          type: boolean
+          jsonPath: .spec.suspend
+        - name: Last Result
+          type: string
+          jsonPath: .status.lastResult
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - cron
+              properties:
+                displayName:
+                  type: string
+                  description: Human-readable schedule name.
+                  maxLength: 128
+                cron:
+                  type: string
+                  description: Cron expression (standard 5-field format).
+                timezone:
+                  type: string
+                  description: IANA timezone for the cron expression.
+                  default: "UTC"
+                suspend:
+                  type: boolean
+                  description: Stops future executions when true.
+                concurrencyPolicy:
+                  type: string
+                  description: Controls behavior when a previous run is still active.
+                  default: "Forbid"
+                  enum:
+                    - Allow
+                    - Forbid
+                    - Replace
+                chainRef:
+                  type: string
+                  description: Triggers a Chain on schedule. Mutually exclusive with templateRef.
+                templateRef:
+                  type: string
+                  description: Triggers a single RunTemplate on schedule. Mutually exclusive with chainRef.
+                successfulRunsHistoryLimit:
+                  type: integer
+                  format: int32
+                  description: How many successful runs to keep.
+                  default: 5
+                failedRunsHistoryLimit:
+                  type: integer
+                  format: int32
+                  description: How many failed runs to keep.
+                  default: 3
+            status:
+              type: object
+              properties:
+                lastScheduledTime:
+                  type: string
+                  format: date-time
+                  description: When the schedule last fired.
+                lastRunId:
+                  type: string
+                  description: ID of the most recent run or chain run.
+                lastResult:
+                  type: string
+                  description: Outcome of the most recent run.
+                nextScheduleTime:
+                  type: string
+                  format: date-time
+                  description: When the schedule will next fire.
+                active:
+                  type: array
+                  description: Currently running run/chain-run IDs.
+                  items:
+                    type: string
