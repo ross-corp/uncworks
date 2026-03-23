@@ -1,0 +1,112 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: runtemplates.aot.uncworks.io
+spec:
+  group: aot.uncworks.io
+  names:
+    kind: RunTemplate
+    listKind: RunTemplateList
+    plural: runtemplates
+    singular: runtemplate
+    shortNames:
+      - rt
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Display Name
+          type: string
+          jsonPath: .spec.displayName
+        - name: Model
+          type: string
+          jsonPath: .spec.modelTier
+        - name: Runs
+          type: integer
+          jsonPath: .status.runCount
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  description: Human-readable template name.
+                  maxLength: 128
+                description:
+                  type: string
+                  description: Explains what this template does.
+                  maxLength: 1024
+                projectRef:
+                  type: string
+                  description: References a Project for repo/default inheritance.
+                repos:
+                  type: array
+                  description: Source code repositories.
+                  items:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      branch:
+                        type: string
+                      path:
+                        type: string
+                    required:
+                      - url
+                prompt:
+                  type: string
+                  description: The agent instruction.
+                modelTier:
+                  type: string
+                  description: Controls LLM model routing.
+                manageModelTier:
+                  type: string
+                  description: Model for plan/verify stages.
+                implementModelTier:
+                  type: string
+                  description: Model for execute stages.
+                orchestrationMode:
+                  type: string
+                  description: Controls the execution mode.
+                  enum:
+                    - single
+                    - auto
+                    - manual
+                    - spec-driven
+                ttlSeconds:
+                  type: integer
+                  format: int32
+                  description: Run timeout in seconds.
+                autoPush:
+                  type: boolean
+                  description: Enable automatic git push after success.
+                autoPR:
+                  type: boolean
+                  description: Enable automatic PR creation after success.
+                prBaseBranch:
+                  type: string
+                  description: Target branch for auto-created PRs.
+                specRef:
+                  type: string
+                  description: References a spec in the project's config repo.
+            status:
+              type: object
+              properties:
+                lastTriggeredAt:
+                  type: string
+                  format: date-time
+                  description: When this template was last used to create a run.
+                runCount:
+                  type: integer
+                  format: int32
+                  description: Total number of runs created from this template.

@@ -1,0 +1,103 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: chainruns.aot.uncworks.io
+spec:
+  group: aot.uncworks.io
+  names:
+    kind: ChainRun
+    listKind: ChainRunList
+    plural: chainruns
+    singular: chainrun
+    shortNames:
+      - cr
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Chain
+          type: string
+          jsonPath: .spec.chainRef
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - chainRef
+              properties:
+                chainRef:
+                  type: string
+                  description: References the Chain definition by name.
+                triggeredBy:
+                  type: string
+                  description: "Describes what triggered this chain run (e.g. schedule:weekly-review, manual, webhook)."
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  description: Overall chain execution state.
+                  enum:
+                    - pending
+                    - running
+                    - succeeded
+                    - failed
+                    - cancelled
+                steps:
+                  type: array
+                  description: Per-step execution status.
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - phase
+                    properties:
+                      name:
+                        type: string
+                        description: Matches the ChainStep.Name.
+                      phase:
+                        type: string
+                        description: "Step's current state."
+                        enum:
+                          - pending
+                          - running
+                          - succeeded
+                          - failed
+                          - skipped
+                      runId:
+                        type: string
+                        description: AgentRun created for this step.
+                      startedAt:
+                        type: string
+                        format: date-time
+                        description: When this step's run was created.
+                      completedAt:
+                        type: string
+                        format: date-time
+                        description: When this step's run finished.
+                      message:
+                        type: string
+                        description: Context about the step's state.
+                startedAt:
+                  type: string
+                  format: date-time
+                  description: When the chain run started.
+                completedAt:
+                  type: string
+                  format: date-time
+                  description: When the chain run finished.
+                message:
+                  type: string
+                  description: Context about the chain run state.
