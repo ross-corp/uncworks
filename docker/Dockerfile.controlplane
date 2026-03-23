@@ -10,7 +10,9 @@ RUN CGO_ENABLED=0 go build -o /apiserver ./cmd/apiserver
 RUN CGO_ENABLED=0 go build -o /controller ./cmd/controller
 RUN CGO_ENABLED=0 go build -o /temporal-worker ./cmd/temporal-worker
 
-FROM gcr.io/distroless/static-debian12
+# Use Alpine instead of distroless — controller needs ssh for soft-serve
+FROM alpine:3.21
+RUN apk add --no-cache openssh-client ca-certificates
 COPY --from=builder /apiserver /usr/local/bin/apiserver
 COPY --from=builder /controller /usr/local/bin/controller
 COPY --from=builder /temporal-worker /usr/local/bin/temporal-worker
