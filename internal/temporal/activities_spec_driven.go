@@ -762,3 +762,116 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 		time.Sleep(3 * time.Second)
 	}
 }
+
+// ======================================================================
+// Tiered Verification — Manage Agent Review Helpers
+// ======================================================================
+
+// ReadImplementAgentLog reads the last N lines of the implement agent's
+// JSONL log and extracts a summary of assistant messages and tool calls.
+// Used by the manage agent review in VerifyRun (Tier 2).
+func ReadImplementAgentLog(ctx context.Context, sc agentv1connect.AgentSidecarServiceClient, agentRunName, workDir string) string {
+	out, err := execInSidecar(ctx, sc, agentRunName, workDir,
+		"tail -200 /workspace/.aot/logs/agent.jsonl 2>/dev/null || echo ''")
+	if err != nil || strings.TrimSpace(out) == "" {
+		return "(implement agent log not available)"
+	}
+
+	var summary strings.Builder
+	lineCount := 0
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var evt map[string]interface{}
+		if json.Unmarshal([]byte(line), &evt) != nil {
+			continue
+		}
+		evtType, _ := evt["type"].(string)
+		switch evtType {
+		case "message_end":
+			if msg, ok := evt["message"].(map[string]interface{}); ok {
+				if role, _ := msg["role"].(string); role == "assistant" {
+					if contents, ok := msg["content"].([]interface{}); ok {
+						for _, c := range contents {
+							if cm, ok := c.(map[string]interface{}); ok {
+								if text, ok := cm["text"].(string); ok && text != "" {
+									if len(text) > 500 {
+										text = text[:500] + "..."
+									}
+									summary.WriteString("[assistant] " + text + "\n")
+									lineCount++
+								}
+							}
+						}
+					}
+				}
+			}
+		case "tool_execution_end":
+			toolName, _ := evt["toolName"].(string)
+			if toolName != "" {
+				summary.WriteString("[tool:" + toolName + "] completed\n")
+				lineCount++
+			}
+		}
+		if lineCount >= 50 {
+			summary.WriteString("... (truncated)\n")
+			break
+		}
+	}
+	if summary.Len() == 0 {
+		return "(no implement agent activity found)"
+	}
+	return summary.String()
+}
+
+// buildManageReviewPrompt assembles the manage agent's review prompt from
+// the git diff, spec scenarios, implement agent output, and prior feedback.
+func buildManageReviewPrompt(changeName, gitDiff, specContent, implementLog, previousFeedback string) string {
+	var prompt strings.Builder
+
+	_, _ = fmt.Fprintf(&prompt, `You are the manage agent reviewing the implementation of OpenSpec change '%s'.
+
+Your job is to evaluate whether the implement agent correctly completed the work. You are a senior engineer reviewing a junior engineer's PR. Be thorough but fair.
+
+`, changeName)
+
+	prompt.WriteString("## Git Diff\n\n```\n")
+	if len(gitDiff) > 8000 {
+		half := 4000
+		prompt.WriteString(gitDiff[:half])
+		prompt.WriteString("\n\n... (diff truncated) ...\n\n")
+		prompt.WriteString(gitDiff[len(gitDiff)-half:])
+	} else {
+		prompt.WriteString(gitDiff)
+	}
+	prompt.WriteString("\n```\n\n")
+
+	prompt.WriteString("## Spec Requirements\n\n")
+	prompt.WriteString(specContent)
+	prompt.WriteString("\n\n")
+
+	prompt.WriteString("## Implement Agent Activity\n\n")
+	prompt.WriteString(implementLog)
+	prompt.WriteString("\n\n")
+
+	if previousFeedback != "" {
+		prompt.WriteString("## Previous Review Feedback (from last attempt)\n\n")
+		prompt.WriteString(previousFeedback)
+		prompt.WriteString("\n\n")
+	}
+
+	prompt.WriteString(`## Instructions
+
+1. Read each spec requirement and its WHEN/THEN scenarios.
+2. Check the git diff to verify each scenario is satisfied.
+3. If unclear, use the read tool to examine the modified files.
+4. If the implement agent left questions in its output, either answer them (if you can) or escalate to the human via ask_user.
+5. Output your verdict as JSON:
+
+{"pass": true/false, "feedback": "detailed review comments", "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}
+`)
+
+	return prompt.String()
+}

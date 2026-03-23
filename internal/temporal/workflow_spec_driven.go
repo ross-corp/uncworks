@@ -29,6 +29,7 @@ type VerificationResult struct {
 	AutomatedChecks []AutomatedCheck `json:"automatedChecks"`
 	LLMVerdict      *LLMVerdict      `json:"llmVerdict,omitempty"`
 	FailureReport   string           `json:"failureReport,omitempty"`
+	ReviewFeedback  string           `json:"reviewFeedback,omitempty"` // Manage agent review feedback (Tier 2)
 	ExecutionTimeMs int64            `json:"executionTimeMs"`
 }
 
@@ -78,14 +79,16 @@ type PlanRunOutput struct {
 
 // VerifyRunInput contains parameters for the verification stage activity.
 type VerifyRunInput struct {
-	AgentRunName string
-	Namespace    string
-	PodName      string
-	PodIP        string
-	ChangeName   string
-	RepoPath     string
-	ParentSpanID string
-	TraceID      string
+	AgentRunName           string
+	Namespace              string
+	PodName                string
+	PodIP                  string
+	ChangeName             string
+	RepoPath               string
+	ParentSpanID           string
+	TraceID                string
+	ManageModel            string // Model for the manage agent review (Tier 2)
+	PreviousReviewFeedback string // Manage agent review feedback from previous attempt
 }
 
 // VerifyRunOutput contains the result of the verification stage.
@@ -461,6 +464,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	// STAGE 2 + 3: EXECUTE → VERIFY (with retry)
 	// =============================================
 	var lastFailureReport string
+	var lastReviewFeedback string
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if state.Phase == "Cancelled" {
@@ -485,8 +489,11 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 
 		prompt := fmt.Sprintf("Implement the OpenSpec change '%s'.\n\nRead specs at /workspace/openspec/changes/%s/ for requirements.\nRead tasks.md for your checklist. Mark each task [x] as you complete it.\n\nOriginal task: %s",
 			changeName, changeName, input.Prompt)
-		if lastFailureReport != "" {
-			prompt = fmt.Sprintf("PREVIOUS ATTEMPT FAILED:\n%s\n\nFix the issues and complete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
+		if lastReviewFeedback != "" {
+			prompt = fmt.Sprintf("MANAGE AGENT REVIEW FAILED (attempt %d):\n\n%s\n\nFix the issues identified above and complete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
+				attempt-1, lastReviewFeedback, changeName, changeName, input.Prompt)
+		} else if lastFailureReport != "" {
+			prompt = fmt.Sprintf("PREVIOUS ATTEMPT FAILED (structural checks):\n%s\n\nFix the issues and complete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
 				lastFailureReport, changeName, changeName, input.Prompt)
 		}
 
@@ -569,14 +576,16 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		})
 
 		verifyInput := VerifyRunInput{
-			AgentRunName: input.AgentRunName,
-			Namespace:    input.Namespace,
-			PodName:      podName,
-			PodIP:        podIP,
-			ChangeName:   changeName,
-			RepoPath:     "/workspace",
-			ParentSpanID: verifySpanID,
-			TraceID:      traceID,
+			AgentRunName:           input.AgentRunName,
+			Namespace:              input.Namespace,
+			PodName:                podName,
+			PodIP:                  podIP,
+			ChangeName:             changeName,
+			RepoPath:               "/workspace",
+			ParentSpanID:           verifySpanID,
+			TraceID:                traceID,
+			ManageModel:            verifyCfg.Model,
+			PreviousReviewFeedback: lastReviewFeedback,
 		}
 
 		var verifyOutput VerifyRunOutput
@@ -697,6 +706,10 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		})
 
 		// Verification failed — prepare retry context.
+		// Prefer manage agent review feedback over generic failure report.
+		if verifyOutput.Result.ReviewFeedback != "" {
+			lastReviewFeedback = verifyOutput.Result.ReviewFeedback
+		}
 		lastFailureReport = verifyOutput.Result.FailureReport
 		workflow.GetLogger(ctx).Info("Verification failed, will retry",
 			"attempt", attempt,
