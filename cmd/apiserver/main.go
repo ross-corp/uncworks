@@ -165,6 +165,10 @@ func main() {
 	projectHandler := &server.ProjectHandler{K8sClient: k8sClient, Namespace: namespace, SoftServe: ssClient}
 	projectHandler.RegisterProjectHandlers(mux)
 
+	// Register chain/schedule/template endpoints
+	chainHandler := &server.ChainHandler{K8sClient: k8sClient, Namespace: namespace}
+	chainHandler.RegisterChainHandlers(mux)
+
 	// Register GitHub webhook receiver (webhooks use their own HMAC auth, skip API key)
 	webhookHandler := server.NewWebhookHandler(k8sClient, namespace, ghProvider)
 	mux.Handle("/api/v1/webhooks/github", webhookHandler)
