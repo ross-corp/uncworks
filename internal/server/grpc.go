@@ -11,9 +11,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
-	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -31,6 +29,7 @@ import (
 	"github.com/uncworks/aot/internal/brain"
 	"github.com/uncworks/aot/internal/embeddings"
 	"github.com/uncworks/aot/internal/eventbus"
+	"github.com/uncworks/aot/internal/repoutil"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
@@ -487,12 +486,7 @@ func (s *AOTServiceHandler) SearchPastWork(ctx context.Context, req *connect.Req
 
 // repoNameFromURL derives a directory name from a git URL.
 func repoNameFromURL(repoURL string) string {
-	if u, err := url.Parse(repoURL); err == nil && u.Path != "" {
-		base := filepath.Base(u.Path)
-		return strings.TrimSuffix(base, ".git")
-	}
-	base := filepath.Base(repoURL)
-	return strings.TrimSuffix(base, ".git")
+	return repoutil.NameFromURL(repoURL)
 }
 
 // crdFieldOrLabel returns the spec field value if non-empty, otherwise falls back to the label.
