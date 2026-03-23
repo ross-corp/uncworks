@@ -997,25 +997,9 @@ func extractContentEntries(entries *[]AgentLogEntry, contents []interface{}, rol
 			})
 
 		case "toolResult":
-			toolName, _ := cm["toolName"].(string)
-			resultText := extractResultContent(cm["content"])
-			if resultText == "" {
-				continue
-			}
-			resultKey := "tool_result:" + toolName + ":" + resultText
-			if len(resultKey) > 200 {
-				resultKey = resultKey[:200]
-			}
-			if seenTexts[resultKey] {
-				continue
-			}
-			seenTexts[resultKey] = true
-			*entries = append(*entries, AgentLogEntry{
-				Timestamp: ts,
-				Type:      "tool_result",
-				Content:   resultText,
-				ToolName:  toolName,
-			})
+			// Skip — toolResult content blocks are always duplicates of
+			// tool_execution_end events which are already captured above.
+			continue
 		}
 	}
 }
