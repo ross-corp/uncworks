@@ -135,13 +135,25 @@ export const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
 ];
 
 export const MODEL_TIER_OPTIONS: { value: ModelTier; label: string; description: string }[] = [
-  { value: "default", label: "Default (Local)", description: "Ollama · qwen3:8b · No rate limits" },
-  { value: "qwen3:8b", label: "qwen3:8b", description: "Local · Ollama · Best 8B coder" },
-  { value: "llama3.1:8b", label: "llama3.1:8b", description: "Local · Ollama · All-rounder" },
-  { value: "default-cloud", label: "Cloud", description: "OpenRouter · qwen3-coder · Rate limited" },
-  { value: "qwen3-coder", label: "qwen3-coder", description: "Cloud · OpenRouter · Free" },
-  { value: "mistral-small", label: "mistral-small-3.1-24b", description: "Cloud · OpenRouter · Free" },
-  { value: "qwen2.5:0.5b", label: "qwen2.5:0.5b", description: "Local · Ollama · CI only" },
+  // Local models (Ollama)
+  { value: "default", label: "Default (Local)", description: "Ollama · qwen3:8b" },
+  { value: "qwen3:8b", label: "qwen3:8b", description: "Local · 8B coder" },
+  { value: "llama3.1:8b", label: "llama3.1:8b", description: "Local · all-rounder" },
+  // Cloud models (OpenRouter, paid)
+  { value: "default-cloud", label: "Cloud Default", description: "DeepSeek V3.1 · $0.15/M" },
+  { value: "claude-sonnet-4", label: "Claude Sonnet 4", description: "Best quality · $3/M in" },
+  { value: "claude-haiku", label: "Claude Haiku 3.5", description: "Fast Anthropic · $0.80/M" },
+  { value: "gpt-4.1-mini", label: "GPT-4.1 Mini", description: "1M ctx · $0.40/M" },
+  { value: "gemini-flash", label: "Gemini Flash", description: "1M ctx · $0.15/M" },
+  { value: "qwen3-coder", label: "Qwen3 Coder", description: "262K ctx · $0.22/M" },
+  { value: "qwen3-235b", label: "Qwen3 235B", description: "Largest Qwen · $0.20/M" },
+  { value: "deepseek-v3.1", label: "DeepSeek V3.1", description: "Cheapest · $0.15/M" },
+  { value: "deepseek-v3.2", label: "DeepSeek V3.2", description: "164K ctx · $0.26/M" },
+  { value: "mistral-medium", label: "Mistral Medium", description: "131K ctx · $0.40/M" },
+  // Free tier
+  { value: "qwen3-coder-free", label: "Qwen3 Coder (Free)", description: "Rate limited" },
+  // CI
+  { value: "qwen2.5:0.5b", label: "qwen2.5:0.5b", description: "CI only" },
 ];
 
 export const ORCHESTRATION_MODE_OPTIONS: { value: OrchestrationMode; label: string; description: string }[] = [
