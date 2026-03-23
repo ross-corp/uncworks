@@ -99,6 +99,20 @@ func run() error {
 		return fmt.Errorf("create project controller: %w", err)
 	}
 
+	// Set up Schedule controller (cron-triggered runs)
+	if err = (&controller.ScheduleReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("create schedule controller: %w", err)
+	}
+
+	// Set up ChainRun controller (DAG executor)
+	if err = (&controller.ChainRunReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("create chain run controller: %w", err)
+	}
+
 	ctrl.Log.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("run manager: %w", err)
