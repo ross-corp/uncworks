@@ -51,30 +51,28 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		return nil, fmt.Errorf("configure git user: %w", err)
 	}
 
-	// Create and checkout feature branch (force-create to handle re-runs)
+	// Create feature branch from current HEAD (which has all checkpoint commits)
 	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
 		fmt.Sprintf("git checkout -B %s", input.BranchName)); err != nil {
 		return nil, fmt.Errorf("create branch %s: %w", input.BranchName, err)
 	}
 
-	// Stage all changes
+	// Stage and commit any remaining unstaged changes
 	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
 		"git add -A"); err != nil {
 		return nil, fmt.Errorf("git add: %w", err)
 	}
 
-	// Check if there are changes to commit
 	statusOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
 		"git status --porcelain")
-	if strings.TrimSpace(statusOut) == "" {
-		return nil, fmt.Errorf("no changes to commit")
+	if strings.TrimSpace(statusOut) != "" {
+		// There are unstaged changes — commit them
+		commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
+		if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
+			return nil, fmt.Errorf("git commit: %w", err)
+		}
 	}
-
-	// Commit
-	commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
-	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
-		return nil, fmt.Errorf("git commit: %w", err)
-	}
+	// Even if no unstaged changes, the branch may have checkpoint commits to push
 
 	// Get commit SHA
 	sha, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
