@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,10 +9,41 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
+	"time"
 
+	"github.com/uncworks/aot/internal/litellm"
 	"github.com/uncworks/aot/internal/sidecar"
 )
+
+type piCost struct {
+	Input      float64 `json:"input"`
+	Output     float64 `json:"output"`
+	CacheRead  float64 `json:"cacheRead"`
+	CacheWrite float64 `json:"cacheWrite"`
+}
+
+type piModel struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Reasoning     bool     `json:"reasoning"`
+	Input         []string `json:"input"`
+	Cost          piCost   `json:"cost"`
+	ContextWindow int      `json:"contextWindow"`
+	MaxTokens     int      `json:"maxTokens"`
+}
+
+type piProvider struct {
+	BaseURL string    `json:"baseUrl"`
+	APIKey  string    `json:"apiKey"`
+	API     string    `json:"api"`
+	Models  []piModel `json:"models"`
+}
+
+type piConfig struct {
+	Providers map[string]piProvider `json:"providers"`
+}
 
 func main() {
 	port := 50052
@@ -46,45 +78,26 @@ func main() {
 
 // writePiModelsConfig generates ~/.pi/agent/models.json so pi-coding-agent
 // routes LLM calls through LiteLLM proxy instead of directly to OpenAI.
+// It dynamically fetches the available models from the LiteLLM proxy.
 func writePiModelsConfig(baseURL string) error {
-	type cost struct {
-		Input      float64 `json:"input"`
-		Output     float64 `json:"output"`
-		CacheRead  float64 `json:"cacheRead"`
-		CacheWrite float64 `json:"cacheWrite"`
-	}
-	type model struct {
-		ID            string   `json:"id"`
-		Name          string   `json:"name"`
-		Reasoning     bool     `json:"reasoning"`
-		Input         []string `json:"input"`
-		Cost          cost     `json:"cost"`
-		ContextWindow int      `json:"contextWindow"`
-		MaxTokens     int      `json:"maxTokens"`
-	}
-	type provider struct {
-		BaseURL string  `json:"baseUrl"`
-		APIKey  string  `json:"apiKey"`
-		API     string  `json:"api"`
-		Models  []model `json:"models"`
-	}
-	type config struct {
-		Providers map[string]provider `json:"providers"`
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		apiKey = "OPENAI_API_KEY"
 	}
 
-	cfg := config{
-		Providers: map[string]provider{
+	models, err := fetchModelsFromProxy(baseURL, apiKey)
+	if err != nil {
+		log.Printf("WARNING: Failed to fetch models from LiteLLM proxy, using fallback: %v", err)
+		models = fallbackModels()
+	}
+
+	cfg := piConfig{
+		Providers: map[string]piProvider{
 			"litellm": {
 				BaseURL: baseURL,
-				APIKey:  "OPENAI_API_KEY",
+				APIKey:  apiKey,
 				API:     "openai-completions",
-				Models: []model{
-					{ID: "default", Name: "Default", Input: []string{"text"}, ContextWindow: 8192, MaxTokens: 4096},
-					{ID: "default-cloud", Name: "Default Cloud", Input: []string{"text"}, ContextWindow: 128000, MaxTokens: 4096},
-					{ID: "premium", Name: "Premium", Input: []string{"text", "image"}, ContextWindow: 200000, MaxTokens: 8192,
-						Cost: cost{Input: 0.003, Output: 0.015}},
-					{ID: "ci", Name: "CI", Input: []string{"text"}, ContextWindow: 4096, MaxTokens: 2048},
-				},
+				Models:  models,
 			},
 		},
 	}
@@ -100,6 +113,53 @@ func writePiModelsConfig(baseURL string) error {
 		return fmt.Errorf("write file: %w", err)
 	}
 
-	log.Printf("Wrote pi models config to %s (baseURL: %s)", path, baseURL)
+	log.Printf("Wrote pi models config to %s (%d models from %s)", path, len(models), baseURL)
 	return nil
+}
+
+// fetchModelsFromProxy queries the LiteLLM proxy's /v1/models endpoint
+// and converts the response into pi-compatible model entries.
+func fetchModelsFromProxy(baseURL, apiKey string) ([]piModel, error) {
+	client := litellm.NewClient(baseURL, apiKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := client.ListModels(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var models []piModel
+	for _, m := range resp.Data {
+		models = append(models, piModel{
+			ID:            m.ID,
+			Name:          humanName(m.ID),
+			Input:         []string{"text"},
+			ContextWindow: 128000,
+			MaxTokens:     4096,
+		})
+	}
+	return models, nil
+}
+
+// humanName converts a model ID like "deepseek-v3.1" to "Deepseek V3.1".
+func humanName(id string) string {
+	words := strings.Split(id, "-")
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// fallbackModels returns a static list used when the proxy is unreachable.
+func fallbackModels() []piModel {
+	return []piModel{
+		{ID: "default", Name: "Default", Input: []string{"text"}, ContextWindow: 8192, MaxTokens: 4096},
+		{ID: "default-cloud", Name: "Default Cloud", Input: []string{"text"}, ContextWindow: 128000, MaxTokens: 4096},
+		{ID: "premium", Name: "Premium", Input: []string{"text", "image"}, ContextWindow: 200000, MaxTokens: 8192,
+			Cost: piCost{Input: 0.003, Output: 0.015}},
+		{ID: "ci", Name: "CI", Input: []string{"text"}, ContextWindow: 4096, MaxTokens: 2048},
+	}
 }

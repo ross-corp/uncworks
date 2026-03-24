@@ -397,6 +397,7 @@ type ProvisionLLMKeyOutput struct {
 }
 
 // modelsForTier returns the LiteLLM model names a tier is authorized to use.
+// Used as a fallback when the proxy is unreachable.
 func modelsForTier(tier string) []string {
 	switch tier {
 	case "premium":
@@ -409,6 +410,9 @@ func modelsForTier(tier string) []string {
 }
 
 // ProvisionLLMKey provisions a LiteLLM virtual key for an agent run.
+// It dynamically queries available models from the proxy and grants
+// access to all of them, falling back to hardcoded tier-based models
+// if the proxy is unreachable.
 func (a *Activities) ProvisionLLMKey(ctx context.Context, input ProvisionLLMKeyInput) (*ProvisionLLMKeyOutput, error) {
 	if a.LiteLLMClient == nil {
 		return &ProvisionLLMKeyOutput{}, nil
@@ -424,10 +428,18 @@ func (a *Activities) ProvisionLLMKey(ctx context.Context, input ProvisionLLMKeyI
 		budget = 1.0 // Default $1 budget
 	}
 
+	// Dynamically discover available models from LiteLLM proxy.
+	// Fall back to hardcoded tier-based models if the proxy is unreachable.
+	models, err := a.LiteLLMClient.ModelIDs(ctx)
+	if err != nil {
+		activity.GetLogger(ctx).Warn("Failed to list models from LiteLLM, using tier-based fallback", "error", err)
+		models = modelsForTier(tier)
+	}
+
 	resp, err := a.LiteLLMClient.GenerateKey(ctx, litellm.GenerateKeyRequest{
 		KeyAlias:  fmt.Sprintf("aot-%s-%s", input.Namespace, input.AgentRunName),
 		MaxBudget: &budget,
-		Models:    modelsForTier(tier),
+		Models:    models,
 		Metadata: map[string]string{
 			"agent_run": input.AgentRunName,
 			"namespace": input.Namespace,
