@@ -75,7 +75,7 @@
   --border: var(--unc-border);
   --input: var(--unc-border);
   --ring: var(--unc-accent);
-  --radius: 0px;
+  --radius: 6px;
 
   /* Effect tokens */
   --glow-primary: oklch(0.85 0.15 75 / 0.5);
@@ -158,10 +158,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
 }
 
 /* ============================================================
@@ -170,7 +170,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50 rounded-none!;
+    @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground font-mono;
@@ -200,7 +200,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: var(--muted);
-  border-radius: 0px;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

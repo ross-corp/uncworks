@@ -193,23 +193,23 @@ export default function NewRunView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <span className="font-semibold">New Run</span>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between border-b px-4 py-2.5">
+        <span className="font-semibold text-base">New Run</span>
+        <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">ctrl+enter to run</span>
-          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => navigate("/")}>
+          <Button size="sm" variant="ghost" onClick={() => navigate("/")}>
             Cancel
           </Button>
         </div>
       </div>
 
-      {/* Form — two-column layout */}
+      {/* Form */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl p-4 space-y-4">
+        <div className="mx-auto max-w-2xl p-6 space-y-6">
 
           {/* Repositories */}
           <section>
-            <label className="text-xs text-muted-foreground mb-1 block">Repositories</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Repositories</label>
             {repos.map((r, i) => (
               <div key={i} className="flex gap-2 mb-1">
                 <Input
@@ -231,7 +231,7 @@ export default function NewRunView() {
                 )}
               </div>
             ))}
-            <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={addRepo}>
+            <Button size="sm" variant="ghost" className="text-xs text-muted-foreground" onClick={addRepo}>
               + add repository
             </Button>
           </section>
@@ -239,16 +239,16 @@ export default function NewRunView() {
           {/* Mode + Prompt */}
           <section>
             <div className="flex items-center gap-2 mb-1">
-              <label className="text-xs text-muted-foreground">
-                {mode === "prompt" ? "Prompt" : "Prompt (optional when spec is provided)"}
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {mode === "prompt" ? "Prompt" : "Prompt (optional with spec)"}
               </label>
-              <div className="flex gap-0.5 ml-auto">
+              <div className="flex gap-0.5 ml-auto bg-muted/50 rounded-md p-0.5">
                 {(["prompt", "spec"] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`px-2 py-0.5 text-[10px] rounded transition-colors ${
-                      mode === m ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                    className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                      mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     {m}
@@ -281,7 +281,7 @@ export default function NewRunView() {
           {/* Spec editor */}
           {mode === "spec" && (
             <section>
-              <label className="text-xs text-muted-foreground mb-1 block">Spec (markdown)</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Spec (markdown)</label>
               <MarkdownEditor
                 value={specContent}
                 onChange={setSpecContent}
@@ -306,7 +306,7 @@ export default function NewRunView() {
 
           {/* Configuration — horizontal row */}
           <section>
-            <label className="text-xs text-muted-foreground mb-1 block">Configuration</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Configuration</label>
             <div className="flex gap-2 items-start">
               <div className="flex-1">
                 <Select value={modelTier} onValueChange={setModelTier}>
@@ -370,7 +370,7 @@ export default function NewRunView() {
           {/* Classification — project, feature, tags */}
           <section>
             <div className="flex items-center gap-2 mb-1">
-              <label className="text-xs text-muted-foreground">Classification</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Classification</label>
               {classifying && <span className="text-[10px] text-muted-foreground animate-pulse">suggesting...</span>}
             </div>
             <div className="flex gap-2">

@@ -38,12 +38,12 @@ function FeatureHeader({
 }) {
   return (
     <div
-      className="flex items-center gap-3 border-b bg-muted/30 px-4 py-2 text-sm cursor-pointer select-none"
+      className="flex items-center gap-3 border-b bg-muted/20 px-4 py-2 text-sm cursor-pointer select-none hover:bg-muted/40 transition-colors"
       onClick={onToggle}
     >
-      <span className="text-xs text-muted-foreground">{expanded ? "\u25BC" : "\u25B6"}</span>
+      <span className="text-xs text-muted-foreground transition-transform" style={{ transform: expanded ? "rotate(90deg)" : "none" }}>&#9654;</span>
       <span
-        className="font-bold truncate hover:underline"
+        className="font-semibold truncate hover:underline"
         onClick={(e) => { e.stopPropagation(); onNavigate(); }}
       >
         {group.feature}
@@ -246,84 +246,62 @@ export default function RunListView() {
     return (
       <div
         data-testid={`run-row-${run.id}`}
-        className={`flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-b border-border/50 transition-colors ${
-          index === selected ? "bg-accent/50" : "hover:bg-muted/30"
+        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-border/40 transition-colors ${
+          index === selected ? "bg-accent/40" : "hover:bg-muted/20"
         } ${run.status.archived ? "opacity-40" : ""}`}
         onClick={() => selectMode ? toggleSelect(run.id) : navigate(`/run/${run.id}`)}
       >
-        {/* Checkbox (select mode) */}
         {selectMode && (
           <input
             type="checkbox"
             checked={selectedIds.has(run.id)}
             onChange={() => toggleSelect(run.id)}
-            className="shrink-0"
+            className="shrink-0 rounded"
           />
         )}
 
-        {/* Status dot */}
         <RunStatusBadge phase={run.status.phase} stage={run.status.stage} />
 
-        {/* Name + inline metadata */}
         <div className="flex-1 min-w-0">
-          <span className="truncate block">{run.spec.displayName || run.name}</span>
+          <span className="truncate block text-sm">{run.spec.displayName || run.name}</span>
         </div>
 
-        {/* Inline metadata pills */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Model */}
-          <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <span className="text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
             {run.spec.modelTier || "default"}
           </span>
 
-          {/* Cost */}
           {run.status.totalCost && (
-            <span className="text-[11px] text-muted-foreground">{run.status.totalCost}</span>
+            <span className="text-xs text-muted-foreground">{run.status.totalCost}</span>
           )}
 
-          {/* Diff stats */}
           {hasDiff && (
-            <span className="text-[11px] font-mono">
+            <span className="text-xs font-mono">
               <span className="text-green-600 dark:text-green-400">+{run.status.totalAdditions || 0}</span>
-              <span className="text-red-600 dark:text-red-400"> -{run.status.totalDeletions || 0}</span>
+              <span className="text-red-600 dark:text-red-400 ml-1">-{run.status.totalDeletions || 0}</span>
             </span>
           )}
 
-          {/* PR link */}
           {run.status.prUrl && (
             <a
               href={run.status.prUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[11px] text-blue-500 hover:text-blue-400 font-medium"
+              className="text-xs text-blue-500 hover:text-blue-400 font-medium"
               onClick={(e) => e.stopPropagation()}
             >
               PR
             </a>
           )}
 
-          {/* CI fix indicator */}
-          {run.status.parentPRUrl && (
-            <a
-              href={run.status.parentPRUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-orange-500 hover:text-orange-400"
-              onClick={(e) => e.stopPropagation()}
-              title="CI autofix run"
-            >
-              fix
-            </a>
-          )}
           {run.status.lastCIStatus === "success" && (
-            <span className="text-[10px] text-green-500" title="CI passing">ci ok</span>
+            <span className="text-xs text-green-500">CI ok</span>
           )}
           {run.status.lastCIStatus === "failure" && (
-            <span className="text-[10px] text-red-500" title="CI failing">ci fail</span>
+            <span className="text-xs text-red-500">CI fail</span>
           )}
 
-          {/* Age */}
-          <span className="text-[11px] text-muted-foreground w-8 text-right">{formatAge(run.createdAt)}</span>
+          <span className="text-xs text-muted-foreground w-10 text-right">{formatAge(run.createdAt)}</span>
         </div>
       </div>
     );
@@ -340,20 +318,44 @@ export default function RunListView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-3">
-          <span className="font-semibold">UNCWORKS</span>
-          <span className="text-muted-foreground text-xs">({filtered.length})</span>
+      <div className="border-b px-4 py-2.5 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-base">Runs</span>
+            <span className="text-muted-foreground text-xs">{filtered.length}</span>
+            {activeProject && (
+              <Badge variant="secondary" className="cursor-pointer" onClick={() => setActiveProject("")}>
+                {activeProject} &times;
+              </Badge>
+            )}
+          </div>
 
-          {/* Status filter */}
-          <div className="flex items-center gap-0.5 border rounded px-0.5 py-0.5">
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" className="h-7 text-xs px-2.5" onClick={() => navigate("/projects")}>
+              Projects
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs px-2.5" onClick={() => navigate("/chains")}>
+              Chains
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs px-2.5" onClick={() => navigate("/schedules")}>
+              Schedules
+            </Button>
+            <Button size="sm" variant="default" className="h-7 text-xs px-3" onClick={() => navigate("/new")}>
+              + New Run
+            </Button>
+          </div>
+        </div>
+
+        {/* Filter row */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
             {(["all", "running", "failed", "succeeded"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
+                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
                   statusFilter === s
-                    ? "bg-foreground text-background font-medium"
+                    ? "bg-background text-foreground font-medium shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -361,39 +363,19 @@ export default function RunListView() {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Right side actions */}
-        <div className="flex items-center gap-2">
-          {activeProject && (
-            <Badge variant="secondary" className="text-[10px] cursor-pointer" onClick={() => setActiveProject("")}>
-              {activeProject} &times;
-            </Badge>
-          )}
+          <div className="flex-1" />
           <button
             onClick={() => setShowArchived(!showArchived)}
-            className={`text-[11px] px-2 py-0.5 rounded transition-colors ${showArchived ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            className={`text-xs px-2.5 py-1 rounded-md transition-colors ${showArchived ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
-            {showArchived ? "show archived" : "archived"}
+            {showArchived ? "hide archived" : "show archived"}
           </button>
           <button
             onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-            className={`text-[11px] px-2 py-0.5 rounded transition-colors ${selectMode ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            className={`text-xs px-2.5 py-1 rounded-md transition-colors ${selectMode ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
             {selectMode ? "done" : "select"}
           </button>
-          <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => navigate("/projects")}>
-            Projects
-          </Button>
-          <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => navigate("/chains")}>
-            Chains
-          </Button>
-          <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => navigate("/schedules")}>
-            Schedules
-          </Button>
-          <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => navigate("/new")}>
-            + new
-          </Button>
         </div>
       </div>
 
@@ -481,9 +463,9 @@ export default function RunListView() {
       </div>
 
       {/* Footer */}
-      <div className="border-t px-4 py-1 text-[10px] text-muted-foreground flex items-center justify-between">
-        <span>j/k nav · enter open · n new · d delete · c clone · x select · p project · 1/2 view</span>
-        <span>/ name · ? state · ' stage · " model</span>
+      <div className="border-t px-4 py-1.5 text-xs text-muted-foreground flex items-center justify-between">
+        <span>j/k nav &middot; enter open &middot; n new &middot; d delete &middot; c clone &middot; x select &middot; p project</span>
+        <span>/ name &middot; ? state &middot; &apos; stage &middot; &quot; model</span>
       </div>
     </div>
   );

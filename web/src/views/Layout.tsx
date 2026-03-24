@@ -1,19 +1,10 @@
 import { Outlet } from "react-router-dom";
 import { useThemeNew, type ColorMode } from "../hooks/useThemeNew";
 
-const MODE_ICONS: Record<string, string> = {
-  light: "\u2600",    // ☀
-  dark: "\u263E",     // ☾
-  system: "\u25D1",   // ◑
-};
-
 const MODE_CYCLE: ColorMode[] = ["light", "dark", "system"];
 
-/**
- * Root layout — renders the current route with theme toggle.
- */
 export default function Layout() {
-  const { mode, setMode, resolvedTheme } = useThemeNew();
+  const { mode, setMode } = useThemeNew();
 
   function cycleMode() {
     const idx = MODE_CYCLE.indexOf(mode);
@@ -27,14 +18,13 @@ export default function Layout() {
         <Outlet />
       </div>
       <div className="flex items-center justify-between border-t px-4 py-1">
-        <span className="text-[10px] text-muted-foreground">UNCWORKS</span>
+        <span className="text-xs text-muted-foreground tracking-wider">UNCWORKS</span>
         <button
           onClick={cycleMode}
-          className="flex items-center gap-1.5 px-2 py-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          title={`Theme: ${mode} (${resolvedTheme})`}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded-md"
+          title={`Theme: ${mode}`}
         >
-          <span>{MODE_ICONS[mode]}</span>
-          <span className="text-[10px] uppercase">{mode}</span>
+          {mode}
         </button>
       </div>
     </div>
