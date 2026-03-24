@@ -36,6 +36,7 @@ var images = []imageSpec{
 	{Name: "aot-sidecar", Dockerfile: "docker/Dockerfile.sidecar", Context: "."},
 	{Name: "aot-agent", Dockerfile: "docker/Dockerfile.agent-base", Context: "."},
 	{Name: "aot-web", Dockerfile: "docker/Dockerfile.web", Context: "web"},
+	{Name: "aot-bff", Dockerfile: "docker/Dockerfile.bff", Context: "."},
 }
 
 // goBase returns a Go container with the source mounted and modules cached.
@@ -215,7 +216,7 @@ func (m *Ci) PushImages(
 	registryUser string,
 	registryPass *dagger.Secret,
 	// +optional
-	// +default="ghcr.io/uncworks"
+	// +default="ghcr.io/ross-corp"
 	registry string,
 ) (string, error) {
 	type result struct {
@@ -264,10 +265,10 @@ func (m *Ci) PushImages(
 // PackageChart packages the Helm chart with the given version.
 func (m *Ci) PackageChart(ctx context.Context, source *dagger.Directory, version string) *dagger.File {
 	return m.helmBase(source).
-		WithExec([]string{"devbox", "run", "--", "bash", "-c", fmt.Sprintf(`
+		WithExec([]string{"bash", "-c", fmt.Sprintf(`
 			cd /src/deploy/helm/aot
 			sed -i "s/^version:.*/version: %s/" Chart.yaml
-			sed -i "s/^appVersion:.*/appVersion: %s/" Chart.yaml
+			sed -i "s/^appVersion:.*/appVersion: \"%s\"/" Chart.yaml
 			helm package .
 		`, version, version)}).
 		File(fmt.Sprintf("/src/deploy/helm/aot/aot-%s.tgz", version))
@@ -281,17 +282,19 @@ func (m *Ci) PushChart(
 	registryUser string,
 	registryPass *dagger.Secret,
 	// +optional
-	// +default="oci://ghcr.io/uncworks/charts"
+	// +default="oci://ghcr.io/ross-corp/charts"
 	registry string,
 ) (string, error) {
 	out, err := m.helmBase(source).
-		WithExec([]string{"devbox", "run", "--", "bash", "-c", fmt.Sprintf(`
+		WithSecretVariable("HELM_REGISTRY_PASS", registryPass).
+		WithExec([]string{"bash", "-c", fmt.Sprintf(`
 			cd /src/deploy/helm/aot
 			sed -i "s/^version:.*/version: %s/" Chart.yaml
-			sed -i "s/^appVersion:.*/appVersion: %s/" Chart.yaml
+			sed -i "s/^appVersion:.*/appVersion: \"%s\"/" Chart.yaml
 			helm package .
+			echo "$HELM_REGISTRY_PASS" | helm registry login ghcr.io --username %s --password-stdin
 			helm push aot-%s.tgz %s
-		`, version, version, version, registry)}).
+		`, version, version, registryUser, version, registry)}).
 		Stdout(ctx)
 	if err != nil {
 		return "", fmt.Errorf("chart push failed: %w", err)
@@ -308,10 +311,10 @@ func (m *Ci) Release(
 	registryUser string,
 	registryPass *dagger.Secret,
 	// +optional
-	// +default="ghcr.io/uncworks"
+	// +default="ghcr.io/ross-corp"
 	imageRegistry string,
 	// +optional
-	// +default="oci://ghcr.io/uncworks/charts"
+	// +default="oci://ghcr.io/ross-corp/charts"
 	chartRegistry string,
 ) (string, error) {
 	// Gate: all checks must pass first

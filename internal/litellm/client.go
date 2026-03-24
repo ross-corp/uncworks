@@ -125,3 +125,55 @@ func (c *Client) DeleteKey(ctx context.Context, keys []string) (*DeleteKeyRespon
 	}
 	return &result, nil
 }
+
+// ModelInfo represents a model returned by the LiteLLM /v1/models endpoint.
+type ModelInfo struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	OwnedBy string `json:"owned_by,omitempty"`
+}
+
+// ListModelsResponse is the response from GET /v1/models.
+type ListModelsResponse struct {
+	Object string      `json:"object"`
+	Data   []ModelInfo `json:"data"`
+}
+
+// ListModels returns all models available on the LiteLLM proxy.
+func (c *Client) ListModels(ctx context.Context) (*ListModelsResponse, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+c.masterKey)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("/v1/models returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result ListModelsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &result, nil
+}
+
+// ModelIDs returns just the model ID strings from all available models.
+func (c *Client) ModelIDs(ctx context.Context) ([]string, error) {
+	resp, err := c.ListModels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(resp.Data))
+	for i, m := range resp.Data {
+		ids[i] = m.ID
+	}
+	return ids, nil
+}
