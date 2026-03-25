@@ -343,6 +343,74 @@ func TestProjectHandler_ListWithProjects(t *testing.T) {
 	}
 }
 
+func TestProjectHandler_UpdateProject(t *testing.T) {
+	project := &aotv1alpha1.Project{
+		ObjectMeta: metav1.ObjectMeta{Name: "upd-proj", Namespace: "default"},
+		Spec: aotv1alpha1.ProjectSpec{
+			DisplayName: "Old Name",
+			Devbox:      nil,
+			Defaults:    nil,
+		},
+	}
+	k8s := fake.NewClientBuilder().WithScheme(projectScheme()).WithObjects(project).Build()
+	h := &ProjectHandler{K8sClient: k8s, Namespace: "default"}
+
+	mux := http.NewServeMux()
+	h.RegisterProjectHandlers(mux)
+
+	newDisplay := "New Name"
+	body := map[string]interface{}{
+		"displayName": newDisplay,
+		"devbox": map[string]interface{}{
+			"packages": []string{"go@1.22", "nodejs@20"},
+		},
+		"defaults": map[string]interface{}{
+			"modelTier": "premium",
+		},
+	}
+	encoded, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/projects/upd-proj", bytes.NewBuffer(encoded))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+
+	var got projectResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.DisplayName != newDisplay {
+		t.Errorf("displayName = %q, want %q", got.DisplayName, newDisplay)
+	}
+	if got.Devbox == nil || len(got.Devbox.Packages) != 2 {
+		t.Errorf("expected 2 devbox packages, got devbox: %v", got.Devbox)
+	}
+	if got.Defaults == nil || got.Defaults.ModelTier != "premium" {
+		t.Errorf("expected defaults.modelTier=premium, got: %v", got.Defaults)
+	}
+}
+
+func TestProjectHandler_UpdateProject_NotFound(t *testing.T) {
+	k8s := fake.NewClientBuilder().WithScheme(projectScheme()).Build()
+	h := &ProjectHandler{K8sClient: k8s, Namespace: "default"}
+
+	mux := http.NewServeMux()
+	h.RegisterProjectHandlers(mux)
+
+	body := `{"displayName":"X"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/projects/nonexistent", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
 func TestIsValidRepoPath(t *testing.T) {
 	tests := []struct {
 		path string

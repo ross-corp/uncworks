@@ -73,3 +73,38 @@ func TestValidateChainDAG_DuplicateName(t *testing.T) {
 		t.Fatal("expected error for duplicate step name, got nil")
 	}
 }
+
+func TestValidateChainDAG_Empty(t *testing.T) {
+	// Empty step list should succeed (no cycle, no undefined refs).
+	if err := ValidateChainDAG([]ChainStep{}); err != nil {
+		t.Fatalf("expected no error for empty steps, got: %v", err)
+	}
+}
+
+func TestValidateChainDAG_SingleStep(t *testing.T) {
+	steps := []ChainStep{
+		{Name: "A", TemplateRef: "t"},
+	}
+	if err := ValidateChainDAG(steps); err != nil {
+		t.Fatalf("expected no error for single step, got: %v", err)
+	}
+}
+
+func TestValidateChainDAG_SelfReference(t *testing.T) {
+	steps := []ChainStep{
+		{Name: "A", TemplateRef: "t", DependsOn: []string{"A"}},
+	}
+	if err := ValidateChainDAG(steps); err == nil {
+		t.Fatal("expected cycle error for self-reference, got nil")
+	}
+}
+
+func TestValidateChainDAG_UnknownDependency(t *testing.T) {
+	steps := []ChainStep{
+		{Name: "A", TemplateRef: "t"},
+		{Name: "B", TemplateRef: "t", DependsOn: []string{"nonexistent"}},
+	}
+	if err := ValidateChainDAG(steps); err == nil {
+		t.Fatal("expected error for unknown dependency, got nil")
+	}
+}

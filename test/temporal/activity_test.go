@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.temporal.io/sdk/testsuite"
+
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 
 	"github.com/uncworks/aot/internal/litellm"
@@ -148,5 +150,63 @@ func TestRevokeLLMKey_EmptyKey(t *testing.T) {
 	err := activities.RevokeLLMKey(context.Background(), aottemporal.RevokeLLMKeyInput{Key: ""})
 	if err != nil {
 		t.Fatalf("expected no error for empty key: %v", err)
+	}
+}
+
+// TestProvisionLLMKey_FallbackOnModelError verifies that when /v1/models returns
+// a server error the provisioning falls back to the static modelsForTier list and
+// still generates a key successfully.
+// It uses testsuite.TestActivityEnvironment so that activity.GetLogger works inside
+// the fallback code path.
+func TestProvisionLLMKey_FallbackOnModelError(t *testing.T) {
+	keyCalled := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/models" {
+			// Simulate server error — forces fallback to static list.
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		// /key/generate
+		keyCalled = true
+		var req litellm.GenerateKeyRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+
+		// With the default tier the fallback list has at least 2 models.
+		if len(req.Models) < 1 {
+			t.Errorf("expected at least 1 model in fallback list, got %d", len(req.Models))
+		}
+
+		_ = json.NewEncoder(w).Encode(litellm.GenerateKeyResponse{Key: "sk-fallback"})
+	}))
+	defer server.Close()
+
+	activities := &aottemporal.Activities{
+		LiteLLMClient: litellm.NewClient(server.URL, "master-key"),
+	}
+
+	// Use the Temporal test activity environment so that activity.GetLogger(ctx)
+	// inside the fallback path doesn't panic.
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestActivityEnvironment()
+	env.RegisterActivity(activities)
+
+	val, err := env.ExecuteActivity(activities.ProvisionLLMKey, aottemporal.ProvisionLLMKeyInput{
+		AgentRunName: "fallback-run",
+		Namespace:    "default",
+		ModelTier:    "default",
+	})
+	if err != nil {
+		t.Fatalf("ProvisionLLMKey: %v", err)
+	}
+	var out aottemporal.ProvisionLLMKeyOutput
+	if err := val.Get(&out); err != nil {
+		t.Fatalf("get output: %v", err)
+	}
+	if out.Key != "sk-fallback" {
+		t.Errorf("unexpected key: %s", out.Key)
+	}
+	if !keyCalled {
+		t.Error("key/generate was never called")
 	}
 }
