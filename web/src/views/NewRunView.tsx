@@ -364,7 +364,6 @@ export default function NewRunView() {
                     <div className="flex justify-end mt-1">
                       <Button
                         size="sm"
-                        variant="outline"
                         className="text-sm"
                         disabled={improvingPrompt}
                         onClick={() => improveText(prompt, "prompt", setPrompt, setImprovingPrompt)}
@@ -389,7 +388,6 @@ export default function NewRunView() {
                       <div className="flex justify-end mt-1">
                         <Button
                           size="sm"
-                          variant="outline"
                           className="text-sm"
                           disabled={improvingSpec}
                           onClick={() => improveText(specContent, "spec", setSpecContent, setImprovingSpec)}

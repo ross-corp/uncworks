@@ -354,7 +354,7 @@ export default function ProjectDetailView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => navigate(`/new?project=${name}`)}>
+          <Button size="sm" onClick={() => navigate(`/new?project=${name}`)}>
             + new run
           </Button>
         </div>
@@ -455,7 +455,6 @@ export default function ProjectDetailView() {
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
                       disabled={!hasChanges || saving}
                       onClick={saveFile}
                     >
@@ -465,7 +464,6 @@ export default function ProjectDetailView() {
                       <>
                         <Button
                           size="sm"
-                          variant="outline"
                           onClick={() => setChatOpen(true)}
                         >
                           Chat about this spec
@@ -500,7 +498,7 @@ export default function ProjectDetailView() {
           {runs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
               <span className="text-sm">No runs yet</span>
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" asChild>
                 <Link to={`/new?project=${name}`}>+ New Run</Link>
               </Button>
             </div>

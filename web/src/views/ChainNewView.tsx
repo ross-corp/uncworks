@@ -183,7 +183,7 @@ export default function ChainNewView() {
           <div className="space-y-2 pt-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold">Steps</span>
-              <Button type="button" size="sm" variant="outline" onClick={addStep}>
+              <Button type="button" size="sm" onClick={addStep}>
                 + add step
               </Button>
             </div>

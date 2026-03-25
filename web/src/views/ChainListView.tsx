@@ -81,7 +81,7 @@ export default function ChainListView() {
     <div className="flex h-full flex-col">
       <div className="h-12 border-b flex items-center px-4 gap-2">
         <span className="font-semibold flex-1">Chains</span>
-        <Button size="sm" variant="outline" onClick={() => navigate("/chains/new")}>
+        <Button size="sm" onClick={() => navigate("/chains/new")}>
           + new chain
         </Button>
       </div>

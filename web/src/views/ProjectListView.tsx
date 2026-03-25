@@ -109,7 +109,7 @@ export default function ProjectListView() {
           <Button size="sm" variant="ghost" onClick={() => navigate("/")}>
             Runs
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setShowCreate(!showCreate)}>
+          <Button size="sm" onClick={() => setShowCreate(!showCreate)}>
             + new project
           </Button>
         </div>

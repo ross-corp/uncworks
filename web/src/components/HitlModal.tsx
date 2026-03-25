@@ -51,7 +51,7 @@ export default function HitlModal({ open, promptText, onSubmit, onClose }: HitlM
           onKeyDown={handleKeyDown}
         />
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
           <Button size="sm" onClick={handleSubmit} disabled={!value.trim()}>
