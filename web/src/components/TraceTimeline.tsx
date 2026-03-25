@@ -1047,10 +1047,10 @@ export default function TraceTimeline({
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <Button size="sm" variant="outline" onClick={expandAll}>
+          <Button size="sm" onClick={expandAll}>
             Expand All
           </Button>
-          <Button size="sm" variant="outline" onClick={collapseAll}>
+          <Button size="sm" onClick={collapseAll}>
             Collapse All
           </Button>
         </div>
@@ -1080,7 +1080,7 @@ export default function TraceTimeline({
           <Button
             key={chip}
             size="sm"
-            variant={activeChips.has(chip) ? "default" : "outline"}
+            variant={activeChips.has(chip) ? "terminal" : "ghost"}
             onClick={() => toggleChip(chip)}
             className={cn(
               "rounded-full",

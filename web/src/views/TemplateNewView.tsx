@@ -125,7 +125,7 @@ export default function TemplateNewView() {
             <Button type="submit" size="sm" disabled={!name || submitting}>
               {submitting ? "Creating..." : "Create template"}
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => navigate("/templates")}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => navigate("/templates")}>
               Cancel
             </Button>
           </div>

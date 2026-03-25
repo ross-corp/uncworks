@@ -528,7 +528,7 @@ export default function RunListView() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <Button size="sm" variant="default" onClick={() => navigate("/new")}>
+            <Button size="sm" onClick={() => navigate("/new")}>
               + New Run
             </Button>
           </div>
