@@ -60,6 +60,10 @@ spec:
             - name: GITHUB_TOKEN_SECRET_NAME
               value: {{ .Values.github.tokenSecretName | quote }}
             {{- end }}
+            {{- if .Values.cudgel.enabled }}
+            - name: CUDGEL_ENDPOINT
+              value: {{ .Values.cudgel.endpoint | quote }}
+            {{- end }}
           {{- with .Values.worker.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

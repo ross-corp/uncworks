@@ -21,12 +21,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentSidecarService_StartAgent_FullMethodName   = "/aot.agent.v1.AgentSidecarService/StartAgent"
-	AgentSidecarService_StreamOutput_FullMethodName = "/aot.agent.v1.AgentSidecarService/StreamOutput"
-	AgentSidecarService_SendInput_FullMethodName    = "/aot.agent.v1.AgentSidecarService/SendInput"
-	AgentSidecarService_GetStatus_FullMethodName    = "/aot.agent.v1.AgentSidecarService/GetStatus"
-	AgentSidecarService_StopAgent_FullMethodName    = "/aot.agent.v1.AgentSidecarService/StopAgent"
-	AgentSidecarService_ExecCommand_FullMethodName  = "/aot.agent.v1.AgentSidecarService/ExecCommand"
+	AgentSidecarService_StartAgent_FullMethodName     = "/aot.agent.v1.AgentSidecarService/StartAgent"
+	AgentSidecarService_StreamOutput_FullMethodName   = "/aot.agent.v1.AgentSidecarService/StreamOutput"
+	AgentSidecarService_SendInput_FullMethodName      = "/aot.agent.v1.AgentSidecarService/SendInput"
+	AgentSidecarService_GetStatus_FullMethodName      = "/aot.agent.v1.AgentSidecarService/GetStatus"
+	AgentSidecarService_StopAgent_FullMethodName      = "/aot.agent.v1.AgentSidecarService/StopAgent"
+	AgentSidecarService_ExecCommand_FullMethodName    = "/aot.agent.v1.AgentSidecarService/ExecCommand"
+	AgentSidecarService_SemanticSearch_FullMethodName = "/aot.agent.v1.AgentSidecarService/SemanticSearch"
 )
 
 // AgentSidecarServiceClient is the client API for AgentSidecarService service.
@@ -49,6 +50,10 @@ type AgentSidecarServiceClient interface {
 	// ExecCommand runs a bash command in the workspace and returns the result.
 	// Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
 	ExecCommand(ctx context.Context, in *ExecCommandRequest, opts ...grpc.CallOption) (*ExecCommandResponse, error)
+	// SemanticSearch performs a semantic code search via the cudgel service.
+	// Returns ranked code symbols matching the query.
+	// Returns an empty response (no error) when CUDGEL_ENDPOINT is unset or cudgel is unavailable.
+	SemanticSearch(ctx context.Context, in *SemanticSearchRequest, opts ...grpc.CallOption) (*SemanticSearchResponse, error)
 }
 
 type agentSidecarServiceClient struct {
@@ -128,6 +133,16 @@ func (c *agentSidecarServiceClient) ExecCommand(ctx context.Context, in *ExecCom
 	return out, nil
 }
 
+func (c *agentSidecarServiceClient) SemanticSearch(ctx context.Context, in *SemanticSearchRequest, opts ...grpc.CallOption) (*SemanticSearchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SemanticSearchResponse)
+	err := c.cc.Invoke(ctx, AgentSidecarService_SemanticSearch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentSidecarServiceServer is the server API for AgentSidecarService service.
 // All implementations must embed UnimplementedAgentSidecarServiceServer
 // for forward compatibility.
@@ -148,6 +163,10 @@ type AgentSidecarServiceServer interface {
 	// ExecCommand runs a bash command in the workspace and returns the result.
 	// Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
 	ExecCommand(context.Context, *ExecCommandRequest) (*ExecCommandResponse, error)
+	// SemanticSearch performs a semantic code search via the cudgel service.
+	// Returns ranked code symbols matching the query.
+	// Returns an empty response (no error) when CUDGEL_ENDPOINT is unset or cudgel is unavailable.
+	SemanticSearch(context.Context, *SemanticSearchRequest) (*SemanticSearchResponse, error)
 	mustEmbedUnimplementedAgentSidecarServiceServer()
 }
 
@@ -175,6 +194,9 @@ func (UnimplementedAgentSidecarServiceServer) StopAgent(context.Context, *StopAg
 }
 func (UnimplementedAgentSidecarServiceServer) ExecCommand(context.Context, *ExecCommandRequest) (*ExecCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExecCommand not implemented")
+}
+func (UnimplementedAgentSidecarServiceServer) SemanticSearch(context.Context, *SemanticSearchRequest) (*SemanticSearchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SemanticSearch not implemented")
 }
 func (UnimplementedAgentSidecarServiceServer) mustEmbedUnimplementedAgentSidecarServiceServer() {}
 func (UnimplementedAgentSidecarServiceServer) testEmbeddedByValue()                             {}
@@ -298,6 +320,24 @@ func _AgentSidecarService_ExecCommand_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentSidecarService_SemanticSearch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SemanticSearchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentSidecarServiceServer).SemanticSearch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentSidecarService_SemanticSearch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentSidecarServiceServer).SemanticSearch(ctx, req.(*SemanticSearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentSidecarService_ServiceDesc is the grpc.ServiceDesc for AgentSidecarService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -324,6 +364,10 @@ var AgentSidecarService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExecCommand",
 			Handler:    _AgentSidecarService_ExecCommand_Handler,
+		},
+		{
+			MethodName: "SemanticSearch",
+			Handler:    _AgentSidecarService_SemanticSearch_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

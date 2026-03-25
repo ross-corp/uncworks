@@ -400,3 +400,81 @@ func TestWatchAgentRun_NotFound(t *testing.T) {
 		t.Errorf("expected NotFound, got %v", connect.CodeOf(stream.Err()))
 	}
 }
+
+// --- SearchPastWork SOURCE_CODE tests ---
+
+func TestSearchPastWork_SourceCode_NoEndpoint(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "")
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+
+	resp, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query:        "authentication middleware",
+		SourceFilter: apiv1.SourceFilter_SOURCE_FILTER_SOURCE_CODE,
+		Limit:        5,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Msg.Results) != 0 {
+		t.Errorf("expected empty results when endpoint unset, got %d", len(resp.Msg.Results))
+	}
+}
+
+func TestSearchPastWork_SourceCode_Success(t *testing.T) {
+	cudgelSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			http.Error(w, "unexpected", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"name":"AuthHandler","kind":"function","file":"auth.go","line":10,"snippet":"func AuthHandler()","score":0.95}]`))
+	}))
+	defer cudgelSrv.Close()
+	t.Setenv("CUDGEL_ENDPOINT", cudgelSrv.URL)
+
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+
+	resp, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query:        "authentication middleware",
+		SourceFilter: apiv1.SourceFilter_SOURCE_FILTER_SOURCE_CODE,
+		Limit:        5,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Msg.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Msg.Results))
+	}
+	r := resp.Msg.Results[0]
+	if r.NodeType != "function" {
+		t.Errorf("expected node_type=function, got %q", r.NodeType)
+	}
+	if r.ChunkText != "func AuthHandler()" {
+		t.Errorf("expected snippet as chunk_text, got %q", r.ChunkText)
+	}
+	if r.SimilarityScore != 0.95 {
+		t.Errorf("expected score=0.95, got %f", r.SimilarityScore)
+	}
+}
+
+func TestSearchPastWork_SourceCode_CudgelUnavailable(t *testing.T) {
+	// Point to a non-listening port
+	t.Setenv("CUDGEL_ENDPOINT", "http://127.0.0.1:19998")
+
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+
+	resp, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query:        "auth",
+		SourceFilter: apiv1.SourceFilter_SOURCE_FILTER_SOURCE_CODE,
+		Limit:        5,
+	}))
+	if err != nil {
+		t.Fatalf("expected empty response, got error: %v", err)
+	}
+	if len(resp.Msg.Results) != 0 {
+		t.Errorf("expected empty results on cudgel failure, got %d", len(resp.Msg.Results))
+	}
+}

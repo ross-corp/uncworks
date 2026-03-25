@@ -255,6 +255,9 @@ const (
 	SourceFilter_SOURCE_FILTER_ALL   SourceFilter = 0
 	SourceFilter_SOURCE_FILTER_CODE  SourceFilter = 1
 	SourceFilter_SOURCE_FILTER_TRACE SourceFilter = 2
+	// SOURCE_FILTER_SOURCE_CODE queries the cudgel semantic code search index
+	// rather than the internal code_chunks table.
+	SourceFilter_SOURCE_FILTER_SOURCE_CODE SourceFilter = 3
 )
 
 // Enum value maps for SourceFilter.
@@ -263,11 +266,13 @@ var (
 		0: "SOURCE_FILTER_ALL",
 		1: "SOURCE_FILTER_CODE",
 		2: "SOURCE_FILTER_TRACE",
+		3: "SOURCE_FILTER_SOURCE_CODE",
 	}
 	SourceFilter_value = map[string]int32{
-		"SOURCE_FILTER_ALL":   0,
-		"SOURCE_FILTER_CODE":  1,
-		"SOURCE_FILTER_TRACE": 2,
+		"SOURCE_FILTER_ALL":         0,
+		"SOURCE_FILTER_CODE":        1,
+		"SOURCE_FILTER_TRACE":       2,
+		"SOURCE_FILTER_SOURCE_CODE": 3,
 	}
 )
 
@@ -2394,11 +2399,12 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x18AGENT_RUN_EVENT_TYPE_LOG\x10\x02\x12\"\n" +
 	"\x1eAGENT_RUN_EVENT_TYPE_TOOL_CALL\x10\x03\x12*\n" +
 	"&AGENT_RUN_EVENT_TYPE_WAITING_FOR_INPUT\x10\x04\x12\"\n" +
-	"\x1eAGENT_RUN_EVENT_TYPE_COMPLETED\x10\x05*V\n" +
+	"\x1eAGENT_RUN_EVENT_TYPE_COMPLETED\x10\x05*u\n" +
 	"\fSourceFilter\x12\x15\n" +
 	"\x11SOURCE_FILTER_ALL\x10\x00\x12\x16\n" +
 	"\x12SOURCE_FILTER_CODE\x10\x01\x12\x17\n" +
-	"\x13SOURCE_FILTER_TRACE\x10\x022\xa0\x05\n" +
+	"\x13SOURCE_FILTER_TRACE\x10\x02\x12\x1d\n" +
+	"\x19SOURCE_FILTER_SOURCE_CODE\x10\x032\xa0\x05\n" +
 	"\n" +
 	"AOTService\x12W\n" +
 	"\x0eCreateAgentRun\x12!.aot.api.v1.CreateAgentRunRequest\x1a\".aot.api.v1.CreateAgentRunResponse\x12C\n" +

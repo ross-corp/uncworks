@@ -37,6 +37,7 @@ var images = []imageSpec{
 	{Name: "aot-agent", Dockerfile: "docker/Dockerfile.agent-base", Context: "."},
 	{Name: "aot-web", Dockerfile: "docker/Dockerfile.web", Context: "web"},
 	{Name: "aot-bff", Dockerfile: "docker/Dockerfile.bff", Context: "."},
+	{Name: "aot-cudgel-shim", Dockerfile: "docker/Dockerfile.cudgel-shim", Context: "."},
 }
 
 // goBase returns a Go container with the source mounted and modules cached.

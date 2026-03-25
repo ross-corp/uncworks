@@ -286,6 +286,9 @@ enum SourceFilter {
   SOURCE_FILTER_ALL = 0;
   SOURCE_FILTER_CODE = 1;
   SOURCE_FILTER_TRACE = 2;
+  // SOURCE_FILTER_SOURCE_CODE queries the cudgel semantic code search index
+  // rather than the internal code_chunks table.
+  SOURCE_FILTER_SOURCE_CODE = 3;
 }
 
 message SearchPastWorkRequest {

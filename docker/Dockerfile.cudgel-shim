@@ -1,0 +1,48 @@
+# Dockerfile.cudgel-shim
+# Multi-stage build:
+#   Stage 1: compile the Go HTTP shim
+#   Stage 2: fetch the cudgel Rust binary from GitHub releases
+#   Stage 3: assemble the final image
+
+# ---- Stage 1: Build Go shim ----
+FROM golang:1.25-bookworm AS go-builder
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /cudgel-shim ./cmd/cudgel-shim
+
+# ---- Stage 2: Fetch cudgel Rust binary ----
+FROM debian:bookworm-slim AS cudgel-fetcher
+
+ARG CUDGEL_VERSION=latest
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Download the cudgel binary from GitHub releases.
+# The release asset is expected at:
+#   https://github.com/roshbhatia/cudgel/releases/download/<tag>/cudgel-x86_64-unknown-linux-musl.tar.gz
+# If CUDGEL_VERSION is "latest" we resolve the redirect to get the actual tag.
+RUN set -ex; \
+    if [ "$CUDGEL_VERSION" = "latest" ]; then \
+        CUDGEL_VERSION=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+            https://github.com/roshbhatia/cudgel/releases/latest \
+            | sed 's|.*/tag/||'); \
+    fi; \
+    curl -fsSL -o /tmp/cudgel.tar.gz \
+        "https://github.com/roshbhatia/cudgel/releases/download/${CUDGEL_VERSION}/cudgel-x86_64-unknown-linux-musl.tar.gz" && \
+    tar -xzf /tmp/cudgel.tar.gz -C /tmp && \
+    install -m 0755 /tmp/cudgel /usr/local/bin/cudgel
+
+# ---- Stage 3: Final image ----
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=go-builder /cudgel-shim /usr/local/bin/cudgel-shim
+COPY --from=cudgel-fetcher /usr/local/bin/cudgel /usr/local/bin/cudgel
+
+# Default port for the HTTP shim.
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/cudgel-shim"]

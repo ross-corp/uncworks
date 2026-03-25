@@ -989,6 +989,191 @@ func (x *ExecCommandResponse) GetExitCode() int32 {
 	return 0
 }
 
+// SemanticSearchRequest is sent by an agent to search for relevant code symbols.
+type SemanticSearchRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Natural language query string.
+	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	// Maximum results to return. Defaults to 10 if unset; clamped to 50.
+	Limit         int32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SemanticSearchRequest) Reset() {
+	*x = SemanticSearchRequest{}
+	mi := &file_aot_agent_v1_agent_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SemanticSearchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SemanticSearchRequest) ProtoMessage() {}
+
+func (x *SemanticSearchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_agent_v1_agent_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SemanticSearchRequest.ProtoReflect.Descriptor instead.
+func (*SemanticSearchRequest) Descriptor() ([]byte, []int) {
+	return file_aot_agent_v1_agent_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SemanticSearchRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *SemanticSearchRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+// SemanticSearchResponse contains the ranked code symbol results.
+type SemanticSearchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Chunks        []*CodeChunk           `protobuf:"bytes,1,rep,name=chunks,proto3" json:"chunks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SemanticSearchResponse) Reset() {
+	*x = SemanticSearchResponse{}
+	mi := &file_aot_agent_v1_agent_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SemanticSearchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SemanticSearchResponse) ProtoMessage() {}
+
+func (x *SemanticSearchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_agent_v1_agent_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SemanticSearchResponse.ProtoReflect.Descriptor instead.
+func (*SemanticSearchResponse) Descriptor() ([]byte, []int) {
+	return file_aot_agent_v1_agent_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SemanticSearchResponse) GetChunks() []*CodeChunk {
+	if x != nil {
+		return x.Chunks
+	}
+	return nil
+}
+
+// CodeChunk represents a single code symbol result from cudgel.
+type CodeChunk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	File          string                 `protobuf:"bytes,3,opt,name=file,proto3" json:"file,omitempty"`
+	Line          int32                  `protobuf:"varint,4,opt,name=line,proto3" json:"line,omitempty"`
+	Snippet       string                 `protobuf:"bytes,5,opt,name=snippet,proto3" json:"snippet,omitempty"`
+	Score         float32                `protobuf:"fixed32,6,opt,name=score,proto3" json:"score,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CodeChunk) Reset() {
+	*x = CodeChunk{}
+	mi := &file_aot_agent_v1_agent_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CodeChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CodeChunk) ProtoMessage() {}
+
+func (x *CodeChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_aot_agent_v1_agent_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CodeChunk.ProtoReflect.Descriptor instead.
+func (*CodeChunk) Descriptor() ([]byte, []int) {
+	return file_aot_agent_v1_agent_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CodeChunk) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CodeChunk) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *CodeChunk) GetFile() string {
+	if x != nil {
+		return x.File
+	}
+	return ""
+}
+
+func (x *CodeChunk) GetLine() int32 {
+	if x != nil {
+		return x.Line
+	}
+	return 0
+}
+
+func (x *CodeChunk) GetSnippet() string {
+	if x != nil {
+		return x.Snippet
+	}
+	return ""
+}
+
+func (x *CodeChunk) GetScore() float32 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
 var File_aot_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_aot_agent_v1_agent_proto_rawDesc = "" +
@@ -1054,7 +1239,19 @@ const file_aot_agent_v1_agent_proto_rawDesc = "" +
 	"\x13ExecCommandResponse\x12\x16\n" +
 	"\x06stdout\x18\x01 \x01(\tR\x06stdout\x12\x16\n" +
 	"\x06stderr\x18\x02 \x01(\tR\x06stderr\x12\x1b\n" +
-	"\texit_code\x18\x03 \x01(\x05R\bexitCode*\x92\x01\n" +
+	"\texit_code\x18\x03 \x01(\x05R\bexitCode\"C\n" +
+	"\x15SemanticSearchRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"I\n" +
+	"\x16SemanticSearchResponse\x12/\n" +
+	"\x06chunks\x18\x01 \x03(\v2\x17.aot.agent.v1.CodeChunkR\x06chunks\"\x8b\x01\n" +
+	"\tCodeChunk\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
+	"\x04file\x18\x03 \x01(\tR\x04file\x12\x12\n" +
+	"\x04line\x18\x04 \x01(\x05R\x04line\x12\x18\n" +
+	"\asnippet\x18\x05 \x01(\tR\asnippet\x12\x14\n" +
+	"\x05score\x18\x06 \x01(\x02R\x05score*\x92\x01\n" +
 	"\n" +
 	"OutputType\x12\x1b\n" +
 	"\x17OUTPUT_TYPE_UNSPECIFIED\x10\x00\x12\x16\n" +
@@ -1076,7 +1273,7 @@ const file_aot_agent_v1_agent_proto_rawDesc = "" +
 	"\x1cEVENT_TYPE_WAITING_FOR_INPUT\x10\x03\x12\x18\n" +
 	"\x14EVENT_TYPE_COMPLETED\x10\x04\x12\x15\n" +
 	"\x11EVENT_TYPE_FAILED\x10\x05\x12\x12\n" +
-	"\x0eEVENT_TYPE_LOG\x10\x062\xee\x03\n" +
+	"\x0eEVENT_TYPE_LOG\x10\x062\xcb\x04\n" +
 	"\x13AgentSidecarService\x12O\n" +
 	"\n" +
 	"StartAgent\x12\x1f.aot.agent.v1.StartAgentRequest\x1a .aot.agent.v1.StartAgentResponse\x12N\n" +
@@ -1084,7 +1281,8 @@ const file_aot_agent_v1_agent_proto_rawDesc = "" +
 	"\tSendInput\x12\x1e.aot.agent.v1.SendInputRequest\x1a\x1f.aot.agent.v1.SendInputResponse\x12F\n" +
 	"\tGetStatus\x12\x1e.aot.agent.v1.GetStatusRequest\x1a\x19.aot.agent.v1.AgentStatus\x12L\n" +
 	"\tStopAgent\x12\x1e.aot.agent.v1.StopAgentRequest\x1a\x1f.aot.agent.v1.StopAgentResponse\x12R\n" +
-	"\vExecCommand\x12 .aot.agent.v1.ExecCommandRequest\x1a!.aot.agent.v1.ExecCommandResponse2n\n" +
+	"\vExecCommand\x12 .aot.agent.v1.ExecCommandRequest\x1a!.aot.agent.v1.ExecCommandResponse\x12[\n" +
+	"\x0eSemanticSearch\x12#.aot.agent.v1.SemanticSearchRequest\x1a$.aot.agent.v1.SemanticSearchResponse2n\n" +
 	"\x18AgentNotificationService\x12R\n" +
 	"\vNotifyEvent\x12 .aot.agent.v1.NotifyEventRequest\x1a!.aot.agent.v1.NotifyEventResponseB1Z/github.com/uncworks/aot/gen/go/agent/v1;agentv1b\x06proto3"
 
@@ -1101,55 +1299,61 @@ func file_aot_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_aot_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_aot_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_aot_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_aot_agent_v1_agent_proto_goTypes = []any{
-	(OutputType)(0),               // 0: aot.agent.v1.OutputType
-	(AgentProcessState)(0),        // 1: aot.agent.v1.AgentProcessState
-	(EventType)(0),                // 2: aot.agent.v1.EventType
-	(*StartAgentRequest)(nil),     // 3: aot.agent.v1.StartAgentRequest
-	(*StartAgentResponse)(nil),    // 4: aot.agent.v1.StartAgentResponse
-	(*StreamOutputRequest)(nil),   // 5: aot.agent.v1.StreamOutputRequest
-	(*AgentOutput)(nil),           // 6: aot.agent.v1.AgentOutput
-	(*SendInputRequest)(nil),      // 7: aot.agent.v1.SendInputRequest
-	(*SendInputResponse)(nil),     // 8: aot.agent.v1.SendInputResponse
-	(*GetStatusRequest)(nil),      // 9: aot.agent.v1.GetStatusRequest
-	(*AgentStatus)(nil),           // 10: aot.agent.v1.AgentStatus
-	(*StopAgentRequest)(nil),      // 11: aot.agent.v1.StopAgentRequest
-	(*StopAgentResponse)(nil),     // 12: aot.agent.v1.StopAgentResponse
-	(*NotifyEventRequest)(nil),    // 13: aot.agent.v1.NotifyEventRequest
-	(*NotifyEventResponse)(nil),   // 14: aot.agent.v1.NotifyEventResponse
-	(*ExecCommandRequest)(nil),    // 15: aot.agent.v1.ExecCommandRequest
-	(*ExecCommandResponse)(nil),   // 16: aot.agent.v1.ExecCommandResponse
-	nil,                           // 17: aot.agent.v1.StartAgentRequest.EnvVarsEntry
-	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
+	(OutputType)(0),                // 0: aot.agent.v1.OutputType
+	(AgentProcessState)(0),         // 1: aot.agent.v1.AgentProcessState
+	(EventType)(0),                 // 2: aot.agent.v1.EventType
+	(*StartAgentRequest)(nil),      // 3: aot.agent.v1.StartAgentRequest
+	(*StartAgentResponse)(nil),     // 4: aot.agent.v1.StartAgentResponse
+	(*StreamOutputRequest)(nil),    // 5: aot.agent.v1.StreamOutputRequest
+	(*AgentOutput)(nil),            // 6: aot.agent.v1.AgentOutput
+	(*SendInputRequest)(nil),       // 7: aot.agent.v1.SendInputRequest
+	(*SendInputResponse)(nil),      // 8: aot.agent.v1.SendInputResponse
+	(*GetStatusRequest)(nil),       // 9: aot.agent.v1.GetStatusRequest
+	(*AgentStatus)(nil),            // 10: aot.agent.v1.AgentStatus
+	(*StopAgentRequest)(nil),       // 11: aot.agent.v1.StopAgentRequest
+	(*StopAgentResponse)(nil),      // 12: aot.agent.v1.StopAgentResponse
+	(*NotifyEventRequest)(nil),     // 13: aot.agent.v1.NotifyEventRequest
+	(*NotifyEventResponse)(nil),    // 14: aot.agent.v1.NotifyEventResponse
+	(*ExecCommandRequest)(nil),     // 15: aot.agent.v1.ExecCommandRequest
+	(*ExecCommandResponse)(nil),    // 16: aot.agent.v1.ExecCommandResponse
+	(*SemanticSearchRequest)(nil),  // 17: aot.agent.v1.SemanticSearchRequest
+	(*SemanticSearchResponse)(nil), // 18: aot.agent.v1.SemanticSearchResponse
+	(*CodeChunk)(nil),              // 19: aot.agent.v1.CodeChunk
+	nil,                            // 20: aot.agent.v1.StartAgentRequest.EnvVarsEntry
+	(*timestamppb.Timestamp)(nil),  // 21: google.protobuf.Timestamp
 }
 var file_aot_agent_v1_agent_proto_depIdxs = []int32{
-	17, // 0: aot.agent.v1.StartAgentRequest.env_vars:type_name -> aot.agent.v1.StartAgentRequest.EnvVarsEntry
+	20, // 0: aot.agent.v1.StartAgentRequest.env_vars:type_name -> aot.agent.v1.StartAgentRequest.EnvVarsEntry
 	0,  // 1: aot.agent.v1.AgentOutput.type:type_name -> aot.agent.v1.OutputType
-	18, // 2: aot.agent.v1.AgentOutput.timestamp:type_name -> google.protobuf.Timestamp
+	21, // 2: aot.agent.v1.AgentOutput.timestamp:type_name -> google.protobuf.Timestamp
 	1,  // 3: aot.agent.v1.AgentStatus.state:type_name -> aot.agent.v1.AgentProcessState
-	18, // 4: aot.agent.v1.AgentStatus.started_at:type_name -> google.protobuf.Timestamp
+	21, // 4: aot.agent.v1.AgentStatus.started_at:type_name -> google.protobuf.Timestamp
 	2,  // 5: aot.agent.v1.NotifyEventRequest.event_type:type_name -> aot.agent.v1.EventType
-	18, // 6: aot.agent.v1.NotifyEventRequest.timestamp:type_name -> google.protobuf.Timestamp
-	3,  // 7: aot.agent.v1.AgentSidecarService.StartAgent:input_type -> aot.agent.v1.StartAgentRequest
-	5,  // 8: aot.agent.v1.AgentSidecarService.StreamOutput:input_type -> aot.agent.v1.StreamOutputRequest
-	7,  // 9: aot.agent.v1.AgentSidecarService.SendInput:input_type -> aot.agent.v1.SendInputRequest
-	9,  // 10: aot.agent.v1.AgentSidecarService.GetStatus:input_type -> aot.agent.v1.GetStatusRequest
-	11, // 11: aot.agent.v1.AgentSidecarService.StopAgent:input_type -> aot.agent.v1.StopAgentRequest
-	15, // 12: aot.agent.v1.AgentSidecarService.ExecCommand:input_type -> aot.agent.v1.ExecCommandRequest
-	13, // 13: aot.agent.v1.AgentNotificationService.NotifyEvent:input_type -> aot.agent.v1.NotifyEventRequest
-	4,  // 14: aot.agent.v1.AgentSidecarService.StartAgent:output_type -> aot.agent.v1.StartAgentResponse
-	6,  // 15: aot.agent.v1.AgentSidecarService.StreamOutput:output_type -> aot.agent.v1.AgentOutput
-	8,  // 16: aot.agent.v1.AgentSidecarService.SendInput:output_type -> aot.agent.v1.SendInputResponse
-	10, // 17: aot.agent.v1.AgentSidecarService.GetStatus:output_type -> aot.agent.v1.AgentStatus
-	12, // 18: aot.agent.v1.AgentSidecarService.StopAgent:output_type -> aot.agent.v1.StopAgentResponse
-	16, // 19: aot.agent.v1.AgentSidecarService.ExecCommand:output_type -> aot.agent.v1.ExecCommandResponse
-	14, // 20: aot.agent.v1.AgentNotificationService.NotifyEvent:output_type -> aot.agent.v1.NotifyEventResponse
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	21, // 6: aot.agent.v1.NotifyEventRequest.timestamp:type_name -> google.protobuf.Timestamp
+	19, // 7: aot.agent.v1.SemanticSearchResponse.chunks:type_name -> aot.agent.v1.CodeChunk
+	3,  // 8: aot.agent.v1.AgentSidecarService.StartAgent:input_type -> aot.agent.v1.StartAgentRequest
+	5,  // 9: aot.agent.v1.AgentSidecarService.StreamOutput:input_type -> aot.agent.v1.StreamOutputRequest
+	7,  // 10: aot.agent.v1.AgentSidecarService.SendInput:input_type -> aot.agent.v1.SendInputRequest
+	9,  // 11: aot.agent.v1.AgentSidecarService.GetStatus:input_type -> aot.agent.v1.GetStatusRequest
+	11, // 12: aot.agent.v1.AgentSidecarService.StopAgent:input_type -> aot.agent.v1.StopAgentRequest
+	15, // 13: aot.agent.v1.AgentSidecarService.ExecCommand:input_type -> aot.agent.v1.ExecCommandRequest
+	17, // 14: aot.agent.v1.AgentSidecarService.SemanticSearch:input_type -> aot.agent.v1.SemanticSearchRequest
+	13, // 15: aot.agent.v1.AgentNotificationService.NotifyEvent:input_type -> aot.agent.v1.NotifyEventRequest
+	4,  // 16: aot.agent.v1.AgentSidecarService.StartAgent:output_type -> aot.agent.v1.StartAgentResponse
+	6,  // 17: aot.agent.v1.AgentSidecarService.StreamOutput:output_type -> aot.agent.v1.AgentOutput
+	8,  // 18: aot.agent.v1.AgentSidecarService.SendInput:output_type -> aot.agent.v1.SendInputResponse
+	10, // 19: aot.agent.v1.AgentSidecarService.GetStatus:output_type -> aot.agent.v1.AgentStatus
+	12, // 20: aot.agent.v1.AgentSidecarService.StopAgent:output_type -> aot.agent.v1.StopAgentResponse
+	16, // 21: aot.agent.v1.AgentSidecarService.ExecCommand:output_type -> aot.agent.v1.ExecCommandResponse
+	18, // 22: aot.agent.v1.AgentSidecarService.SemanticSearch:output_type -> aot.agent.v1.SemanticSearchResponse
+	14, // 23: aot.agent.v1.AgentNotificationService.NotifyEvent:output_type -> aot.agent.v1.NotifyEventResponse
+	16, // [16:24] is the sub-list for method output_type
+	8,  // [8:16] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_aot_agent_v1_agent_proto_init() }
@@ -1163,7 +1367,7 @@ func file_aot_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aot_agent_v1_agent_proto_rawDesc), len(file_aot_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   15,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
