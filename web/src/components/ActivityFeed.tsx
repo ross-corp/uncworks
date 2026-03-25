@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { apiFetch } from "../hooks/apiFetch";
 import type { AgentRunPhase } from "../types/agent-run";
 import { ROLE_STYLES } from "../lib/role-styles";
@@ -202,28 +202,36 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
   // Poll thinking endpoint (only when run is active)
   const isActive = phase === "running" || phase === "waiting_for_input";
 
-  const fetchThinking = useCallback(async () => {
-    try {
-      const r = await apiFetch(`/api/v1/runs/${runId}/logs/thinking`);
-      if (r.ok) {
-        const data: ThinkingState = await r.json();
-        setThinking(data.thinking ? data : null);
-      }
-    } catch {
-      // silent
-    }
-  }, [runId]);
-
   useEffect(() => {
     if (!isActive) {
       setThinking(null);
       return;
     }
 
-    fetchThinking();
-    const interval = setInterval(fetchThinking, 2000);
-    return () => clearInterval(interval);
-  }, [isActive, fetchThinking]);
+    let cancelled = false;
+
+    const fetch = async () => {
+      try {
+        const r = await apiFetch(`/api/v1/runs/${runId}/logs/thinking`);
+        if (r.ok) {
+          const data: ThinkingState = await r.json();
+          if (!cancelled) setThinking(data.thinking ? data : null);
+        }
+      } catch {
+        // silent
+      }
+    };
+
+    fetch();
+    const interval = setInterval(() => {
+      if (!cancelled) fetch();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isActive, runId]);
 
   // Auto-scroll
   useEffect(() => {

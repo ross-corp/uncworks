@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -399,5 +400,50 @@ func TestChainHandler_SuspendResumeSchedule(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("resume status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCapList_TruncatesAt500(t *testing.T) {
+	items := make([]aotv1alpha1.RunTemplate, 600)
+	result := capList(items, maxListItems)
+	if len(result) != 500 {
+		t.Errorf("capList(600, 500) = %d items, want 500", len(result))
+	}
+}
+
+func TestCapList_PassesThroughWhenUnder(t *testing.T) {
+	items := make([]aotv1alpha1.RunTemplate, 10)
+	result := capList(items, maxListItems)
+	if len(result) != 10 {
+		t.Errorf("capList(10, 500) = %d items, want 10", len(result))
+	}
+}
+
+func TestChainHandler_ListTemplates_CapAt500(t *testing.T) {
+	var objs []runtime.Object
+	for i := 0; i < 600; i++ {
+		tmpl := &aotv1alpha1.RunTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("tmpl-%d", i),
+				Namespace: "default",
+			},
+		}
+		objs = append(objs, tmpl)
+	}
+	_, mux := newChainHandler(objs...)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/templates", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var out []aotv1alpha1.RunTemplate
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out) != 500 {
+		t.Errorf("list returned %d items, want 500", len(out))
 	}
 }

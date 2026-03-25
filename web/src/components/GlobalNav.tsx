@@ -17,7 +17,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Projects", path: "/projects", icon: "◈", countKey: "projects" },
   { label: "Templates", path: "/templates", icon: "◻", countKey: "templates" },
   { label: "Chains", path: "/chains", icon: "⛓", countKey: "chains" },
-  { label: "Chain Runs", path: "/chainruns", icon: "↩", countKey: "chainruns" },
   { label: "Schedules", path: "/schedules", icon: "⏱", countKey: "schedules" },
 ];
 
@@ -61,72 +60,82 @@ export default function GlobalNav() {
     setMode(next);
   }
 
-  async function fetchCounts() {
-    try {
-      const [runsResp, projectsResp, templatesResp, chainsResp, chainrunsResp, schedulesResp] = await Promise.allSettled([
-        apiFetch("/api/v1/runs"),
-        apiFetch("/api/v1/projects"),
-        apiFetch("/api/v1/templates"),
-        apiFetch("/api/v1/chains"),
-        apiFetch("/api/v1/chainruns"),
-        apiFetch("/api/v1/schedules"),
-      ]);
-
-      let runsCount: number | null = null;
-      if (runsResp.status === "fulfilled" && runsResp.value.ok) {
-        const data = await runsResp.value.json();
-        const items: { status?: { phase?: string } }[] = Array.isArray(data) ? data : (data.items || []);
-        runsCount = items.filter((r) => {
-          const phase = r.status?.phase;
-          return phase === "running" || phase === "pending" || phase === "waiting_for_input";
-        }).length;
-      }
-
-      let projectsCount: number | null = null;
-      if (projectsResp.status === "fulfilled" && projectsResp.value.ok) {
-        const data = await projectsResp.value.json();
-        projectsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-      }
-
-      let templatesCount: number | null = null;
-      if (templatesResp.status === "fulfilled" && templatesResp.value.ok) {
-        const data = await templatesResp.value.json();
-        templatesCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-      }
-
-      let chainsCount: number | null = null;
-      if (chainsResp.status === "fulfilled" && chainsResp.value.ok) {
-        const data = await chainsResp.value.json();
-        chainsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-      }
-
-      let chainrunsCount: number | null = null;
-      if (chainrunsResp.status === "fulfilled" && chainrunsResp.value.ok) {
-        const data = await chainrunsResp.value.json();
-        chainrunsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-      }
-
-      let schedulesCount: number | null = null;
-      if (schedulesResp.status === "fulfilled" && schedulesResp.value.ok) {
-        const data = await schedulesResp.value.json();
-        schedulesCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-      }
-
-      setCounts({ runs: runsCount, projects: projectsCount, templates: templatesCount, chains: chainsCount, chainruns: chainrunsCount, schedules: schedulesCount });
-    } catch {
-      // silently ignore fetch errors for badge counts
-    }
-  }
-
   useEffect(() => {
-    fetchCounts();
-    const interval = setInterval(fetchCounts, 10000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+
+    const fetch = async () => {
+      try {
+        const [runsResp, projectsResp, templatesResp, chainsResp, chainrunsResp, schedulesResp] = await Promise.allSettled([
+          apiFetch("/api/v1/runs"),
+          apiFetch("/api/v1/projects"),
+          apiFetch("/api/v1/templates"),
+          apiFetch("/api/v1/chains"),
+          apiFetch("/api/v1/chainruns"),
+          apiFetch("/api/v1/schedules"),
+        ]);
+
+        let runsCount: number | null = null;
+        if (runsResp.status === "fulfilled" && runsResp.value.ok) {
+          const data = await runsResp.value.json();
+          const items: { status?: { phase?: string } }[] = Array.isArray(data) ? data : (data.items || []);
+          runsCount = items.filter((r) => {
+            const phase = r.status?.phase;
+            return phase === "running" || phase === "pending" || phase === "waiting_for_input";
+          }).length;
+        }
+
+        let projectsCount: number | null = null;
+        if (projectsResp.status === "fulfilled" && projectsResp.value.ok) {
+          const data = await projectsResp.value.json();
+          projectsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
+        }
+
+        let templatesCount: number | null = null;
+        if (templatesResp.status === "fulfilled" && templatesResp.value.ok) {
+          const data = await templatesResp.value.json();
+          templatesCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
+        }
+
+        let chainsCount: number | null = null;
+        if (chainsResp.status === "fulfilled" && chainsResp.value.ok) {
+          const data = await chainsResp.value.json();
+          chainsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
+        }
+
+        let chainrunsCount: number | null = null;
+        if (chainrunsResp.status === "fulfilled" && chainrunsResp.value.ok) {
+          const data = await chainrunsResp.value.json();
+          chainrunsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
+        }
+
+        let schedulesCount: number | null = null;
+        if (schedulesResp.status === "fulfilled" && schedulesResp.value.ok) {
+          const data = await schedulesResp.value.json();
+          schedulesCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
+        }
+
+        if (!cancelled) {
+          setCounts({ runs: runsCount, projects: projectsCount, templates: templatesCount, chains: chainsCount, chainruns: chainrunsCount, schedules: schedulesCount });
+        }
+      } catch {
+        // silently ignore fetch errors for badge counts
+      }
+    };
+
+    fetch();
+    const interval = setInterval(() => {
+      if (!cancelled) fetch();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   function isActive(item: NavItem): boolean {
     if (item.path === "/") {
-      return location.pathname === "/" || location.pathname.startsWith("/run/") || location.pathname === "/new";
+      return location.pathname === "/" || location.pathname.startsWith("/run/") || location.pathname === "/new" || location.pathname.startsWith("/chainrun/");
     }
     if (item.path === "/chains") {
       return location.pathname === "/chains" || location.pathname.startsWith("/chains/");

@@ -29,15 +29,23 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Skip terminal states
-	if cr.Status.Phase == "succeeded" || cr.Status.Phase == "failed" || cr.Status.Phase == "cancelled" {
+	if cr.Status.Phase == aotv1alpha1.ChainRunPhaseSucceeded || cr.Status.Phase == aotv1alpha1.ChainRunPhaseFailed || cr.Status.Phase == aotv1alpha1.ChainRunPhaseCancelled {
 		return ctrl.Result{}, nil
 	}
 
 	// Load the Chain definition
 	var chain aotv1alpha1.Chain
 	if err := r.Get(ctx, client.ObjectKey{Namespace: cr.Namespace, Name: cr.Spec.ChainRef}, &chain); err != nil {
-		cr.Status.Phase = "failed"
+		cr.Status.Phase = aotv1alpha1.ChainRunPhaseFailed
 		cr.Status.Message = fmt.Sprintf("chain %q not found: %v", cr.Spec.ChainRef, err)
+		_ = r.Status().Update(ctx, &cr)
+		return ctrl.Result{}, nil
+	}
+
+	// Validate chain DAG before executing (catches cycles, undefined deps, etc.)
+	if err := aotv1alpha1.ValidateChainDAG(chain.Spec.Steps); err != nil {
+		cr.Status.Phase = aotv1alpha1.ChainRunPhaseFailed
+		cr.Status.Message = fmt.Sprintf("invalid chain DAG: %v", err)
 		_ = r.Status().Update(ctx, &cr)
 		return ctrl.Result{}, nil
 	}
@@ -45,12 +53,12 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Initialize step statuses on first reconcile
 	if len(cr.Status.Steps) == 0 {
 		now := metav1.Now()
-		cr.Status.Phase = "running"
+		cr.Status.Phase = aotv1alpha1.ChainRunPhaseRunning
 		cr.Status.StartedAt = &now
 		for _, step := range chain.Spec.Steps {
 			cr.Status.Steps = append(cr.Status.Steps, aotv1alpha1.ChainRunStepStatus{
 				Name:  step.Name,
-				Phase: "pending",
+				Phase: aotv1alpha1.ChainRunStepPhasePending,
 			})
 		}
 		if err := r.Status().Update(ctx, &cr); err != nil {
@@ -75,7 +83,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	updated := false
 	for i := range cr.Status.Steps {
 		s := &cr.Status.Steps[i]
-		if s.Phase != "running" || s.RunID == "" {
+		if s.Phase != aotv1alpha1.ChainRunStepPhaseRunning || s.RunID == "" {
 			continue
 		}
 		var run aotv1alpha1.AgentRun
@@ -84,19 +92,19 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		switch run.Status.Phase {
 		case aotv1alpha1.AgentRunPhaseSucceeded:
-			s.Phase = "succeeded"
+			s.Phase = aotv1alpha1.ChainRunStepPhaseSucceeded
 			now := metav1.Now()
 			s.CompletedAt = &now
 			s.Message = "completed"
 			updated = true
 		case aotv1alpha1.AgentRunPhaseFailed:
-			s.Phase = "failed"
+			s.Phase = aotv1alpha1.ChainRunStepPhaseFailed
 			now := metav1.Now()
 			s.CompletedAt = &now
 			s.Message = run.Status.Message
 			updated = true
 		case aotv1alpha1.AgentRunPhaseCancelled:
-			s.Phase = "failed"
+			s.Phase = aotv1alpha1.ChainRunStepPhaseFailed
 			now := metav1.Now()
 			s.CompletedAt = &now
 			s.Message = "cancelled"
@@ -107,7 +115,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Find pending steps whose dependencies are all satisfied
 	for i := range cr.Status.Steps {
 		s := &cr.Status.Steps[i]
-		if s.Phase != "pending" {
+		if s.Phase != aotv1alpha1.ChainRunStepPhasePending {
 			continue
 		}
 		def := stepDef[s.Name]
@@ -119,7 +127,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		allDepsOK := true
 		for _, dep := range def.DependsOn {
 			depStatus := stepStatus[dep]
-			if depStatus == nil || depStatus.Phase != "succeeded" {
+			if depStatus == nil || depStatus.Phase != aotv1alpha1.ChainRunStepPhaseSucceeded {
 				allDepsOK = false
 				break
 			}
@@ -131,7 +139,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Look up the template
 		tmpl := &aotv1alpha1.RunTemplate{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: cr.Namespace, Name: def.TemplateRef}, tmpl); err != nil {
-			s.Phase = "failed"
+			s.Phase = aotv1alpha1.ChainRunStepPhaseFailed
 			s.Message = fmt.Sprintf("template %q not found", def.TemplateRef)
 			updated = true
 			continue
@@ -187,14 +195,14 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		if err := r.Create(ctx, run); err != nil {
-			s.Phase = "failed"
+			s.Phase = aotv1alpha1.ChainRunStepPhaseFailed
 			s.Message = fmt.Sprintf("create run: %v", err)
 			updated = true
 			continue
 		}
 
 		now := metav1.Now()
-		s.Phase = "running"
+		s.Phase = aotv1alpha1.ChainRunStepPhaseRunning
 		s.RunID = run.Name
 		s.StartedAt = &now
 		s.Message = "started"
@@ -208,7 +216,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		changed = false
 		for i := range cr.Status.Steps {
 			s := &cr.Status.Steps[i]
-			if s.Phase != "pending" {
+			if s.Phase != aotv1alpha1.ChainRunStepPhasePending {
 				continue
 			}
 			def := stepDef[s.Name]
@@ -217,8 +225,8 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 			for _, dep := range def.DependsOn {
 				depStatus := stepStatus[dep]
-				if depStatus != nil && (depStatus.Phase == "failed" || depStatus.Phase == "skipped") {
-					s.Phase = "skipped"
+				if depStatus != nil && (depStatus.Phase == aotv1alpha1.ChainRunStepPhaseFailed || depStatus.Phase == aotv1alpha1.ChainRunStepPhaseSkipped) {
+					s.Phase = aotv1alpha1.ChainRunStepPhaseSkipped
 					s.Message = fmt.Sprintf("skipped because dependency %q %s", dep, depStatus.Phase)
 					updated = true
 					changed = true
@@ -232,10 +240,10 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	allDone := true
 	anyFailed := false
 	for _, s := range cr.Status.Steps {
-		if s.Phase == "pending" || s.Phase == "running" {
+		if s.Phase == aotv1alpha1.ChainRunStepPhasePending || s.Phase == aotv1alpha1.ChainRunStepPhaseRunning {
 			allDone = false
 		}
-		if s.Phase == "failed" {
+		if s.Phase == aotv1alpha1.ChainRunStepPhaseFailed {
 			anyFailed = true
 		}
 	}
@@ -244,10 +252,10 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		now := metav1.Now()
 		cr.Status.CompletedAt = &now
 		if anyFailed {
-			cr.Status.Phase = "failed"
+			cr.Status.Phase = aotv1alpha1.ChainRunPhaseFailed
 			cr.Status.Message = "one or more steps failed"
 		} else {
-			cr.Status.Phase = "succeeded"
+			cr.Status.Phase = aotv1alpha1.ChainRunPhaseSucceeded
 			cr.Status.Message = "all steps completed"
 		}
 		updated = true
@@ -260,7 +268,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Requeue if still running
-	if cr.Status.Phase == "running" {
+	if cr.Status.Phase == aotv1alpha1.ChainRunPhaseRunning {
 		return ctrl.Result{RequeueAfter: chainReconcileInterval}, nil
 	}
 	return ctrl.Result{}, nil

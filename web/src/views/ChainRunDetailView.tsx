@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { apiFetch } from "../hooks/apiFetch";
 import { Badge } from "../components/ui/badge";
@@ -71,24 +71,35 @@ export default function ChainRunDetailView() {
   const [chainDef, setChainDef] = useState<ChainDef | null>(null);
   const [tab, setTab] = useState<Tab>("dag");
 
-  const fetchData = useCallback(async () => {
-    if (!name) return;
-    const crResp = await apiFetch(`/api/v1/chainruns/${name}`);
-    if (crResp.ok) {
-      const cr = await crResp.json();
-      setChainRun(cr);
-      if (cr.spec?.chainRef) {
-        const chainResp = await apiFetch(`/api/v1/chains/${cr.spec.chainRef}`);
-        if (chainResp.ok) setChainDef(await chainResp.json());
-      }
-    }
-  }, [name]);
-
   useEffect(() => {
-    fetchData();
-    const i = setInterval(fetchData, 5000);
-    return () => clearInterval(i);
-  }, [fetchData]);
+    let cancelled = false;
+
+    const fetch = async () => {
+      if (!name) return;
+      const crResp = await apiFetch(`/api/v1/chainruns/${name}`);
+      if (crResp.ok) {
+        const cr = await crResp.json();
+        if (!cancelled) setChainRun(cr);
+        if (cr.spec?.chainRef) {
+          const chainResp = await apiFetch(`/api/v1/chains/${cr.spec.chainRef}`);
+          if (chainResp.ok) {
+            const chainData = await chainResp.json();
+            if (!cancelled) setChainDef(chainData);
+          }
+        }
+      }
+    };
+
+    fetch();
+    const i = setInterval(() => {
+      if (!cancelled) fetch();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(i);
+    };
+  }, [name]);
 
   if (!chainRun) {
     return <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>;

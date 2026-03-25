@@ -161,8 +161,7 @@ func (ka *KnowledgeActivities) EmbedRunData(ctx context.Context, input EmbedRunD
 			for _, chunk := range chunks {
 				vec, err := ka.Embedder.Embed(ctx, chunk.Text)
 				if err != nil {
-					logger.Warn("Failed to embed code chunk", "error", err)
-					continue
+					return fmt.Errorf("embed code chunk: %w", err)
 				}
 				codeChunks = append(codeChunks, brain.CodeChunkRecord{
 					AgentRunID: input.AgentRunID,
@@ -196,8 +195,7 @@ func (ka *KnowledgeActivities) EmbedRunData(ctx context.Context, input EmbedRunD
 		for _, text := range textChunks {
 			vec, err := ka.Embedder.Embed(ctx, text)
 			if err != nil {
-				logger.Warn("Failed to embed trace chunk", "error", err)
-				continue
+				return fmt.Errorf("embed trace chunk: %w", err)
 			}
 			traceChunks = append(traceChunks, brain.TraceChunkRecord{
 				AgentRunID: input.AgentRunID,
@@ -251,8 +249,7 @@ func (ka *KnowledgeActivities) HydrateContext(ctx context.Context, input Hydrate
 	// Embed the prompt
 	queryVec, err := ka.Embedder.Embed(ctx, input.Prompt)
 	if err != nil {
-		logger.Warn("Failed to embed prompt for context hydration", "error", err)
-		return &HydrateContextOutput{}, nil
+		return nil, fmt.Errorf("embed prompt for context hydration: %w", err)
 	}
 
 	// Determine top-K based on agent type

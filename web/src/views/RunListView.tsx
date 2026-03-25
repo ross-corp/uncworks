@@ -8,8 +8,35 @@ import { formatAge, aggregatePhase } from "../lib/format";
 import RunStatusBadge from "../components/RunStatusBadge";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 
-type ViewMode = "features" | "all";
+// ---- Chain run types ----
+interface ChainRunSummary {
+  metadata: { name: string; creationTimestamp: string };
+  spec: { chainRef: string; triggeredBy?: string };
+  status: { phase?: string; startedAt?: string; completedAt?: string };
+}
+
+// ---- Unified run type ----
+type RunKind = "agent" | "chain" | "scheduled";
+
+interface UnifiedRun {
+  id: string;
+  kind: RunKind;
+  name: string;
+  status: string;
+  createdAt: string;
+  // agent-only
+  agentRun?: AgentRun;
+  // chain-only
+  chainRun?: ChainRunSummary;
+}
+
+type ViewMode = "features" | "all" | "unified";
 type FilterField = "name" | "state" | "stage" | "model" | null;
 
 const FILTER_KEYS: Record<string, { field: FilterField; label: string; placeholder: string }> = {
@@ -108,18 +135,20 @@ export default function RunListView() {
   const client = useClient();
   const navigate = useNavigate();
   const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [chainRuns, setChainRuns] = useState<ChainRunSummary[]>([]);
   const [selected, setSelected] = useState(0);
   const [filter, setFilter] = useState("");
   const [filterField, setFilterField] = useState<FilterField>(null);
   const [loading, setLoading] = useState(true);
   const [activeProject, setActiveProject] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("features");
+  const [viewMode, setViewMode] = useState<ViewMode>("unified");
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [collapsedFeatures, setCollapsedFeatures] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showArchived, setShowArchived] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingDeleteRun, setPendingDeleteRun] = useState<AgentRun | null>(null);
 
   const fetchRuns = useCallback(async () => {
     try {
@@ -133,10 +162,42 @@ export default function RunListView() {
   }, [client]);
 
   useEffect(() => {
-    fetchRuns();
-    const interval = setInterval(fetchRuns, 5000);
-    return () => clearInterval(interval);
-  }, [fetchRuns]);
+    let cancelled = false;
+
+    const fetchAll = async () => {
+      try {
+        const [agentResult, chainResp] = await Promise.allSettled([
+          client.listAgentRuns(),
+          apiFetch("/api/v1/chainruns"),
+        ]);
+        if (!cancelled) {
+          if (agentResult.status === "fulfilled") {
+            setRuns(agentResult.value.map(mapRun));
+          } else {
+            toast.error("Failed to load agent runs");
+          }
+          if (chainResp.status === "fulfilled" && chainResp.value.ok) {
+            const data = await chainResp.value.json();
+            setChainRuns(data);
+          }
+        }
+      } catch {
+        if (!cancelled) toast.error("Failed to load runs");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchAll();
+    const interval = setInterval(() => {
+      if (!cancelled) fetchAll();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [client]);
 
   const projects = useMemo(() => {
     const set = new Set<string>();
@@ -197,12 +258,57 @@ export default function RunListView() {
 
   const visibleRuns = useMemo((): AgentRun[] => {
     if (viewMode === "all") return filtered;
+    if (viewMode === "unified") return filtered; // used only for keyboard nav in unified mode
     const result: AgentRun[] = [];
     for (const group of featureGroups) {
       if (!collapsedFeatures.has(group.feature)) result.push(...group.runs);
     }
     return result;
   }, [viewMode, filtered, featureGroups, collapsedFeatures]);
+
+  // Unified view: merge agent + chain runs sorted newest first
+  const unifiedRuns = useMemo((): UnifiedRun[] => {
+    const agentEntries: UnifiedRun[] = filtered.map((r) => {
+      const isScheduled = !!(r.spec as { scheduleName?: string }).scheduleName;
+      return {
+        id: r.id,
+        kind: isScheduled ? "scheduled" : "agent",
+        name: r.spec.displayName || r.name,
+        status: r.status.phase,
+        createdAt: r.createdAt,
+        agentRun: r,
+      };
+    });
+
+    const chainEntries: UnifiedRun[] = chainRuns
+      .filter((cr) => {
+        if (!filter) return true;
+        const q = filter.toLowerCase();
+        return cr.metadata.name.toLowerCase().includes(q) ||
+          (cr.spec.chainRef || "").toLowerCase().includes(q) ||
+          (cr.status.phase || "").toLowerCase().includes(q);
+      })
+      .filter((cr) => {
+        if (statusFilter === "all") return true;
+        const phase = cr.status.phase || "pending";
+        if (statusFilter === "running") return phase === "running";
+        if (statusFilter === "failed") return phase === "failed";
+        if (statusFilter === "succeeded") return phase === "succeeded";
+        return true;
+      })
+      .map((cr) => ({
+        id: cr.metadata.name,
+        kind: (cr.spec.triggeredBy ? "scheduled" : "chain") as RunKind,
+        name: cr.metadata.name,
+        status: cr.status.phase || "pending",
+        createdAt: cr.metadata.creationTimestamp,
+        chainRun: cr,
+      }));
+
+    return [...agentEntries, ...chainEntries].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [filtered, chainRuns, filter, statusFilter]);
 
   const toggleFeature = useCallback((feature: string) => {
     setCollapsedFeatures((prev) => {
@@ -275,10 +381,7 @@ export default function RunListView() {
         case "2": setViewMode("all"); setSelected(0); break;
         case "d":
           if (visibleRuns[selected]) {
-            const run = visibleRuns[selected];
-            if (window.confirm(`Delete ${run.spec.displayName || run.name}?`)) {
-              apiFetch(`/api/v1/runs/${run.id}`, { method: "DELETE" }).then(() => fetchRuns());
-            }
+            setPendingDeleteRun(visibleRuns[selected]);
           }
           break;
         case "c":
@@ -347,6 +450,47 @@ export default function RunListView() {
     return visibleRuns.indexOf(run);
   }
 
+  const KIND_BADGE: Record<RunKind, { label: string; className: string }> = {
+    agent: { label: "one-shot", className: "bg-blue-500/15 text-blue-500" },
+    chain: { label: "chain", className: "bg-purple-500/15 text-purple-500" },
+    scheduled: { label: "scheduled", className: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
+  };
+
+  function UnifiedRunRow({ ur }: { ur: UnifiedRun }) {
+    const badge = KIND_BADGE[ur.kind];
+    return (
+      <div
+        className="flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-border/40 transition-colors hover:bg-muted/30"
+        onClick={() => {
+          if (ur.agentRun) navigate(`/run/${ur.id}`);
+          else navigate(`/chainrun/${ur.id}`);
+        }}
+      >
+        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md shrink-0 ${badge.className}`}>
+          {badge.label}
+        </span>
+
+        <RunStatusBadge phase={ur.status} />
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="truncate text-sm">{ur.name}</span>
+            {ur.chainRun && (
+              <span className="text-xs text-muted-foreground shrink-0">chain: {ur.chainRun.spec.chainRef}</span>
+            )}
+            {ur.chainRun?.spec.triggeredBy && (
+              <span className="text-xs text-muted-foreground shrink-0">via {ur.chainRun.spec.triggeredBy}</span>
+            )}
+          </div>
+        </div>
+
+        {ur.agentRun && <ExternalStatus run={ur.agentRun} />}
+
+        <span className="text-xs text-muted-foreground w-10 text-right shrink-0">{formatAge(ur.createdAt)}</span>
+      </div>
+    );
+  }
+
   const activeFilterDef = filterField
     ? Object.values(FILTER_KEYS).find((d) => d.field === filterField)
     : null;
@@ -358,12 +502,29 @@ export default function RunListView() {
         <div className="h-12 flex items-center gap-2">
           <div className="flex items-center gap-3 flex-1">
             <span className="font-semibold text-base">Runs</span>
-            <span className="text-muted-foreground text-xs">{filtered.length}</span>
+            <span className="text-muted-foreground text-xs">
+              {viewMode === "unified" ? unifiedRuns.length : filtered.length}
+            </span>
             {activeProject && (
               <Badge variant="secondary" className="cursor-pointer" onClick={() => setActiveProject("")}>
                 {activeProject} &times;
               </Badge>
             )}
+            <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5 ml-2">
+              {(["unified", "features", "all"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setViewMode(m)}
+                  className={`px-2 py-0.5 text-xs rounded-md transition-colors ${
+                    viewMode === m
+                      ? "bg-background text-foreground font-medium shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -488,16 +649,23 @@ export default function RunListView() {
 
       {/* Run rows */}
       <div className="flex-1 overflow-y-auto">
-        {loading && filtered.length === 0 && (
+        {loading && unifiedRuns.length === 0 && filtered.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
         )}
-        {!loading && filtered.length === 0 && (
+        {!loading && viewMode === "unified" && unifiedRuns.length === 0 && (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            {filter ? "No runs match filter" : "No runs yet — press n to create one"}
+          </div>
+        )}
+        {!loading && viewMode !== "unified" && filtered.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
             {filter ? "No runs match filter" : "No runs yet — press n to create one"}
           </div>
         )}
 
-        {viewMode === "features"
+        {viewMode === "unified"
+          ? unifiedRuns.map((ur) => <UnifiedRunRow key={`${ur.kind}-${ur.id}`} ur={ur} />)
+          : viewMode === "features"
           ? featureGroups.map((group) => (
               <div key={group.feature}>
                 <FeatureHeader
@@ -524,6 +692,26 @@ export default function RunListView() {
         <span>j/k nav &middot; enter open &middot; n new &middot; d delete &middot; c clone &middot; x select &middot; p project</span>
         <span>/ name &middot; ? state &middot; &apos; stage &middot; &quot; model</span>
       </div>
+
+      <AlertDialog open={!!pendingDeleteRun} onOpenChange={(open) => { if (!open) setPendingDeleteRun(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteRun?.spec.displayName || pendingDeleteRun?.name} will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (pendingDeleteRun) {
+                apiFetch(`/api/v1/runs/${pendingDeleteRun.id}`, { method: "DELETE" }).then(() => fetchRuns());
+                setPendingDeleteRun(null);
+              }
+            }}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

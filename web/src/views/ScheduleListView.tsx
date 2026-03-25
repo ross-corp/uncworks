@@ -36,7 +36,32 @@ export default function ScheduleListView() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchData(); const i = setInterval(fetchData, 10000); return () => clearInterval(i); }, [fetchData]);
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetch = async () => {
+      try {
+        const resp = await apiFetch("/api/v1/schedules");
+        if (resp.ok) {
+          const data = await resp.json();
+          if (!cancelled) setSchedules(data);
+        }
+      } catch { /* silent */ }
+      finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetch();
+    const i = setInterval(() => {
+      if (!cancelled) fetch();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(i);
+    };
+  }, []);
 
   async function toggleSuspend(name: string, suspended: boolean) {
     await apiFetch(`/api/v1/schedules/${name}/${suspended ? "resume" : "suspend"}`, { method: "POST" });

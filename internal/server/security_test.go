@@ -228,6 +228,7 @@ func TestWebhook_ExactlyAtLimit(t *testing.T) {
 	scheme := newTestScheme()
 	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
 	wh := &WebhookHandler{
+		secret:    "test-secret",
 		k8sClient: k8s,
 		namespace: "default",
 	}
@@ -237,6 +238,7 @@ func TestWebhook_ExactlyAtLimit(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-Hub-Signature-256", signPayload(body, "test-secret"))
 	rec := httptest.NewRecorder()
 	wh.ServeHTTP(rec, req)
 
@@ -315,9 +317,9 @@ func TestWebhook_SecretConfigured_AcceptsCorrectSignature(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
-// TestWebhook_NoSecret_AcceptsAnything verifies that when no webhook secret is
-// configured, requests are accepted regardless of signature.
-func TestWebhook_NoSecret_AcceptsAnything(t *testing.T) {
+// TestWebhook_NoSecret_Returns401 verifies that when no webhook secret is
+// configured, requests are rejected with 401 (fail-closed).
+func TestWebhook_NoSecret_Returns401(t *testing.T) {
 	scheme := newTestScheme()
 	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
 	wh := &WebhookHandler{
@@ -332,7 +334,7 @@ func TestWebhook_NoSecret_AcceptsAnything(t *testing.T) {
 	rec := httptest.NewRecorder()
 	wh.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 // TestWebhook_MethodNotAllowed verifies that non-POST methods are rejected.

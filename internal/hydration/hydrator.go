@@ -49,7 +49,9 @@ func ConfigFromEnv() *Config {
 	// Try multi-repo env var first
 	if reposJSON := os.Getenv("AOT_REPOS"); reposJSON != "" {
 		var repos []RepoConfig
-		if err := json.Unmarshal([]byte(reposJSON), &repos); err == nil && len(repos) > 0 {
+		if err := json.Unmarshal([]byte(reposJSON), &repos); err != nil {
+			log.Printf("WARNING: failed to parse AOT_REPOS as JSON: %v, falling back to single-repo", err)
+		} else if len(repos) > 0 {
 			config.Repos = repos
 			return config
 		}
@@ -117,9 +119,32 @@ type DevboxManifest struct {
 	Sources []DevboxSource `yaml:"sources,omitempty"`
 }
 
+// validateRepoPath rejects paths that could escape the workspace directory.
+// It disallows absolute paths, paths containing "..", and paths that when
+// cleaned resolve to strings starting with "..".
+func validateRepoPath(path string) error {
+	if path == "" {
+		return nil // empty means "derive from URL"
+	}
+	if filepath.IsAbs(path) {
+		return fmt.Errorf("repository path must be relative, got %q", path)
+	}
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("path traversal not allowed in repository path %q", path)
+	}
+	if clean := filepath.Clean(path); strings.HasPrefix(clean, "..") {
+		return fmt.Errorf("repository path would escape workspace: %q", path)
+	}
+	return nil
+}
+
 // Run executes the full hydration sequence for all repos.
 func (h *Hydrator) Run(ctx context.Context) error {
 	for i, repo := range h.config.Repos {
+		if err := validateRepoPath(repo.Path); err != nil {
+			return fmt.Errorf("repo %d: %w", i, err)
+		}
+
 		repoPath := repo.Path
 		if repoPath == "" {
 			repoPath = repoNameFromURL(repo.URL)
@@ -363,7 +388,16 @@ func (h *Hydrator) writeMetadata() error {
 
 func (h *Hydrator) cloneRepo(ctx context.Context, repoURL, bareDir string) error {
 	if _, err := os.Stat(bareDir); err == nil {
-		return nil // Already cloned
+		// Directory exists — validate it's actually a git repo
+		if _, gitErr := h.runner.Run(ctx, bareDir, "git", "rev-parse", "--git-dir"); gitErr != nil {
+			// Broken or partial clone; remove and re-clone
+			log.Printf("WARNING: removing broken bare clone at %s: %v", bareDir, gitErr)
+			if rmErr := os.RemoveAll(bareDir); rmErr != nil {
+				return fmt.Errorf("remove broken bare dir: %w", rmErr)
+			}
+		} else {
+			return nil // Valid existing clone
+		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("check bare dir: %w", err)
 	}
@@ -380,21 +414,27 @@ func (h *Hydrator) cloneRepo(ctx context.Context, repoURL, bareDir string) error
 	}
 
 	args := []string{"clone", "--bare", cloneURL, bareDir}
-	_, err := h.runner.Run(ctx, h.config.WorkspaceDir, "git", args...)
-	return err
+	if _, err := h.runner.Run(ctx, h.config.WorkspaceDir, "git", args...); err != nil {
+		// Clean up partial clone so retries start fresh
+		_ = os.RemoveAll(bareDir)
+		return err
+	}
+	return nil
 }
 
 // injectTokenInURL embeds a token into an HTTPS git URL for authentication.
+// Only injects into github.com HTTPS URLs; returns the original URL unchanged
+// for SSH URLs or any host not in the allowlist.
 func injectTokenInURL(repoURL, token string) string {
-	const prefix = "https://github.com/"
-	if len(repoURL) > len(prefix) && repoURL[:len(prefix)] == prefix {
-		return "https://x-access-token:" + token + "@github.com/" + repoURL[len(prefix):]
+	u, err := url.Parse(repoURL)
+	if err != nil || u.Scheme != "https" {
+		return repoURL // SSH or unparseable — leave unchanged
 	}
-	const httpsPrefix = "https://"
-	if len(repoURL) > len(httpsPrefix) && repoURL[:len(httpsPrefix)] == httpsPrefix {
-		return httpsPrefix + "x-access-token:" + token + "@" + repoURL[len(httpsPrefix):]
+	if u.Host != "github.com" {
+		return repoURL // Not in allowlist — refuse to embed token
 	}
-	return repoURL
+	u.User = url.UserPassword("x-access-token", token)
+	return u.String()
 }
 
 func (h *Hydrator) createWorktree(ctx context.Context, bareDir, worktreeDir, branch string) error {
