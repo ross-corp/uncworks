@@ -41,6 +41,11 @@ func (h *ChatHandler) RegisterChatHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/chat/stream", h.handleChatStream)
 }
 
+// RegisterChatHandlersWithMiddleware registers chat routes wrapped with middleware.
+func (h *ChatHandler) RegisterChatHandlersWithMiddleware(mux *http.ServeMux, mid func(http.Handler) http.Handler) {
+	mux.Handle("POST /api/v1/chat/stream", mid(http.HandlerFunc(h.handleChatStream)))
+}
+
 // chatMessage is a single turn in the conversation.
 type chatMessage struct {
 	Role    string `json:"role"`

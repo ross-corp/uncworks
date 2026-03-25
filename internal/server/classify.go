@@ -56,6 +56,12 @@ func (h *ClassifyRunHandler) RegisterClassifyHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/improve-text", h.handleImproveText)
 }
 
+// RegisterClassifyHandlersWithMiddleware registers classify/improve endpoints wrapped with middleware.
+func (h *ClassifyRunHandler) RegisterClassifyHandlersWithMiddleware(mux *http.ServeMux, mid func(http.Handler) http.Handler) {
+	mux.Handle("POST /api/v1/classify", mid(http.HandlerFunc(h.handleClassify)))
+	mux.Handle("POST /api/v1/improve-text", mid(http.HandlerFunc(h.handleImproveText)))
+}
+
 func (h *ClassifyRunHandler) handleClassify(w http.ResponseWriter, r *http.Request) {
 	var req classifyRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {

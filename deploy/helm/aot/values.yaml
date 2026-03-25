@@ -74,6 +74,29 @@ apiserver:
   # Defaults to localhost:3000,localhost:5173 for development.
   # Set to "*" to allow all origins (not recommended for production).
   allowedOrigins: ""
+  # -- Per-IP rate limiting configuration.
+  # NOTE: In-process only (single-replica). For multi-replica deployments, use an external
+  # rate limiter (e.g. Redis-backed). Set enabled: true in production with conservative limits.
+  rateLimit:
+    # -- Enable rate limiting. Disabled by default; enable in production.
+    enabled: false
+    # -- Global requests per second per IP.
+    rps: 100
+    # -- Global burst allowance.
+    burst: 20
+    # -- LLM endpoints (classify, chat/stream) requests per second per IP.
+    llmRps: 10
+    # -- LLM endpoints burst allowance.
+    llmBurst: 5
+    # -- Webhook endpoint requests per second per IP.
+    webhookRps: 5
+    # -- Webhook endpoint burst allowance.
+    webhookBurst: 2
+    # -- Minutes after which an inactive IP entry is evicted from memory.
+    ttlMinutes: 10
+    # -- When true, reads client IP from X-Forwarded-For header (for ingress deployments).
+    # Only enable when behind a trusted proxy/ingress controller.
+    trustProxy: false
 
 # -- Spec-driven pipeline configuration
 pipeline:
