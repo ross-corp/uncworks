@@ -29,6 +29,11 @@ service AgentSidecarService {
   // ExecCommand runs a bash command in the workspace and returns the result.
   // Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
   rpc ExecCommand(ExecCommandRequest) returns (ExecCommandResponse);
+
+  // SemanticSearch performs a semantic code search via the cudgel service.
+  // Returns ranked code symbols matching the query.
+  // Returns an empty response (no error) when CUDGEL_ENDPOINT is unset or cudgel is unavailable.
+  rpc SemanticSearch(SemanticSearchRequest) returns (SemanticSearchResponse);
 }
 
 // AgentNotificationService is called BY the sidecar back TO the Control Plane for async events.
@@ -145,4 +150,27 @@ message ExecCommandResponse {
   string stdout = 1;
   string stderr = 2;
   int32 exit_code = 3;
+}
+
+// SemanticSearchRequest is sent by an agent to search for relevant code symbols.
+message SemanticSearchRequest {
+  // Natural language query string.
+  string query = 1;
+  // Maximum results to return. Defaults to 10 if unset; clamped to 50.
+  int32 limit = 2;
+}
+
+// SemanticSearchResponse contains the ranked code symbol results.
+message SemanticSearchResponse {
+  repeated CodeChunk chunks = 1;
+}
+
+// CodeChunk represents a single code symbol result from cudgel.
+message CodeChunk {
+  string name    = 1;
+  string kind    = 2;
+  string file    = 3;
+  int32  line    = 4;
+  string snippet = 5;
+  float  score   = 6;
 }

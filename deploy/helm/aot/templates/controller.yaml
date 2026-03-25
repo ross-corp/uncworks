@@ -38,6 +38,10 @@ spec:
             - name: GITHUB_TOKEN_SECRET_NAME
               value: {{ .Values.github.tokenSecretName | quote }}
             {{- end }}
+            {{- if .Values.cudgel.enabled }}
+            - name: CUDGEL_ENDPOINT
+              value: {{ .Values.cudgel.endpoint | quote }}
+            {{- end }}
             {{- if .Values.softServe.enabled }}
             - name: SOFT_SERVE_ADDR
               value: "soft-serve.{{ .Release.Namespace }}.svc:23231"

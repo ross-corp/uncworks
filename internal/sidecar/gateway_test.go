@@ -755,3 +755,106 @@ func TestResolveWorkDirAt_BareSkippedRealRepoFound(t *testing.T) {
 		t.Errorf("ResolveWorkDirAt = %q, want %q", got, repoDir)
 	}
 }
+
+// --- SemanticSearch tests ---
+
+// startTestGatewayWithCudgel creates a fake cudgel HTTP server, sets CUDGEL_ENDPOINT,
+// and returns a gateway client and cleanup func.
+func startTestGatewayWithCudgel(t *testing.T, cudgelHandler http.HandlerFunc) (agentv1connect.AgentSidecarServiceClient, func()) {
+	t.Helper()
+
+	cudgelSrv := httptest.NewServer(cudgelHandler)
+	t.Setenv("CUDGEL_ENDPOINT", cudgelSrv.URL)
+
+	client, gwCleanup := startTestGateway(t)
+	return client, func() {
+		gwCleanup()
+		cudgelSrv.Close()
+	}
+}
+
+func TestSemanticSearch_EmptyQuery(t *testing.T) {
+	client, cleanup := startTestGateway(t)
+	defer cleanup()
+
+	_, err := client.SemanticSearch(context.Background(), connect.NewRequest(&agentv1.SemanticSearchRequest{Query: ""}))
+	if err == nil {
+		t.Fatal("expected error for empty query, got nil")
+	}
+}
+
+func TestSemanticSearch_NoEndpoint(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "")
+	client, cleanup := startTestGateway(t)
+	defer cleanup()
+
+	resp, err := client.SemanticSearch(context.Background(), connect.NewRequest(&agentv1.SemanticSearchRequest{Query: "auth middleware", Limit: 5}))
+	if err != nil {
+		t.Fatalf("expected empty response, got error: %v", err)
+	}
+	if len(resp.Msg.Chunks) != 0 {
+		t.Errorf("expected no chunks, got %d", len(resp.Msg.Chunks))
+	}
+}
+
+func TestSemanticSearch_Success(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"name":"Foo","kind":"function","file":"foo.go","line":1,"snippet":"func Foo()","score":0.9}]`))
+	})
+	client, cleanup := startTestGatewayWithCudgel(t, handler)
+	defer cleanup()
+
+	resp, err := client.SemanticSearch(context.Background(), connect.NewRequest(&agentv1.SemanticSearchRequest{Query: "auth", Limit: 5}))
+	if err != nil {
+		t.Fatalf("SemanticSearch: %v", err)
+	}
+	if len(resp.Msg.Chunks) != 1 || resp.Msg.Chunks[0].Name != "Foo" {
+		t.Errorf("unexpected chunks: %+v", resp.Msg.Chunks)
+	}
+}
+
+func TestSemanticSearch_CudgelUnavailable(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+	})
+	client, cleanup := startTestGatewayWithCudgel(t, handler)
+	defer cleanup()
+
+	// Should return empty response, not an error
+	resp, err := client.SemanticSearch(context.Background(), connect.NewRequest(&agentv1.SemanticSearchRequest{Query: "auth", Limit: 5}))
+	if err != nil {
+		t.Fatalf("expected empty response on cudgel failure, got error: %v", err)
+	}
+	if len(resp.Msg.Chunks) != 0 {
+		t.Errorf("expected no chunks on failure, got %d", len(resp.Msg.Chunks))
+	}
+}
+
+func TestSemanticSearch_LimitClamping(t *testing.T) {
+	var gotLimit int
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Limit int `json:"limit"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		gotLimit = body.Limit
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	})
+
+	client, cleanup := startTestGatewayWithCudgel(t, handler)
+	defer cleanup()
+
+	_, err := client.SemanticSearch(context.Background(), connect.NewRequest(&agentv1.SemanticSearchRequest{Query: "auth", Limit: 100}))
+	if err != nil {
+		t.Fatalf("SemanticSearch: %v", err)
+	}
+	if gotLimit != 50 {
+		t.Errorf("expected clamped limit 50, got %d", gotLimit)
+	}
+}

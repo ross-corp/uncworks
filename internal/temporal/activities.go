@@ -35,6 +35,9 @@ var (
 	agentImage   = envOrDefault("AOT_AGENT_IMAGE", "ghcr.io/uncworks/aot-agent:latest")
 	sidecarImage = envOrDefault("AOT_SIDECAR_IMAGE", "ghcr.io/uncworks/aot-sidecar:latest")
 	initImage    = envOrDefault("AOT_INIT_IMAGE", "ghcr.io/uncworks/aot-init:latest")
+	// cudgelEndpoint is the base URL of the cudgel HTTP shim, injected into agent and init pods.
+	// Sourced from CUDGEL_ENDPOINT env var on the worker/controller process.
+	cudgelEndpoint = os.Getenv("CUDGEL_ENDPOINT")
 )
 
 func envOrDefault(key, fallback string) string {
@@ -302,9 +305,14 @@ func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
 	}
 	agentEnvVars := append(envVars, llmEnvVars...) //nolint:gocritic // intentional new slice
 
-	// Init container env: base env vars + optional GITHUB_TOKEN from Secret
+	// Init container env: base env vars + optional GITHUB_TOKEN from Secret + optional CUDGEL_ENDPOINT
 	initEnvVars := make([]corev1.EnvVar, len(envVars))
 	copy(initEnvVars, envVars)
+	if cudgelEndpoint != "" {
+		initEnvVars = append(initEnvVars, corev1.EnvVar{Name: "CUDGEL_ENDPOINT", Value: cudgelEndpoint})
+		// Also pass to agent containers (sidecar reads it for SemanticSearch RPC)
+		agentEnvVars = append(agentEnvVars, corev1.EnvVar{Name: "CUDGEL_ENDPOINT", Value: cudgelEndpoint})
+	}
 	if input.GitHubTokenSecretName != "" {
 		initEnvVars = append(initEnvVars, corev1.EnvVar{
 			Name: "GITHUB_TOKEN",

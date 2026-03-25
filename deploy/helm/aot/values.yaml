@@ -110,6 +110,19 @@ web:
     # -- NodePort (only used when type is NodePort)
     nodePort: ""
 
+# -- Cudgel semantic code search service
+cudgel:
+  # -- Enable the cudgel Deployment and Service
+  enabled: false
+  # -- Container image for the cudgel-shim (bundles Go shim + cudgel Rust binary)
+  image: ghcr.io/uncworks/aot-cudgel-shim:latest
+  # -- Cluster-internal endpoint used by workers and the hydration init-container.
+  # Defaults to the in-cluster service DNS name; override if deploying outside the aot namespace.
+  endpoint: "http://cudgel.aot.svc.cluster.local:8080"
+  resources:
+    cpu: 250m
+    memory: 256Mi
+
 # -- soft-serve Git server for project config repos
 softServe:
   enabled: true

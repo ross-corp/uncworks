@@ -12,8 +12,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/uncworks/aot/internal/cudgel"
 )
 
 // RepoConfig describes a single repository to hydrate.
@@ -69,8 +72,9 @@ func ConfigFromEnv() *Config {
 
 // Hydrator provisions the workspace for an agent run.
 type Hydrator struct {
-	config *Config
-	runner CommandRunner
+	config       *Config
+	runner       CommandRunner
+	cudgelClient cudgel.Client // nil means use env-driven default
 }
 
 // CommandRunner abstracts command execution for testing.
@@ -178,10 +182,11 @@ func (h *Hydrator) Run(ctx context.Context) error {
 		return fmt.Errorf("write devcontainer: %w", err)
 	}
 
-	// Create .aot directory structure for traces and logs (6.2, 6.3)
+	// Create .aot directory structure for traces, logs, and context.
 	for _, dir := range []string{
 		filepath.Join(h.config.WorkspaceDir, ".aot", "traces"),
 		filepath.Join(h.config.WorkspaceDir, ".aot", "logs"),
+		filepath.Join(h.config.WorkspaceDir, ".aot", "context"),
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create dir %s: %w", dir, err)
@@ -191,6 +196,16 @@ func (h *Hydrator) Run(ctx context.Context) error {
 	// Write run metadata (6.4)
 	if err := h.writeMetadata(); err != nil {
 		return fmt.Errorf("write metadata: %w", err)
+	}
+
+	// Seed codebase context from cudgel (best-effort; errors are non-fatal).
+	prompt := os.Getenv("AOT_PROMPT")
+	agentType := os.Getenv("AOT_AGENT_TYPE")
+	if agentType == "" {
+		agentType = os.Getenv("AOT_MODEL_TIER")
+	}
+	if seedErr := h.SeedCodebaseContext(ctx, prompt, agentType); seedErr != nil {
+		log.Printf("WARNING: SeedCodebaseContext failed: %v (proceeding without codebase context)", seedErr)
 	}
 
 	// Devbox setup: use explicit config if set, otherwise auto-compose
@@ -491,6 +506,73 @@ func (h *Hydrator) PrimaryWorktreePath() string {
 // WorktreePath returns the path to the created worktree (backward compat alias).
 func (h *Hydrator) WorktreePath() string {
 	return h.PrimaryWorktreePath()
+}
+
+// SeedCodebaseContext queries the cudgel service with the run prompt and writes
+// the top-K results to .aot/context/codebase.md.
+//
+// When CUDGEL_ENDPOINT is unset, the method returns nil immediately.
+// On errors or timeout the method logs a warning and returns nil (graceful degradation).
+func (h *Hydrator) SeedCodebaseContext(ctx context.Context, prompt, agentType string) error {
+	endpoint := os.Getenv("CUDGEL_ENDPOINT")
+	if endpoint == "" {
+		return nil
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return nil
+	}
+
+	k := 10
+	lower := strings.ToLower(agentType)
+	if lower == "senior" || lower == "orchestrator" {
+		k = 20
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var client cudgel.Client
+	if h.cudgelClient != nil {
+		client = h.cudgelClient
+	} else {
+		client = cudgel.NewHTTPClient(endpoint)
+	}
+	symbols, err := client.SemanticSearch(queryCtx, prompt, k)
+	if err != nil {
+		log.Printf("WARNING: cudgel SemanticSearch failed: %v", err)
+		return nil
+	}
+	if len(symbols) == 0 {
+		return nil
+	}
+
+	content := formatCodebaseContext(symbols)
+	outPath := filepath.Join(h.config.WorkspaceDir, ".aot", "context", "codebase.md")
+	if err := os.WriteFile(outPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write codebase context: %w", err)
+	}
+	return nil
+}
+
+// formatCodebaseContext formats cudgel symbols as a markdown file for agent consumption.
+// Total output is truncated to approximately 4,000 tokens (≈16,000 bytes as a rough proxy).
+func formatCodebaseContext(symbols []cudgel.Symbol) string {
+	const maxBytes = 16000 // ~4,000 tokens at ~4 chars/token
+
+	var b strings.Builder
+	b.WriteString("# Codebase Context (Semantic Search)\n\n")
+	b.WriteString("The following code symbols are semantically relevant to this run's task.\n")
+	b.WriteString("They were retrieved from the cudgel code search index at run start.\n\n")
+
+	for _, s := range symbols {
+		entry := fmt.Sprintf("## `%s` (%s)\n**File:** `%s` line %d\n**Score:** %.4f\n\n```\n%s\n```\n\n",
+			s.Name, s.Kind, s.File, s.Line, s.Score, s.Snippet)
+		if b.Len()+len(entry) > maxBytes {
+			break
+		}
+		b.WriteString(entry)
+	}
+	return b.String()
 }
 
 // repoNameFromURL derives a directory name from a git URL.

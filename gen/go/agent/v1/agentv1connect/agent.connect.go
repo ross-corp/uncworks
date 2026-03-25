@@ -55,6 +55,9 @@ const (
 	// AgentSidecarServiceExecCommandProcedure is the fully-qualified name of the AgentSidecarService's
 	// ExecCommand RPC.
 	AgentSidecarServiceExecCommandProcedure = "/aot.agent.v1.AgentSidecarService/ExecCommand"
+	// AgentSidecarServiceSemanticSearchProcedure is the fully-qualified name of the
+	// AgentSidecarService's SemanticSearch RPC.
+	AgentSidecarServiceSemanticSearchProcedure = "/aot.agent.v1.AgentSidecarService/SemanticSearch"
 	// AgentNotificationServiceNotifyEventProcedure is the fully-qualified name of the
 	// AgentNotificationService's NotifyEvent RPC.
 	AgentNotificationServiceNotifyEventProcedure = "/aot.agent.v1.AgentNotificationService/NotifyEvent"
@@ -75,6 +78,10 @@ type AgentSidecarServiceClient interface {
 	// ExecCommand runs a bash command in the workspace and returns the result.
 	// Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
 	ExecCommand(context.Context, *connect.Request[v1.ExecCommandRequest]) (*connect.Response[v1.ExecCommandResponse], error)
+	// SemanticSearch performs a semantic code search via the cudgel service.
+	// Returns ranked code symbols matching the query.
+	// Returns an empty response (no error) when CUDGEL_ENDPOINT is unset or cudgel is unavailable.
+	SemanticSearch(context.Context, *connect.Request[v1.SemanticSearchRequest]) (*connect.Response[v1.SemanticSearchResponse], error)
 }
 
 // NewAgentSidecarServiceClient constructs a client for the aot.agent.v1.AgentSidecarService
@@ -124,17 +131,24 @@ func NewAgentSidecarServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(agentSidecarServiceMethods.ByName("ExecCommand")),
 			connect.WithClientOptions(opts...),
 		),
+		semanticSearch: connect.NewClient[v1.SemanticSearchRequest, v1.SemanticSearchResponse](
+			httpClient,
+			baseURL+AgentSidecarServiceSemanticSearchProcedure,
+			connect.WithSchema(agentSidecarServiceMethods.ByName("SemanticSearch")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // agentSidecarServiceClient implements AgentSidecarServiceClient.
 type agentSidecarServiceClient struct {
-	startAgent   *connect.Client[v1.StartAgentRequest, v1.StartAgentResponse]
-	streamOutput *connect.Client[v1.StreamOutputRequest, v1.AgentOutput]
-	sendInput    *connect.Client[v1.SendInputRequest, v1.SendInputResponse]
-	getStatus    *connect.Client[v1.GetStatusRequest, v1.AgentStatus]
-	stopAgent    *connect.Client[v1.StopAgentRequest, v1.StopAgentResponse]
-	execCommand  *connect.Client[v1.ExecCommandRequest, v1.ExecCommandResponse]
+	startAgent     *connect.Client[v1.StartAgentRequest, v1.StartAgentResponse]
+	streamOutput   *connect.Client[v1.StreamOutputRequest, v1.AgentOutput]
+	sendInput      *connect.Client[v1.SendInputRequest, v1.SendInputResponse]
+	getStatus      *connect.Client[v1.GetStatusRequest, v1.AgentStatus]
+	stopAgent      *connect.Client[v1.StopAgentRequest, v1.StopAgentResponse]
+	execCommand    *connect.Client[v1.ExecCommandRequest, v1.ExecCommandResponse]
+	semanticSearch *connect.Client[v1.SemanticSearchRequest, v1.SemanticSearchResponse]
 }
 
 // StartAgent calls aot.agent.v1.AgentSidecarService.StartAgent.
@@ -167,6 +181,11 @@ func (c *agentSidecarServiceClient) ExecCommand(ctx context.Context, req *connec
 	return c.execCommand.CallUnary(ctx, req)
 }
 
+// SemanticSearch calls aot.agent.v1.AgentSidecarService.SemanticSearch.
+func (c *agentSidecarServiceClient) SemanticSearch(ctx context.Context, req *connect.Request[v1.SemanticSearchRequest]) (*connect.Response[v1.SemanticSearchResponse], error) {
+	return c.semanticSearch.CallUnary(ctx, req)
+}
+
 // AgentSidecarServiceHandler is an implementation of the aot.agent.v1.AgentSidecarService service.
 type AgentSidecarServiceHandler interface {
 	// StartAgent initializes the agent harness with a prompt and config.
@@ -182,6 +201,10 @@ type AgentSidecarServiceHandler interface {
 	// ExecCommand runs a bash command in the workspace and returns the result.
 	// Lightweight alternative to StartAgent for running CLI tools (openspec, test suites, etc.).
 	ExecCommand(context.Context, *connect.Request[v1.ExecCommandRequest]) (*connect.Response[v1.ExecCommandResponse], error)
+	// SemanticSearch performs a semantic code search via the cudgel service.
+	// Returns ranked code symbols matching the query.
+	// Returns an empty response (no error) when CUDGEL_ENDPOINT is unset or cudgel is unavailable.
+	SemanticSearch(context.Context, *connect.Request[v1.SemanticSearchRequest]) (*connect.Response[v1.SemanticSearchResponse], error)
 }
 
 // NewAgentSidecarServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -227,6 +250,12 @@ func NewAgentSidecarServiceHandler(svc AgentSidecarServiceHandler, opts ...conne
 		connect.WithSchema(agentSidecarServiceMethods.ByName("ExecCommand")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentSidecarServiceSemanticSearchHandler := connect.NewUnaryHandler(
+		AgentSidecarServiceSemanticSearchProcedure,
+		svc.SemanticSearch,
+		connect.WithSchema(agentSidecarServiceMethods.ByName("SemanticSearch")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/aot.agent.v1.AgentSidecarService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentSidecarServiceStartAgentProcedure:
@@ -241,6 +270,8 @@ func NewAgentSidecarServiceHandler(svc AgentSidecarServiceHandler, opts ...conne
 			agentSidecarServiceStopAgentHandler.ServeHTTP(w, r)
 		case AgentSidecarServiceExecCommandProcedure:
 			agentSidecarServiceExecCommandHandler.ServeHTTP(w, r)
+		case AgentSidecarServiceSemanticSearchProcedure:
+			agentSidecarServiceSemanticSearchHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -272,6 +303,10 @@ func (UnimplementedAgentSidecarServiceHandler) StopAgent(context.Context, *conne
 
 func (UnimplementedAgentSidecarServiceHandler) ExecCommand(context.Context, *connect.Request[v1.ExecCommandRequest]) (*connect.Response[v1.ExecCommandResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("aot.agent.v1.AgentSidecarService.ExecCommand is not implemented"))
+}
+
+func (UnimplementedAgentSidecarServiceHandler) SemanticSearch(context.Context, *connect.Request[v1.SemanticSearchRequest]) (*connect.Response[v1.SemanticSearchResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("aot.agent.v1.AgentSidecarService.SemanticSearch is not implemented"))
 }
 
 // AgentNotificationServiceClient is a client for the aot.agent.v1.AgentNotificationService service.

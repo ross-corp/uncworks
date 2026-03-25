@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/uncworks/aot/internal/cudgel"
 )
 
 // MockRunner records and replays commands for testing.
@@ -938,4 +940,179 @@ func TestConfigFromEnv_MalformedJSON(t *testing.T) {
 	if len(config.Repos) != 1 || config.Repos[0].URL != "https://github.com/org/fallback.git" {
 		t.Errorf("expected fallback to single-repo mode, got repos: %v", config.Repos)
 	}
+}
+
+// --- SeedCodebaseContext tests ---
+
+// mockCudgelClient is a simple in-memory mock of cudgel.Client for testing.
+type mockCudgelClient struct {
+	symbols []mockSymbol
+	err     error
+}
+
+type mockSymbol struct {
+	Name    string
+	Kind    string
+	File    string
+	Line    int
+	Snippet string
+	Score   float64
+}
+
+func (m *mockCudgelClient) SemanticSearch(_ context.Context, _ string, limit int) ([]cudgel.Symbol, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	result := make([]cudgel.Symbol, 0, len(m.symbols))
+	for i, s := range m.symbols {
+		if i >= limit {
+			break
+		}
+		result = append(result, cudgel.Symbol{
+			Name: s.Name, Kind: s.Kind, File: s.File,
+			Line: s.Line, Snippet: s.Snippet, Score: s.Score,
+		})
+	}
+	return result, nil
+}
+
+func (m *mockCudgelClient) GraphTraversal(_ context.Context, _ string, _ int) ([]cudgel.Edge, error) {
+	return []cudgel.Edge{}, nil
+}
+
+func newHydratorWithCudgel(t *testing.T, client cudgel.Client) (*Hydrator, string) {
+	t.Helper()
+	workspace := t.TempDir()
+	config := &Config{WorkspaceDir: workspace}
+	h := &Hydrator{config: config, runner: NewMockRunner(), cudgelClient: client}
+	// Create .aot/context dir
+	if err := os.MkdirAll(filepath.Join(workspace, ".aot", "context"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return h, workspace
+}
+
+func TestSeedCodebaseContext_NoEndpoint(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "")
+	mc := &mockCudgelClient{}
+	h, workspace := newHydratorWithCudgel(t, mc)
+
+	if err := h.SeedCodebaseContext(context.Background(), "fix auth", "worker"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// File should NOT be written
+	_, err := os.Stat(filepath.Join(workspace, ".aot", "context", "codebase.md"))
+	if !os.IsNotExist(err) {
+		t.Error("expected no codebase.md when endpoint is unset")
+	}
+}
+
+func TestSeedCodebaseContext_EmptyPrompt(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "http://cudgel:8080")
+	mc := &mockCudgelClient{symbols: []mockSymbol{{Name: "Foo"}}}
+	h, workspace := newHydratorWithCudgel(t, mc)
+
+	if err := h.SeedCodebaseContext(context.Background(), "", "worker"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err := os.Stat(filepath.Join(workspace, ".aot", "context", "codebase.md"))
+	if !os.IsNotExist(err) {
+		t.Error("expected no codebase.md for empty prompt")
+	}
+}
+
+func TestSeedCodebaseContext_WritesFile(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "http://cudgel:8080")
+	mc := &mockCudgelClient{symbols: []mockSymbol{
+		{Name: "AuthMiddleware", Kind: "function", File: "auth.go", Line: 42, Snippet: "func AuthMiddleware()", Score: 0.95},
+	}}
+	h, workspace := newHydratorWithCudgel(t, mc)
+
+	if err := h.SeedCodebaseContext(context.Background(), "fix auth middleware", "worker"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(workspace, ".aot", "context", "codebase.md"))
+	if err != nil {
+		t.Fatalf("expected codebase.md to be written: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "# Codebase Context") {
+		t.Error("missing header in codebase.md")
+	}
+	if !strings.Contains(content, "AuthMiddleware") {
+		t.Error("missing symbol in codebase.md")
+	}
+}
+
+func TestSeedCodebaseContext_SeniorAgentUsesK20(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "http://cudgel:8080")
+	var capturedLimit int
+	mc := &mockCudgelClient{}
+	mc.err = nil // override SemanticSearch to capture limit
+	// We use a custom mock inline to capture the limit
+	h, _ := newHydratorWithCudgel(t, &limitCapturingClient{captureLimit: &capturedLimit})
+
+	_ = h.SeedCodebaseContext(context.Background(), "do something", "senior")
+	if capturedLimit != 20 {
+		t.Errorf("expected K=20 for senior agent, got %d", capturedLimit)
+	}
+}
+
+func TestSeedCodebaseContext_WorkerAgentUsesK10(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "http://cudgel:8080")
+	var capturedLimit int
+	h, _ := newHydratorWithCudgel(t, &limitCapturingClient{captureLimit: &capturedLimit})
+
+	_ = h.SeedCodebaseContext(context.Background(), "do something", "worker")
+	if capturedLimit != 10 {
+		t.Errorf("expected K=10 for worker agent, got %d", capturedLimit)
+	}
+}
+
+func TestSeedCodebaseContext_GracefulDegradation(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "http://cudgel:8080")
+	mc := &mockCudgelClient{err: fmt.Errorf("connection refused")}
+	h, workspace := newHydratorWithCudgel(t, mc)
+
+	// Should not return an error
+	if err := h.SeedCodebaseContext(context.Background(), "fix something", "worker"); err != nil {
+		t.Fatalf("expected nil on error, got: %v", err)
+	}
+
+	_, err := os.Stat(filepath.Join(workspace, ".aot", "context", "codebase.md"))
+	if !os.IsNotExist(err) {
+		t.Error("expected no codebase.md when cudgel fails")
+	}
+}
+
+func TestSeedCodebaseContext_NoResultsNoFile(t *testing.T) {
+	t.Setenv("CUDGEL_ENDPOINT", "http://cudgel:8080")
+	mc := &mockCudgelClient{symbols: []mockSymbol{}} // empty results
+	h, workspace := newHydratorWithCudgel(t, mc)
+
+	if err := h.SeedCodebaseContext(context.Background(), "do something", "worker"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err := os.Stat(filepath.Join(workspace, ".aot", "context", "codebase.md"))
+	if !os.IsNotExist(err) {
+		t.Error("expected no codebase.md when cudgel returns empty")
+	}
+}
+
+// limitCapturingClient captures the limit passed to SemanticSearch.
+type limitCapturingClient struct {
+	captureLimit *int
+}
+
+func (l *limitCapturingClient) SemanticSearch(_ context.Context, _ string, limit int) ([]cudgel.Symbol, error) {
+	*l.captureLimit = limit
+	return []cudgel.Symbol{}, nil
+}
+
+func (l *limitCapturingClient) GraphTraversal(_ context.Context, _ string, _ int) ([]cudgel.Edge, error) {
+	return []cudgel.Edge{}, nil
 }

@@ -27,6 +27,7 @@ import (
 
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
+	"github.com/uncworks/aot/internal/cudgel"
 )
 
 // Gateway is the RPC Gateway sidecar server.
@@ -930,6 +931,52 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 		Stderr:   stderr.String(),
 		ExitCode: int32(exitCode),
 	}), nil
+}
+
+// SemanticSearch forwards a semantic code search request to the cudgel service.
+// The CUDGEL_ENDPOINT environment variable controls which service is called.
+// Returns an empty response (no error) when the endpoint is unset or cudgel is unavailable.
+// Returns InvalidArgument if the query is empty.
+// Limit defaults to 10 if unset; clamped to 50 if too large.
+func (g *Gateway) SemanticSearch(ctx context.Context, req *connect.Request[agentv1.SemanticSearchRequest]) (*connect.Response[agentv1.SemanticSearchResponse], error) {
+	if req.Msg.Query == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query must not be empty"))
+	}
+
+	limit := int(req.Msg.Limit)
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	endpoint := os.Getenv("CUDGEL_ENDPOINT")
+	if endpoint == "" {
+		// No endpoint configured — return empty results silently.
+		return connect.NewResponse(&agentv1.SemanticSearchResponse{}), nil
+	}
+
+	client := cudgel.NewHTTPClient(endpoint)
+	symbols, err := client.SemanticSearch(ctx, req.Msg.Query, limit)
+	if err != nil {
+		slog.Warn("cudgel SemanticSearch failed, returning empty results", "err", err)
+		return connect.NewResponse(&agentv1.SemanticSearchResponse{}), nil
+	}
+
+	chunks := make([]*agentv1.CodeChunk, 0, len(symbols))
+	for _, s := range symbols {
+		chunks = append(chunks, &agentv1.CodeChunk{
+			Name:    s.Name,
+			Kind:    s.Kind,
+			File:    s.File,
+			Line:    int32(s.Line),
+			Snippet: s.Snippet,
+			Score:   float32(s.Score),
+		})
+	}
+
+	return connect.NewResponse(&agentv1.SemanticSearchResponse{Chunks: chunks}), nil
 }
 
 // --- Pi JSON event formatting for human-readable logs ---

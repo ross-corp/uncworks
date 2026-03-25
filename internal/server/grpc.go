@@ -27,6 +27,7 @@ import (
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
 	"github.com/uncworks/aot/internal/brain"
+	cudgelclient "github.com/uncworks/aot/internal/cudgel"
 	"github.com/uncworks/aot/internal/embeddings"
 	"github.com/uncworks/aot/internal/eventbus"
 	"github.com/uncworks/aot/internal/repoutil"
@@ -414,6 +415,21 @@ func (s *AOTServiceHandler) SearchPastWork(ctx context.Context, req *connect.Req
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query is required"))
 	}
 
+	// Build limit before branching — both paths use it.
+	limit := int(req.Msg.Limit)
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// SOURCE_CODE: delegate to cudgel instead of the internal code_chunks table.
+	// This path does not require BrainSearcher or Embedder.
+	if req.Msg.SourceFilter == apiv1.SourceFilter_SOURCE_FILTER_SOURCE_CODE {
+		return s.searchSourceCode(ctx, req.Msg.Query, limit)
+	}
+
 	if s.BrainSearcher == nil || s.Embedder == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("knowledge system not configured"))
 	}
@@ -422,15 +438,6 @@ func (s *AOTServiceHandler) SearchPastWork(ctx context.Context, req *connect.Req
 	queryVec, err := s.Embedder.Embed(ctx, req.Msg.Query)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("embed query: %w", err))
-	}
-
-	// Build search query
-	limit := int(req.Msg.Limit)
-	if limit <= 0 {
-		limit = 10
-	}
-	if limit > 100 {
-		limit = 100
 	}
 
 	sourceFilter := ""
@@ -481,6 +488,35 @@ func (s *AOTServiceHandler) SearchPastWork(ctx context.Context, req *connect.Req
 		protoResults = append(protoResults, pr)
 	}
 
+	return connect.NewResponse(&apiv1.SearchPastWorkResponse{Results: protoResults}), nil
+}
+
+// searchSourceCode handles SearchPastWork with SOURCE_FILTER_SOURCE_CODE by
+// delegating to the cudgel HTTP shim. Returns empty results (no error) when
+// cudgel is unreachable or CUDGEL_ENDPOINT is unset.
+func (s *AOTServiceHandler) searchSourceCode(ctx context.Context, query string, limit int) (*connect.Response[apiv1.SearchPastWorkResponse], error) {
+	endpoint := os.Getenv("CUDGEL_ENDPOINT")
+	if endpoint == "" {
+		return connect.NewResponse(&apiv1.SearchPastWorkResponse{}), nil
+	}
+
+	client := cudgelclient.NewHTTPClient(endpoint)
+	symbols, err := client.SemanticSearch(ctx, query, limit)
+	if err != nil {
+		slog.Warn("cudgel searchSourceCode failed, returning empty results", "err", err)
+		return connect.NewResponse(&apiv1.SearchPastWorkResponse{}), nil
+	}
+
+	protoResults := make([]*apiv1.PastWorkResult, 0, len(symbols))
+	for _, s := range symbols {
+		protoResults = append(protoResults, &apiv1.PastWorkResult{
+			ChunkText:       s.Snippet,
+			SourceType:      "source_code",
+			SimilarityScore: s.Score,
+			FilePath:        s.File,
+			NodeType:        s.Kind,
+		})
+	}
 	return connect.NewResponse(&apiv1.SearchPastWorkResponse{Results: protoResults}), nil
 }
 
