@@ -13,7 +13,19 @@ import (
 )
 
 func TestProvisionLLMKey_Success(t *testing.T) {
+	// Mock server serves both /v1/models (dynamic discovery) and /key/generate.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/models" {
+			_ = json.NewEncoder(w).Encode(litellm.ListModelsResponse{
+				Object: "list",
+				Data: []litellm.ModelInfo{
+					{ID: "default"},
+					{ID: "default-cloud"},
+				},
+			})
+			return
+		}
 		var req litellm.GenerateKeyRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
 
@@ -24,7 +36,6 @@ func TestProvisionLLMKey_Success(t *testing.T) {
 			t.Errorf("expected 2 models for default tier, got %d", len(req.Models))
 		}
 
-		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(litellm.GenerateKeyResponse{Key: "sk-provisioned-123"})
 	}))
 	defer server.Close()
@@ -48,7 +59,20 @@ func TestProvisionLLMKey_Success(t *testing.T) {
 }
 
 func TestProvisionLLMKey_PremiumTier(t *testing.T) {
+	// Mock server serves /v1/models with premium-tier model set.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/models" {
+			_ = json.NewEncoder(w).Encode(litellm.ListModelsResponse{
+				Object: "list",
+				Data: []litellm.ModelInfo{
+					{ID: "default"},
+					{ID: "default-cloud"},
+					{ID: "premium"},
+				},
+			})
+			return
+		}
 		var req litellm.GenerateKeyRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
 
@@ -56,7 +80,6 @@ func TestProvisionLLMKey_PremiumTier(t *testing.T) {
 			t.Errorf("expected 3 models for premium tier, got %d: %v", len(req.Models), req.Models)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(litellm.GenerateKeyResponse{Key: "sk-premium"})
 	}))
 	defer server.Close()
