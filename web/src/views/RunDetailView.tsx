@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { usePoll } from "../hooks/usePoll";
 import { useCopilotContext } from "../hooks/useCopilotContext";
 import { ScrollTextIcon, GitBranchIcon, FolderIcon, TerminalIcon } from "lucide-react";
 import { useParams, useNavigate, Link } from "react-router-dom";
@@ -191,32 +192,19 @@ export default function RunDetailView() {
   const [loadError, setLoadError] = useState(false);
 
   // Fetch run and poll
-  useEffect(() => {
+  const retriesRef = useRef(0);
+  usePoll(async () => {
     if (!id) return;
-    let cancelled = false;
-    let retries = 0;
-
-    async function fetch() {
-      try {
-        const result = await client.getAgentRun(id!);
-        if (!cancelled) {
-          setRun(mapRun(result));
-          setLoadError(false);
-          retries = 0;
-        }
-      } catch {
-        retries++;
-        if (retries >= 3 && !cancelled) setLoadError(true);
-      }
+    try {
+      const result = await client.getAgentRun(id);
+      setRun(mapRun(result));
+      setLoadError(false);
+      retriesRef.current = 0;
+    } catch {
+      retriesRef.current++;
+      if (retriesRef.current >= 3) setLoadError(true);
     }
-
-    fetch();
-    const interval = setInterval(fetch, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [id, client]);
+  }, 5000, [id, client]);
 
   // Keyboard: esc back, number keys for tabs, i for info
   useEffect(() => {

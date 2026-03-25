@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { apiFetch } from "../hooks/apiFetch";
+import { usePoll } from "../hooks/usePoll";
 import type { AgentRunPhase } from "../types/agent-run";
 import { ROLE_STYLES } from "../lib/role-styles";
 
@@ -169,27 +170,19 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
   const prevEntryCountRef = useRef(0);
 
   // Poll structured logs
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetch() {
-      try {
-        const r = await apiFetch(`/api/v1/runs/${runId}/logs/structured`);
-        if (r.ok) {
-          const data = await r.json();
-          if (!cancelled) setEntries(data ?? []);
-        }
-      } catch {
-        // silent
-      } finally {
-        if (!cancelled) setLoading(false);
+  usePoll(async () => {
+    try {
+      const r = await apiFetch(`/api/v1/runs/${runId}/logs/structured`);
+      if (r.ok) {
+        const data = await r.json();
+        setEntries(data ?? []);
       }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
     }
-
-    fetch();
-    const interval = setInterval(fetch, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [runId]);
+  }, 3000, [runId]);
 
   // Clear thinking when new completed entries arrive
   useEffect(() => {
@@ -205,33 +198,21 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
   useEffect(() => {
     if (!isActive) {
       setThinking(null);
-      return;
     }
+  }, [isActive]);
 
-    let cancelled = false;
-
-    const fetch = async () => {
-      try {
-        const r = await apiFetch(`/api/v1/runs/${runId}/logs/thinking`);
-        if (r.ok) {
-          const data: ThinkingState = await r.json();
-          if (!cancelled) setThinking(data.thinking ? data : null);
-        }
-      } catch {
-        // silent
+  usePoll(async () => {
+    if (!isActive) return;
+    try {
+      const r = await apiFetch(`/api/v1/runs/${runId}/logs/thinking`);
+      if (r.ok) {
+        const data: ThinkingState = await r.json();
+        setThinking(data.thinking ? data : null);
       }
-    };
-
-    fetch();
-    const interval = setInterval(() => {
-      if (!cancelled) fetch();
-    }, 2000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [isActive, runId]);
+    } catch {
+      // silent
+    }
+  }, 2000, [isActive, runId]);
 
   // Auto-scroll
   useEffect(() => {

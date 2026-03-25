@@ -86,6 +86,26 @@ func RateLimitMiddleware(reqPerSec int) Middleware {
 	var buckets sync.Map // map[string]*ipBucket
 	rate := float64(reqPerSec)
 
+	// Background sweep: evict inactive IP buckets every 5 minutes.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		const bucketTTL = 10 * time.Minute
+		for range ticker.C {
+			now := time.Now()
+			buckets.Range(func(key, val any) bool {
+				bucket := val.(*ipBucket)
+				bucket.mu.Lock()
+				inactive := now.Sub(bucket.lastCheck) > bucketTTL
+				bucket.mu.Unlock()
+				if inactive {
+					buckets.Delete(key)
+				}
+				return true
+			})
+		}
+	}()
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := extractIP(r)
@@ -149,6 +169,23 @@ func SessionMiddleware(secret string) Middleware {
 	var mu sync.RWMutex
 	sessions := make(map[string]sessionEntry)
 	_ = secret // reserved for future HMAC signing of session IDs
+
+	// Background sweep: evict sessions older than 24 hours every 5 minutes.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		const sessionTTL = 24 * time.Hour
+		for range ticker.C {
+			now := time.Now()
+			mu.Lock()
+			for sid, entry := range sessions {
+				if now.Sub(entry.createdAt) > sessionTTL {
+					delete(sessions, sid)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +252,12 @@ func generateSessionID() string {
 // 4.2  CSRF middleware
 // ---------------------------------------------------------------------------
 
+// csrfEntry holds a CSRF token and the time it was created.
+type csrfEntry struct {
+	token     string
+	createdAt time.Time
+}
+
 // CSRFMiddleware generates a CSRF token per session and sets it in the
 // X-CSRF-Token response header. State-changing methods (POST, PUT, DELETE)
 // must include the matching token in the X-CSRF-Token request header.
@@ -222,8 +265,25 @@ func generateSessionID() string {
 // verification since they are not susceptible to CSRF attacks.
 func CSRFMiddleware() Middleware {
 	var mu sync.RWMutex
-	// Map of session cookie value → CSRF token.
-	tokens := make(map[string]string)
+	// Map of session cookie value → CSRF entry.
+	tokens := make(map[string]csrfEntry)
+
+	// Background sweep: evict CSRF entries older than 24 hours every 5 minutes.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		const csrfTTL = 24 * time.Hour
+		for range ticker.C {
+			now := time.Now()
+			mu.Lock()
+			for sid, entry := range tokens {
+				if now.Sub(entry.createdAt) > csrfTTL {
+					delete(tokens, sid)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -242,16 +302,19 @@ func CSRFMiddleware() Middleware {
 
 			// Ensure a CSRF token exists for this session.
 			mu.RLock()
-			token, exists := tokens[sessionID]
+			entry, exists := tokens[sessionID]
 			mu.RUnlock()
 
+			var token string
 			if !exists || sessionID == "" {
 				token = generateCSRFToken()
 				if sessionID != "" {
 					mu.Lock()
-					tokens[sessionID] = token
+					tokens[sessionID] = csrfEntry{token: token, createdAt: time.Now()}
 					mu.Unlock()
 				}
+			} else {
+				token = entry.token
 			}
 
 			// Always expose the current CSRF token so the client can read it.

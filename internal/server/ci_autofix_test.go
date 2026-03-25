@@ -39,7 +39,7 @@ func makeCheckRunPayload(action, conclusion, branch, repo string) []byte {
 
 func TestHandleCheckRunEvent_FailureOnAotBranch(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(ciScheme()).Build()
-	ci := NewCIAutofix(k8s, "default", nil, 3)
+	ci := NewCIAutofix(context.Background(), k8s, "default", nil, 3)
 
 	payload := makeCheckRunPayload("completed", "failure", "aot/ar-test", "org/repo")
 	triggered, err := ci.HandleCheckRunEvent(context.Background(), payload)
@@ -53,7 +53,7 @@ func TestHandleCheckRunEvent_FailureOnAotBranch(t *testing.T) {
 
 func TestHandleCheckRunEvent_SuccessIgnored(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(ciScheme()).Build()
-	ci := NewCIAutofix(k8s, "default", nil, 3)
+	ci := NewCIAutofix(context.Background(), k8s, "default", nil, 3)
 
 	payload := makeCheckRunPayload("completed", "success", "aot/ar-test", "org/repo")
 	triggered, err := ci.HandleCheckRunEvent(context.Background(), payload)
@@ -67,7 +67,7 @@ func TestHandleCheckRunEvent_SuccessIgnored(t *testing.T) {
 
 func TestHandleCheckRunEvent_NonAotBranchIgnored(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(ciScheme()).Build()
-	ci := NewCIAutofix(k8s, "default", nil, 3)
+	ci := NewCIAutofix(context.Background(), k8s, "default", nil, 3)
 
 	payload := makeCheckRunPayload("completed", "failure", "main", "org/repo")
 	triggered, err := ci.HandleCheckRunEvent(context.Background(), payload)
@@ -81,7 +81,7 @@ func TestHandleCheckRunEvent_NonAotBranchIgnored(t *testing.T) {
 
 func TestHandleCheckRunEvent_PendingIgnored(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(ciScheme()).Build()
-	ci := NewCIAutofix(k8s, "default", nil, 3)
+	ci := NewCIAutofix(context.Background(), k8s, "default", nil, 3)
 
 	payload := makeCheckRunPayload("created", "failure", "aot/ar-test", "org/repo")
 	triggered, err := ci.HandleCheckRunEvent(context.Background(), payload)
@@ -177,7 +177,7 @@ func TestGetFixAttemptCount(t *testing.T) {
 		objs[i] = &runs[i]
 	}
 	k8s := fake.NewClientBuilder().WithScheme(ciScheme()).WithRuntimeObjects(objs...).Build()
-	ci := NewCIAutofix(k8s, "default", nil, 3)
+	ci := NewCIAutofix(context.Background(), k8s, "default", nil, 3)
 
 	count, err := ci.getFixAttemptCount(context.Background(), "aot/ar-original")
 	if err != nil {
@@ -226,7 +226,7 @@ func TestCircuitBreaker_MaxRetriesReached(t *testing.T) {
 		objs[i] = &runs[i]
 	}
 	k8s := fake.NewClientBuilder().WithScheme(ciScheme()).WithRuntimeObjects(objs...).Build()
-	ci := NewCIAutofix(k8s, "default", nil, 3) // max 3 retries
+	ci := NewCIAutofix(context.Background(), k8s, "default", nil, 3) // max 3 retries
 
 	payload := makeCheckRunPayload("completed", "failure", "aot/ar-maxed", "org/repo")
 	triggered, err := ci.HandleCheckRunEvent(context.Background(), payload)

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -42,7 +42,40 @@ func init() {
 	utilruntime.Must(aotv1alpha1.AddToScheme(scheme))
 }
 
+func initLogger() {
+	level := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler
+	if os.Getenv("LOG_FORMAT") == "json" || !isTerminal(os.Stdout) {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(handler))
+}
+
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
 func main() {
+	initLogger()
+
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+
 	addr := envOrDefault("LISTEN_ADDR", ":50055")
 	namespace := envOrDefault("NAMESPACE", "default")
 
@@ -52,16 +85,18 @@ func main() {
 	// API key authentication (optional but strongly recommended for production).
 	apiKey := os.Getenv("AOT_API_KEY")
 	if apiKey == "" {
-		log.Println("WARNING: AOT_API_KEY not set — API server is unauthenticated. Set AOT_API_KEY for production use.")
+		slog.Warn("AOT_API_KEY not set — API server is unauthenticated. Set AOT_API_KEY for production use.")
 	}
 
 	// Initialize K8s client
 	restConfig := ctrl.GetConfigOrDie()
 	k8sClient, err := runtimeclient.New(restConfig, runtimeclient.Options{Scheme: scheme})
 	if err != nil {
-		log.Fatalf("Failed to create K8s client: %v", err)
+		serverCancel()
+		slog.Error("failed to create K8s client", "err", err)
+		os.Exit(1)
 	}
-	log.Printf("K8s client initialized (namespace: %s)", namespace)
+	slog.Info("K8s client initialized", "namespace", namespace)
 
 	bus := eventbus.NewChannelBus()
 	svc := server.NewAOTServiceHandler(k8sClient, bus, namespace)
@@ -69,7 +104,7 @@ func main() {
 	// Connect to Temporal (required for production)
 	temporalHost := os.Getenv("TEMPORAL_HOST")
 	if temporalHost == "" {
-		log.Println("WARNING: TEMPORAL_HOST not set — agent run creation, cancellation, and human input will fail. Set TEMPORAL_HOST for production use.")
+		slog.Warn("TEMPORAL_HOST not set — agent run creation, cancellation, and human input will fail. Set TEMPORAL_HOST for production use.")
 	} else {
 		temporalNamespace := envOrDefault("TEMPORAL_NAMESPACE", "default")
 		tc, err := temporalclient.Dial(temporalclient.Options{
@@ -77,11 +112,11 @@ func main() {
 			Namespace: temporalNamespace,
 		})
 		if err != nil {
-			log.Printf("WARNING: Failed to connect to Temporal at %s: %v", temporalHost, err)
+			slog.Warn("failed to connect to Temporal", "host", temporalHost, "err", err)
 		} else {
 			defer tc.Close()
 			svc.TemporalClient = tc
-			log.Printf("Connected to Temporal at %s (namespace: %s)", temporalHost, temporalNamespace)
+			slog.Info("connected to Temporal", "host", temporalHost, "namespace", temporalNamespace)
 		}
 	}
 
@@ -159,6 +194,10 @@ func main() {
 	archiveHandler := &server.ArchiveHandler{K8sClient: k8sClient, Namespace: namespace}
 	archiveHandler.RegisterArchiveHandlers(mux)
 
+	// Register lightweight counts endpoint (used by GlobalNav)
+	countsHandler := &server.CountsHandler{K8sClient: k8sClient, Namespace: namespace}
+	countsHandler.RegisterCountsHandlers(mux)
+
 	// Register project endpoints
 	softServeAddr := envOrDefault("SOFT_SERVE_ADDR", "soft-serve.aot.svc:23231")
 	softServeKeyPath := envOrDefault("SOFT_SERVE_KEY_PATH", "/etc/soft-serve/id_ed25519")
@@ -174,7 +213,7 @@ func main() {
 	chainHandler.RegisterChainHandlers(mux)
 
 	// Register GitHub webhook receiver (webhooks use their own HMAC auth, skip API key)
-	webhookHandler := server.NewWebhookHandler(k8sClient, namespace, ghProvider)
+	webhookHandler := server.NewWebhookHandler(serverCtx, k8sClient, namespace, ghProvider)
 	mux.Handle("/api/v1/webhooks/github", webhookHandler)
 
 	// Register AOTService handler
@@ -207,9 +246,10 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("UNCWORKS API server listening on %s (gRPC + Connect + gRPC-Web)", addr)
+		slog.Info("UNCWORKS API server listening", "addr", addr, "protocols", "gRPC+Connect+gRPC-Web")
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+			slog.Error("server failed", "err", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -217,11 +257,12 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
-	log.Println("Shutting down...")
+	slog.Info("shutting down...")
+	serverCancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("Shutdown error: %v", err)
+		slog.Error("shutdown error", "err", err)
 	}
 }
 

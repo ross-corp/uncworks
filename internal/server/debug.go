@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -91,7 +91,7 @@ func (d *DebugHandler) handleStartDebug(w http.ResponseWriter, r *http.Request) 
 	d.ensureDebugEnvVar(deploy, true)
 
 	if err := d.k8sClient.Update(r.Context(), deploy); err != nil {
-		log.Printf("failed to update deployment %s for debug: %v", deployName, err)
+		slog.Error("failed to update deployment for debug", "deployment", deployName, "err", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to start debug: " + err.Error()})
 		return
 	}
@@ -99,7 +99,7 @@ func (d *DebugHandler) handleStartDebug(w http.ResponseWriter, r *http.Request) 
 	// Update CRD status debugActive=true via status subresource.
 	crd.Status.DebugActive = true
 	if err := d.k8sClient.Status().Update(r.Context(), crd); err != nil {
-		log.Printf("failed to update AgentRun %s status for debug: %v", runID, err)
+		slog.Error("failed to update AgentRun status for debug", "run", runID, "err", err)
 		// Non-fatal: deployment was already patched.
 	}
 
@@ -143,7 +143,7 @@ func (d *DebugHandler) handleStopDebug(w http.ResponseWriter, r *http.Request) {
 	d.ensureDebugEnvVar(deploy, false)
 
 	if err := d.k8sClient.Update(r.Context(), deploy); err != nil {
-		log.Printf("failed to update deployment %s to stop debug: %v", deployName, err)
+		slog.Error("failed to update deployment to stop debug", "deployment", deployName, "err", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to stop debug: " + err.Error()})
 		return
 	}
@@ -151,7 +151,7 @@ func (d *DebugHandler) handleStopDebug(w http.ResponseWriter, r *http.Request) {
 	// Update CRD status debugActive=false via status subresource.
 	crd.Status.DebugActive = false
 	if err := d.k8sClient.Status().Update(r.Context(), crd); err != nil {
-		log.Printf("failed to update AgentRun %s status after debug stop: %v", runID, err)
+		slog.Error("failed to update AgentRun status after debug stop", "run", runID, "err", err)
 		// Non-fatal: deployment was already patched.
 	}
 

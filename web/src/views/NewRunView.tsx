@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
+import { useRunForm } from "../hooks/useRunForm";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -35,35 +36,22 @@ export default function NewRunView() {
   const navigate = useNavigate();
 
   const [searchParams] = useSearchParams();
-  const [prompt, setPrompt] = useState("");
-  const [repos, setRepos] = useState([{ url: "https://github.com/roshbhatia/neph.nvim", branch: "main" }]);
+  const { form, set, reset } = useRunForm();
+
+  // Destructure form fields for readability
+  const {
+    prompt, repos, mode, specContent,
+    modelTier, ttlMinutes, orchestrationMode, implementModelTier,
+    projectRef, specRef, customLabelMode,
+    project, feature, tags,
+  } = form;
+
+  // Auxiliary UI state (not part of the run creation payload)
   const [submitting, setSubmitting] = useState(false);
-  const [mode, setMode] = useState<"prompt" | "spec">("prompt");
-  const [specContent, setSpecContent] = useState("");
-
-  // Configuration
-  const [modelTier, setModelTier] = useState("default");
-  const [ttlMinutes, setTtlMinutes] = useState(15);
-  const [orchestrationMode, setOrchestrationMode] = useState<OrchestrationMode>("single");
-  const [implementModelTier, setImplementModelTier] = useState("");
-
-  // AI improvement
   const [improvingPrompt, setImprovingPrompt] = useState(false);
   const [improvingSpec, setImprovingSpec] = useState(false);
-
-  // Project reference (Project CRD)
-  const [projectRef, setProjectRef] = useState("");
-  const [specRef, setSpecRef] = useState("");
   const [availableProjects, setAvailableProjects] = useState<ProjectOption[]>([]);
-  const [customLabelMode, setCustomLabelMode] = useState(false);
-
-  // Classification
-  const [project, setProject] = useState("");
-  const [feature, setFeature] = useState("");
-  const [tags, setTags] = useState("");
   const [classifying, setClassifying] = useState(false);
-
-  // Existing projects/features for dropdown suggestions
   const [existingProjects, setExistingProjects] = useState<string[]>([]);
   const [existingFeatures, setExistingFeatures] = useState<string[]>([]);
 
@@ -78,7 +66,7 @@ export default function NewRunView() {
         const data = await resp.json() as ProjectOption[];
         setAvailableProjects(data);
       }
-    }).catch(() => { toast.error("Failed to load projects"); });
+    }).catch((err) => { console.error("[NewRunView]", err); toast.error("Failed to load projects"); });
   }, []);
 
   // Fetch existing projects/features for suggestions
@@ -92,7 +80,7 @@ export default function NewRunView() {
       }
       setExistingProjects(Array.from(projects).sort());
       setExistingFeatures(Array.from(features).sort());
-    }).catch(() => { toast.error("Failed to load run history"); });
+    }).catch((err) => { console.error("[NewRunView]", err); toast.error("Failed to load run history"); });
   }, [client]);
 
   // Clone support
@@ -101,49 +89,49 @@ export default function NewRunView() {
     if (!cloneId) return;
     client.getAgentRun(cloneId).then((raw) => {
       const run = mapRun(raw);
-      setPrompt(run.spec.prompt || "");
+      set.prompt(run.spec.prompt || "");
       if (run.spec.repos?.length) {
-        setRepos(run.spec.repos.map((r) => ({ url: r.url, branch: r.branch })));
+        set.repos(run.spec.repos.map((r) => ({ url: r.url, branch: r.branch })));
       }
       if (run.spec.specContent) {
-        setSpecContent(run.spec.specContent);
-        setMode("spec");
+        set.specContent(run.spec.specContent);
+        set.mode("spec");
       }
-      if (run.spec.orchestrationMode) setOrchestrationMode(run.spec.orchestrationMode);
-      if (run.spec.modelTier) setModelTier(run.spec.modelTier);
-      if (run.spec.project) { setProject(run.spec.project); userEditedProject.current = true; }
-      if (run.spec.feature) { setFeature(run.spec.feature); userEditedFeature.current = true; }
-      if (run.spec.tags?.length) { setTags(run.spec.tags.join(", ")); userEditedTags.current = true; }
-    }).catch(() => { toast.error("Failed to load run to clone"); });
+      if (run.spec.orchestrationMode) set.orchestrationMode(run.spec.orchestrationMode);
+      if (run.spec.modelTier) set.modelTier(run.spec.modelTier);
+      if (run.spec.project) { set.project(run.spec.project); userEditedProject.current = true; }
+      if (run.spec.feature) { set.feature(run.spec.feature); userEditedFeature.current = true; }
+      if (run.spec.tags?.length) { set.tags(run.spec.tags.join(", ")); userEditedTags.current = true; }
+    }).catch((err) => { console.error("[NewRunView]", err); toast.error("Failed to load run to clone"); });
   }, [searchParams, client]);
 
   // Pre-fill from project/spec query params
   useEffect(() => {
     const projName = searchParams.get("project");
     if (projName) {
-      setProjectRef(projName);
-      setProject(projName);
+      set.projectRef(projName);
+      set.project(projName);
       userEditedProject.current = true;
       // Fetch project details for defaults
       apiFetch(`/api/v1/projects/${projName}`).then(async (resp) => {
         if (!resp.ok) return;
         const proj = await resp.json();
-        if (proj.repos?.length) setRepos(proj.repos.map((r: { url: string; branch: string }) => ({ url: r.url, branch: r.branch || "main" })));
-        if (proj.defaults?.modelTier) setModelTier(proj.defaults.modelTier);
-        if (proj.defaults?.orchestrationMode) setOrchestrationMode(proj.defaults.orchestrationMode);
-        if (proj.displayName || proj.name) setProject(proj.displayName || proj.name);
-      }).catch(() => {});
+        if (proj.repos?.length) set.repos(proj.repos.map((r: { url: string; branch: string }) => ({ url: r.url, branch: r.branch || "main" })));
+        if (proj.defaults?.modelTier) set.modelTier(proj.defaults.modelTier);
+        if (proj.defaults?.orchestrationMode) set.orchestrationMode(proj.defaults.orchestrationMode);
+        if (proj.displayName || proj.name) set.project(proj.displayName || proj.name);
+      }).catch((err) => { console.error("[NewRunView]", err); });
     }
     const specName = searchParams.get("spec");
     if (specName) {
-      setSpecRef(specName);
-      setMode("spec");
-      setOrchestrationMode("spec-driven");
+      set.specRef(specName);
+      set.mode("spec");
+      set.orchestrationMode("spec-driven");
     }
   }, [searchParams]);
 
   useEffect(() => {
-    if (mode === "spec") setOrchestrationMode("spec-driven");
+    if (mode === "spec") set.orchestrationMode("spec-driven");
   }, [mode]);
 
   const classifyPrompt = useCallback(async () => {
@@ -158,10 +146,10 @@ export default function NewRunView() {
       });
       if (!resp.ok) return;
       const data = await resp.json() as { project?: string; feature?: string; tags?: string[] };
-      if (data.project && !userEditedProject.current) setProject(data.project);
-      if (data.feature && !userEditedFeature.current) setFeature(data.feature);
-      if (data.tags?.length && !userEditedTags.current) setTags(data.tags.join(", "));
-    } catch { toast.error("Classification failed"); } finally { setClassifying(false); }
+      if (data.project && !userEditedProject.current) set.project(data.project);
+      if (data.feature && !userEditedFeature.current) set.feature(data.feature);
+      if (data.tags?.length && !userEditedTags.current) set.tags(data.tags.join(", "));
+    } catch (err) { console.error("[NewRunView]", err); toast.error("Classification failed"); } finally { setClassifying(false); }
   }, [prompt, repos]);
 
   async function improveText(text: string, kind: "prompt" | "spec", setter: (v: string) => void, setLoading: (v: boolean) => void) {
@@ -177,7 +165,7 @@ export default function NewRunView() {
         const data = await resp.json();
         if (data.improved) setter(data.improved);
       }
-    } catch { toast.error("Couldn't improve prompt — try again"); }
+    } catch (err) { console.error("[NewRunView]", err); toast.error("Couldn't improve prompt — try again"); }
     setLoading(false);
   }
 
@@ -222,29 +210,30 @@ export default function NewRunView() {
         ...(specRef.trim() ? { specRef: specRef.trim() } : {}),
       });
       toast.success("Run created");
+      reset();
       navigate(`/run/${run.id}`);
-    } catch { toast.error("Failed to create run"); }
+    } catch (err) { console.error("[NewRunView]", err); toast.error("Failed to create run"); }
     finally { setSubmitting(false); }
   }
 
   function handleProjectRefChange(name: string) {
-    setProjectRef(name);
-    setSpecRef(""); // clear stale spec ref when project changes
+    set.projectRef(name);
+    set.specRef(""); // clear stale spec ref when project changes
     if (!name) return;
     const proj = availableProjects.find((p) => p.name === name);
     if (!proj) return;
-    if (proj.repos?.length) setRepos(proj.repos.map((r) => ({ url: r.url, branch: r.branch || "main" })));
-    if (proj.defaults?.modelTier) setModelTier(proj.defaults.modelTier);
-    if (proj.defaults?.orchestrationMode) setOrchestrationMode(proj.defaults.orchestrationMode as OrchestrationMode);
+    if (proj.repos?.length) set.repos(proj.repos.map((r) => ({ url: r.url, branch: r.branch || "main" })));
+    if (proj.defaults?.modelTier) set.modelTier(proj.defaults.modelTier);
+    if (proj.defaults?.orchestrationMode) set.orchestrationMode(proj.defaults.orchestrationMode as OrchestrationMode);
     if (!userEditedProject.current) {
-      setProject(proj.displayName || proj.name);
+      set.project(proj.displayName || proj.name);
     }
   }
 
-  function addRepo() { setRepos([...repos, { url: "", branch: "main" }]); }
-  function removeRepo(i: number) { setRepos(repos.filter((_, idx) => idx !== i)); }
+  function addRepo() { set.repos([...repos, { url: "", branch: "main" }]); }
+  function removeRepo(i: number) { set.repos(repos.filter((_, idx) => idx !== i)); }
   function updateRepo(i: number, field: "url" | "branch", value: string) {
-    setRepos(repos.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
+    set.repos(repos.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
   }
 
   return (
@@ -258,7 +247,7 @@ export default function NewRunView() {
             {(["prompt", "spec"] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => setMode(m)}
+                onClick={() => set.mode(m)}
                 className={`px-2.5 py-1 text-xs rounded-md transition-colors capitalize ${
                   mode === m ? "bg-background text-foreground shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -296,7 +285,7 @@ export default function NewRunView() {
                       <Input
                         className="flex-1 h-8 text-sm"
                         value={project}
-                        onChange={(e) => { setProject(e.target.value); userEditedProject.current = true; }}
+                        onChange={(e) => { set.project(e.target.value); userEditedProject.current = true; }}
                         placeholder="Custom project label"
                         autoFocus
                         list="project-suggestions"
@@ -308,7 +297,7 @@ export default function NewRunView() {
                         size="sm"
                         variant="ghost"
                         className="px-2 text-muted-foreground"
-                        onClick={() => { setCustomLabelMode(false); setProject(""); userEditedProject.current = false; }}
+                        onClick={() => { set.customLabelMode(false); set.project(""); userEditedProject.current = false; }}
                       >
                         ✕
                       </Button>
@@ -318,11 +307,11 @@ export default function NewRunView() {
                       value={projectRef || "__none__"}
                       onValueChange={(v) => {
                         if (v === "__custom__") {
-                          setProjectRef("");
-                          setCustomLabelMode(true);
+                          set.projectRef("");
+                          set.customLabelMode(true);
                           return;
                         }
-                        setCustomLabelMode(false);
+                        set.customLabelMode(false);
                         handleProjectRefChange(v === "__none__" ? "" : v);
                       }}
                     >
@@ -355,7 +344,7 @@ export default function NewRunView() {
                   </label>
                   <MarkdownEditor
                     value={prompt}
-                    onChange={setPrompt}
+                    onChange={set.prompt}
                     placeholder="What should the agent do?"
                     minHeight={mode === "spec" ? "60px" : "120px"}
                     autoFocus
@@ -366,7 +355,7 @@ export default function NewRunView() {
                         size="sm"
                         className="text-sm"
                         disabled={improvingPrompt}
-                        onClick={() => improveText(prompt, "prompt", setPrompt, setImprovingPrompt)}
+                        onClick={() => improveText(prompt, "prompt", set.prompt, setImprovingPrompt)}
                       >
                         {improvingPrompt ? "Improving..." : "✨ Improve with AI"}
                       </Button>
@@ -380,7 +369,7 @@ export default function NewRunView() {
                     <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Spec (markdown)</label>
                     <MarkdownEditor
                       value={specContent}
-                      onChange={setSpecContent}
+                      onChange={set.specContent}
                       placeholder="Paste or write your spec..."
                       minHeight="180px"
                     />
@@ -390,7 +379,7 @@ export default function NewRunView() {
                           size="sm"
                           className="text-sm"
                           disabled={improvingSpec}
-                          onClick={() => improveText(specContent, "spec", setSpecContent, setImprovingSpec)}
+                          onClick={() => improveText(specContent, "spec", set.specContent, setImprovingSpec)}
                         >
                           {improvingSpec ? "Improving..." : "✨ Improve with AI"}
                         </Button>
@@ -440,7 +429,7 @@ export default function NewRunView() {
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Configuration</label>
                   <div className="flex gap-2 items-start">
                     <div className="flex-1">
-                      <Select value={modelTier} onValueChange={setModelTier}>
+                      <Select value={modelTier} onValueChange={set.modelTier}>
                         <SelectTrigger size="sm" className="w-full h-8">
                           <SelectValue />
                         </SelectTrigger>
@@ -459,11 +448,11 @@ export default function NewRunView() {
                       min={1} max={120}
                       className="w-16 h-8 text-sm text-center"
                       value={ttlMinutes}
-                      onChange={(e) => setTtlMinutes(Math.max(1, Math.min(120, Number(e.target.value) || 15)))}
+                      onChange={(e) => set.ttlMinutes(Math.max(1, Math.min(120, Number(e.target.value) || 15)))}
                       title="Timeout (minutes)"
                     />
                     <div className="flex-1">
-                      <Select value={orchestrationMode} onValueChange={(v) => setOrchestrationMode(v as OrchestrationMode)}>
+                      <Select value={orchestrationMode} onValueChange={(v) => set.orchestrationMode(v as OrchestrationMode)}>
                         <SelectTrigger size="sm" className="w-full h-8">
                           <SelectValue />
                         </SelectTrigger>
@@ -483,7 +472,7 @@ export default function NewRunView() {
                   {orchestrationMode === "spec-driven" && (
                     <div className="flex gap-2 items-center mt-2">
                       <span className="text-xs text-muted-foreground shrink-0">Implement model</span>
-                      <Select value={implementModelTier || "__same__"} onValueChange={(v) => setImplementModelTier(v === "__same__" ? "" : v)}>
+                      <Select value={implementModelTier || "__same__"} onValueChange={(v) => set.implementModelTier(v === "__same__" ? "" : v)}>
                         <SelectTrigger size="sm" className="h-8 flex-1">
                           <SelectValue />
                         </SelectTrigger>
@@ -510,7 +499,7 @@ export default function NewRunView() {
                       <Input
                         className="text-sm"
                         value={feature}
-                        onChange={(e) => { setFeature(e.target.value); userEditedFeature.current = true; }}
+                        onChange={(e) => { set.feature(e.target.value); userEditedFeature.current = true; }}
                         placeholder="Feature"
                         list="feature-suggestions"
                       />
@@ -522,7 +511,7 @@ export default function NewRunView() {
                   <Input
                     className="mt-1 h-8 text-sm"
                     value={tags}
-                    onChange={(e) => { setTags(e.target.value); userEditedTags.current = true; }}
+                    onChange={(e) => { set.tags(e.target.value); userEditedTags.current = true; }}
                     placeholder="Tags (comma-separated)"
                   />
                 </section>

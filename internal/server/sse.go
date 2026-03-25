@@ -3,7 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -187,7 +187,7 @@ func (s *SSEHandler) handleWatchGraph(w http.ResponseWriter, r *http.Request) {
 			sseEvent := agentRunEventToGraphSSE(event)
 			data, err := json.Marshal(sseEvent)
 			if err != nil {
-				log.Printf("SSE: failed to marshal graph event: %v", err)
+				slog.Error("SSE: failed to marshal graph event", "err", err)
 				continue
 			}
 
@@ -243,7 +243,7 @@ func (s *SSEHandler) handleWatchTraces(w http.ResponseWriter, r *http.Request) {
 
 			data, err := json.Marshal(spanEvent)
 			if err != nil {
-				log.Printf("SSE: failed to marshal trace event: %v", err)
+				slog.Error("SSE: failed to marshal trace event", "err", err)
 				continue
 			}
 

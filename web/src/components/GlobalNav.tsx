@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useThemeNew, type ColorMode } from "../hooks/useThemeNew";
 import { apiFetch } from "../hooks/apiFetch";
+import { usePoll } from "../hooks/usePoll";
 
 const MODE_CYCLE: ColorMode[] = ["light", "dark", "system"];
 
@@ -20,8 +21,10 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Schedules", path: "/schedules", icon: "⏱", countKey: "schedules" },
 ];
 
+/** Matches CountsResponse from GET /api/v1/counts.
+ *  `runs` here holds activeRuns (the badge-count for the Runs nav item). */
 interface Counts {
-  runs: number | null;
+  runs: number | null;       // maps to activeRuns
   projects: number | null;
   templates: number | null;
   chains: number | null;
@@ -60,78 +63,24 @@ export default function GlobalNav() {
     setMode(next);
   }
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetch = async () => {
-      try {
-        const [runsResp, projectsResp, templatesResp, chainsResp, chainrunsResp, schedulesResp] = await Promise.allSettled([
-          apiFetch("/api/v1/runs"),
-          apiFetch("/api/v1/projects"),
-          apiFetch("/api/v1/templates"),
-          apiFetch("/api/v1/chains"),
-          apiFetch("/api/v1/chainruns"),
-          apiFetch("/api/v1/schedules"),
-        ]);
-
-        let runsCount: number | null = null;
-        if (runsResp.status === "fulfilled" && runsResp.value.ok) {
-          const data = await runsResp.value.json();
-          const items: { status?: { phase?: string } }[] = Array.isArray(data) ? data : (data.items || []);
-          runsCount = items.filter((r) => {
-            const phase = r.status?.phase;
-            return phase === "running" || phase === "pending" || phase === "waiting_for_input";
-          }).length;
-        }
-
-        let projectsCount: number | null = null;
-        if (projectsResp.status === "fulfilled" && projectsResp.value.ok) {
-          const data = await projectsResp.value.json();
-          projectsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-        }
-
-        let templatesCount: number | null = null;
-        if (templatesResp.status === "fulfilled" && templatesResp.value.ok) {
-          const data = await templatesResp.value.json();
-          templatesCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-        }
-
-        let chainsCount: number | null = null;
-        if (chainsResp.status === "fulfilled" && chainsResp.value.ok) {
-          const data = await chainsResp.value.json();
-          chainsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-        }
-
-        let chainrunsCount: number | null = null;
-        if (chainrunsResp.status === "fulfilled" && chainrunsResp.value.ok) {
-          const data = await chainrunsResp.value.json();
-          chainrunsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-        }
-
-        let schedulesCount: number | null = null;
-        if (schedulesResp.status === "fulfilled" && schedulesResp.value.ok) {
-          const data = await schedulesResp.value.json();
-          schedulesCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
-        }
-
-        if (!cancelled) {
-          setCounts({ runs: runsCount, projects: projectsCount, templates: templatesCount, chains: chainsCount, chainruns: chainrunsCount, schedules: schedulesCount });
-        }
-      } catch {
-        // silently ignore fetch errors for badge counts
+  usePoll(async () => {
+    try {
+      const resp = await apiFetch("/api/v1/counts");
+      if (resp.ok) {
+        const data = await resp.json();
+        setCounts({
+          runs: data.activeRuns ?? null,
+          projects: data.projects ?? null,
+          templates: data.templates ?? null,
+          chains: data.chains ?? null,
+          chainruns: data.chainruns ?? null,
+          schedules: data.schedules ?? null,
+        });
       }
-    };
-
-    fetch();
-    const interval = setInterval(() => {
-      if (!cancelled) fetch();
-    }, 10000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
+    } catch (err) {
+      console.error("[GlobalNav]", err);
+    }
+  }, 10000);
 
   function isActive(item: NavItem): boolean {
     if (item.path === "/") {

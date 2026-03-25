@@ -38,7 +38,9 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err := r.Get(ctx, client.ObjectKey{Namespace: cr.Namespace, Name: cr.Spec.ChainRef}, &chain); err != nil {
 		cr.Status.Phase = aotv1alpha1.ChainRunPhaseFailed
 		cr.Status.Message = fmt.Sprintf("chain %q not found: %v", cr.Spec.ChainRef, err)
-		_ = r.Status().Update(ctx, &cr)
+		if err := r.Status().Update(ctx, &cr); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -46,7 +48,9 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err := aotv1alpha1.ValidateChainDAG(chain.Spec.Steps); err != nil {
 		cr.Status.Phase = aotv1alpha1.ChainRunPhaseFailed
 		cr.Status.Message = fmt.Sprintf("invalid chain DAG: %v", err)
-		_ = r.Status().Update(ctx, &cr)
+		if err := r.Status().Update(ctx, &cr); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
