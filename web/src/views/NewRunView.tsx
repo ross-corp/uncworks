@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import MarkdownEditor from "../components/MarkdownEditor";
 import {
   MODEL_TIER_OPTIONS,
@@ -251,7 +252,23 @@ export default function NewRunView() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2.5">
-        <span className="font-semibold text-base">New Run</span>
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-base">New Run</span>
+          {/* Prompt / Spec mode toggle — segmented control in header */}
+          <div className="flex gap-0.5 bg-muted/50 rounded-md p-0.5">
+            {(["prompt", "spec"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`px-2.5 py-1 text-xs rounded-md transition-colors capitalize ${
+                  mode === m ? "bg-background text-foreground shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <Button size="sm" variant="ghost" onClick={() => navigate("/")}>
             Cancel
@@ -259,260 +276,265 @@ export default function NewRunView() {
         </div>
       </div>
 
-      {/* Form */}
+      {/* Tabs */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl p-6 space-y-6">
+          <Tabs defaultValue="core">
+            <TabsList>
+              <TabsTrigger value="core">Core</TabsTrigger>
+              <TabsTrigger value="config">Config</TabsTrigger>
+            </TabsList>
 
-          {/* Unified project field */}
-          <section>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Project</label>
-            {customLabelMode ? (
-              <div className="flex gap-2">
-                <Input
-                  className="flex-1 h-8 text-sm"
-                  value={project}
-                  onChange={(e) => { setProject(e.target.value); userEditedProject.current = true; }}
-                  placeholder="Custom project label"
-                  autoFocus
-                  list="project-suggestions"
-                />
-                <datalist id="project-suggestions">
-                  {existingProjects.map((p) => <option key={p} value={p} />)}
-                </datalist>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2 text-muted-foreground"
-                  onClick={() => { setCustomLabelMode(false); setProject(""); userEditedProject.current = false; }}
-                >
-                  ✕
-                </Button>
-              </div>
-            ) : (
-              <Select
-                value={projectRef || "__none__"}
-                onValueChange={(v) => {
-                  if (v === "__custom__") {
-                    setProjectRef("");
-                    setCustomLabelMode(true);
-                    return;
-                  }
-                  setCustomLabelMode(false);
-                  handleProjectRefChange(v === "__none__" ? "" : v);
-                }}
-              >
-                <SelectTrigger size="sm" className="w-full h-8">
-                  <SelectValue placeholder="None (standalone run)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None (standalone run)</SelectItem>
-                  {availableProjects.map((p) => (
-                    <SelectItem key={p.name} value={p.name}>
-                      {p.displayName || p.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="__custom__">Custom label...</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            {projectRef && !customLabelMode && (
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Repos, model, and defaults inherited from project (overridable below).
-                {specRef && <span className="ml-1">Spec: <span className="font-mono">{specRef}</span></span>}
-              </p>
-            )}
-          </section>
+            {/* Core tab: prompt/spec editor + repositories */}
+            <TabsContent value="core">
+              <div className="space-y-6 pt-4">
 
-          {/* Repositories */}
-          <section>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Repositories</label>
-            {repos.map((r, i) => (
-              <div key={i} className="flex gap-2 mb-1">
-                <Input
-                  className="flex-1 h-8 text-sm"
-                  value={r.url}
-                  onChange={(e) => updateRepo(i, "url", e.target.value)}
-                  placeholder="https://github.com/org/repo"
-                />
-                <Input
-                  className="min-w-0 flex-1 h-8 text-sm"
-                  value={r.branch}
-                  onChange={(e) => updateRepo(i, "branch", e.target.value)}
-                  placeholder="main"
-                />
-                {repos.length > 1 && (
-                  <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={() => removeRepo(i)}>
-                    x
-                  </Button>
+                {/* Unified project field */}
+                <section>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Project</label>
+                  {customLabelMode ? (
+                    <div className="flex gap-2">
+                      <Input
+                        className="flex-1 h-8 text-sm"
+                        value={project}
+                        onChange={(e) => { setProject(e.target.value); userEditedProject.current = true; }}
+                        placeholder="Custom project label"
+                        autoFocus
+                        list="project-suggestions"
+                      />
+                      <datalist id="project-suggestions">
+                        {existingProjects.map((p) => <option key={p} value={p} />)}
+                      </datalist>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-muted-foreground"
+                        onClick={() => { setCustomLabelMode(false); setProject(""); userEditedProject.current = false; }}
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={projectRef || "__none__"}
+                      onValueChange={(v) => {
+                        if (v === "__custom__") {
+                          setProjectRef("");
+                          setCustomLabelMode(true);
+                          return;
+                        }
+                        setCustomLabelMode(false);
+                        handleProjectRefChange(v === "__none__" ? "" : v);
+                      }}
+                    >
+                      <SelectTrigger size="sm" className="w-full h-8">
+                        <SelectValue placeholder="None (standalone run)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None (standalone run)</SelectItem>
+                        {availableProjects.map((p) => (
+                          <SelectItem key={p.name} value={p.name}>
+                            {p.displayName || p.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__custom__">Custom label...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {projectRef && !customLabelMode && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Repos, model, and defaults inherited from project (overridable below).
+                      {specRef && <span className="ml-1">Spec: <span className="font-mono">{specRef}</span></span>}
+                    </p>
+                  )}
+                </section>
+
+                {/* Prompt */}
+                <section>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">
+                    {mode === "prompt" ? "Prompt" : "Prompt (optional with spec)"}
+                  </label>
+                  <MarkdownEditor
+                    value={prompt}
+                    onChange={setPrompt}
+                    placeholder="What should the agent do?"
+                    minHeight={mode === "spec" ? "60px" : "120px"}
+                    autoFocus
+                  />
+                  {prompt.trim().length > 10 && (
+                    <div className="flex justify-end mt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-sm"
+                        disabled={improvingPrompt}
+                        onClick={() => improveText(prompt, "prompt", setPrompt, setImprovingPrompt)}
+                      >
+                        {improvingPrompt ? "Improving..." : "✨ Improve with AI"}
+                      </Button>
+                    </div>
+                  )}
+                </section>
+
+                {/* Spec editor */}
+                {mode === "spec" && (
+                  <section>
+                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Spec (markdown)</label>
+                    <MarkdownEditor
+                      value={specContent}
+                      onChange={setSpecContent}
+                      placeholder="Paste or write your spec..."
+                      minHeight="180px"
+                    />
+                    {specContent.trim().length > 10 && (
+                      <div className="flex justify-end mt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-sm"
+                          disabled={improvingSpec}
+                          onClick={() => improveText(specContent, "spec", setSpecContent, setImprovingSpec)}
+                        >
+                          {improvingSpec ? "Improving..." : "✨ Improve with AI"}
+                        </Button>
+                      </div>
+                    )}
+                  </section>
                 )}
-              </div>
-            ))}
-            <Button size="sm" variant="ghost" className="text-xs text-muted-foreground" onClick={addRepo}>
-              + add repository
-            </Button>
-          </section>
 
-          {/* Mode + Prompt */}
-          <section>
-            <div className="flex items-center gap-2 mb-1">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {mode === "prompt" ? "Prompt" : "Prompt (optional with spec)"}
-              </label>
-              <div className="flex gap-0.5 ml-auto bg-muted/50 rounded-md p-0.5">
-                {(["prompt", "spec"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMode(m)}
-                    className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                      mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <MarkdownEditor
-              value={prompt}
-              onChange={setPrompt}
-              placeholder="What should the agent do?"
-              minHeight={mode === "spec" ? "60px" : "120px"}
-              autoFocus
-            />
-            {prompt.trim().length > 10 && (
-              <div className="flex justify-end mt-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-sm"
-                  disabled={improvingPrompt}
-                  onClick={() => improveText(prompt, "prompt", setPrompt, setImprovingPrompt)}
-                >
-                  {improvingPrompt ? "Improving..." : "✨ Improve with AI"}
-                </Button>
-              </div>
-            )}
-          </section>
-
-          {/* Spec editor */}
-          {mode === "spec" && (
-            <section>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Spec (markdown)</label>
-              <MarkdownEditor
-                value={specContent}
-                onChange={setSpecContent}
-                placeholder="Paste or write your spec..."
-                minHeight="180px"
-              />
-              {specContent.trim().length > 10 && (
-                <div className="flex justify-end mt-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-sm"
-                    disabled={improvingSpec}
-                    onClick={() => improveText(specContent, "spec", setSpecContent, setImprovingSpec)}
-                  >
-                    {improvingSpec ? "Improving..." : "✨ Improve with AI"}
+                {/* Repositories */}
+                <section>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Repositories</label>
+                  {repos.map((r, i) => (
+                    <div key={i} className="flex gap-2 mb-1">
+                      <Input
+                        className="flex-1 h-8 text-sm"
+                        value={r.url}
+                        onChange={(e) => updateRepo(i, "url", e.target.value)}
+                        placeholder="https://github.com/org/repo"
+                      />
+                      <Input
+                        className="min-w-0 flex-1 h-8 text-sm"
+                        value={r.branch}
+                        onChange={(e) => updateRepo(i, "branch", e.target.value)}
+                        placeholder="main"
+                      />
+                      {repos.length > 1 && (
+                        <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={() => removeRepo(i)}>
+                          x
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button size="sm" variant="ghost" className="text-xs text-muted-foreground" onClick={addRepo}>
+                    + add repository
                   </Button>
-                </div>
-              )}
-            </section>
-          )}
+                </section>
 
-          {/* Configuration — horizontal row */}
-          <section>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Configuration</label>
-            <div className="flex gap-2 items-start">
-              <div className="flex-1">
-                <Select value={modelTier} onValueChange={setModelTier}>
-                  <SelectTrigger size="sm" className="w-full h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MODEL_TIER_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        <span>{opt.label}</span>
-                        <span className="text-muted-foreground ml-1 text-[10px]">{opt.description}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
-              <Input
-                type="number"
-                min={1} max={120}
-                className="w-16 h-8 text-sm text-center"
-                value={ttlMinutes}
-                onChange={(e) => setTtlMinutes(Math.max(1, Math.min(120, Number(e.target.value) || 15)))}
-                title="Timeout (minutes)"
-              />
-              <div className="flex-1">
-                <Select value={orchestrationMode} onValueChange={(v) => setOrchestrationMode(v as OrchestrationMode)}>
-                  <SelectTrigger size="sm" className="w-full h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ORCHESTRATION_MODE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        <span>{opt.label}</span>
-                        <span className="text-muted-foreground ml-1 text-[10px]">{opt.description}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            </TabsContent>
 
-            {/* Implement model (progressive only) */}
-            {orchestrationMode === "spec-driven" && (
-              <div className="flex gap-2 items-center mt-2">
-                <span className="text-[10px] text-muted-foreground shrink-0">Implement model</span>
-                <Select value={implementModelTier || "__same__"} onValueChange={(v) => setImplementModelTier(v === "__same__" ? "" : v)}>
-                  <SelectTrigger size="sm" className="h-8 flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__same__">Same as above</SelectItem>
-                    {MODEL_TIER_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </section>
+            {/* Config tab: model, TTL, orchestration, implement model, classification */}
+            <TabsContent value="config">
+              <div className="space-y-6 pt-4">
 
-          {/* Classification — feature, tags */}
-          <section>
-            <div className="flex items-center gap-2 mb-1">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Classification</label>
-              {classifying && <span className="text-[10px] text-muted-foreground animate-pulse">suggesting...</span>}
-            </div>
-            <div className="flex gap-2">
-              {/* Feature dropdown with suggestions */}
-              <div className="flex-1">
-                <Input
-                  className="h-8 text-sm"
-                  value={feature}
-                  onChange={(e) => { setFeature(e.target.value); userEditedFeature.current = true; }}
-                  placeholder="Feature"
-                  list="feature-suggestions"
-                />
-                <datalist id="feature-suggestions">
-                  {existingFeatures.map((f) => <option key={f} value={f} />)}
-                </datalist>
-              </div>
-            </div>
-            <Input
-              className="mt-1 h-8 text-sm"
-              value={tags}
-              onChange={(e) => { setTags(e.target.value); userEditedTags.current = true; }}
-              placeholder="Tags (comma-separated)"
-            />
-          </section>
+                {/* Configuration — horizontal row */}
+                <section>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Configuration</label>
+                  <div className="flex gap-2 items-start">
+                    <div className="flex-1">
+                      <Select value={modelTier} onValueChange={setModelTier}>
+                        <SelectTrigger size="sm" className="w-full h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MODEL_TIER_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              <span>{opt.label}</span>
+                              <span className="text-muted-foreground ml-1 text-[10px]">{opt.description}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Input
+                      type="number"
+                      min={1} max={120}
+                      className="w-16 h-8 text-sm text-center"
+                      value={ttlMinutes}
+                      onChange={(e) => setTtlMinutes(Math.max(1, Math.min(120, Number(e.target.value) || 15)))}
+                      title="Timeout (minutes)"
+                    />
+                    <div className="flex-1">
+                      <Select value={orchestrationMode} onValueChange={(v) => setOrchestrationMode(v as OrchestrationMode)}>
+                        <SelectTrigger size="sm" className="w-full h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ORCHESTRATION_MODE_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              <span>{opt.label}</span>
+                              <span className="text-muted-foreground ml-1 text-[10px]">{opt.description}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-          {/* Submit */}
+                  {/* Implement model (progressive only) */}
+                  {orchestrationMode === "spec-driven" && (
+                    <div className="flex gap-2 items-center mt-2">
+                      <span className="text-[10px] text-muted-foreground shrink-0">Implement model</span>
+                      <Select value={implementModelTier || "__same__"} onValueChange={(v) => setImplementModelTier(v === "__same__" ? "" : v)}>
+                        <SelectTrigger size="sm" className="h-8 flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__same__">Same as above</SelectItem>
+                          {MODEL_TIER_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </section>
+
+                {/* Classification — feature, tags */}
+                <section>
+                  <div className="flex items-center gap-2 mb-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Classification</label>
+                    {classifying && <span className="text-[10px] text-muted-foreground animate-pulse">suggesting...</span>}
+                  </div>
+                  <div className="flex gap-2">
+                    {/* Feature dropdown with suggestions */}
+                    <div className="flex-1">
+                      <Input
+                        className="h-8 text-sm"
+                        value={feature}
+                        onChange={(e) => { setFeature(e.target.value); userEditedFeature.current = true; }}
+                        placeholder="Feature"
+                        list="feature-suggestions"
+                      />
+                      <datalist id="feature-suggestions">
+                        {existingFeatures.map((f) => <option key={f} value={f} />)}
+                      </datalist>
+                    </div>
+                  </div>
+                  <Input
+                    className="mt-1 h-8 text-sm"
+                    value={tags}
+                    onChange={(e) => { setTags(e.target.value); userEditedTags.current = true; }}
+                    placeholder="Tags (comma-separated)"
+                  />
+                </section>
+
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {/* Submit — always visible, outside tabs */}
           <div className="flex items-center justify-end gap-2 pt-2 pb-4">
             <Button variant="ghost" onClick={() => navigate("/")}>
               Cancel

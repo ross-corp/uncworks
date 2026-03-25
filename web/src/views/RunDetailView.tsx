@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { ScrollTextIcon, GitBranchIcon, FolderIcon, TerminalIcon } from "lucide-react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { AgentRun } from "../types/agent-run";
@@ -10,11 +11,11 @@ import ActivityFeed from "../components/ActivityFeed";
 import StageProgress from "../components/StageProgress";
 import FileExplorer from "../components/FileExplorer";
 import ShellTerminal from "../components/ShellTerminal";
-import TraceTimeline from "../components/TraceTimeline";
+import TraceTimeline, { SpanDetail } from "../components/TraceTimeline";
 import FailureDiagnosisPanel from "../components/FailureDiagnosisPanel";
 import HitlModal from "../components/HitlModal";
 import { useTraces } from "../hooks/useTraces";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
+import type { TraceSpan } from "../types/agent-run";
 import {
   Sheet,
   SheetContent,
@@ -100,11 +101,11 @@ function PhaseStepRow({ stage, phase }: { stage?: string; phase?: string }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TABS: { key: Tab; label: string; num: string }[] = [
-  { key: "logs", label: "Logs", num: "1" },
-  { key: "traces", label: "Traces", num: "2" },
-  { key: "files", label: "Files", num: "3" },
-  { key: "shell", label: "Shell", num: "4" },
+const TABS: { key: Tab; label: string; num: string; icon: React.ElementType }[] = [
+  { key: "logs", label: "Logs", num: "1", icon: ScrollTextIcon },
+  { key: "traces", label: "Traces", num: "2", icon: GitBranchIcon },
+  { key: "files", label: "Files", num: "3", icon: FolderIcon },
+  { key: "shell", label: "Shell", num: "4", icon: TerminalIcon },
 ];
 
 export default function RunDetailView() {
@@ -114,6 +115,7 @@ export default function RunDetailView() {
   const [run, setRun] = useState<AgentRun | null>(null);
   const [tab, setTab] = useState<Tab>("logs");
   const [showInfo, setShowInfo] = useState(false);
+  const [selectedSpan, setSelectedSpan] = useState<TraceSpan | null>(null);
   const [hitlInput, setHitlInput] = useState("");
   const [hitlModalOpen, setHitlModalOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -210,7 +212,9 @@ export default function RunDetailView() {
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
       if (e.key === "Escape") {
-        if (showInfo) {
+        if (selectedSpan) {
+          setSelectedSpan(null);
+        } else if (showInfo) {
           setShowInfo(false);
         } else {
           navigate("/");
@@ -227,7 +231,7 @@ export default function RunDetailView() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [navigate, showInfo]);
+  }, [navigate, showInfo, selectedSpan]);
 
   if (!run) {
     return (
@@ -340,7 +344,7 @@ export default function RunDetailView() {
             </button>
           )}
 
-          <span className="text-xs text-muted-foreground">esc back · 1-4 tabs · i info</span>
+          <span className="text-xs text-muted-foreground">1-4 sections · esc close/back · i info</span>
         </div>
       </div>
 
@@ -403,40 +407,65 @@ export default function RunDetailView() {
         />
       )}
 
-      {/* Tabs */}
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as Tab)}
-        className="flex-1 min-h-0 flex flex-col gap-0"
-      >
-        <TabsList>
-          {TABS.map((t) => (
-            <TabsTrigger
-              key={t.key}
-              value={t.key}
-              data-testid={`detail-tab-${t.key}`}
-            >
-              <span className="opacity-40 mr-1">{t.num}</span>
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {/* Three-zone layout: sidebar nav + main content + right detail panel */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Left sidebar nav */}
+        <nav className="flex flex-col items-center gap-1 border-r bg-muted/20 px-1 py-2 w-12 flex-shrink-0">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const isActive = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                data-testid={`detail-tab-${t.key}`}
+                onClick={() => setTab(t.key)}
+                title={`${t.label} (${t.num})`}
+                className={`flex flex-col items-center gap-0.5 w-10 py-2 rounded transition-colors text-[9px] font-medium ${
+                  isActive
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-        <TabsContent value="logs" className="flex-1 min-h-0 overflow-hidden">
-          <ActivityFeed runId={run.id} phase={run.status.phase} />
-        </TabsContent>
-        <TabsContent value="traces" className="flex-1 min-h-0 overflow-hidden">
-          <div className="h-full">
-            <TraceTimeline spans={spans} runId={run.id} onSelectSpan={() => {}} />
+        {/* Main content area */}
+        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+          {tab === "logs" && (
+            <ActivityFeed runId={run.id} phase={run.status.phase} />
+          )}
+          {tab === "traces" && (
+            <TraceTimeline
+              spans={spans}
+              runId={run.id}
+              selectedSpanId={selectedSpan?.id}
+              onSelectSpan={(span) => setSelectedSpan(span)}
+            />
+          )}
+          {tab === "files" && (
+            <FileExplorer runId={run.id} />
+          )}
+          {tab === "shell" && (
+            <ShellTerminal runId={run.id} phase={run.status.phase} />
+          )}
+        </div>
+
+        {/* Right detail panel — shown when a trace span is selected */}
+        {selectedSpan && (
+          <div className="flex-shrink-0 w-[360px] border-l border-border bg-background overflow-hidden">
+            <SpanDetail
+              span={selectedSpan}
+              allSpans={spans}
+              runId={run.id}
+              onClose={() => setSelectedSpan(null)}
+            />
           </div>
-        </TabsContent>
-        <TabsContent value="files" className="flex-1 min-h-0 overflow-hidden">
-          <FileExplorer runId={run.id} />
-        </TabsContent>
-        <TabsContent value="shell" className="flex-1 min-h-0 overflow-hidden">
-          <ShellTerminal runId={run.id} phase={run.status.phase} />
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
 
       {/* HITL inline overlay (fallback when modal is closed) */}
       {run.status.phase === "waiting_for_input" && !hitlModalOpen && (
