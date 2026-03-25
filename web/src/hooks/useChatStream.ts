@@ -93,8 +93,8 @@ export function useChatStream(): UseChatStreamReturn {
               setIsStreaming(false);
               return;
             }
-            // Extract delta content.
-            const delta = parsed?.choices?.[0]?.delta?.content;
+            // Extract delta content (regular or reasoning tokens from thinking models).
+            const delta = parsed?.choices?.[0]?.delta?.content ?? parsed?.choices?.[0]?.delta?.reasoning_content;
             if (typeof delta === "string") {
               setMessages((prev) => {
                 const next = [...prev];

@@ -28,7 +28,7 @@ func NewChatHandler(liteLLMBaseURL string) *ChatHandler {
 		LiteLLMBaseURL: liteLLMBaseURL,
 		HTTPClient: &http.Client{
 			Transport: &http.Transport{
-				ResponseHeaderTimeout: 10 * time.Second,
+				ResponseHeaderTimeout: 60 * time.Second,
 			},
 			// No overall timeout — streaming responses run until completion
 			// or client disconnect (handled via request context).
