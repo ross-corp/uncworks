@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../hooks/apiFetch";
+import { usePoll } from "../hooks/usePoll";
 import { formatAge } from "../lib/format";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -42,33 +43,19 @@ export default function ProjectListView() {
     }
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetch = async () => {
-      try {
-        const resp = await apiFetch("/api/v1/projects");
-        if (resp.ok) {
-          const data = await resp.json();
-          if (!cancelled) setProjects(data);
-        }
-      } catch {
-        // silent
-      } finally {
-        if (!cancelled) setLoading(false);
+  usePoll(async () => {
+    try {
+      const resp = await apiFetch("/api/v1/projects");
+      if (resp.ok) {
+        const data = await resp.json();
+        setProjects(data);
       }
-    };
-
-    fetch();
-    const interval = setInterval(() => {
-      if (!cancelled) fetch();
-    }, 10000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, 10000);
 
   async function handleCreate() {
     if (!newName.trim()) return;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { usePoll } from "../hooks/usePoll";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { AgentRun, AgentRunPhase } from "../types/agent-run";
@@ -161,43 +162,27 @@ export default function RunListView() {
     }
   }, [client]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchAll = async () => {
-      try {
-        const [agentResult, chainResp] = await Promise.allSettled([
-          client.listAgentRuns(),
-          apiFetch("/api/v1/chainruns"),
-        ]);
-        if (!cancelled) {
-          if (agentResult.status === "fulfilled") {
-            setRuns(agentResult.value.map(mapRun));
-          } else {
-            toast.error("Failed to load agent runs");
-          }
-          if (chainResp.status === "fulfilled" && chainResp.value.ok) {
-            const data = await chainResp.value.json();
-            setChainRuns(data);
-          }
-        }
-      } catch {
-        if (!cancelled) toast.error("Failed to load runs");
-      } finally {
-        if (!cancelled) setLoading(false);
+  usePoll(async () => {
+    try {
+      const [agentResult, chainResp] = await Promise.allSettled([
+        client.listAgentRuns(),
+        apiFetch("/api/v1/chainruns"),
+      ]);
+      if (agentResult.status === "fulfilled") {
+        setRuns(agentResult.value.map(mapRun));
+      } else {
+        toast.error("Failed to load agent runs");
       }
-    };
-
-    fetchAll();
-    const interval = setInterval(() => {
-      if (!cancelled) fetchAll();
-    }, 5000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [client]);
+      if (chainResp.status === "fulfilled" && chainResp.value.ok) {
+        const data = await chainResp.value.json();
+        setChainRuns(data);
+      }
+    } catch {
+      toast.error("Failed to load runs");
+    } finally {
+      setLoading(false);
+    }
+  }, 5000, [client]);
 
   const projects = useMemo(() => {
     const set = new Set<string>();

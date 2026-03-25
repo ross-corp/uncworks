@@ -76,7 +76,7 @@ func TestBoundary_GitHubClientRequiresProvider(t *testing.T) {
 // accepts a TokenProvider parameter for fetching file content.
 func TestBoundary_WebhookHandlerRequiresProvider(t *testing.T) {
 	provider := aotgithub.NewPATProvider("test")
-	handler := server.NewWebhookHandler(nil, "default", provider)
+	handler := server.NewWebhookHandler(context.Background(), nil, "default", provider)
 	require.NotNil(t, handler)
 }
 

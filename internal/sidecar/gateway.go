@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -107,21 +107,35 @@ type AgentProcess struct {
 	pendingQuestion string
 }
 
+// State returns the current AgentProcessState, holding mu for the read.
+func (p *AgentProcess) State() agentv1.AgentProcessState {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.state
+}
+
+// ExitError returns the exit error string, holding mu for the read.
+func (p *AgentProcess) ExitError() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exitError
+}
+
 // NewGateway creates a new RPC Gateway sidecar.
 func NewGateway(port int) *Gateway {
 	// Ensure log directory exists at sidecar startup (5.2)
 	if err := os.MkdirAll(agentLogDir, 0o755); err != nil {
-		log.Printf("WARNING: failed to create log dir %s: %v", agentLogDir, err)
+		slog.Warn("failed to create log dir", "dir", agentLogDir, "err", err)
 	}
 
 	// Ensure trace directory exists at sidecar startup (10.4)
 	if err := os.MkdirAll(traceDir, 0o755); err != nil {
-		log.Printf("WARNING: failed to create trace dir %s: %v", traceDir, err)
+		slog.Warn("failed to create trace dir", "dir", traceDir, "err", err)
 	}
 
 	debugMode := os.Getenv("AOT_DEBUG_MODE") == "true"
 	if debugMode {
-		log.Printf("Debug mode — waiting for connections")
+		slog.Info("debug mode — waiting for connections")
 	}
 
 	return &Gateway{port: port, debugMode: debugMode}
@@ -142,7 +156,7 @@ func (g *Gateway) Start() error {
 		Handler: h2c.NewHandler(mux, &http2.Server{}),
 	}
 
-	log.Printf("RPC Gateway listening on :%d", g.port)
+	slog.Info("RPC Gateway listening", "port", g.port)
 	return g.server.ListenAndServe()
 }
 
@@ -159,15 +173,15 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 
 	// Debug mode: don't launch the agent, just report started (5.3)
 	if g.debugMode {
-		log.Printf("Debug mode active — skipping agent launch for run %s", req.Msg.AgentRunId)
+		slog.Info("debug mode: skipping agent launch", "run", req.Msg.AgentRunId)
 		return connect.NewResponse(&agentv1.StartAgentResponse{Started: true}), nil
 	}
 
 	// If a previous agent is still running, stop it before starting a new one.
 	// This handles pipeline stage transitions and retry attempts where the
 	// previous agent may not have fully exited yet.
-	if g.process != nil && g.process.state == agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING {
-		log.Printf("Stopping previous agent before starting new one for run %s", req.Msg.AgentRunId)
+	if g.process != nil && g.process.State() == agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING {
+		slog.Info("stopping previous agent before starting new one", "run", req.Msg.AgentRunId)
 		if g.process.cmd.Process != nil {
 			_ = g.process.cmd.Process.Signal(os.Interrupt)
 			// Give it a moment to clean up, but don't block long.
@@ -444,7 +458,7 @@ func (proc *AgentProcess) startReaders() {
 					if sig == lastToolSig {
 						repeatCount++
 						if repeatCount >= maxRepeatedToolCalls {
-							log.Printf("Loop detected: tool call %q repeated %d times — killing agent", sig, repeatCount)
+							slog.Warn("loop detected: tool call repeated — killing agent", "tool", sig, "count", repeatCount)
 							_ = proc.cmd.Process.Kill()
 							return
 						}
@@ -490,13 +504,13 @@ func (proc *AgentProcess) startReaders() {
 				select {
 				case ch <- output:
 				default:
-					log.Printf("WARNING: dropped %s output (subscriber buffer full)", outputType)
+					slog.Warn("dropped output: subscriber buffer full", "type", outputType)
 				}
 			}
 			proc.mu.Unlock()
 		}
 		if err := scanner.Err(); err != nil {
-			log.Printf("Scanner error on %s: %v", outputType, err)
+			slog.Error("scanner error", "type", outputType, "err", err)
 		}
 	}
 
@@ -532,17 +546,16 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 
 	// Check if this is a rate limit error and retry if so.
 	// We read the log file to check for rate limit indicators in stderr output.
-	if err != nil && isRateLimitError(proc.exitError+err.Error()) {
+	if err != nil && isRateLimitError(proc.ExitError()+err.Error()) {
 		for attempt := 1; attempt <= maxRateLimitRetries; attempt++ {
-			log.Printf("Agent process hit rate limit (attempt %d/%d), retrying in %v: %s",
-				attempt, maxRateLimitRetries, rateLimitRetryDelay, agentRunID)
+			slog.Warn("agent process hit rate limit, retrying", "attempt", attempt, "maxAttempts", maxRateLimitRetries, "delay", rateLimitRetryDelay)
 
 			time.Sleep(rateLimitRetryDelay)
 
 			// Re-read the original request args from the process to rebuild the command.
 			newProc, startErr := restartAgentProcess(proc.cmd)
 			if startErr != nil {
-				log.Printf("Failed to restart agent process (attempt %d): %v", attempt, startErr)
+				slog.Error("failed to restart agent process", "attempt", attempt, "err", startErr)
 				continue
 			}
 
@@ -554,20 +567,20 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 			err = g.waitForSingleProcess(newProc)
 			proc = newProc
 
-			if err == nil || !isRateLimitError(newProc.exitError+err.Error()) {
+			if err == nil || !isRateLimitError(newProc.ExitError()+err.Error()) {
 				break
 			}
 		}
 
 		// If all retries exhausted and still failing, set a clear message.
 		if err != nil {
-			g.mu.Lock()
+			proc.mu.Lock()
 			proc.exitError = fmt.Sprintf("Rate limited after %d retries: %s", maxRateLimitRetries, proc.exitError)
-			g.mu.Unlock()
+			proc.mu.Unlock()
 		}
 	}
 
-	g.mu.Lock()
+	proc.mu.Lock()
 	if err != nil {
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_FAILED
 		if proc.exitError == "" {
@@ -577,15 +590,13 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_COMPLETED
 	}
 	// Close all output channels
-	proc.mu.Lock()
 	for _, ch := range proc.outputs {
 		close(ch)
 	}
 	proc.outputs = nil
 	proc.mu.Unlock()
-	g.mu.Unlock()
 
-	log.Printf("Agent process finished: %s (state=%v)", agentRunID, proc.state)
+	slog.Info("agent process finished", "run", agentRunID, "state", proc.State())
 }
 
 // waitForSingleProcess waits for a single agent process to complete, drains its
@@ -600,7 +611,7 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 	select {
 	case err = <-done:
 	case <-time.After(24 * time.Hour):
-		log.Printf("Agent process timed out after 24h, killing")
+		slog.Warn("agent process timed out after 24h, killing")
 		_ = proc.cmd.Process.Kill()
 		err = <-done
 	}
@@ -617,7 +628,9 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 	}
 
 	if err != nil {
+		proc.mu.Lock()
 		proc.exitError = err.Error()
+		proc.mu.Unlock()
 	}
 
 	return err
@@ -723,9 +736,11 @@ func (g *Gateway) SendInput(_ context.Context, req *connect.Request[agentv1.Send
 	}
 
 	// Transition the agent state back to RUNNING.
+	proc.mu.Lock()
 	proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING
 	proc.pendingQuestion = ""
-	log.Printf("SendInput: wrote response file, state → RUNNING")
+	proc.mu.Unlock()
+	slog.Info("SendInput: wrote response file, state → RUNNING")
 
 	return connect.NewResponse(&agentv1.SendInputResponse{Accepted: true}), nil
 }
@@ -741,15 +756,21 @@ func (g *Gateway) GetStatus(_ context.Context, _ *connect.Request[agentv1.GetSta
 		}), nil
 	}
 
+	proc.mu.Lock()
+	state := proc.state
+	exitError := proc.exitError
+	pendingQuestion := proc.pendingQuestion
+	proc.mu.Unlock()
+
 	s := &agentv1.AgentStatus{
-		State:     proc.state,
+		State:     state,
 		StartedAt: timestamppb.New(proc.startedAt),
-		Error:     proc.exitError,
+		Error:     exitError,
 	}
 	// When waiting for input, surface the pending question in the error field
 	// so callers can display it. The proto has no dedicated message field.
-	if proc.state == agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT && proc.pendingQuestion != "" {
-		s.Error = proc.pendingQuestion
+	if state == agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT && pendingQuestion != "" {
+		s.Error = pendingQuestion
 	}
 	if proc.cmd.Process != nil {
 		s.Pid = int32(proc.cmd.Process.Pid)
@@ -770,13 +791,17 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 
 	switch req.Msg.EventType {
 	case agentv1.EventType_EVENT_TYPE_WAITING_FOR_INPUT:
+		proc.mu.Lock()
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT
 		proc.pendingQuestion = req.Msg.Payload
-		log.Printf("Agent entered WAITING_FOR_INPUT: %s", req.Msg.Payload)
+		proc.mu.Unlock()
+		slog.Info("agent entered WAITING_FOR_INPUT", "payload", req.Msg.Payload)
 
 	case agentv1.EventType_EVENT_TYPE_STARTED:
+		proc.mu.Lock()
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING
-		log.Printf("Agent resumed RUNNING")
+		proc.mu.Unlock()
+		slog.Info("agent resumed RUNNING")
 		appendTraceSpan(TraceSpan{
 			ID:        uuid.New().String(),
 			Name:      "agent_resumed",
@@ -787,7 +812,7 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 
 	case agentv1.EventType_EVENT_TYPE_TOOL_CALL:
 		// 10.1 + 10.2: Record tool call span with git checkpoint
-		log.Printf("Agent tool call: %s", req.Msg.Payload)
+		slog.Debug("agent tool call", "payload", req.Msg.Payload)
 		metadata := parsePayloadMetadata(req.Msg.Payload)
 		spanName := "tool_call"
 		if n, ok := metadata["name"].(string); ok && n != "" {
@@ -830,10 +855,10 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 			}
 			appendTraceSpan(span)
 		}
-		log.Printf("NotifyEvent LOG: %s", req.Msg.Payload)
+		slog.Debug("NotifyEvent LOG", "payload", req.Msg.Payload)
 
 	default:
-		log.Printf("NotifyEvent: %s payload=%s", req.Msg.EventType, req.Msg.Payload)
+		slog.Debug("NotifyEvent", "type", req.Msg.EventType, "payload", req.Msg.Payload)
 	}
 
 	return connect.NewResponse(&agentv1.NotifyEventResponse{Acknowledged: true}), nil
@@ -1618,7 +1643,7 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 	addCmd := exec.Command("git", "add", "-A")
 	addCmd.Dir = workDir
 	if err := addCmd.Run(); err != nil {
-		log.Printf("git checkpoint: add failed in %s: %v", workDir, err)
+		slog.Warn("git checkpoint: add failed", "workDir", workDir, "err", err)
 		return "", nil
 	}
 
@@ -1643,7 +1668,7 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 		"GIT_COMMITTER_EMAIL=agent@aot.uncworks.io",
 	)
 	if err := commitCmd.Run(); err != nil {
-		log.Printf("git checkpoint: commit failed in %s: %v", workDir, err)
+		slog.Warn("git checkpoint: commit failed", "workDir", workDir, "err", err)
 		return "", nil
 	}
 
@@ -1721,19 +1746,19 @@ func parseDiffOutput(output string) *SpanDiff {
 func appendTraceSpan(span TraceSpan) {
 	data, err := json.Marshal(span)
 	if err != nil {
-		log.Printf("WARNING: failed to marshal trace span: %v", err)
+		slog.Warn("failed to marshal trace span", "err", err)
 		return
 	}
 
 	f, err := os.OpenFile(traceSpansPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		log.Printf("WARNING: failed to open trace spans file: %v", err)
+		slog.Warn("failed to open trace spans file", "err", err)
 		return
 	}
 	defer func() { _ = f.Close() }()
 
 	if _, err := f.Write(append(data, '\n')); err != nil {
-		log.Printf("WARNING: failed to write trace span: %v", err)
+		slog.Warn("failed to write trace span", "err", err)
 	}
 }
 
@@ -1770,7 +1795,7 @@ func ResolveWorkDirAt(repoPath, defaultBase string) string {
 			gitPath := filepath.Join(defaultBase, e.Name(), ".git")
 			if _, err := os.Stat(gitPath); err == nil {
 				resolved := filepath.Join(defaultBase, e.Name())
-				log.Printf("resolveWorkDir: %s → %s", defaultBase, resolved)
+				slog.Debug("resolveWorkDir", "defaultBase", defaultBase, "resolved", resolved)
 				return resolved
 			}
 		}

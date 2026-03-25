@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -39,8 +39,10 @@ type WebhookHandler struct {
 //   - GITHUB_WEBHOOK_SECRET: shared secret for HMAC-SHA256 signature validation
 //   - GITHUB_WEBHOOK_REPOS: comma-separated allowlist of "owner/repo" strings
 //
-// The GitHub token for fetching file content is provided via the TokenProvider.
-func NewWebhookHandler(k8sClient client.Client, namespace string, provider aotgithub.TokenProvider) *WebhookHandler {
+// ctx should be a server-lifetime context so that CIAutofix timer callbacks
+// respect shutdown. The GitHub token for fetching file content is provided via
+// the TokenProvider.
+func NewWebhookHandler(ctx context.Context, k8sClient client.Client, namespace string, provider aotgithub.TokenProvider) *WebhookHandler {
 	var repos []string
 	if raw := os.Getenv("GITHUB_WEBHOOK_REPOS"); raw != "" {
 		for _, r := range strings.Split(raw, ",") {
@@ -53,7 +55,7 @@ func NewWebhookHandler(k8sClient client.Client, namespace string, provider aotgi
 
 	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
 	if secret == "" {
-		log.Println("WARNING: GITHUB_WEBHOOK_SECRET not set — webhook signature validation is disabled. Any POST to /api/v1/webhooks/github will be accepted. Set GITHUB_WEBHOOK_SECRET for production use.")
+		slog.Warn("GITHUB_WEBHOOK_SECRET not set — webhook signature validation is disabled")
 	}
 
 	maxRetries := 3
@@ -69,7 +71,7 @@ func NewWebhookHandler(k8sClient client.Client, namespace string, provider aotgi
 		githubProvider: provider,
 		k8sClient:      k8sClient,
 		namespace:      namespace,
-		ciAutofix:      NewCIAutofix(k8sClient, namespace, provider, maxRetries),
+		ciAutofix:      NewCIAutofix(ctx, k8sClient, namespace, provider, maxRetries),
 	}
 }
 
@@ -115,7 +117,7 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if eventType == "check_run" && wh.ciAutofix != nil {
 		triggered, err := wh.ciAutofix.HandleCheckRunEvent(r.Context(), body)
 		if err != nil {
-			log.Printf("ERROR: CI autofix handler: %v", err)
+			slog.Error("CI autofix handler error", "err", err)
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "ci_autofix_triggered": triggered})
 		return
@@ -153,12 +155,12 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, path := range specFiles {
 		content, err := wh.fetchFileContent(r.Context(), repo, path, payload.After)
 		if err != nil {
-			log.Printf("webhook: failed to fetch %s/%s@%s: %v", repo, path, payload.After, err)
+			slog.Error("webhook: failed to fetch file", "repo", repo, "path", path, "sha", payload.After, "err", err)
 			continue
 		}
 
 		if err := wh.createAgentRun(r.Context(), repo, path, branch, content); err != nil {
-			log.Printf("webhook: failed to create AgentRun for %s/%s: %v", repo, path, err)
+			slog.Error("webhook: failed to create AgentRun", "repo", repo, "path", path, "err", err)
 			continue
 		}
 		created++
@@ -283,7 +285,7 @@ func (wh *WebhookHandler) createAgentRun(ctx context.Context, repo, path, branch
 	if err := wh.k8sClient.Create(ctx, crd); err != nil {
 		return fmt.Errorf("create agentrun CRD: %w", err)
 	}
-	log.Printf("webhook: created AgentRun %s for %s/%s", name, repo, path)
+	slog.Info("webhook: created AgentRun", "run", name, "repo", repo, "path", path)
 	return nil
 }
 

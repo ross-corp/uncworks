@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -149,7 +149,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 	// Upgrade to WebSocket.
 	wsConn, err := e.wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("websocket upgrade failed: %v", err)
+		slog.Error("websocket upgrade failed", "err", err, "path", r.URL.Path)
 		return
 	}
 	defer func() { _ = wsConn.Close() }()
@@ -157,7 +157,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 	// Create SPDY exec session.
 	clientset, err := kubernetes.NewForConfig(e.restConfig)
 	if err != nil {
-		log.Printf("create clientset failed: %v", err)
+		slog.Error("create clientset failed", "err", err)
 		_ = wsConn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "k8s client error"))
 		return
@@ -179,7 +179,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 
 	spdyExec, err := remotecommand.NewSPDYExecutor(e.restConfig, "POST", req.URL())
 	if err != nil {
-		log.Printf("create SPDY executor failed: %v", err)
+		slog.Error("create SPDY executor failed", "err", err)
 		_ = wsConn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "exec error"))
 		return
@@ -208,7 +208,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 			TerminalSizeQueue: sizeQueue,
 		})
 		if err != nil {
-			log.Printf("SPDY stream ended: %v", err)
+			slog.Debug("SPDY stream ended", "err", err)
 		}
 		cancel()
 	}()
@@ -222,14 +222,14 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 			n, err := stdoutReader.Read(buf)
 			if n > 0 {
 				if writeErr := wsConn.WriteMessage(websocket.BinaryMessage, buf[:n]); writeErr != nil {
-					log.Printf("websocket write error: %v", writeErr)
+					slog.Warn("websocket write error", "err", writeErr)
 					cancel()
 					return
 				}
 			}
 			if err != nil {
 				if err != io.EOF {
-					log.Printf("stdout read error: %v", err)
+					slog.Warn("stdout read error", "err", err)
 				}
 				cancel()
 				return
@@ -238,7 +238,9 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Main goroutine: WebSocket reads → SPDY stdin (or resize).
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		defer cancel()
 		defer stdinWriter.Close()
 		defer close(sizeQueue.sizes)
@@ -247,7 +249,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 			msgType, msg, err := wsConn.ReadMessage()
 			if err != nil {
 				if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-					log.Printf("websocket read error: %v", err)
+					slog.Warn("websocket read error", "err", err)
 				}
 				return
 			}

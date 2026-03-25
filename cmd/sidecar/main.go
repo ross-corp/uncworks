@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -45,7 +45,38 @@ type piConfig struct {
 	Providers map[string]piProvider `json:"providers"`
 }
 
+func initLogger() {
+	level := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler
+	if os.Getenv("LOG_FORMAT") == "json" || !isTerminal(os.Stdout) {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(handler))
+}
+
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
 func main() {
+	initLogger()
+
 	port := 50052
 	if p := os.Getenv("AOT_SIDECAR_PORT"); p != "" {
 		if parsed, err := strconv.Atoi(p); err == nil {
@@ -56,7 +87,7 @@ func main() {
 	// Generate pi-coding-agent models.json for LiteLLM integration
 	if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
 		if err := writePiModelsConfig(baseURL); err != nil {
-			log.Printf("WARNING: Failed to write pi models config: %v", err)
+			slog.Warn("failed to write pi models config", "err", err)
 		}
 	}
 
@@ -64,7 +95,8 @@ func main() {
 
 	go func() {
 		if err := gw.Start(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Gateway failed: %v", err)
+			slog.Error("gateway failed", "err", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -72,7 +104,7 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
-	log.Println("Shutting down RPC Gateway...")
+	slog.Info("shutting down RPC Gateway...")
 	gw.Stop()
 }
 
@@ -87,7 +119,7 @@ func writePiModelsConfig(baseURL string) error {
 
 	models, err := fetchModelsFromProxy(baseURL, apiKey)
 	if err != nil {
-		log.Printf("WARNING: Failed to fetch models from LiteLLM proxy, using fallback: %v", err)
+		slog.Warn("failed to fetch models from LiteLLM proxy, using fallback", "err", err)
 		models = fallbackModels()
 	}
 
@@ -113,7 +145,7 @@ func writePiModelsConfig(baseURL string) error {
 		return fmt.Errorf("write file: %w", err)
 	}
 
-	log.Printf("Wrote pi models config to %s (%d models from %s)", path, len(models), baseURL)
+	slog.Info("wrote pi models config", "path", path, "models", len(models), "baseURL", baseURL)
 	return nil
 }
 

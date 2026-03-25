@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"os"
@@ -571,7 +571,7 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		log.Printf("WARNING: failed to marshal display name request: %v", err)
+		slog.Warn("failed to marshal display name request", "err", err)
 		return deriveNameFromPrompt(prompt)
 	}
 
@@ -581,26 +581,26 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 	url := strings.TrimRight(s.LiteLLMBaseURL, "/") + "/v1/chat/completions"
 	httpReq, err := http.NewRequestWithContext(llmCtx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
-		log.Printf("WARNING: failed to create display name request: %v", err)
+		slog.Warn("failed to create display name request", "err", err)
 		return deriveNameFromPrompt(prompt)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		log.Printf("WARNING: display name LLM call failed, using prompt fallback: %v", err)
+		slog.Warn("display name LLM call failed, using prompt fallback", "err", err)
 		return deriveNameFromPrompt(prompt)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("WARNING: display name LLM returned status %d, using prompt fallback", resp.StatusCode)
+		slog.Warn("display name LLM returned non-200 status, using prompt fallback", "status", resp.StatusCode)
 		return deriveNameFromPrompt(prompt)
 	}
 
 	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
-		log.Printf("WARNING: failed to read display name response: %v", err)
+		slog.Warn("failed to read display name response", "err", err)
 		return deriveNameFromPrompt(prompt)
 	}
 
@@ -612,19 +612,19 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(respBytes, &result); err != nil {
-		log.Printf("WARNING: failed to parse display name response: %v", err)
+		slog.Warn("failed to parse display name response", "err", err)
 		return deriveNameFromPrompt(prompt)
 	}
 
 	if len(result.Choices) == 0 {
-		log.Printf("WARNING: display name LLM returned no choices")
+		slog.Warn("display name LLM returned no choices")
 		return deriveNameFromPrompt(prompt)
 	}
 
 	name := strings.TrimSpace(strings.ToLower(result.Choices[0].Message.Content))
 
 	if !displayNameRegex.MatchString(name) {
-		log.Printf("WARNING: generated display name %q failed validation, falling back to prompt derivation", name)
+		slog.Warn("generated display name failed validation, falling back to prompt derivation", "name", name)
 		return deriveNameFromPrompt(prompt)
 	}
 
