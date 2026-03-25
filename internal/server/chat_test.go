@@ -86,8 +86,15 @@ func TestChatHandler_NoLiteLLMURL_Returns502(t *testing.T) {
 
 func TestBuildChatSystemMessage_NoContext(t *testing.T) {
 	msg := buildChatSystemMessage(nil)
-	if msg != minimalSystemPrompt {
-		t.Errorf("expected minimal prompt, got %q", msg)
+	if msg != baseSystemPrompt {
+		t.Errorf("expected base prompt, got %q", msg)
+	}
+	// Verify guidance token instructions are present.
+	if !strings.Contains(msg, "[NAV:") {
+		t.Errorf("base prompt missing NAV token guidance")
+	}
+	if !strings.Contains(msg, "[HIGHLIGHT:") {
+		t.Errorf("base prompt missing HIGHLIGHT token guidance")
 	}
 }
 

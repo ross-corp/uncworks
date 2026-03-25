@@ -10,8 +10,7 @@ import MarkdownEditor from "../components/MarkdownEditor";
 import RunStatusBadge from "../components/RunStatusBadge";
 import { formatAge } from "../lib/format";
 import type { AgentRun } from "../types/agent-run";
-import ChatSheet from "../components/ChatSheet";
-import { useCopilotContext } from "../hooks/useCopilotContext";
+import { useCopilotContext, useCopilotContextValue } from "../hooks/useCopilotContext";
 
 interface ProjectDetail {
   name: string;
@@ -54,7 +53,7 @@ export default function ProjectDetailView() {
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
 
-  const [chatOpen, setChatOpen] = useState(false);
+  const { setOpen: setCopilotOpen } = useCopilotContextValue();
 
   // Register page context for global CopilotPanel.
   const copilotCtx = useMemo(() => {
@@ -463,7 +462,7 @@ export default function ProjectDetailView() {
                       <>
                         <Button
                           size="sm"
-                          onClick={() => setChatOpen(true)}
+                          onClick={() => setCopilotOpen(true)}
                         >
                           Chat about this spec
                         </Button>
@@ -722,14 +721,6 @@ export default function ProjectDetailView() {
         </TabsContent>
       </Tabs>
 
-      {selectedFile && (
-        <ChatSheet
-          open={chatOpen}
-          onOpenChange={setChatOpen}
-          context={{ type: "spec", content: editedContent, label: selectedFile }}
-          title={"Chat: " + selectedFile.split("/").pop()}
-        />
-      )}
     </div>
   );
 }

@@ -61,9 +61,19 @@ type chatRequest struct {
 }
 
 const (
-	maxChatBodyBytes    = 64 * 1024 // 64 KB request body limit
-	maxContextBytes     = 8 * 1024  // 8 KB context content limit
-	minimalSystemPrompt = "You are a helpful assistant for the uncworks AI agent platform."
+	maxChatBodyBytes = 64 * 1024 // 64 KB request body limit
+	maxContextBytes  = 8 * 1024  // 8 KB context content limit
+
+	// baseSystemPrompt is always included. The guidance section teaches the
+	// copilot how to emit navigation and highlight actions that the UI interprets.
+	baseSystemPrompt = `You are a helpful assistant for the uncworks AI agent platform.
+
+You can guide the user through the UI using special action tokens that the app interprets:
+- To navigate: include [NAV:/path] in your response (e.g. [NAV:/run/ar-abc123])
+- To highlight a UI element: include [HIGHLIGHT:css-selector] (e.g. [HIGHLIGHT:.run-status-badge])
+
+Only emit these tokens when it genuinely helps the user. They are stripped from the displayed text.
+Be concise and specific.`
 )
 
 func (h *ChatHandler) handleChatStream(w http.ResponseWriter, r *http.Request) {
@@ -179,11 +189,11 @@ func (h *ChatHandler) handleChatStream(w http.ResponseWriter, r *http.Request) {
 // buildChatSystemMessage constructs the system message, injecting context when present.
 func buildChatSystemMessage(ctx *chatContext) string {
 	if ctx == nil || ctx.Content == "" {
-		return minimalSystemPrompt
+		return baseSystemPrompt
 	}
 	return fmt.Sprintf(
-		"%s\nCurrent context (%s — %s):\n\n%s\n\nAnswer questions about the context above. Be concise and specific.",
-		minimalSystemPrompt,
+		"%s\n\nCurrent context (%s — %s):\n\n%s",
+		baseSystemPrompt,
 		ctx.Type,
 		ctx.Label,
 		ctx.Content,
