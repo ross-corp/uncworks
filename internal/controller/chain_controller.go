@@ -202,7 +202,33 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Info("Started chain step", "chainRun", cr.Name, "step", s.Name, "run", run.Name)
 	}
 
-	// Check overall completion
+	// Propagate failures: skip pending steps whose dependencies have failed or been skipped.
+	// Iterate until stable (transitive closure).
+	for changed := true; changed; {
+		changed = false
+		for i := range cr.Status.Steps {
+			s := &cr.Status.Steps[i]
+			if s.Phase != "pending" {
+				continue
+			}
+			def := stepDef[s.Name]
+			if def == nil {
+				continue
+			}
+			for _, dep := range def.DependsOn {
+				depStatus := stepStatus[dep]
+				if depStatus != nil && (depStatus.Phase == "failed" || depStatus.Phase == "skipped") {
+					s.Phase = "skipped"
+					s.Message = fmt.Sprintf("skipped because dependency %q %s", dep, depStatus.Phase)
+					updated = true
+					changed = true
+					break
+				}
+			}
+		}
+	}
+
+	// Check overall completion: done when no step is pending or running.
 	allDone := true
 	anyFailed := false
 	for _, s := range cr.Status.Steps {
@@ -214,7 +240,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
-	if allDone || anyFailed {
+	if allDone {
 		now := metav1.Now()
 		cr.Status.CompletedAt = &now
 		if anyFailed {

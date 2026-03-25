@@ -53,6 +53,8 @@ export interface AgentRunSpec {
   project?: string;
   feature?: string;
   tags?: string[];
+  projectRef?: string;
+  specRef?: string;
   pipelineConfig?: {
     plan?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };
     execute?: { model?: string; timeoutSeconds?: number; maxRetries?: number; onFailure?: string };

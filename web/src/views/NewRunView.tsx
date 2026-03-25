@@ -19,6 +19,16 @@ import {
   type OrchestrationMode,
 } from "../types/agent-run";
 
+interface ProjectOption {
+  name: string;
+  displayName: string;
+  repos: { url: string; branch: string }[];
+  defaults?: {
+    modelTier?: string;
+    orchestrationMode?: string;
+  };
+}
+
 export default function NewRunView() {
   const client = useClient();
   const navigate = useNavigate();
@@ -41,6 +51,11 @@ export default function NewRunView() {
   const [improvingPrompt, setImprovingPrompt] = useState(false);
   const [improvingSpec, setImprovingSpec] = useState(false);
 
+  // Project reference (Project CRD)
+  const [projectRef, setProjectRef] = useState("");
+  const [specRef, setSpecRef] = useState("");
+  const [availableProjects, setAvailableProjects] = useState<ProjectOption[]>([]);
+
   // Classification
   const [project, setProject] = useState("");
   const [feature, setFeature] = useState("");
@@ -54,6 +69,16 @@ export default function NewRunView() {
   const userEditedProject = useRef(false);
   const userEditedFeature = useRef(false);
   const userEditedTags = useRef(false);
+
+  // Fetch Project CRDs for the project selector
+  useEffect(() => {
+    apiFetch("/api/v1/projects").then(async (resp) => {
+      if (resp.ok) {
+        const data = await resp.json() as ProjectOption[];
+        setAvailableProjects(data);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Fetch existing projects/features for suggestions
   useEffect(() => {
@@ -91,10 +116,11 @@ export default function NewRunView() {
     }).catch(() => {});
   }, [searchParams, client]);
 
-  // Pre-fill from project query param
+  // Pre-fill from project/spec query params
   useEffect(() => {
     const projName = searchParams.get("project");
     if (projName) {
+      setProjectRef(projName);
       setProject(projName);
       userEditedProject.current = true;
       // Fetch project details for defaults
@@ -104,10 +130,12 @@ export default function NewRunView() {
         if (proj.repos?.length) setRepos(proj.repos.map((r: { url: string; branch: string }) => ({ url: r.url, branch: r.branch || "main" })));
         if (proj.defaults?.modelTier) setModelTier(proj.defaults.modelTier);
         if (proj.defaults?.orchestrationMode) setOrchestrationMode(proj.defaults.orchestrationMode);
+        if (proj.displayName || proj.name) setProject(proj.displayName || proj.name);
       }).catch(() => {});
     }
     const specName = searchParams.get("spec");
     if (specName) {
+      setSpecRef(specName);
       setMode("spec");
       setOrchestrationMode("spec-driven");
     }
@@ -177,11 +205,27 @@ export default function NewRunView() {
         ...(feature.trim() ? { feature: feature.trim() } : {}),
         ...(parsedTags.length > 0 ? { tags: parsedTags } : {}),
         ...(mode === "spec" && specContent.trim() ? { specContent: specContent.trim() } : {}),
+        ...(projectRef.trim() ? { projectRef: projectRef.trim() } : {}),
+        ...(specRef.trim() ? { specRef: specRef.trim() } : {}),
       });
       toast("Run created", "success");
       navigate(`/run/${run.id}`);
     } catch { toast("Failed to create run", "error"); }
     finally { setSubmitting(false); }
+  }
+
+  function handleProjectRefChange(name: string) {
+    setProjectRef(name);
+    setSpecRef(""); // clear stale spec ref when project changes
+    if (!name) return;
+    const proj = availableProjects.find((p) => p.name === name);
+    if (!proj) return;
+    if (proj.repos?.length) setRepos(proj.repos.map((r) => ({ url: r.url, branch: r.branch || "main" })));
+    if (proj.defaults?.modelTier) setModelTier(proj.defaults.modelTier);
+    if (proj.defaults?.orchestrationMode) setOrchestrationMode(proj.defaults.orchestrationMode as OrchestrationMode);
+    if (!userEditedProject.current) {
+      setProject(proj.displayName || proj.name);
+    }
   }
 
   function addRepo() { setRepos([...repos, { url: "", branch: "main" }]); }
@@ -206,6 +250,32 @@ export default function NewRunView() {
       {/* Form */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl p-6 space-y-6">
+
+          {/* Project selector */}
+          {availableProjects.length > 0 && (
+            <section>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Project</label>
+              <Select value={projectRef || "__none__"} onValueChange={(v) => handleProjectRefChange(v === "__none__" ? "" : v)}>
+                <SelectTrigger size="sm" className="w-full h-8">
+                  <SelectValue placeholder="None (standalone run)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None (standalone run)</SelectItem>
+                  {availableProjects.map((p) => (
+                    <SelectItem key={p.name} value={p.name}>
+                      {p.displayName || p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {projectRef && (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Repos, model, and defaults inherited from project (overridable below).
+                  {specRef && <span className="ml-1">Spec: <span className="font-mono">{specRef}</span></span>}
+                </p>
+              )}
+            </section>
+          )}
 
           {/* Repositories */}
           <section>

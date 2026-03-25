@@ -27,6 +27,7 @@ import (
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/internal/eventbus"
+	"github.com/uncworks/aot/internal/softserve"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
@@ -66,6 +67,7 @@ type AgentRunReconciler struct {
 	GitHubTokenSecretName string
 	EventBus              eventbus.EventBus
 	RetentionDays         int
+	SoftServe             softserve.RepoManager
 	eventBusWarned        bool
 }
 
@@ -152,6 +154,18 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 // startWorkflow creates a new Temporal workflow for the AgentRun and annotates the CRD.
 func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1alpha1.AgentRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	// Resolve project defaults (inherit repos, model, spec content) before building workflow input.
+	if agentRun.Spec.ProjectRef != "" {
+		if _, err := ResolveProjectDefaults(ctx, r.Client, r.SoftServe, agentRun, agentRun.Namespace); err != nil {
+			logger.Error(err, "Failed to resolve project defaults, continuing with partial config")
+		} else {
+			// Persist the resolved fields back so the spec reflects what was actually used.
+			if err := r.Update(ctx, agentRun); err != nil {
+				logger.Error(err, "Failed to persist resolved project defaults")
+			}
+		}
+	}
 
 	workflowInput := BuildWorkflowInput(agentRun, r.LiteLLMBaseURL, r.GitHubTokenSecretName)
 

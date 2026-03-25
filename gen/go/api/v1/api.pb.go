@@ -496,7 +496,13 @@ type AgentRunSpec struct {
 	// Feature is the feature/unit-of-work this run contributes to.
 	Feature string `protobuf:"bytes,28,opt,name=feature,proto3" json:"feature,omitempty"`
 	// Tags are freeform labels for cross-cutting filtering.
-	Tags          []string `protobuf:"bytes,29,rep,name=tags,proto3" json:"tags,omitempty"`
+	Tags []string `protobuf:"bytes,29,rep,name=tags,proto3" json:"tags,omitempty"`
+	// ProjectRef is the name of the Project CRD this run belongs to.
+	// When set, the controller resolves repos, model, and TTL defaults from the project.
+	ProjectRef string `protobuf:"bytes,30,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	// SpecRef is the name of a spec in the project's config repo (e.g., "add-comments").
+	// Requires project_ref to be set. The controller fetches spec content from soft-serve.
+	SpecRef       string `protobuf:"bytes,31,opt,name=spec_ref,json=specRef,proto3" json:"spec_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -697,6 +703,20 @@ func (x *AgentRunSpec) GetTags() []string {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *AgentRunSpec) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetSpecRef() string {
+	if x != nil {
+		return x.SpecRef
+	}
+	return ""
 }
 
 // PipelineConfig provides per-stage configuration for the spec-driven pipeline.
@@ -2196,7 +2216,7 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"Repository\x12\x1a\n" +
 	"\x03url\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x88\x01\x01R\x03url\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\"\x88\b\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"\xc4\b\n" +
 	"\fAgentRunSpec\x127\n" +
 	"\abackend\x18\x01 \x01(\x0e2\x13.aot.api.v1.BackendB\b\xbaH\x05\x82\x01\x02 \x00R\abackend\x126\n" +
 	"\x05repos\x18\x02 \x03(\v2\x16.aot.api.v1.RepositoryB\b\xbaH\x05\x92\x01\x02\b\x01R\x05repos\x12\x16\n" +
@@ -2226,7 +2246,10 @@ const file_aot_api_v1_api_proto_rawDesc = "" +
 	"\x0epr_base_branch\x18\x17 \x01(\tR\fprBaseBranch\x12\x18\n" +
 	"\aproject\x18\x1b \x01(\tR\aproject\x12\x18\n" +
 	"\afeature\x18\x1c \x01(\tR\afeature\x12\x12\n" +
-	"\x04tags\x18\x1d \x03(\tR\x04tags\x1a:\n" +
+	"\x04tags\x18\x1d \x03(\tR\x04tags\x12\x1f\n" +
+	"\vproject_ref\x18\x1e \x01(\tR\n" +
+	"projectRef\x12\x19\n" +
+	"\bspec_ref\x18\x1f \x01(\tR\aspecRef\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0e\x10\x0f\"\xa1\x01\n" +

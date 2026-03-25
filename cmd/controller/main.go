@@ -72,6 +72,14 @@ func run() error {
 			retentionDays = n
 		}
 	}
+	// Set up soft-serve client (shared by AgentRun + Project controllers)
+	softServeAddr := envOrDefault("SOFT_SERVE_ADDR", "soft-serve.aot.svc:23231")
+	softServeKeyPath := envOrDefault("SOFT_SERVE_KEY_PATH", "/etc/soft-serve/id_ed25519")
+	ssClient := &softserve.Client{
+		SSHAddr: softServeAddr,
+		KeyPath: softServeKeyPath,
+	}
+
 	if err = (&controller.AgentRunReconciler{
 		Client:                mgr.GetClient(),
 		Scheme:                mgr.GetScheme(),
@@ -81,16 +89,9 @@ func run() error {
 		GitHubTokenSecretName: ghTokenSecretName,
 		EventBus:              bus,
 		RetentionDays:         retentionDays,
+		SoftServe:             ssClient,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("create controller: %w", err)
-	}
-
-	// Set up Project controller (manages soft-serve repos)
-	softServeAddr := envOrDefault("SOFT_SERVE_ADDR", "soft-serve.aot.svc:23231")
-	softServeKeyPath := envOrDefault("SOFT_SERVE_KEY_PATH", "/etc/soft-serve/id_ed25519")
-	ssClient := &softserve.Client{
-		SSHAddr: softServeAddr,
-		KeyPath: softServeKeyPath,
 	}
 	if err = (&controller.ProjectReconciler{
 		Client:    mgr.GetClient(),
