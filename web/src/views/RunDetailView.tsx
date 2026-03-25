@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useCopilotContext } from "../hooks/useCopilotContext";
 import { ScrollTextIcon, GitBranchIcon, FolderIcon, TerminalIcon } from "lucide-react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -127,6 +128,13 @@ export default function RunDetailView() {
   const [pendingArchive, setPendingArchive] = useState(false);
   const prevPhaseRef = useRef<string | undefined>(undefined);
   const { spans } = useTraces(id || "");
+
+  // Register run context for the global CopilotPanel.
+  useCopilotContext(
+    run
+      ? { type: "run", content: `${run.status.phase}: ${run.spec.prompt}`, label: run.name }
+      : null
+  );
 
   // Live elapsed counter
   useEffect(() => {
