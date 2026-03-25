@@ -165,6 +165,7 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [showJumpButton, setShowJumpButton] = useState(false);
   const prevEntryCountRef = useRef(0);
 
   // Poll structured logs
@@ -233,8 +234,13 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
   function handleScroll() {
     const el = containerRef.current;
     if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
-    setAutoScroll(atBottom);
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setAutoScroll(distFromBottom < 50);
+    setShowJumpButton(distFromBottom > 100);
+  }
+
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
   // Pre-process entries: pair tool_call with tool_result, split user "---" entries
@@ -249,14 +255,24 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
   }
 
   return (
-    <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto p-4 space-y-1">
-      {displayEntries.map((de, i) => (
-        <EntryRow key={i} display={de} />
-      ))}
-      {thinking?.thinking && (thinking.text || thinking.toolName) && (
-        <ThinkingEntry text={thinking.text} toolName={thinking.toolName} />
+    <div className="relative h-full">
+      <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto p-4 space-y-1">
+        {displayEntries.map((de, i) => (
+          <EntryRow key={i} display={de} />
+        ))}
+        {thinking?.thinking && (thinking.text || thinking.toolName) && (
+          <ThinkingEntry text={thinking.text} toolName={thinking.toolName} />
+        )}
+        <div ref={bottomRef} />
+      </div>
+      {showJumpButton && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:bg-primary/90 transition-colors"
+        >
+          ↓ Jump to latest
+        </button>
       )}
-      <div ref={bottomRef} />
     </div>
   );
 }

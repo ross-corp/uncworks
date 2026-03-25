@@ -55,6 +55,7 @@ export default function NewRunView() {
   const [projectRef, setProjectRef] = useState("");
   const [specRef, setSpecRef] = useState("");
   const [availableProjects, setAvailableProjects] = useState<ProjectOption[]>([]);
+  const [customLabelMode, setCustomLabelMode] = useState(false);
 
   // Classification
   const [project, setProject] = useState("");
@@ -77,7 +78,7 @@ export default function NewRunView() {
         const data = await resp.json() as ProjectOption[];
         setAvailableProjects(data);
       }
-    }).catch(() => {});
+    }).catch(() => { toast("Failed to load projects", "error"); });
   }, []);
 
   // Fetch existing projects/features for suggestions
@@ -91,7 +92,7 @@ export default function NewRunView() {
       }
       setExistingProjects(Array.from(projects).sort());
       setExistingFeatures(Array.from(features).sort());
-    }).catch(() => {});
+    }).catch(() => { toast("Failed to load run history", "error"); });
   }, [client]);
 
   // Clone support
@@ -113,7 +114,7 @@ export default function NewRunView() {
       if (run.spec.project) { setProject(run.spec.project); userEditedProject.current = true; }
       if (run.spec.feature) { setFeature(run.spec.feature); userEditedFeature.current = true; }
       if (run.spec.tags?.length) { setTags(run.spec.tags.join(", ")); userEditedTags.current = true; }
-    }).catch(() => {});
+    }).catch(() => { toast("Failed to load run to clone", "error"); });
   }, [searchParams, client]);
 
   // Pre-fill from project/spec query params
@@ -160,7 +161,7 @@ export default function NewRunView() {
       if (data.project && !userEditedProject.current) setProject(data.project);
       if (data.feature && !userEditedFeature.current) setFeature(data.feature);
       if (data.tags?.length && !userEditedTags.current) setTags(data.tags.join(", "));
-    } catch { /* silent */ } finally { setClassifying(false); }
+    } catch { toast("Classification failed", "error"); } finally { setClassifying(false); }
   }, [prompt, repos]);
 
   async function improveText(text: string, kind: "prompt" | "spec", setter: (v: string) => void, setLoading: (v: boolean) => void) {
@@ -176,7 +177,7 @@ export default function NewRunView() {
         const data = await resp.json();
         if (data.improved) setter(data.improved);
       }
-    } catch { /* silent */ }
+    } catch { toast("Couldn't improve prompt — try again", "error"); }
     setLoading(false);
   }
 
@@ -185,6 +186,18 @@ export default function NewRunView() {
     : prompt.trim();
 
   const canRun = effectivePrompt && repos.some((r) => r.url.trim());
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && canRun && !submitting) {
+        e.preventDefault();
+        handleRun();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canRun, submitting]);
 
   async function handleRun() {
     if (!canRun) return;
@@ -240,7 +253,6 @@ export default function NewRunView() {
       <div className="flex items-center justify-between border-b px-4 py-2.5">
         <span className="font-semibold text-base">New Run</span>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">ctrl+enter to run</span>
           <Button size="sm" variant="ghost" onClick={() => navigate("/")}>
             Cancel
           </Button>
@@ -251,11 +263,44 @@ export default function NewRunView() {
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl p-6 space-y-6">
 
-          {/* Project selector */}
-          {availableProjects.length > 0 && (
-            <section>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Project</label>
-              <Select value={projectRef || "__none__"} onValueChange={(v) => handleProjectRefChange(v === "__none__" ? "" : v)}>
+          {/* Unified project field */}
+          <section>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Project</label>
+            {customLabelMode ? (
+              <div className="flex gap-2">
+                <Input
+                  className="flex-1 h-8 text-sm"
+                  value={project}
+                  onChange={(e) => { setProject(e.target.value); userEditedProject.current = true; }}
+                  placeholder="Custom project label"
+                  autoFocus
+                  list="project-suggestions"
+                />
+                <datalist id="project-suggestions">
+                  {existingProjects.map((p) => <option key={p} value={p} />)}
+                </datalist>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-muted-foreground"
+                  onClick={() => { setCustomLabelMode(false); setProject(""); userEditedProject.current = false; }}
+                >
+                  ✕
+                </Button>
+              </div>
+            ) : (
+              <Select
+                value={projectRef || "__none__"}
+                onValueChange={(v) => {
+                  if (v === "__custom__") {
+                    setProjectRef("");
+                    setCustomLabelMode(true);
+                    return;
+                  }
+                  setCustomLabelMode(false);
+                  handleProjectRefChange(v === "__none__" ? "" : v);
+                }}
+              >
                 <SelectTrigger size="sm" className="w-full h-8">
                   <SelectValue placeholder="None (standalone run)" />
                 </SelectTrigger>
@@ -266,16 +311,17 @@ export default function NewRunView() {
                       {p.displayName || p.name}
                     </SelectItem>
                   ))}
+                  <SelectItem value="__custom__">Custom label...</SelectItem>
                 </SelectContent>
               </Select>
-              {projectRef && (
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Repos, model, and defaults inherited from project (overridable below).
-                  {specRef && <span className="ml-1">Spec: <span className="font-mono">{specRef}</span></span>}
-                </p>
-              )}
-            </section>
-          )}
+            )}
+            {projectRef && !customLabelMode && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Repos, model, and defaults inherited from project (overridable below).
+                {specRef && <span className="ml-1">Spec: <span className="font-mono">{specRef}</span></span>}
+              </p>
+            )}
+          </section>
 
           {/* Repositories */}
           <section>
@@ -289,7 +335,7 @@ export default function NewRunView() {
                   placeholder="https://github.com/org/repo"
                 />
                 <Input
-                  className="w-20 h-8 text-sm"
+                  className="min-w-0 flex-1 h-8 text-sm"
                   value={r.branch}
                   onChange={(e) => updateRepo(i, "branch", e.target.value)}
                   placeholder="main"
@@ -337,12 +383,12 @@ export default function NewRunView() {
               <div className="flex justify-end mt-1">
                 <Button
                   size="sm"
-                  variant="ghost"
-                  className="h-6 text-[11px]"
+                  variant="outline"
+                  className="h-8 text-sm"
                   disabled={improvingPrompt}
                   onClick={() => improveText(prompt, "prompt", setPrompt, setImprovingPrompt)}
                 >
-                  {improvingPrompt ? "Improving..." : "Improve with AI"}
+                  {improvingPrompt ? "Improving..." : "✨ Improve with AI"}
                 </Button>
               </div>
             )}
@@ -362,12 +408,12 @@ export default function NewRunView() {
                 <div className="flex justify-end mt-1">
                   <Button
                     size="sm"
-                    variant="ghost"
-                    className="h-6 text-[11px]"
+                    variant="outline"
+                    className="h-8 text-sm"
                     disabled={improvingSpec}
                     onClick={() => improveText(specContent, "spec", setSpecContent, setImprovingSpec)}
                   >
-                    {improvingSpec ? "Improving..." : "Improve with AI"}
+                    {improvingSpec ? "Improving..." : "✨ Improve with AI"}
                   </Button>
                 </div>
               )}
@@ -437,26 +483,13 @@ export default function NewRunView() {
             )}
           </section>
 
-          {/* Classification — project, feature, tags */}
+          {/* Classification — feature, tags */}
           <section>
             <div className="flex items-center gap-2 mb-1">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Classification</label>
               {classifying && <span className="text-[10px] text-muted-foreground animate-pulse">suggesting...</span>}
             </div>
             <div className="flex gap-2">
-              {/* Project dropdown with suggestions */}
-              <div className="flex-1">
-                <Input
-                  className="h-8 text-sm"
-                  value={project}
-                  onChange={(e) => { setProject(e.target.value); userEditedProject.current = true; }}
-                  placeholder="Project"
-                  list="project-suggestions"
-                />
-                <datalist id="project-suggestions">
-                  {existingProjects.map((p) => <option key={p} value={p} />)}
-                </datalist>
-              </div>
               {/* Feature dropdown with suggestions */}
               <div className="flex-1">
                 <Input
@@ -487,6 +520,9 @@ export default function NewRunView() {
             <Button onClick={handleRun} disabled={submitting || !canRun}>
               {submitting ? "Creating..." : "Run"}
             </Button>
+            {canRun && !submitting && (
+              <span className="text-[11px] text-muted-foreground select-none">⌘↵</span>
+            )}
           </div>
         </div>
       </div>

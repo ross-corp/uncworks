@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { toast } from "sonner";
 import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
-import { useToast } from "../components/Toast";
 import { Button } from "../components/ui/button";
 import RunStatusBadge from "../components/RunStatusBadge";
 import ActivityFeed from "../components/ActivityFeed";
@@ -11,6 +11,8 @@ import StageProgress from "../components/StageProgress";
 import FileExplorer from "../components/FileExplorer";
 import ShellTerminal from "../components/ShellTerminal";
 import TraceTimeline from "../components/TraceTimeline";
+import FailureDiagnosisPanel from "../components/FailureDiagnosisPanel";
+import HitlModal from "../components/HitlModal";
 import { useTraces } from "../hooks/useTraces";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import {
@@ -23,6 +25,81 @@ import {
 
 type Tab = "logs" | "traces" | "files" | "shell";
 
+const ACTIVE_PHASES = new Set(["running", "planning", "verifying", "waiting_for_input"]);
+
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  if (mins > 0) return `${mins}m ${secs}s`;
+  return `${secs}s`;
+}
+
+// ── Horizontal phase step indicator ──────────────────────────────────────────
+
+type StepStatus = "done" | "active" | "failed" | "future";
+
+const PHASE_STEPS = [
+  { key: "planning", label: "Planning" },
+  { key: "executing", label: "Executing" },
+  { key: "verifying", label: "Verifying" },
+] as const;
+
+function getStepStatus(stepKey: string, stage: string | undefined, phase: string | undefined): StepStatus {
+  const order = ["planning", "executing", "verifying"];
+  const stepIdx = order.indexOf(stepKey);
+  let currentIdx = -1;
+  if (stage === "planning") currentIdx = 0;
+  else if (stage === "executing") currentIdx = 1;
+  else if (stage === "verifying") currentIdx = 2;
+
+  if (phase === "succeeded") return "done";
+  if (phase === "failed" || phase === "cancelled") {
+    if (stepIdx < currentIdx) return "done";
+    if (stepIdx === currentIdx) return "failed";
+    return "future";
+  }
+  if (stepIdx < currentIdx) return "done";
+  if (stepIdx === currentIdx) return "active";
+  return "future";
+}
+
+function PhaseStepRow({ stage, phase }: { stage?: string; phase?: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      {PHASE_STEPS.map((step, i) => {
+        const status = getStepStatus(step.key, stage, phase);
+        return (
+          <div key={step.key} className="flex items-center gap-1">
+            {i > 0 && <div className="w-4 h-px bg-border" />}
+            <div className="flex items-center gap-1">
+              {status === "done" && <span className="text-green-500 text-[10px] leading-none">✓</span>}
+              {status === "failed" && <span className="text-red-500 text-[10px] leading-none">✗</span>}
+              {status === "active" && (
+                <span className="relative flex size-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full size-1.5 bg-blue-500" />
+                </span>
+              )}
+              {status === "future" && (
+                <span className="size-1.5 rounded-full border border-muted-foreground/40 inline-block" />
+              )}
+              <span className={`text-[10px] ${
+                status === "active" ? "text-blue-500 font-medium"
+                : status === "done" ? "text-green-500"
+                : status === "failed" ? "text-red-500"
+                : "text-muted-foreground/60"
+              }`}>{step.label}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const TABS: { key: Tab; label: string; num: string }[] = [
   { key: "logs", label: "Logs", num: "1" },
   { key: "traces", label: "Traces", num: "2" },
@@ -34,33 +111,66 @@ export default function RunDetailView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const client = useClient();
-  const { toast } = useToast();
   const [run, setRun] = useState<AgentRun | null>(null);
   const [tab, setTab] = useState<Tab>("logs");
   const [showInfo, setShowInfo] = useState(false);
   const [hitlInput, setHitlInput] = useState("");
+  const [hitlModalOpen, setHitlModalOpen] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const prevPhaseRef = useRef<string | undefined>(undefined);
   const { spans } = useTraces(id || "");
 
-  const sendHitl = useCallback(async () => {
-    if (!id || !hitlInput.trim()) return;
-    try {
-      await client.sendHumanInput(id, hitlInput.trim());
-      setHitlInput("");
-      toast("Input sent", "success");
-    } catch {
-      toast("Failed to send input", "error");
+  // Live elapsed counter
+  useEffect(() => {
+    if (!run) return;
+    const isActive = ACTIVE_PHASES.has(run.status.phase);
+    if (!isActive) {
+      if (run.status.completedAt && run.createdAt) {
+        setElapsed(new Date(run.status.completedAt).getTime() - new Date(run.createdAt).getTime());
+      }
+      return;
     }
-  }, [id, hitlInput, client, toast]);
+    const start = run.createdAt ? new Date(run.createdAt).getTime() : Date.now();
+    const tick = () => setElapsed(Date.now() - start);
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [run?.status.phase, run?.createdAt, run?.status.completedAt]);
+
+  // Auto-open HITL modal when phase transitions to waiting_for_input
+  useEffect(() => {
+    if (!run) return;
+    const phase = run.status.phase;
+    if (phase === "waiting_for_input" && prevPhaseRef.current !== "waiting_for_input") {
+      setHitlModalOpen(true);
+    }
+    prevPhaseRef.current = phase;
+  }, [run?.status.phase]);
+
+  const elapsedStr = elapsed > 0 ? formatElapsed(elapsed) : "";
+
+  const sendHitl = useCallback(async (input?: string) => {
+    const value = input ?? hitlInput;
+    if (!id || !value.trim()) return;
+    try {
+      await client.sendHumanInput(id, value.trim());
+      setHitlInput("");
+      setHitlModalOpen(false);
+      toast.success("Input sent · Resuming run");
+    } catch {
+      toast.error("Failed to send input");
+    }
+  }, [id, hitlInput, client]);
 
   const cancelRun = useCallback(async () => {
     if (!id) return;
     try {
       await client.cancelAgentRun(id);
-      toast("Run cancelled", "success");
+      toast.success("Run cancelled");
     } catch {
-      toast("Failed to cancel run", "error");
+      toast.error("Failed to cancel run");
     }
-  }, [id, client, toast]);
+  }, [id, client]);
 
   const [loadError, setLoadError] = useState(false);
 
@@ -139,15 +249,40 @@ export default function RunDetailView() {
   const isSpecDriven = run.spec.orchestrationMode === "spec-driven";
   const isRunning = run.status.phase === "running" || run.status.phase === "waiting_for_input";
   const isFailed = run.status.phase === "failed" || run.status.phase === "cancelled";
+  const isWaiting = run.status.phase === "waiting_for_input";
+  const hitlPrompt = run.status.message || "The agent is requesting your input to continue.";
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-0.5">
+          <div className="text-xs text-muted-foreground">
+            <Link to="/" className="hover:text-foreground transition-colors">Runs</Link>
+            {" / "}
+            <span>{run.spec.displayName || run.name}</span>
+          </div>
+          <div className="flex items-center gap-3">
           <span className="font-semibold">{run.spec.displayName || run.name}</span>
           <RunStatusBadge phase={run.status.phase} stage={run.status.stage} />
-          {run.status.message && (
+          {/* Waiting for input amber badge — task 7.3 */}
+          {isWaiting && (
+            <button
+              onClick={() => setHitlModalOpen(true)}
+              className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors animate-pulse"
+            >
+              Waiting for Input
+            </button>
+          )}
+          {/* Horizontal phase step indicator — task 6.1 */}
+          {isSpecDriven && (
+            <PhaseStepRow stage={run.status.stage} phase={run.status.phase} />
+          )}
+          {/* Live elapsed counter — task 6.2 */}
+          {elapsedStr && ACTIVE_PHASES.has(run.status.phase) && (
+            <span className="text-xs text-muted-foreground font-mono">{elapsedStr}</span>
+          )}
+          {run.status.message && !isWaiting && (
             <span
               className={`text-xs truncate max-w-[32rem] ${
                 run.status.phase === "failed" ? "text-red-500" : "text-muted-foreground"
@@ -159,6 +294,7 @@ export default function RunDetailView() {
                 : run.status.message}
             </span>
           )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {/* Cancel button - visible when running or waiting */}
@@ -186,13 +322,17 @@ export default function RunDetailView() {
             <button
               onClick={async () => {
                 if (!window.confirm("Archive this run? The workspace will be deleted.")) return;
-                await apiFetch(`/api/v1/runs/${id}/archive`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ archived: true }),
-                });
-                toast("Run archived", "success");
-                navigate("/");
+                try {
+                  await apiFetch(`/api/v1/runs/${id}/archive`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ archived: true }),
+                  });
+                  toast.success("Run archived");
+                  navigate("/");
+                } catch {
+                  toast.error("Failed to archive run");
+                }
               }}
               className="px-2 py-0.5 text-xs border text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -238,6 +378,31 @@ export default function RunDetailView() {
         </div>
       )}
 
+      {/* Failure diagnosis panel — tasks 6.3/6.4 */}
+      {run.status.phase === "failed" && (
+        <FailureDiagnosisPanel
+          run={run}
+          elapsed={elapsedStr}
+          onViewTraces={() => setTab("traces")}
+          onRetry={() => navigate(`/new?clone=${id}`)}
+          onEditRetry={() => navigate(`/new?clone=${id}`)}
+          onArchive={async () => {
+            if (!window.confirm("Archive this run? The workspace will be deleted.")) return;
+            try {
+              await apiFetch(`/api/v1/runs/${id}/archive`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ archived: true }),
+              });
+              toast.success("Run archived");
+              navigate("/");
+            } catch {
+              toast.error("Failed to archive run");
+            }
+          }}
+        />
+      )}
+
       {/* Tabs */}
       <Tabs
         value={tab}
@@ -273,8 +438,8 @@ export default function RunDetailView() {
         </TabsContent>
       </Tabs>
 
-      {/* HITL overlay */}
-      {run.status.phase === "waiting_for_input" && (
+      {/* HITL inline overlay (fallback when modal is closed) */}
+      {run.status.phase === "waiting_for_input" && !hitlModalOpen && (
         <div className="border-t bg-yellow-500/10 px-4 py-2">
           <div className="text-xs text-yellow-500 mb-1">Agent is waiting for input</div>
           <div className="flex gap-2">
@@ -287,7 +452,7 @@ export default function RunDetailView() {
               autoFocus
             />
             <button
-              onClick={sendHitl}
+              onClick={() => sendHitl()}
               className="px-3 py-1 text-xs bg-primary text-primary-foreground"
             >
               Send
@@ -295,6 +460,14 @@ export default function RunDetailView() {
           </div>
         </div>
       )}
+
+      {/* HITL Modal — tasks 7.1/7.2/7.4 */}
+      <HitlModal
+        open={hitlModalOpen}
+        promptText={hitlPrompt}
+        onSubmit={(input) => sendHitl(input)}
+        onClose={() => setHitlModalOpen(false)}
+      />
 
       {/* Info Sheet (side panel) */}
       <Sheet open={showInfo} onOpenChange={setShowInfo}>

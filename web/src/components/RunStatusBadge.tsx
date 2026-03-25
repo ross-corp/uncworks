@@ -32,7 +32,7 @@ export default function RunStatusBadge({ phase, stage }: RunStatusBadgeProps) {
 
   return (
     <Badge variant={config.variant} className={config.className}>
-      <span className={`inline-block w-1.5 h-1.5 rounded-full ${config.dot || "bg-current"} ${phase === "running" ? "animate-pulse" : ""}`} />
+      <span className={`inline-block w-1.5 h-1.5 rounded-full ${config.dot || "bg-current"} ${(phase === "running" || phase === "waiting_for_input") ? "animate-pulse" : ""}`} />
       {label}{stageLabel ? ` / ${stageLabel}` : ""}
     </Badge>
   );
