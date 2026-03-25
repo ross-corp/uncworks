@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
@@ -141,7 +142,11 @@ func (h *ProjectHandler) handleUpdateProject(w http.ResponseWriter, r *http.Requ
 	if err := h.K8sClient.Get(r.Context(), client.ObjectKey{
 		Namespace: h.Namespace, Name: name,
 	}, project); err != nil {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: "project not found"})
+		if apierrors.IsNotFound(err) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "project not found"})
+		} else {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("get project: %v", err)})
+		}
 		return
 	}
 

@@ -50,19 +50,19 @@ export default function FailureDiagnosisPanel({
               {errorMessage}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onViewTraces}>
+              <Button size="sm" variant="outline" className="text-xs" onClick={onViewTraces}>
                 View in Traces
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onRetry}>
+              <Button size="sm" variant="outline" className="text-xs" onClick={onRetry}>
                 Retry
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onEditRetry}>
+              <Button size="sm" variant="outline" className="text-xs" onClick={onEditRetry}>
                 Edit &amp; Retry
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-xs text-muted-foreground"
+                className="text-xs text-muted-foreground"
                 onClick={onArchive}
               >
                 Archive
