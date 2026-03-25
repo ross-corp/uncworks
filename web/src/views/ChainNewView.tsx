@@ -12,8 +12,8 @@ interface Template {
 }
 
 interface Project {
-  metadata: { name: string };
-  spec: { displayName?: string };
+  name: string;
+  displayName?: string;
 }
 
 interface Step {
@@ -172,8 +172,8 @@ export default function ChainNewView() {
             >
               <option value="">— none —</option>
               {projects.map((p) => (
-                <option key={p.metadata.name} value={p.metadata.name}>
-                  {p.spec.displayName || p.metadata.name}
+                <option key={p.name} value={p.name}>
+                  {p.displayName || p.name}
                 </option>
               ))}
             </select>

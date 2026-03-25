@@ -6,8 +6,8 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
 interface ProjectSummary {
-  metadata: { name: string };
-  spec?: { displayName?: string };
+  name: string;
+  displayName?: string;
 }
 
 export default function TemplateNewView() {
@@ -104,8 +104,8 @@ export default function TemplateNewView() {
             >
               <option value="">— none —</option>
               {projects.map((p) => (
-                <option key={p.metadata.name} value={p.metadata.name}>
-                  {p.spec?.displayName || p.metadata.name}
+                <option key={p.name} value={p.name}>
+                  {p.displayName || p.name}
                 </option>
               ))}
             </select>

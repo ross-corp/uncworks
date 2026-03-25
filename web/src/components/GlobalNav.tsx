@@ -178,7 +178,7 @@ export default function GlobalNav() {
               } ${collapsed ? "justify-center" : ""}`}
               title={collapsed ? item.label : undefined}
             >
-              <span className="text-base leading-none shrink-0">{item.icon}</span>
+              <span className="w-4 text-center text-base leading-none shrink-0">{item.icon}</span>
               {!collapsed && (
                 <>
                   <span className="flex-1 truncate">{item.label}</span>
