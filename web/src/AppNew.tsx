@@ -9,6 +9,7 @@ import ProjectDetailView from "./views/ProjectDetailView";
 import ScheduleListView from "./views/ScheduleListView";
 import ScheduleDetailView from "./views/ScheduleDetailView";
 import ChainListView from "./views/ChainListView";
+import ChainRunListView from "./views/ChainRunListView";
 import ChainRunDetailView from "./views/ChainRunDetailView";
 
 /**
@@ -28,6 +29,7 @@ export default function AppNew() {
           <Route path="/schedules" element={<ScheduleListView />} />
           <Route path="/schedules/:name" element={<ScheduleDetailView />} />
           <Route path="/chains" element={<ChainListView />} />
+          <Route path="/chainruns" element={<ChainRunListView />} />
           <Route path="/chainrun/:name" element={<ChainRunDetailView />} />
         </Route>
       </Routes>

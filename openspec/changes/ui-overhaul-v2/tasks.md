@@ -70,35 +70,35 @@
 
 ## 10. Tier 3 — RunDetailView layout overhaul
 
-- [ ] 10.1 Redesign RunDetailView to sidebar-nav (Logs/Traces/Files/Shell) + main content area + right slide-in detail panel
-- [ ] 10.2 Right detail panel slides in when trace span is selected — main content (waterfall) stays visible
-- [ ] 10.3 Preserve 1/2/3/4 keyboard shortcuts for switching main content; Escape closes right panel
-- [ ] 10.4 Default main content is ActivityFeed (Logs); preserve existing tab-1 behavior
+- [x] 10.1 Redesign RunDetailView to sidebar-nav (Logs/Traces/Files/Shell) + main content area + right slide-in detail panel
+- [x] 10.2 Right detail panel slides in when trace span is selected — main content (waterfall) stays visible
+- [x] 10.3 Preserve 1/2/3/4 keyboard shortcuts for switching main content; Escape closes right panel
+- [x] 10.4 Default main content is ActivityFeed (Logs); preserve existing tab-1 behavior
 
 ## 11. Tier 3 — TraceTimeline search and expand/collapse
 
-- [ ] 11.1 Add filter bar to TraceTimeline header — text search input + filter chips (Failed, Bash, Write, LLM)
-- [ ] 11.2 Implement span text search — filter waterfall rows by span name match; show parent spans collapsed if they have matching children
-- [ ] 11.3 Add "Expand All" / "Collapse All" buttons to TraceTimeline header
-- [ ] 11.4 Show "[N hidden]" badge on collapsed span groups
-- [ ] 11.5 Improve span hover state — full row background highlight + underline on span name + cursor:pointer
-- [ ] 11.6 Persist selected span highlight (accent background) until another click or Escape
+- [x] 11.1 Add filter bar to TraceTimeline header — text search input + filter chips (Failed, Bash, Write, LLM)
+- [x] 11.2 Implement span text search — filter waterfall rows by span name match; show parent spans collapsed if they have matching children
+- [x] 11.3 Add "Expand All" / "Collapse All" buttons to TraceTimeline header
+- [x] 11.4 Show "[N hidden]" badge on collapsed span groups
+- [x] 11.5 Improve span hover state — full row background highlight + underline on span name + cursor:pointer
+- [x] 11.6 Persist selected span highlight (accent background) until another click or Escape
 
 ## 12. Tier 3 — ChainRunDetail visual DAG
 
-- [ ] 12.1 Add `react-flow` dependency to web package
-- [ ] 12.2 Create `ChainDagViz.tsx` using react-flow — nodes for each step, directed edges for dependencies
-- [ ] 12.3 Color nodes by phase (blue=running, green=succeeded, red=failed, gray=pending, yellow=skipped)
-- [ ] 12.4 Show elapsed duration inside completed nodes
-- [ ] 12.5 Wire node click to navigate to /run/:id for that step
-- [ ] 12.6 Add Timeline tab to ChainRunDetailView showing steps as horizontal bars on a time axis
-- [ ] 12.7 Fallback to existing text-based step list if react-flow fails to render
+- [x] 12.1 Add `react-flow` dependency to web package
+- [x] 12.2 Create `ChainDagViz.tsx` using react-flow — nodes for each step, directed edges for dependencies
+- [x] 12.3 Color nodes by phase (blue=running, green=succeeded, red=failed, gray=pending, yellow=skipped)
+- [x] 12.4 Show elapsed duration inside completed nodes
+- [x] 12.5 Wire node click to navigate to /run/:id for that step
+- [x] 12.6 Add Timeline tab to ChainRunDetailView showing steps as horizontal bars on a time axis
+- [x] 12.7 Fallback to existing text-based step list if react-flow fails to render
 
 ## 13. Tier 3 — NewRunView progressive disclosure
 
-- [ ] 13.1 Add "Core" and "Config" tabs to NewRunView — Core: prompt+repos; Config: model/TTL/orchestration mode/classification
-- [ ] 13.2 Move prompt/spec mode toggle to the NewRunView header next to the title for discoverability
-- [ ] 13.3 Split ChainListView into separate routes: `/chains` (chain definitions) and `/chainruns` (chain run executions)
+- [x] 13.1 Add "Core" and "Config" tabs to NewRunView — Core: prompt+repos; Config: model/TTL/orchestration mode/classification
+- [x] 13.2 Move prompt/spec mode toggle to the NewRunView header next to the title for discoverability
+- [x] 13.3 Split ChainListView into separate routes: `/chains` (chain definitions) and `/chainruns` (chain run executions)
 
 ## 14. Verification
 

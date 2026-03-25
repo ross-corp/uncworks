@@ -14,6 +14,7 @@ import {
   ChevronDownIcon,
   FileIcon,
   XIcon,
+  SearchIcon,
 } from "lucide-react";
 
 // ============================================================
@@ -129,6 +130,18 @@ function computeStageAggregates(
 }
 
 // -- Helpers ------------------------------------------------
+
+function countDescendants(spanId: string, childrenOf: Map<string, TraceSpan[]>): number {
+  let count = 0;
+  const queue = [spanId];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    const children = childrenOf.get(id) ?? [];
+    count += children.length;
+    for (const c of children) queue.push(c.id);
+  }
+  return count;
+}
 
 function getDurationMs(startTime: string, endTime: string): number {
   const start = new Date(startTime).getTime();
@@ -286,7 +299,7 @@ function DiffViewer({ files }: { files: FileDiff[] }) {
 
 // -- Span detail panel (right side) -------------------------
 
-function SpanDetail({
+export function SpanDetail({
   span,
   allSpans,
   runId,
@@ -728,9 +741,6 @@ const OVERSCAN = 8;
 const INDENT_PX = 20;
 const LABEL_WIDTH = 280;
 const MIN_BAR_WIDTH_PX = 4;
-const DEFAULT_DETAIL_WIDTH = 400;
-const MIN_DETAIL_WIDTH = 280;
-const MAX_DETAIL_WIDTH = 700;
 
 // -- Main component -----------------------------------------
 
@@ -754,12 +764,14 @@ export default function TraceTimeline({
     string | null
   >(null);
   const [userScrolled, setUserScrolled] = useState(false);
-  const [detailWidth, setDetailWidth] = useState(DEFAULT_DETAIL_WIDTH);
-  const [isDragging, setIsDragging] = useState(false);
   const [collapsedSpanIds, setCollapsedSpanIds] = useState<Set<string>>(
     new Set()
   );
   const prevSpanCount = useRef(spans.length);
+
+  // Filter state (11.1, 11.2)
+  const [filterText, setFilterText] = useState("");
+  const [activeChips, setActiveChips] = useState<Set<string>>(new Set());
 
   // Use controlled selectedSpanId if provided, otherwise use internal
   const selectedSpanId = controlledSelectedSpanId ?? internalSelectedSpanId;
@@ -777,18 +789,103 @@ export default function TraceTimeline({
     });
   }, []);
 
+  // Expand All / Collapse All (11.3)
+  const expandAll = useCallback(() => {
+    setCollapsedSpanIds(new Set());
+  }, []);
+
+  const collapseAll = useCallback(() => {
+    const parentIds = new Set<string>();
+    for (const span of spans) {
+      if (spans.some((s) => s.parentId === span.id)) {
+        parentIds.add(span.id);
+      }
+    }
+    setCollapsedSpanIds(parentIds);
+  }, [spans]);
+
+  // Toggle filter chip (11.1)
+  const toggleChip = useCallback((chip: string) => {
+    setActiveChips((prev) => {
+      const next = new Set(prev);
+      if (next.has(chip)) {
+        next.delete(chip);
+      } else {
+        next.add(chip);
+      }
+      return next;
+    });
+  }, []);
+
+  // Compute which span IDs pass the active filters (11.2)
+  const matchingSpanIds = useMemo(() => {
+    const hasText = filterText.trim().length > 0;
+    const hasChips = activeChips.size > 0;
+    if (!hasText && !hasChips) return null; // null = no filter active, show all
+
+    const lower = filterText.toLowerCase();
+
+    function spanMatchesFilter(span: TraceSpan): boolean {
+      // Text match
+      if (hasText && !displaySpanName(span.name).toLowerCase().includes(lower)) return false;
+      // Chip match
+      if (hasChips) {
+        const op = resolveOperation(span).toLowerCase();
+        const name = span.name.toLowerCase();
+        let chipMatch = false;
+        if (activeChips.has("Failed")) {
+          if (span.metadata?.error !== undefined || span.status === "error") chipMatch = true;
+        }
+        if (activeChips.has("Bash")) {
+          if (op === "bash" || name.includes("bash")) chipMatch = true;
+        }
+        if (activeChips.has("Write")) {
+          if (op === "write" || name.includes("write")) chipMatch = true;
+        }
+        if (activeChips.has("LLM")) {
+          if (span.type === "llm" || op === "thought" || name.includes("llm") || name.includes("thought")) chipMatch = true;
+        }
+        if (!chipMatch) return false;
+      }
+      return true;
+    }
+
+    // Build a set of all matching span IDs (direct matches) and their ancestor IDs
+    const directMatches = new Set<string>();
+    for (const span of spans) {
+      if (spanMatchesFilter(span)) directMatches.add(span.id);
+    }
+
+    // Also include parent spans that have at least one matching descendant
+    const byId = new Map<string, TraceSpan>();
+    for (const span of spans) byId.set(span.id, span);
+
+    const visible = new Set<string>(directMatches);
+    // Walk ancestors of each direct match
+    for (const span of spans) {
+      if (!directMatches.has(span.id)) continue;
+      let parentId = span.parentId;
+      while (parentId) {
+        visible.add(parentId);
+        const parent = byId.get(parentId);
+        parentId = parent?.parentId;
+      }
+    }
+
+    return visible;
+  }, [filterText, activeChips, spans]);
+
   // Build tree structure (collapse-aware)
-  const { flat, traceDurationMs, traceStartMs } = useMemo(
+  const { flat, traceDurationMs, traceStartMs, childrenOf } = useMemo(
     () => buildFlatTree(spans, collapsedSpanIds),
     [spans, collapsedSpanIds]
   );
 
-  // Find the selected span object
-  const selectedSpan = useMemo(() => {
-    if (!selectedSpanId) return null;
-    const entry = flat.find((f) => f.span.id === selectedSpanId);
-    return entry?.span ?? null;
-  }, [flat, selectedSpanId]);
+  // Filtered flat list (11.2)
+  const filteredFlat = useMemo(() => {
+    if (!matchingSpanIds) return flat;
+    return flat.filter((f) => matchingSpanIds.has(f.span.id));
+  }, [flat, matchingSpanIds]);
 
   // Select a span (single selection, no toggle)
   const handleSelectSpan = useCallback(
@@ -799,9 +896,15 @@ export default function TraceTimeline({
     [onSelectSpan]
   );
 
-  // Close the detail panel
-  const handleCloseDetail = useCallback(() => {
-    setInternalSelectedSpanId(null);
+  // Escape key clears selection (11.6)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setInternalSelectedSpanId(null);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   // Track container resize
@@ -836,47 +939,18 @@ export default function TraceTimeline({
     setUserScrolled(!atBottom);
   }, []);
 
-  // Draggable divider for resizing the detail panel
-  const handleDividerMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      setIsDragging(true);
-      const startX = e.clientX;
-      const startWidth = detailWidth;
-
-      const onMouseMove = (ev: MouseEvent) => {
-        const delta = startX - ev.clientX;
-        const newWidth = Math.min(
-          MAX_DETAIL_WIDTH,
-          Math.max(MIN_DETAIL_WIDTH, startWidth + delta)
-        );
-        setDetailWidth(newWidth);
-      };
-
-      const onMouseUp = () => {
-        setIsDragging(false);
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-      };
-
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [detailWidth]
-  );
-
   // Compute positions for each row (stage spans are slightly taller)
   const rowPositions = useMemo(() => {
     const positions: { top: number; height: number; flatIndex: number }[] = [];
     let y = 0;
-    for (let i = 0; i < flat.length; i++) {
+    for (let i = 0; i < filteredFlat.length; i++) {
       const h =
-        flat[i].span.type === "stage" ? STAGE_ROW_HEIGHT : SPAN_ROW_HEIGHT;
+        filteredFlat[i].span.type === "stage" ? STAGE_ROW_HEIGHT : SPAN_ROW_HEIGHT;
       positions.push({ top: y, height: h, flatIndex: i });
       y += h;
     }
     return positions;
-  }, [flat]);
+  }, [filteredFlat]);
 
   const totalHeight = useMemo(() => {
     if (rowPositions.length === 0) return 0;
@@ -954,7 +1028,7 @@ export default function TraceTimeline({
 
   return (
     <div data-testid="trace-timeline" className="flex flex-col h-full">
-      {/* Header */}
+      {/* Header row 1: run info + expand/collapse buttons (11.3) */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30 flex-shrink-0">
         <div className="flex items-center gap-2">
           {runId && (
@@ -971,6 +1045,61 @@ export default function TraceTimeline({
             {spans.length} span{spans.length !== 1 ? "s" : ""}
           </span>
         </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={expandAll}
+            className="text-[11px] px-2 py-0.5 rounded border border-border bg-background hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Expand All
+          </button>
+          <button
+            onClick={collapseAll}
+            className="text-[11px] px-2 py-0.5 rounded border border-border bg-background hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Collapse All
+          </button>
+        </div>
+      </div>
+
+      {/* Header row 2: filter bar (11.1) */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-muted/10 flex-shrink-0 flex-wrap">
+        <div className="relative flex items-center">
+          <SearchIcon className="absolute left-2 h-3 w-3 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="Search spans..."
+            className="h-6 pl-6 pr-6 text-[11px] rounded border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring w-40"
+          />
+          {filterText && (
+            <button
+              onClick={() => setFilterText("")}
+              className="absolute right-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <XIcon className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        {(["Failed", "Bash", "Write", "LLM"] as const).map((chip) => (
+          <button
+            key={chip}
+            onClick={() => toggleChip(chip)}
+            className={cn(
+              "text-[11px] px-2 py-0.5 rounded-full border transition-colors",
+              activeChips.has(chip)
+                ? "border-primary bg-primary/20 text-primary"
+                : "border-border bg-background text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+            )}
+          >
+            {chip}
+          </button>
+        ))}
+        {matchingSpanIds !== null && (
+          <span className="text-[10px] text-muted-foreground ml-auto">
+            {filteredFlat.length} match{filteredFlat.length !== 1 ? "es" : ""}
+          </span>
+        )}
       </div>
 
       {/* Two-column body: waterfall + detail panel */}
@@ -1009,7 +1138,7 @@ export default function TraceTimeline({
                 .slice(visibleRange.startIdx, visibleRange.endIdx)
                 .map((pos) => {
                   const { span, depth, durationMs, offsetMs, hasChildren } =
-                    flat[pos.flatIndex];
+                    filteredFlat[pos.flatIndex];
                   const isStageSpan = span.type === "stage";
                   const isActive = !span.endTime;
                   const isSelected = span.id === selectedSpanId;
@@ -1074,10 +1203,10 @@ export default function TraceTimeline({
                       <button
                         onClick={() => handleSelectSpan(span)}
                         className={cn(
-                          "flex items-center w-full text-left transition-colors group",
+                          "flex items-center w-full text-left transition-colors group cursor-pointer",
                           isSelected
-                            ? "bg-accent/20 border-l-2 border-l-primary"
-                            : "hover:bg-muted/40",
+                            ? "bg-accent/30 border-l-2 border-l-primary"
+                            : "hover:bg-muted/30",
                           isStageSpan && "bg-muted/10 border-b border-border/50"
                         )}
                         style={{ height: rowHeight }}
@@ -1093,14 +1222,20 @@ export default function TraceTimeline({
                           {/* Collapse toggle for stage/parent spans */}
                           {hasChildren ? (
                             <span
-                              className="flex-shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
+                              className="flex items-center gap-1 flex-shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleCollapse(span.id);
                               }}
                             >
                               {isCollapsed ? (
-                                <ChevronRightIcon className="h-3 w-3" />
+                                <>
+                                  <ChevronRightIcon className="h-3 w-3" />
+                                  {/* [N hidden] badge (11.4) */}
+                                  <span className="text-[9px] text-muted-foreground/60 font-mono whitespace-nowrap">
+                                    [{countDescendants(span.id, childrenOf)} hidden]
+                                  </span>
+                                </>
                               ) : (
                                 <ChevronDownIcon className="h-3 w-3" />
                               )}
@@ -1124,7 +1259,7 @@ export default function TraceTimeline({
                           {/* Span name */}
                           <span
                             className={cn(
-                              "text-[11px] font-mono truncate",
+                              "text-[11px] font-mono truncate group-hover:underline",
                               isStageSpan ? "font-bold text-foreground" : textClass
                             )}
                           >
@@ -1304,37 +1439,6 @@ export default function TraceTimeline({
           </div>
         </div>
 
-        {/* Draggable divider + Detail panel */}
-        {selectedSpan && (
-          <>
-            {/* Divider */}
-            <div
-              className={cn(
-                "w-1 flex-shrink-0 cursor-col-resize transition-colors hover:bg-accent/50",
-                isDragging ? "bg-accent" : "bg-border"
-              )}
-              onMouseDown={handleDividerMouseDown}
-            />
-
-            {/* Right: detail panel */}
-            <div
-              className="flex-shrink-0 overflow-hidden border-l border-border bg-background"
-              style={{ width: detailWidth }}
-            >
-              <SpanDetail
-                span={selectedSpan}
-                allSpans={spans}
-                runId={runId}
-                onClose={handleCloseDetail}
-              />
-            </div>
-          </>
-        )}
-
-        {/* Empty state when no span selected — show hint at right edge */}
-        {!selectedSpan && (
-          <div className="flex-shrink-0 w-0 overflow-hidden" />
-        )}
       </div>
     </div>
   );
