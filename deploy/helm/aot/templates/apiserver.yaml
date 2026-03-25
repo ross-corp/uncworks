@@ -70,6 +70,26 @@ spec:
             - name: SOFT_SERVE_KEY_PATH
               value: "/etc/soft-serve/id_ed25519"
             {{- end }}
+            {{- with .Values.apiserver.rateLimit }}
+            - name: RATE_LIMIT_ENABLED
+              value: {{ .enabled | quote }}
+            - name: RATE_LIMIT_RPS
+              value: {{ .rps | quote }}
+            - name: RATE_LIMIT_BURST
+              value: {{ .burst | quote }}
+            - name: RATE_LIMIT_LLM_RPS
+              value: {{ .llmRps | quote }}
+            - name: RATE_LIMIT_LLM_BURST
+              value: {{ .llmBurst | quote }}
+            - name: RATE_LIMIT_WEBHOOK_RPS
+              value: {{ .webhookRps | quote }}
+            - name: RATE_LIMIT_WEBHOOK_BURST
+              value: {{ .webhookBurst | quote }}
+            - name: RATE_LIMIT_TTL_MINUTES
+              value: {{ .ttlMinutes | quote }}
+            - name: RATE_LIMIT_TRUST_PROXY
+              value: {{ .trustProxy | quote }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

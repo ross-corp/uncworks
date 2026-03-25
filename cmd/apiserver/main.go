@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -101,6 +101,18 @@ func main() {
 	bus := eventbus.NewChannelBus()
 	svc := server.NewAOTServiceHandler(k8sClient, bus, namespace)
 
+	// Build rate limiter instances from env-var config.
+	globalRLCfg, llmRLCfg, webhookRLCfg := rateLimitConfigs()
+	globalRL := server.NewRateLimiter(globalRLCfg)
+	llmRL := server.NewRateLimiter(llmRLCfg)
+	webhookRL := server.NewRateLimiter(webhookRLCfg)
+	llmMiddleware := server.RateLimitMiddleware(llmRL)
+	webhookMiddleware := server.RateLimitMiddleware(webhookRL)
+	if globalRLCfg.Enabled {
+		slog.Info("rate limiting enabled",
+			"globalRPS", globalRLCfg.RPS, "llmRPS", llmRLCfg.RPS, "webhookRPS", webhookRLCfg.RPS)
+	}
+
 	// Connect to Temporal (required for production)
 	temporalHost := os.Getenv("TEMPORAL_HOST")
 	if temporalHost == "" {
@@ -174,13 +186,13 @@ func main() {
 	traceHandler := server.NewTraceHandler(k8sClient, restConfig, namespace)
 	traceHandler.RegisterTraceHandlers(mux)
 
-	// Register classify endpoint
+	// Register classify endpoint (wrapped with LLM rate limiter)
 	classifyHandler := server.NewClassifyRunHandler(k8sClient, namespace, svc.LiteLLMBaseURL)
-	classifyHandler.RegisterClassifyHandlers(mux)
+	classifyHandler.RegisterClassifyHandlersWithMiddleware(mux, llmMiddleware)
 
-	// Register chat streaming endpoint
+	// Register chat streaming endpoint (wrapped with LLM rate limiter)
 	chatHandler := server.NewChatHandler(svc.LiteLLMBaseURL)
-	chatHandler.RegisterChatHandlers(mux)
+	chatHandler.RegisterChatHandlersWithMiddleware(mux, llmMiddleware)
 
 	// Register SSE endpoints for real-time graph and trace updates
 	sseHandler := server.NewSSEHandler(k8sClient, bus, namespace)
@@ -214,7 +226,7 @@ func main() {
 
 	// Register GitHub webhook receiver (webhooks use their own HMAC auth, skip API key)
 	webhookHandler := server.NewWebhookHandler(serverCtx, k8sClient, namespace, ghProvider)
-	mux.Handle("/api/v1/webhooks/github", webhookHandler)
+	mux.Handle("/api/v1/webhooks/github", webhookMiddleware(webhookHandler))
 
 	// Register AOTService handler
 	path, handler := apiv1connect.NewAOTServiceHandler(svc,
@@ -231,9 +243,9 @@ func main() {
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
 
-	// Build middleware chain: CORS → Auth → Rate Limit → Handler
+	// Build middleware chain: CORS → Auth → Global Rate Limit → Handler
 	var finalHandler http.Handler = mux
-	finalHandler = withRateLimit(finalHandler)
+	finalHandler = server.RateLimitMiddleware(globalRL)(finalHandler)
 	finalHandler = withAuth(finalHandler, apiKey)
 	finalHandler = withCORS(finalHandler, allowedOrigins)
 
@@ -351,88 +363,52 @@ func withAuth(h http.Handler, apiKey string) http.Handler {
 	})
 }
 
-// rateLimiter is a simple per-IP token bucket rate limiter.
-type rateLimiter struct {
-	mu      sync.Mutex
-	clients map[string]*tokenBucket
-}
+// rateLimitConfigs reads rate limit configuration from environment variables.
+func rateLimitConfigs() (global, llm, webhook server.RateLimiterConfig) {
+	enabled := os.Getenv("RATE_LIMIT_ENABLED") == "true"
+	trustProxy := os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true"
+	ttl := envIntOrDefault("RATE_LIMIT_TTL_MINUTES", 10)
 
-type tokenBucket struct {
-	tokens     float64
-	lastRefill time.Time
-}
-
-const (
-	rateLimit  = 60.0  // requests per second
-	burstLimit = 120.0 // max burst
-)
-
-func newRateLimiter() *rateLimiter {
-	rl := &rateLimiter{clients: make(map[string]*tokenBucket)}
-	// Clean up stale entries periodically.
-	go func() {
-		for range time.Tick(5 * time.Minute) {
-			rl.mu.Lock()
-			now := time.Now()
-			for ip, tb := range rl.clients {
-				if now.Sub(tb.lastRefill) > 10*time.Minute {
-					delete(rl.clients, ip)
-				}
-			}
-			rl.mu.Unlock()
-		}
-	}()
-	return rl
-}
-
-func (rl *rateLimiter) allow(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	tb, ok := rl.clients[ip]
-	if !ok {
-		tb = &tokenBucket{tokens: burstLimit, lastRefill: time.Now()}
-		rl.clients[ip] = tb
+	global = server.RateLimiterConfig{
+		Enabled:    enabled,
+		RPS:        envFloatOrDefault("RATE_LIMIT_RPS", 100),
+		Burst:      envIntOrDefault("RATE_LIMIT_BURST", 20),
+		TTLMinutes: ttl,
+		TrustProxy: trustProxy,
 	}
-
-	now := time.Now()
-	elapsed := now.Sub(tb.lastRefill).Seconds()
-	tb.tokens += elapsed * rateLimit
-	if tb.tokens > burstLimit {
-		tb.tokens = burstLimit
+	llm = server.RateLimiterConfig{
+		Enabled:    enabled,
+		RPS:        envFloatOrDefault("RATE_LIMIT_LLM_RPS", 10),
+		Burst:      envIntOrDefault("RATE_LIMIT_LLM_BURST", 5),
+		TTLMinutes: ttl,
+		TrustProxy: trustProxy,
 	}
-	tb.lastRefill = now
-
-	if tb.tokens < 1 {
-		return false
+	webhook = server.RateLimiterConfig{
+		Enabled:    enabled,
+		RPS:        envFloatOrDefault("RATE_LIMIT_WEBHOOK_RPS", 5),
+		Burst:      envIntOrDefault("RATE_LIMIT_WEBHOOK_BURST", 2),
+		TTLMinutes: ttl,
+		TrustProxy: trustProxy,
 	}
-	tb.tokens--
-	return true
+	return
 }
 
-// withRateLimit applies per-IP rate limiting.
-func withRateLimit(h http.Handler) http.Handler {
-	rl := newRateLimiter()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip rate limiting for health checks.
-		if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
-			h.ServeHTTP(w, r)
-			return
+func envIntOrDefault(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
 		}
+	}
+	return def
+}
 
-		ip := r.RemoteAddr
-		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			ip = strings.SplitN(fwd, ",", 2)[0]
+func envFloatOrDefault(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
 		}
-		ip = strings.TrimSpace(ip)
-
-		if !rl.allow(ip) {
-			w.Header().Set("Retry-After", "1")
-			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
-			return
-		}
-		h.ServeHTTP(w, r)
-	})
+	}
+	return def
 }
 
 func writeJSONResponse(w http.ResponseWriter, v interface{}) error {
