@@ -311,6 +311,10 @@ func (h *ChainHandler) handleCreateSchedule(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "chainRef or templateRef required"})
 		return
 	}
+	if body.ChainRef != "" && body.TemplateRef != "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "chainRef and templateRef are mutually exclusive"})
+		return
+	}
 	sched := &aotv1alpha1.Schedule{}
 	sched.Name = body.Name
 	sched.Namespace = h.Namespace
@@ -339,7 +343,10 @@ func (h *ChainHandler) handleDeleteSchedule(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "schedule not found"})
 		return
 	}
-	_ = h.K8sClient.Delete(r.Context(), sched)
+	if err := h.K8sClient.Delete(r.Context(), sched); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": name})
 }
 

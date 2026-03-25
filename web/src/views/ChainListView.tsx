@@ -25,7 +25,9 @@ export default function ChainListView() {
     try {
       const resp = await apiFetch("/api/v1/chains");
       if (resp.ok) setChains(await resp.json());
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load data");
+    }
     finally { setLoading(false); }
   }, []);
 

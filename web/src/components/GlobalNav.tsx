@@ -184,7 +184,7 @@ export default function GlobalNav() {
                   <span className="flex-1 truncate">{item.label}</span>
                   {showBadge && (
                     <span
-                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full leading-none ${
+                      className={`text-xs font-mono px-1.5 py-0.5 rounded-full leading-none ${
                         item.countKey === "runs"
                           ? "bg-blue-500/20 text-blue-600 dark:text-blue-400"
                           : "bg-muted text-muted-foreground"

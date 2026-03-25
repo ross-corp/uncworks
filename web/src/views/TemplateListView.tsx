@@ -21,7 +21,9 @@ export default function TemplateListView() {
     try {
       const resp = await apiFetch("/api/v1/templates");
       if (resp.ok) setTemplates(await resp.json());
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load data");
+    }
     finally { setLoading(false); }
   }, []);
 
@@ -74,7 +76,7 @@ export default function TemplateListView() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{t.spec.displayName || t.metadata.name}</span>
                   {t.spec.projectRef && (
-                    <Badge variant="secondary" className="text-[10px]">{t.spec.projectRef}</Badge>
+                    <Badge variant="secondary" className="text-xs">{t.spec.projectRef}</Badge>
                   )}
                 </div>
                 {t.spec.description && (
@@ -89,7 +91,7 @@ export default function TemplateListView() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 text-xs px-2 text-destructive hover:text-destructive"
+                  className="text-xs px-2 text-destructive hover:text-destructive"
                   onClick={() => deleteTemplate(t.metadata.name)}
                 >
                   delete

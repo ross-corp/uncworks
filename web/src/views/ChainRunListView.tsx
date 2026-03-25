@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
 import { formatAge } from "../lib/format";
 import { Badge } from "../components/ui/badge";
@@ -30,7 +31,9 @@ export default function ChainRunListView() {
     try {
       const resp = await apiFetch("/api/v1/chainruns");
       if (resp.ok) setChainRuns(await resp.json());
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load data");
+    }
     finally { setLoading(false); }
   }, []);
 

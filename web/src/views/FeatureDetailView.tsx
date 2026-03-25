@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { AgentRun } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
-import { useToast } from "../components/Toast";
+import { toast } from "sonner";
 import { formatAge, aggregatePhase } from "../lib/format";
 import RunStatusBadge from "../components/RunStatusBadge";
 
@@ -10,7 +10,6 @@ export default function FeatureDetailView() {
   const { name } = useParams<{ name: string }>();
   const client = useClient();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const [allRuns, setAllRuns] = useState<AgentRun[]>([]);
   const [selected, setSelected] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -92,11 +91,11 @@ export default function FeatureDetailView() {
                 : {}),
             })
             .then((run) => {
-              toast("Retry run created", "success");
+              toast.success("Retry run created");
               navigate(`/run/${run.id}`);
             })
             .catch(() => {
-              toast("Failed to create retry run", "error");
+              toast.error("Failed to create retry run");
             });
           break;
         }
@@ -104,7 +103,7 @@ export default function FeatureDetailView() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [featureRuns, selected, navigate, client, featureName, toast]);
+  }, [featureRuns, selected, navigate, client, featureName]);
 
   return (
     <div className="flex h-full flex-col">
@@ -155,12 +154,12 @@ export default function FeatureDetailView() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {run.status.stage && (
-                <span className="text-[11px] text-muted-foreground">{run.status.stage}</span>
+                <span className="text-xs text-muted-foreground">{run.status.stage}</span>
               )}
-              <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                 {run.spec.modelTier || "default"}
               </span>
-              <span className="text-[11px] text-muted-foreground w-8 text-right">{formatAge(run.createdAt)}</span>
+              <span className="text-xs text-muted-foreground w-8 text-right">{formatAge(run.createdAt)}</span>
             </div>
           </div>
         ))}
