@@ -11,6 +11,19 @@ export function aggregatePhase(runs: { status: { phase: AgentRunPhase } }[]): Ag
   return "pending";
 }
 
+/** Format an ISO timestamp as a future-relative string (e.g., "in 5m", "in 2h", "overdue"). */
+export function formatRelative(iso: string): string {
+  if (!iso) return "";
+  const secs = Math.floor((new Date(iso).getTime() - Date.now()) / 1000);
+  if (secs < 0) return "overdue";
+  if (secs < 60) return `in ${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `in ${hrs}h`;
+  return `in ${Math.floor(hrs / 24)}d`;
+}
+
 /** Format an ISO timestamp as a relative age string (e.g., "5m", "2h", "3d"). */
 export function formatAge(iso: string): string {
   if (!iso) return "";

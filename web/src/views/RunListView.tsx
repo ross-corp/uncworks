@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import type { AgentRun, AgentRunPhase } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
@@ -12,17 +13,53 @@ type ViewMode = "features" | "all";
 type FilterField = "name" | "state" | "stage" | "model" | null;
 
 const FILTER_KEYS: Record<string, { field: FilterField; label: string; placeholder: string }> = {
-  "/": { field: "name", label: "/", placeholder: "filter by name..." },
-  "?": { field: "state", label: "?", placeholder: "filter by state (running, failed, succeeded)..." },
-  "'": { field: "stage", label: "'", placeholder: "filter by stage (plan, execute, verify)..." },
-  '"': { field: "model", label: '"', placeholder: "filter by model..." },
+  "/": { field: "name", label: "Name", placeholder: "filter by name..." },
+  "?": { field: "state", label: "State", placeholder: "filter by state (running, failed, succeeded)..." },
+  "'": { field: "stage", label: "Stage", placeholder: "filter by stage (plan, execute, verify)..." },
+  '"': { field: "model", label: "Model", placeholder: "filter by model..." },
 };
+
+const FIELD_OPTIONS: { field: FilterField; label: string }[] = [
+  { field: "name", label: "Name" },
+  { field: "state", label: "State" },
+  { field: "stage", label: "Stage" },
+  { field: "model", label: "Model" },
+];
 
 interface FeatureGroup {
   feature: string;
   runs: AgentRun[];
   phase: AgentRunPhase;
   prUrl?: string;
+}
+
+function ExternalStatus({ run }: { run: AgentRun }) {
+  if (!run.status.prUrl && !run.status.lastCIStatus) return null;
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      {run.status.prUrl && (
+        <a
+          href={run.status.prUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-medium bg-blue-500/15 text-blue-500 hover:bg-blue-500/25 px-1.5 py-0.5 rounded-md transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          PR
+        </a>
+      )}
+      {run.status.lastCIStatus === "success" && (
+        <span className="text-xs font-medium bg-green-500/15 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded-md">
+          CI ✓
+        </span>
+      )}
+      {run.status.lastCIStatus === "failure" && (
+        <span className="text-xs font-medium bg-red-500/15 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-md">
+          CI ✗
+        </span>
+      )}
+    </div>
+  );
 }
 
 function FeatureHeader({
@@ -41,7 +78,7 @@ function FeatureHeader({
       className="flex items-center gap-3 border-b bg-muted/20 px-4 py-2 text-sm cursor-pointer select-none hover:bg-muted/40 transition-colors"
       onClick={onToggle}
     >
-      <span className="text-xs text-muted-foreground transition-transform" style={{ transform: expanded ? "rotate(90deg)" : "none" }}>&#9654;</span>
+      <span className="text-sm text-foreground transition-transform" style={{ transform: expanded ? "rotate(90deg)" : "none" }}>&#9654;</span>
       <span
         className="font-semibold truncate hover:underline"
         onClick={(e) => { e.stopPropagation(); onNavigate(); }}
@@ -89,7 +126,7 @@ export default function RunListView() {
       const result = await client.listAgentRuns();
       setRuns(result.map(mapRun));
     } catch {
-      // silent
+      toast.error("Failed to load runs");
     } finally {
       setLoading(false);
     }
@@ -120,6 +157,7 @@ export default function RunListView() {
       if (statusFilter === "running" && r.status.phase !== "running" && r.status.phase !== "waiting_for_input" && r.status.phase !== "pending") return false;
       if (statusFilter === "failed" && r.status.phase !== "failed") return false;
       if (statusFilter === "succeeded" && r.status.phase !== "succeeded") return false;
+      if (statusFilter === "waiting" && r.status.phase !== "waiting_for_input") return false;
       if (!filter) return true;
       const q = filter.toLowerCase();
       switch (filterField) {
@@ -184,15 +222,30 @@ export default function RunListView() {
 
   async function archiveSelected() {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Archive ${selectedIds.size} run(s)?`)) return;
-    await apiFetch("/api/v1/runs/bulk-archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runIds: Array.from(selectedIds), archived: true }),
-    });
-    setSelectedIds(new Set());
-    setSelectMode(false);
-    fetchRuns();
+    const count = selectedIds.size;
+    toast.loading(`Archiving ${count} runs...`, { id: "archive" });
+    try {
+      await apiFetch("/api/v1/runs/bulk-archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runIds: Array.from(selectedIds), archived: true }),
+      });
+      toast.success(`${count} runs archived`, { id: "archive" });
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      fetchRuns();
+    } catch {
+      toast.error("Archive failed — try again", { id: "archive" });
+    }
+  }
+
+  const hasActiveFilter = statusFilter !== "all" || activeProject !== "" || filter !== "";
+
+  function clearAllFilters() {
+    setStatusFilter("all");
+    setActiveProject("");
+    setFilter("");
+    setFilterField(null);
   }
 
   useEffect(() => {
@@ -266,11 +319,9 @@ export default function RunListView() {
           <span className="truncate block text-sm">{run.spec.displayName || run.name}</span>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          <span className="text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
-            {run.spec.modelTier || "default"}
-          </span>
+        <ExternalStatus run={run} />
 
+        <div className="flex items-center gap-2.5 shrink-0">
           {run.status.totalCost && (
             <span className="text-xs text-muted-foreground">{run.status.totalCost}</span>
           )}
@@ -282,24 +333,9 @@ export default function RunListView() {
             </span>
           )}
 
-          {run.status.prUrl && (
-            <a
-              href={run.status.prUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-500 hover:text-blue-400 font-medium"
-              onClick={(e) => e.stopPropagation()}
-            >
-              PR
-            </a>
-          )}
-
-          {run.status.lastCIStatus === "success" && (
-            <span className="text-xs text-green-500">CI ok</span>
-          )}
-          {run.status.lastCIStatus === "failure" && (
-            <span className="text-xs text-red-500">CI fail</span>
-          )}
+          <span className="text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
+            {run.spec.modelTier || "default"}
+          </span>
 
           <span className="text-xs text-muted-foreground w-10 text-right">{formatAge(run.createdAt)}</span>
         </div>
@@ -331,15 +367,6 @@ export default function RunListView() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <Button size="sm" variant="ghost" className="h-7 text-xs px-2.5" onClick={() => navigate("/projects")}>
-              Projects
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs px-2.5" onClick={() => navigate("/chains")}>
-              Chains
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs px-2.5" onClick={() => navigate("/schedules")}>
-              Schedules
-            </Button>
             <Button size="sm" variant="default" className="h-7 text-xs px-3" onClick={() => navigate("/new")}>
               + New Run
             </Button>
@@ -349,7 +376,7 @@ export default function RunListView() {
         {/* Filter row */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
-            {(["all", "running", "failed", "succeeded"] as const).map((s) => (
+            {(["all", "running", "waiting", "failed", "succeeded"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
@@ -363,6 +390,14 @@ export default function RunListView() {
               </button>
             ))}
           </div>
+          {hasActiveFilter && (
+            <button
+              onClick={clearAllFilters}
+              className="text-xs px-2 py-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              clear &times;
+            </button>
+          )}
           <div className="flex-1" />
           <button
             onClick={() => setShowArchived(!showArchived)}
@@ -376,6 +411,43 @@ export default function RunListView() {
           >
             {selectMode ? "done" : "select"}
           </button>
+        </div>
+
+        {/* Persistent filter bar */}
+        <div className="flex items-center gap-2">
+          <select
+            value={filterField ?? ""}
+            onChange={(e) => setFilterField((e.target.value as FilterField) || null)}
+            className="text-xs bg-muted/50 border border-border/50 rounded-md px-2 py-1 outline-none cursor-pointer"
+          >
+            <option value="">Field...</option>
+            {FIELD_OPTIONS.map(({ field, label }) => (
+              <option key={field} value={field ?? ""}>{label}</option>
+            ))}
+          </select>
+          <div className="relative flex-1 flex items-center">
+            {filterField && (
+              <span className="absolute left-2 text-xs font-medium text-blue-500 pointer-events-none">
+                {activeFilterDef?.label}:
+              </span>
+            )}
+            <input
+              className={`w-full bg-muted/30 border border-border/50 rounded-md text-sm outline-none px-2 py-1 focus:border-border transition-colors ${filterField ? "pl-14" : ""}`}
+              placeholder={filterField ? (activeFilterDef?.placeholder ?? "filter...") : "filter runs..."}
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onFocus={() => { if (!filterField) setFilterField("name"); }}
+              onKeyDown={(e) => { if (e.key === "Escape") { setFilter(""); setFilterField(null); (e.target as HTMLInputElement).blur(); } }}
+            />
+            {filter && (
+              <button
+                className="absolute right-2 text-muted-foreground hover:text-foreground text-xs"
+                onClick={() => { setFilter(""); setFilterField(null); }}
+              >
+                &times;
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -398,21 +470,6 @@ export default function RunListView() {
               {p}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Filter bar */}
-      {filterField !== null && (
-        <div className="border-b px-4 py-1.5 flex items-center gap-2 bg-muted/30">
-          <span className="text-xs font-mono text-muted-foreground">{activeFilterDef?.label}</span>
-          <input
-            autoFocus
-            className="flex-1 bg-transparent text-sm outline-none"
-            placeholder={activeFilterDef?.placeholder}
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") { setFilter(""); setFilterField(null); } }}
-          />
         </div>
       )}
 
@@ -470,4 +527,3 @@ export default function RunListView() {
     </div>
   );
 }
-

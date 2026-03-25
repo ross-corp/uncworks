@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import cronstrue from "cronstrue";
 import { apiFetch } from "../hooks/apiFetch";
-import { formatAge } from "../lib/format";
+import { formatAge, formatRelative } from "../lib/format";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 
@@ -75,8 +76,16 @@ export default function ScheduleListView() {
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-medium">{s.spec.displayName || s.metadata.name}</span>
-                <span className="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
+                <Link
+                  to={`/schedules/${s.metadata.name}`}
+                  className="font-medium hover:underline"
+                >
+                  {s.spec.displayName || s.metadata.name}
+                </Link>
+                <span
+                  className="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded cursor-help"
+                  title={(() => { try { return cronstrue.toString(s.spec.cron); } catch { return s.spec.cron; } })()}
+                >
                   {s.spec.cron}
                 </span>
                 {s.spec.suspend && <Badge variant="secondary" className="text-[10px]">suspended</Badge>}
@@ -84,7 +93,7 @@ export default function ScheduleListView() {
               <div className="text-xs text-muted-foreground mt-0.5">
                 {s.spec.chainRef ? `Chain: ${s.spec.chainRef}` : `Template: ${s.spec.templateRef}`}
                 {s.status.lastResult && ` -- last: ${s.status.lastResult}`}
-                {s.status.nextScheduleTime && ` -- next: ${new Date(s.status.nextScheduleTime).toLocaleString()}`}
+                {s.status.nextScheduleTime && ` -- next: ${formatRelative(s.status.nextScheduleTime)}`}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">

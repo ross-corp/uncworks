@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import MarkdownEditor from "../components/MarkdownEditor";
+import RunStatusBadge from "../components/RunStatusBadge";
+import { formatAge } from "../lib/format";
+import type { AgentRun } from "../types/agent-run";
 
 interface ProjectDetail {
   name: string;
@@ -29,7 +34,7 @@ export default function ProjectDetailView() {
   const [editedContent, setEditedContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [improving, setImproving] = useState(false);
-  const [tab, setTab] = useState<"specs" | "settings">("specs");
+  const [tab, setTab] = useState<"specs" | "runs" | "settings">("specs");
 
   // Settings editing state
   const [editRepos, setEditRepos] = useState<{ url: string; branch: string }[]>([]);
@@ -43,6 +48,9 @@ export default function ProjectDetailView() {
   const [newSpecName, setNewSpecName] = useState("");
   const [creatingSpec, setCreatingSpec] = useState(false);
 
+  // Runs tab
+  const [runs, setRuns] = useState<AgentRun[]>([]);
+
   const fetchProject = useCallback(async () => {
     if (!name) return;
     try {
@@ -55,7 +63,9 @@ export default function ProjectDetailView() {
         setEditDescription(data.description || "");
         setSettingsDirty(false);
       }
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(`Failed to load project: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }, [name]);
 
   const fetchFiles = useCallback(async () => {
@@ -63,13 +73,34 @@ export default function ProjectDetailView() {
     try {
       const resp = await apiFetch(`/api/v1/projects/${name}/files`);
       if (resp.ok) setFiles(await resp.json());
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(`Failed to load files: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [name]);
+
+  const fetchRuns = useCallback(async () => {
+    try {
+      const resp = await apiFetch("/api/v1/runs");
+      if (resp.ok) {
+        const data: AgentRun[] = await resp.json();
+        setRuns(data.filter((r) => r.spec.project === name));
+      }
+    } catch (e) {
+      toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }, [name]);
 
   useEffect(() => {
     fetchProject();
     fetchFiles();
   }, [fetchProject, fetchFiles]);
+
+  useEffect(() => {
+    if (tab !== "runs") return;
+    fetchRuns();
+    const i = setInterval(fetchRuns, 10000);
+    return () => clearInterval(i);
+  }, [tab, fetchRuns]);
 
   async function loadFile(path: string) {
     if (!name) return;
@@ -81,7 +112,9 @@ export default function ProjectDetailView() {
         setFileContent(data.content);
         setEditedContent(data.content);
       }
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(`Failed to load file: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   async function saveFile() {
@@ -94,7 +127,9 @@ export default function ProjectDetailView() {
         body: JSON.stringify({ content: editedContent, commitMessage: `update ${selectedFile}` }),
       });
       setFileContent(editedContent);
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(`Failed to save file: ${e instanceof Error ? e.message : String(e)}`);
+    }
     setSaving(false);
   }
 
@@ -112,7 +147,9 @@ export default function ProjectDetailView() {
         const data = await resp.json();
         if (data.improved) setEditedContent(data.improved);
       }
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(`Improve with AI failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
     setImproving(false);
   }
 
@@ -134,7 +171,9 @@ export default function ProjectDetailView() {
       setNewSpecName("");
       await fetchFiles();
       loadFile(path);
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(`Failed to create spec: ${e instanceof Error ? e.message : String(e)}`);
+    }
     setCreatingSpec(false);
   }
 
@@ -155,7 +194,9 @@ export default function ProjectDetailView() {
         setProject(await resp.json());
         setSettingsDirty(false);
       }
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error(`Failed to save settings: ${e instanceof Error ? e.message : String(e)}`);
+    }
     setSavingSettings(false);
   }
 
@@ -187,20 +228,24 @@ export default function ProjectDetailView() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-3">
-          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => navigate("/projects")}>
-            &larr; Projects
-          </Button>
-          <span className="font-semibold">{project.displayName || project.name}</span>
-          {project.configRepoReady ? (
-            <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-500">ready</Badge>
-          ) : (
-            <Badge variant="secondary" className="text-[10px]">provisioning</Badge>
-          )}
-          <span className="text-xs text-muted-foreground">{project.runCount} runs</span>
-          {project.totalCost && (
-            <span className="text-xs text-muted-foreground">{project.totalCost}</span>
-          )}
+        <div className="flex flex-col gap-0.5">
+          <div className="text-xs text-muted-foreground">
+            <Link to="/projects" className="hover:text-foreground transition-colors">Projects</Link>
+            {" / "}
+            <span>{project.displayName || project.name}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold">{project.displayName || project.name}</span>
+            {project.configRepoReady ? (
+              <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-500">ready</Badge>
+            ) : (
+              <Badge variant="secondary" className="text-[10px]">provisioning</Badge>
+            )}
+            <span className="text-xs text-muted-foreground">{project.runCount} runs</span>
+            {project.totalCost && (
+              <span className="text-xs text-muted-foreground">{project.totalCost}</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => navigate(`/new?project=${name}`)}>
@@ -209,142 +254,168 @@ export default function ProjectDetailView() {
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 border-b px-4 py-1">
-        <Badge variant={tab === "specs" ? "default" : "outline"} className="cursor-pointer text-[11px]" onClick={() => setTab("specs")}>
-          Specs
-        </Badge>
-        <Badge variant={tab === "settings" ? "default" : "outline"} className="cursor-pointer text-[11px]" onClick={() => setTab("settings")}>
-          Settings
-        </Badge>
-      </div>
+      {/* Tabs */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="flex flex-col flex-1 min-h-0 gap-0">
+        <TabsList className="rounded-none border-b shrink-0">
+          <TabsTrigger value="specs">Specs</TabsTrigger>
+          <TabsTrigger value="runs">Runs</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
 
-      {/* Content */}
-      <div className="flex-1 min-h-0 flex">
-        {tab === "specs" && (
-          <>
-            {/* Spec file tree */}
-            <div className="w-56 border-r overflow-y-auto p-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Specs</span>
-                <button
-                  onClick={() => setShowNewSpec(!showNewSpec)}
-                  className="text-[10px] text-muted-foreground hover:text-foreground"
-                >
-                  + new
-                </button>
-              </div>
+        {/* Specs tab */}
+        <TabsContent value="specs" className="flex flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
+          {/* Spec file tree */}
+          <div className="w-56 border-r overflow-y-auto p-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Specs</span>
+              <button
+                onClick={() => setShowNewSpec(!showNewSpec)}
+                className="text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                + new
+              </button>
+            </div>
 
-              {showNewSpec && (
-                <div className="mb-2 space-y-1">
-                  <Input
-                    className="h-6 text-xs"
-                    placeholder="spec-name"
-                    value={newSpecName}
-                    onChange={(e) => setNewSpecName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") createSpec(); if (e.key === "Escape") setShowNewSpec(false); }}
-                    autoFocus
-                  />
-                  <div className="flex gap-1">
-                    <Button size="sm" className="h-5 text-[10px] flex-1" onClick={createSpec} disabled={creatingSpec || !newSpecName.trim()}>
-                      {creatingSpec ? "..." : "Create"}
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => setShowNewSpec(false)}>
-                      Cancel
-                    </Button>
-                  </div>
+            {showNewSpec && (
+              <div className="mb-2 space-y-1">
+                <Input
+                  className="h-6 text-xs"
+                  placeholder="spec-name"
+                  value={newSpecName}
+                  onChange={(e) => setNewSpecName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") createSpec(); if (e.key === "Escape") setShowNewSpec(false); }}
+                  autoFocus
+                />
+                <div className="flex gap-1">
+                  <Button size="sm" className="h-5 text-[10px] flex-1" onClick={createSpec} disabled={creatingSpec || !newSpecName.trim()}>
+                    {creatingSpec ? "..." : "Create"}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => setShowNewSpec(false)}>
+                    Cancel
+                  </Button>
                 </div>
-              )}
+              </div>
+            )}
 
-              {specFiles.length === 0 && !showNewSpec && (
-                <div className="text-xs text-muted-foreground p-2">No specs yet</div>
-              )}
-              {specFiles.map((f) => {
-                const label = f.replace("openspec/specs/", "").replace("/spec.md", "");
-                return (
-                  <div
-                    key={f}
-                    className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors ${
-                      selectedFile === f ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-                    }`}
-                    onClick={() => loadFile(f)}
-                  >
-                    {label || f}
-                  </div>
-                );
-              })}
-
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-4 mb-2">Other files</div>
-              {files.filter((f) => !f.startsWith("openspec/specs/")).map((f) => (
+            {specFiles.length === 0 && !showNewSpec && (
+              <div className="text-xs text-muted-foreground p-2">No specs yet</div>
+            )}
+            {specFiles.map((f) => {
+              const label = f.replace("openspec/specs/", "").replace("/spec.md", "");
+              return (
                 <div
                   key={f}
                   className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors ${
-                    selectedFile === f ? "bg-accent text-accent-foreground" : "hover:bg-muted/50 text-muted-foreground"
+                    selectedFile === f ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
                   }`}
                   onClick={() => loadFile(f)}
                 >
-                  {f}
+                  {label || f}
                 </div>
+              );
+            })}
+
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-4 mb-2">Other files</div>
+            {files.filter((f) => !f.startsWith("openspec/specs/")).map((f) => (
+              <div
+                key={f}
+                className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors ${
+                  selectedFile === f ? "bg-accent text-accent-foreground" : "hover:bg-muted/50 text-muted-foreground"
+                }`}
+                onClick={() => loadFile(f)}
+              >
+                {f}
+              </div>
+            ))}
+          </div>
+
+          {/* File editor */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {selectedFile ? (
+              <>
+                <div className="flex items-center justify-between border-b px-3 py-1">
+                  <span className="text-xs text-muted-foreground font-mono">{selectedFile}</span>
+                  <div className="flex items-center gap-2">
+                    {hasChanges && (
+                      <Badge variant="secondary" className="text-[10px]">modified</Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[11px]"
+                      disabled={!editedContent.trim() || improving}
+                      onClick={improveWithAI}
+                    >
+                      {improving ? "Improving..." : "Improve with AI"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[11px]"
+                      disabled={!hasChanges || saving}
+                      onClick={saveFile}
+                    >
+                      {saving ? "Saving..." : "Save"}
+                    </Button>
+                    {selectedFile.endsWith("spec.md") && (
+                      <Button
+                        size="sm"
+                        className="h-6 text-[11px]"
+                        onClick={() => {
+                          const specName = selectedFile.replace("openspec/specs/", "").replace("/spec.md", "");
+                          navigate(`/new?project=${name}&spec=${specName}`);
+                        }}
+                      >
+                        Run this spec
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <MarkdownEditor value={editedContent} onChange={setEditedContent} minHeight="100%" />
+                </div>
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                Select a file to view or create a new spec
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Runs tab */}
+        <TabsContent value="runs" className="flex flex-col flex-1 min-h-0 overflow-y-auto mt-0">
+          {runs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+              <span className="text-sm">No runs yet</span>
+              <Button size="sm" variant="outline" asChild>
+                <Link to={`/new?project=${name}`}>+ New Run</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {runs.map((run) => (
+                <Link
+                  key={run.id}
+                  to={`/run/${run.id}`}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors"
+                >
+                  <RunStatusBadge phase={run.status.phase} />
+                  <span className="flex-1 min-w-0 text-sm truncate">
+                    {run.spec.displayName || run.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatAge(run.createdAt)}
+                  </span>
+                </Link>
               ))}
             </div>
+          )}
+        </TabsContent>
 
-            {/* File editor */}
-            <div className="flex-1 flex flex-col min-w-0">
-              {selectedFile ? (
-                <>
-                  <div className="flex items-center justify-between border-b px-3 py-1">
-                    <span className="text-xs text-muted-foreground font-mono">{selectedFile}</span>
-                    <div className="flex items-center gap-2">
-                      {hasChanges && (
-                        <Badge variant="secondary" className="text-[10px]">modified</Badge>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 text-[11px]"
-                        disabled={!editedContent.trim() || improving}
-                        onClick={improveWithAI}
-                      >
-                        {improving ? "Improving..." : "Improve with AI"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 text-[11px]"
-                        disabled={!hasChanges || saving}
-                        onClick={saveFile}
-                      >
-                        {saving ? "Saving..." : "Save"}
-                      </Button>
-                      {selectedFile.endsWith("spec.md") && (
-                        <Button
-                          size="sm"
-                          className="h-6 text-[11px]"
-                          onClick={() => {
-                            const specName = selectedFile.replace("openspec/specs/", "").replace("/spec.md", "");
-                            navigate(`/new?project=${name}&spec=${specName}`);
-                          }}
-                        >
-                          Run this spec
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex-1 min-h-0">
-                    <MarkdownEditor value={editedContent} onChange={setEditedContent} minHeight="100%" />
-                  </div>
-                </>
-              ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-                  Select a file to view or create a new spec
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {tab === "settings" && (
-          <div className="flex-1 p-4 space-y-4 max-w-2xl overflow-y-auto">
+        {/* Settings tab */}
+        <TabsContent value="settings" className="flex-1 overflow-y-auto mt-0">
+          <div className="p-4 space-y-4 max-w-2xl">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">Display Name</label>
               <Input
@@ -413,8 +484,8 @@ export default function ProjectDetailView() {
               </div>
             )}
           </div>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

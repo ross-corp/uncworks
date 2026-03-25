@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { apiFetch } from "../hooks/apiFetch";
-import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 
 interface StepStatus {
@@ -82,10 +81,13 @@ export default function ChainRunDetailView() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-3">
-          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => navigate("/")}>
-            Runs
-          </Button>
+        <div className="flex flex-col gap-0.5">
+          <div className="text-xs text-muted-foreground">
+            <Link to="/chains" className="hover:text-foreground transition-colors">Chains</Link>
+            {" / "}
+            <span>{chainRun.metadata.name}</span>
+          </div>
+          <div className="flex items-center gap-3">
           <span className="font-semibold">Chain: {chainRun.spec.chainRef}</span>
           {chainRun.status?.phase && (
             <Badge variant={chainRun.status.phase === "succeeded" ? "outline" : chainRun.status.phase === "failed" ? "destructive" : "default"}>
@@ -95,6 +97,7 @@ export default function ChainRunDetailView() {
           {chainRun.spec.triggeredBy && (
             <span className="text-xs text-muted-foreground">{chainRun.spec.triggeredBy}</span>
           )}
+          </div>
         </div>
       </div>
 
