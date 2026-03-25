@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { TraceSpan, FileDiff } from "../types/agent-run";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -272,7 +273,7 @@ function DiffViewer({ files }: { files: FileDiff[] }) {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="border border-border rounded mt-1 overflow-x-auto">
-              <pre className="text-[11px] leading-[18px] font-mono">
+              <pre className="text-xs leading-[18px] font-mono">
                 {file.patch.split("\n").map((line, idx) => {
                   let cls = "px-3 ";
                   if (line.startsWith("+") && !line.startsWith("+++"))
@@ -654,7 +655,7 @@ export function SpanDetail({
               Tool Input
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <pre className="mt-1 p-2 bg-background border border-border rounded text-[11px] font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
+              <pre className="mt-1 p-2 bg-background border border-border rounded text-xs font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
                 {(() => { try { return JSON.stringify(JSON.parse(toolInput), null, 2); } catch { return toolInput; } })()}
               </pre>
             </CollapsibleContent>
@@ -669,7 +670,7 @@ export function SpanDetail({
               Response
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="mt-1 p-2 bg-background border border-border rounded text-[11px] text-foreground overflow-y-auto max-h-64 whitespace-pre-wrap">
+              <div className="mt-1 p-2 bg-background border border-border rounded text-xs text-foreground overflow-y-auto max-h-64 whitespace-pre-wrap">
                 {contentText}
               </div>
             </CollapsibleContent>
@@ -688,7 +689,7 @@ export function SpanDetail({
                 All Metadata
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <pre className="mt-1 p-2 bg-background border border-border rounded text-[11px] font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto">
+                <pre className="mt-1 p-2 bg-background border border-border rounded text-xs font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto">
                   {JSON.stringify(
                     Object.fromEntries(
                       Object.entries(meta).filter(
@@ -1037,7 +1038,7 @@ export default function TraceTimeline({
             </span>
           )}
           {agentType && (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xs">
               {agentType}
             </Badge>
           )}
@@ -1046,18 +1047,12 @@ export default function TraceTimeline({
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={expandAll}
-            className="text-[11px] px-2 py-0.5 rounded border border-border bg-background hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <Button size="sm" variant="outline" onClick={expandAll}>
             Expand All
-          </button>
-          <button
-            onClick={collapseAll}
-            className="text-[11px] px-2 py-0.5 rounded border border-border bg-background hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-          >
+          </Button>
+          <Button size="sm" variant="outline" onClick={collapseAll}>
             Collapse All
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1070,7 +1065,7 @@ export default function TraceTimeline({
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Search spans..."
-            className="h-6 pl-6 pr-6 text-[11px] rounded border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring w-40"
+            className="h-6 pl-6 pr-6 text-xs rounded border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring w-40"
           />
           {filterText && (
             <button
@@ -1082,21 +1077,23 @@ export default function TraceTimeline({
           )}
         </div>
         {(["Failed", "Bash", "Write", "LLM"] as const).map((chip) => (
-          <button
+          <Button
             key={chip}
+            size="sm"
+            variant={activeChips.has(chip) ? "default" : "outline"}
             onClick={() => toggleChip(chip)}
             className={cn(
-              "text-[11px] px-2 py-0.5 rounded-full border transition-colors",
+              "rounded-full",
               activeChips.has(chip)
-                ? "border-primary bg-primary/20 text-primary"
-                : "border-border bg-background text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                ? "bg-primary/20 text-primary border-primary hover:bg-primary/30"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             {chip}
-          </button>
+          </Button>
         ))}
         {matchingSpanIds !== null && (
-          <span className="text-[10px] text-muted-foreground ml-auto">
+          <span className="text-xs text-muted-foreground ml-auto">
             {filteredFlat.length} match{filteredFlat.length !== 1 ? "es" : ""}
           </span>
         )}
@@ -1109,7 +1106,7 @@ export default function TraceTimeline({
           {/* Column headers: label column + time axis */}
           <div className="flex border-b border-border bg-muted/20 flex-shrink-0">
             <div
-              className="flex-shrink-0 px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider border-r border-border"
+              className="flex-shrink-0 px-3 py-1 text-xs text-muted-foreground uppercase tracking-wider border-r border-border"
               style={{ width: LABEL_WIDTH }}
             >
               Trace
@@ -1118,7 +1115,7 @@ export default function TraceTimeline({
               {timeTicks.map((tick, i) => (
                 <span
                   key={i}
-                  className="absolute text-[10px] text-muted-foreground font-mono -translate-x-1/2"
+                  className="absolute text-xs text-muted-foreground font-mono -translate-x-1/2"
                   style={{ left: `${tick.pct}%` }}
                 >
                   {tick.label}
@@ -1259,7 +1256,7 @@ export default function TraceTimeline({
                           {/* Span name */}
                           <span
                             className={cn(
-                              "text-[11px] font-mono truncate group-hover:underline",
+                              "text-xs font-mono truncate group-hover:underline",
                               isStageSpan ? "font-bold text-foreground" : textClass
                             )}
                           >
@@ -1319,7 +1316,7 @@ export default function TraceTimeline({
                               />
                               {/* Stats label — after bar, or inside if near right edge */}
                               <span
-                                className="absolute text-[10px] font-mono text-muted-foreground whitespace-nowrap"
+                                className="absolute text-xs font-mono text-muted-foreground whitespace-nowrap"
                                 style={barLeftPct + barWidthPct > 75
                                   ? { left: `calc(${barLeftPct}% + 8px)` }
                                   : { left: `calc(${Math.min(barLeftPct + barWidthPct, 100)}% + 4px)` }
@@ -1367,7 +1364,7 @@ export default function TraceTimeline({
 
                               {/* Duration label — positioned after the bar end to avoid overlap */}
                               <span
-                                className="absolute text-[10px] font-mono text-muted-foreground whitespace-nowrap"
+                                className="absolute text-xs font-mono text-muted-foreground whitespace-nowrap"
                                 style={{
                                   left: `calc(${Math.min(barLeftPct + barWidthPct, 100)}% + 4px)`,
                                 }}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { toast } from "sonner";
 import cronstrue from "cronstrue";
 import { apiFetch } from "../hooks/apiFetch";
 import { formatAge, formatRelative } from "../lib/format";
@@ -27,7 +28,7 @@ export default function ScheduleListView() {
   const [schedules, setSchedules] = useState<ScheduleSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetch = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       const resp = await apiFetch("/api/v1/schedules");
       if (resp.ok) setSchedules(await resp.json());
@@ -35,28 +36,34 @@ export default function ScheduleListView() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetch(); const i = setInterval(fetch, 10000); return () => clearInterval(i); }, [fetch]);
+  useEffect(() => { fetchData(); const i = setInterval(fetchData, 10000); return () => clearInterval(i); }, [fetchData]);
 
   async function toggleSuspend(name: string, suspended: boolean) {
     await apiFetch(`/api/v1/schedules/${name}/${suspended ? "resume" : "suspend"}`, { method: "POST" });
-    fetch();
+    fetchData();
+  }
+
+  async function deleteSchedule(name: string) {
+    try {
+      const resp = await apiFetch(`/api/v1/schedules/${name}`, { method: "DELETE" });
+      if (resp.ok) {
+        toast.success("Schedule deleted");
+        fetchData();
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to delete schedule");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete schedule");
+    }
   }
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-3">
-          <span className="font-semibold">Schedules</span>
-          <span className="text-muted-foreground text-xs">({schedules.length})</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => navigate("/")}>
-            Runs
-          </Button>
-          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => navigate("/chains")}>
-            Chains
-          </Button>
-        </div>
+      <div className="h-12 border-b flex items-center px-4 gap-2">
+        <span className="font-semibold flex-1">Schedules</span>
+        <Badge variant="secondary" className="text-xs">{schedules.length}</Badge>
+        <Button size="sm" onClick={() => navigate("/schedules/new")}>+ new schedule</Button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -72,7 +79,7 @@ export default function ScheduleListView() {
         {schedules.map((s) => (
           <div
             key={s.metadata.name}
-            className="flex items-center gap-3 px-4 py-3 border-b border-border/50 hover:bg-muted/30 transition-colors"
+            className="flex items-center gap-3 px-4 py-2.5 border-b border-border/40 hover:bg-muted/30 transition-colors"
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -88,7 +95,7 @@ export default function ScheduleListView() {
                 >
                   {s.spec.cron}
                 </span>
-                {s.spec.suspend && <Badge variant="secondary" className="text-[10px]">suspended</Badge>}
+                {s.spec.suspend && <Badge variant="secondary" className="text-xs">suspended</Badge>}
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 {s.spec.chainRef ? `Chain: ${s.spec.chainRef}` : `Template: ${s.spec.templateRef}`}
@@ -97,13 +104,22 @@ export default function ScheduleListView() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => toggleSuspend(s.metadata.name, s.spec.suspend)}
-                className="text-[11px] px-2 py-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
               >
                 {s.spec.suspend ? "resume" : "suspend"}
-              </button>
-              <span className="text-[11px] text-muted-foreground">{formatAge(s.metadata.creationTimestamp)}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => deleteSchedule(s.metadata.name)}
+              >
+                delete
+              </Button>
+              <span className="text-xs text-muted-foreground">{formatAge(s.metadata.creationTimestamp)}</span>
             </div>
           </div>
         ))}

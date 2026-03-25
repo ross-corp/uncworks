@@ -133,10 +133,10 @@ export default function ChainRunDetailView() {
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium text-sm">{step.name}</span>
-                <span className="text-[10px] uppercase tracking-wider">{step.phase}</span>
+                <span className="text-xs uppercase tracking-wider">{step.phase}</span>
               </div>
               {step.runId && (
-                <span className="text-[10px] text-muted-foreground font-mono">{step.runId}</span>
+                <span className="text-xs text-muted-foreground font-mono">{step.runId}</span>
               )}
               {step.message && step.message !== "completed" && step.message !== "started" && (
                 <div className="text-xs text-muted-foreground mt-1 truncate">{step.message}</div>
@@ -151,7 +151,7 @@ export default function ChainRunDetailView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2">
+      <div className="h-12 border-b flex items-center px-4 gap-2">
         <div className="flex flex-col gap-0.5">
           <div className="text-xs text-muted-foreground">
             <Link to="/chains" className="hover:text-foreground transition-colors">Chains</Link>
@@ -225,7 +225,7 @@ export default function ChainRunDetailView() {
                     <span className="w-32 text-sm font-medium truncate shrink-0 group-hover:text-primary transition-colors">
                       {step.name}
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-semibold shrink-0 ${badgeClass}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs uppercase font-semibold shrink-0 ${badgeClass}`}>
                       {step.phase}
                     </span>
                     {step.startedAt && (

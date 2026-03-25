@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
-import { useToast } from "../components/Toast";
+import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
@@ -33,7 +33,6 @@ interface ProjectOption {
 export default function NewRunView() {
   const client = useClient();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const [searchParams] = useSearchParams();
   const [prompt, setPrompt] = useState("");
@@ -79,7 +78,7 @@ export default function NewRunView() {
         const data = await resp.json() as ProjectOption[];
         setAvailableProjects(data);
       }
-    }).catch(() => { toast("Failed to load projects", "error"); });
+    }).catch(() => { toast.error("Failed to load projects"); });
   }, []);
 
   // Fetch existing projects/features for suggestions
@@ -93,7 +92,7 @@ export default function NewRunView() {
       }
       setExistingProjects(Array.from(projects).sort());
       setExistingFeatures(Array.from(features).sort());
-    }).catch(() => { toast("Failed to load run history", "error"); });
+    }).catch(() => { toast.error("Failed to load run history"); });
   }, [client]);
 
   // Clone support
@@ -115,7 +114,7 @@ export default function NewRunView() {
       if (run.spec.project) { setProject(run.spec.project); userEditedProject.current = true; }
       if (run.spec.feature) { setFeature(run.spec.feature); userEditedFeature.current = true; }
       if (run.spec.tags?.length) { setTags(run.spec.tags.join(", ")); userEditedTags.current = true; }
-    }).catch(() => { toast("Failed to load run to clone", "error"); });
+    }).catch(() => { toast.error("Failed to load run to clone"); });
   }, [searchParams, client]);
 
   // Pre-fill from project/spec query params
@@ -162,7 +161,7 @@ export default function NewRunView() {
       if (data.project && !userEditedProject.current) setProject(data.project);
       if (data.feature && !userEditedFeature.current) setFeature(data.feature);
       if (data.tags?.length && !userEditedTags.current) setTags(data.tags.join(", "));
-    } catch { toast("Classification failed", "error"); } finally { setClassifying(false); }
+    } catch { toast.error("Classification failed"); } finally { setClassifying(false); }
   }, [prompt, repos]);
 
   async function improveText(text: string, kind: "prompt" | "spec", setter: (v: string) => void, setLoading: (v: boolean) => void) {
@@ -178,7 +177,7 @@ export default function NewRunView() {
         const data = await resp.json();
         if (data.improved) setter(data.improved);
       }
-    } catch { toast("Couldn't improve prompt — try again", "error"); }
+    } catch { toast.error("Couldn't improve prompt — try again"); }
     setLoading(false);
   }
 
@@ -222,9 +221,9 @@ export default function NewRunView() {
         ...(projectRef.trim() ? { projectRef: projectRef.trim() } : {}),
         ...(specRef.trim() ? { specRef: specRef.trim() } : {}),
       });
-      toast("Run created", "success");
+      toast.success("Run created");
       navigate(`/run/${run.id}`);
-    } catch { toast("Failed to create run", "error"); }
+    } catch { toast.error("Failed to create run"); }
     finally { setSubmitting(false); }
   }
 
@@ -251,8 +250,8 @@ export default function NewRunView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2.5">
-        <div className="flex items-center gap-3">
+      <div className="h-12 border-b flex items-center px-4 gap-2">
+        <div className="flex items-center gap-3 flex-1">
           <span className="font-semibold text-base">New Run</span>
           {/* Prompt / Spec mode toggle — segmented control in header */}
           <div className="flex gap-0.5 bg-muted/50 rounded-md p-0.5">
@@ -308,7 +307,7 @@ export default function NewRunView() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-8 px-2 text-muted-foreground"
+                        className="px-2 text-muted-foreground"
                         onClick={() => { setCustomLabelMode(false); setProject(""); userEditedProject.current = false; }}
                       >
                         ✕
@@ -342,7 +341,7 @@ export default function NewRunView() {
                     </Select>
                   )}
                   {projectRef && !customLabelMode && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Repos, model, and defaults inherited from project (overridable below).
                       {specRef && <span className="ml-1">Spec: <span className="font-mono">{specRef}</span></span>}
                     </p>
@@ -366,7 +365,7 @@ export default function NewRunView() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 text-sm"
+                        className="text-sm"
                         disabled={improvingPrompt}
                         onClick={() => improveText(prompt, "prompt", setPrompt, setImprovingPrompt)}
                       >
@@ -391,7 +390,7 @@ export default function NewRunView() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 text-sm"
+                          className="text-sm"
                           disabled={improvingSpec}
                           onClick={() => improveText(specContent, "spec", setSpecContent, setImprovingSpec)}
                         >
@@ -420,7 +419,7 @@ export default function NewRunView() {
                         placeholder="main"
                       />
                       {repos.length > 1 && (
-                        <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={() => removeRepo(i)}>
+                        <Button size="sm" variant="ghost" className="px-2 text-muted-foreground" onClick={() => removeRepo(i)}>
                           x
                         </Button>
                       )}
@@ -451,7 +450,7 @@ export default function NewRunView() {
                           {MODEL_TIER_OPTIONS.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                               <span>{opt.label}</span>
-                              <span className="text-muted-foreground ml-1 text-[10px]">{opt.description}</span>
+                              <span className="text-muted-foreground ml-1 text-xs">{opt.description}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -474,7 +473,7 @@ export default function NewRunView() {
                           {ORCHESTRATION_MODE_OPTIONS.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                               <span>{opt.label}</span>
-                              <span className="text-muted-foreground ml-1 text-[10px]">{opt.description}</span>
+                              <span className="text-muted-foreground ml-1 text-xs">{opt.description}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -485,7 +484,7 @@ export default function NewRunView() {
                   {/* Implement model (progressive only) */}
                   {orchestrationMode === "spec-driven" && (
                     <div className="flex gap-2 items-center mt-2">
-                      <span className="text-[10px] text-muted-foreground shrink-0">Implement model</span>
+                      <span className="text-xs text-muted-foreground shrink-0">Implement model</span>
                       <Select value={implementModelTier || "__same__"} onValueChange={(v) => setImplementModelTier(v === "__same__" ? "" : v)}>
                         <SelectTrigger size="sm" className="h-8 flex-1">
                           <SelectValue />
@@ -505,13 +504,13 @@ export default function NewRunView() {
                 <section>
                   <div className="flex items-center gap-2 mb-1">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Classification</label>
-                    {classifying && <span className="text-[10px] text-muted-foreground animate-pulse">suggesting...</span>}
+                    {classifying && <span className="text-xs text-muted-foreground animate-pulse">suggesting...</span>}
                   </div>
                   <div className="flex gap-2">
                     {/* Feature dropdown with suggestions */}
                     <div className="flex-1">
                       <Input
-                        className="h-8 text-sm"
+                        className="text-sm"
                         value={feature}
                         onChange={(e) => { setFeature(e.target.value); userEditedFeature.current = true; }}
                         placeholder="Feature"
@@ -543,7 +542,7 @@ export default function NewRunView() {
               {submitting ? "Creating..." : "Run"}
             </Button>
             {canRun && !submitting && (
-              <span className="text-[11px] text-muted-foreground select-none">⌘↵</span>
+              <span className="text-xs text-muted-foreground select-none">⌘↵</span>
             )}
           </div>
         </div>
