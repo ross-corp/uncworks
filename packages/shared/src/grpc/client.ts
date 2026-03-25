@@ -10,6 +10,7 @@ import {
   Backend as PbBackend,
   AgentRunPhase as PbAgentRunPhase,
   AgentRunEventType as PbAgentRunEventType,
+  OrchestrationMode as PbOrchestrationMode,
 } from "../../../../gen/ts/aot/api/v1/api_pb.js";
 import type {
   AgentRun,
@@ -71,6 +72,12 @@ export class AOTClient {
       modelTier: spec.modelTier ?? "",
       specContent: spec.specContent ?? "",
       specSource: spec.specSource ?? "",
+      orchestrationMode: spec.orchestrationMode ? orchModeToProto(spec.orchestrationMode) : undefined,
+      project: spec.project ?? "",
+      feature: spec.feature ?? "",
+      tags: spec.tags ?? [],
+      projectRef: spec.projectRef ?? "",
+      specRef: spec.specRef ?? "",
     });
     const resp = await this.client.createAgentRun({ spec: pbSpec });
     return toAgentRun(resp.agentRun!);
@@ -147,6 +154,17 @@ function backendToProto(b: Backend): PbBackend {
 
 function backendFromProto(b: PbBackend): Backend {
   return backendFromProtoMap[b] ?? "pod";
+}
+
+const orchModeToProtoMap: Record<string, PbOrchestrationMode> = {
+  single: PbOrchestrationMode.SINGLE,
+  auto: PbOrchestrationMode.AUTO,
+  manual: PbOrchestrationMode.MANUAL,
+  "spec-driven": PbOrchestrationMode.SPEC_DRIVEN,
+};
+
+function orchModeToProto(m: string): PbOrchestrationMode {
+  return orchModeToProtoMap[m] ?? PbOrchestrationMode.UNSPECIFIED;
 }
 
 const phaseFromProtoMap: Record<number, AgentRunPhase> = {

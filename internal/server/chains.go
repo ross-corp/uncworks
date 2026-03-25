@@ -105,6 +105,20 @@ func (h *ChainHandler) handleDeleteTemplate(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "template not found"})
 		return
 	}
+	// 409 check: are any Chains referencing this template?
+	var chainList aotv1alpha1.ChainList
+	if err := h.K8sClient.List(r.Context(), &chainList, client.InNamespace(h.Namespace)); err == nil {
+		for _, c := range chainList.Items {
+			for _, step := range c.Spec.Steps {
+				if step.TemplateRef == name {
+					writeJSON(w, http.StatusConflict, errorResponse{
+						Error: fmt.Sprintf("template %q is referenced by chain %q (step %q)", name, c.Name, step.Name),
+					})
+					return
+				}
+			}
+		}
+	}
 	if err := h.K8sClient.Delete(r.Context(), tmpl); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
@@ -172,6 +186,10 @@ func (h *ChainHandler) handleCreateChain(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "name and steps required"})
 		return
 	}
+	if err := aotv1alpha1.ValidateChainDAG(body.Steps); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: fmt.Sprintf("invalid chain DAG: %v", err)})
+		return
+	}
 	chain := &aotv1alpha1.Chain{}
 	chain.Name = body.Name
 	chain.Namespace = h.Namespace
@@ -200,7 +218,22 @@ func (h *ChainHandler) handleDeleteChain(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "chain not found"})
 		return
 	}
-	_ = h.K8sClient.Delete(r.Context(), chain)
+	// 409 check: are any Schedules referencing this chain?
+	var schedList aotv1alpha1.ScheduleList
+	if err := h.K8sClient.List(r.Context(), &schedList, client.InNamespace(h.Namespace)); err == nil {
+		for _, s := range schedList.Items {
+			if s.Spec.ChainRef == name {
+				writeJSON(w, http.StatusConflict, errorResponse{
+					Error: fmt.Sprintf("chain %q is referenced by schedule %q", name, s.Name),
+				})
+				return
+			}
+		}
+	}
+	if err := h.K8sClient.Delete(r.Context(), chain); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": name})
 }
 

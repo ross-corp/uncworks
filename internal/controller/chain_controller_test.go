@@ -297,3 +297,74 @@ func TestChainRun_NotFound_Ignored(t *testing.T) {
 		t.Error("should not requeue for deleted chain run")
 	}
 }
+
+func TestChainRun_FailurePropagation_SkipsDependents(t *testing.T) {
+	rec, k8s, cleanup := setupChainReconciler(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Chain: A -> B -> C  (linear). A fails. B and C should be skipped.
+	chain := &aotv1alpha1.Chain{
+		ObjectMeta: metav1.ObjectMeta{Name: "chain-fail-prop", Namespace: "default"},
+		Spec: aotv1alpha1.ChainSpec{
+			Steps: []aotv1alpha1.ChainStep{
+				{Name: "A", TemplateRef: "t"},
+				{Name: "B", TemplateRef: "t", DependsOn: []string{"A"}},
+				{Name: "C", TemplateRef: "t", DependsOn: []string{"B"}},
+			},
+		},
+	}
+	if err := k8s.Create(ctx, chain); err != nil {
+		t.Fatalf("create chain: %v", err)
+	}
+
+	cr := &aotv1alpha1.ChainRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "cr-fail-prop", Namespace: "default"},
+		Spec:       aotv1alpha1.ChainRunSpec{ChainRef: "chain-fail-prop"},
+	}
+	if err := k8s.Create(ctx, cr); err != nil {
+		t.Fatalf("create chain run: %v", err)
+	}
+
+	// First reconcile: initialize steps
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile init: %v", err)
+	}
+
+	// Manually set step A to failed
+	if err := k8s.Get(ctx, client.ObjectKeyFromObject(cr), cr); err != nil {
+		t.Fatalf("get after init: %v", err)
+	}
+	cr.Status.Steps[0].Phase = "failed"
+	cr.Status.Steps[0].Message = "simulated failure"
+	if err := k8s.Status().Update(ctx, cr); err != nil {
+		t.Fatalf("status update: %v", err)
+	}
+
+	// Reconcile: should propagate failure to B and C, then mark chain failed
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile propagate: %v", err)
+	}
+
+	if err := k8s.Get(ctx, client.ObjectKeyFromObject(cr), cr); err != nil {
+		t.Fatalf("get final: %v", err)
+	}
+
+	stepPhases := map[string]string{}
+	for _, s := range cr.Status.Steps {
+		stepPhases[s.Name] = s.Phase
+	}
+
+	if stepPhases["A"] != "failed" {
+		t.Errorf("A: expected failed, got %q", stepPhases["A"])
+	}
+	if stepPhases["B"] != "skipped" {
+		t.Errorf("B: expected skipped, got %q", stepPhases["B"])
+	}
+	if stepPhases["C"] != "skipped" {
+		t.Errorf("C: expected skipped, got %q", stepPhases["C"])
+	}
+	if cr.Status.Phase != "failed" {
+		t.Errorf("chain: expected failed, got %q", cr.Status.Phase)
+	}
+}

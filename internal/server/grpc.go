@@ -696,6 +696,8 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 		Project:           spec.Project,
 		Feature:           spec.Feature,
 		Tags:              spec.Tags,
+		ProjectRef:        spec.ProjectRef,
+		SpecRef:           spec.SpecRef,
 	}
 	if spec.PipelineConfig != nil {
 		crdSpec.PipelineConfig = &aotv1alpha1.PipelineConfig{
