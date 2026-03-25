@@ -146,7 +146,11 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return r.startWorkflow(ctx, &agentRun)
 	}
 
-	// Existing CRD — sync workflow state to CRD status
+	// Existing CRD — skip sync for already-terminal runs (workflow may be GC'd)
+	if isTerminal(agentRun.Status.Phase) {
+		return ctrl.Result{}, nil
+	}
+
 	logger.V(1).Info("Syncing workflow state", "workflowID", workflowID)
 	return r.syncWorkflowState(ctx, &agentRun, workflowID)
 }
@@ -263,6 +267,10 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 		// Workflow may have completed and been archived — check execution
 		desc, descErr := r.TemporalClient.DescribeWorkflowExecution(ctx, workflowID, "")
 		if descErr != nil {
+			// If already terminal, the workflow was likely GC'd — don't clobber phase/message.
+			if isTerminal(agentRun.Status.Phase) {
+				return ctrl.Result{}, nil
+			}
 			agentRun.Status.Message = fmt.Sprintf("Temporal unreachable: %v", descErr)
 			if updateErr := r.Status().Update(ctx, agentRun); updateErr != nil {
 				logger.Error(updateErr, "Failed to update status with Temporal error")
