@@ -17,7 +17,16 @@ interface ProjectDetail {
   description: string;
   repos: { url: string; branch: string }[];
   devbox?: { packages: string[] };
-  defaults?: Record<string, unknown>;
+  defaults?: {
+    modelTier?: string;
+    manageModelTier?: string;
+    implementModelTier?: string;
+    ttlSeconds?: number;
+    orchestrationMode?: string;
+    autoPush?: boolean;
+    autoPR?: boolean;
+    prBaseBranch?: string;
+  };
   configRepoReady: boolean;
   configRepoURL: string;
   runCount: number;
@@ -43,6 +52,22 @@ export default function ProjectDetailView() {
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // Devbox packages state
+  const [editDevboxPackages, setEditDevboxPackages] = useState<string[]>([]);
+  const [newPackage, setNewPackage] = useState("");
+
+  // Run defaults state
+  const [editDefaults, setEditDefaults] = useState<{
+    modelTier: string;
+    manageModelTier: string;
+    implementModelTier: string;
+    ttlSeconds: string;
+    orchestrationMode: string;
+    autoPush: boolean;
+    autoPR: boolean;
+    prBaseBranch: string;
+  }>({ modelTier: "", manageModelTier: "", implementModelTier: "", ttlSeconds: "", orchestrationMode: "", autoPush: false, autoPR: false, prBaseBranch: "" });
+
   // New spec creation
   const [showNewSpec, setShowNewSpec] = useState(false);
   const [newSpecName, setNewSpecName] = useState("");
@@ -61,6 +86,17 @@ export default function ProjectDetailView() {
         setEditRepos(data.repos || []);
         setEditDisplayName(data.displayName || "");
         setEditDescription(data.description || "");
+        setEditDevboxPackages(data.devbox?.packages || []);
+        setEditDefaults({
+          modelTier: data.defaults?.modelTier || "",
+          manageModelTier: data.defaults?.manageModelTier || "",
+          implementModelTier: data.defaults?.implementModelTier || "",
+          ttlSeconds: data.defaults?.ttlSeconds != null ? String(data.defaults.ttlSeconds) : "",
+          orchestrationMode: data.defaults?.orchestrationMode || "",
+          autoPush: data.defaults?.autoPush || false,
+          autoPR: data.defaults?.autoPR || false,
+          prBaseBranch: data.defaults?.prBaseBranch || "",
+        });
         setSettingsDirty(false);
       }
     } catch (e) {
@@ -188,6 +224,17 @@ export default function ProjectDetailView() {
           displayName: editDisplayName,
           description: editDescription,
           repos: editRepos.filter((r) => r.url.trim()),
+          devbox: editDevboxPackages.length > 0 ? { packages: editDevboxPackages } : undefined,
+          defaults: {
+            modelTier: editDefaults.modelTier || undefined,
+            manageModelTier: editDefaults.manageModelTier || undefined,
+            implementModelTier: editDefaults.implementModelTier || undefined,
+            ttlSeconds: editDefaults.ttlSeconds ? parseInt(editDefaults.ttlSeconds) : undefined,
+            orchestrationMode: editDefaults.orchestrationMode || undefined,
+            autoPush: editDefaults.autoPush || undefined,
+            autoPR: editDefaults.autoPR || undefined,
+            prBaseBranch: editDefaults.prBaseBranch || undefined,
+          },
         }),
       });
       if (resp.ok) {
@@ -213,6 +260,19 @@ export default function ProjectDetailView() {
     setSettingsDirty(true);
   }
 
+  function addPackage() {
+    const pkg = newPackage.trim();
+    if (pkg && !editDevboxPackages.includes(pkg)) {
+      setEditDevboxPackages([...editDevboxPackages, pkg]);
+      setNewPackage("");
+      setSettingsDirty(true);
+    }
+  }
+  function removePackage(pkg: string) {
+    setEditDevboxPackages(editDevboxPackages.filter((p) => p !== pkg));
+    setSettingsDirty(true);
+  }
+
   const specFiles = files.filter((f) => f.startsWith("openspec/specs/"));
   const hasChanges = editedContent !== fileContent;
 
@@ -227,7 +287,7 @@ export default function ProjectDetailView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2">
+      <div className="h-12 border-b flex items-center px-4 gap-2 justify-between">
         <div className="flex flex-col gap-0.5">
           <div className="text-xs text-muted-foreground">
             <Link to="/projects" className="hover:text-foreground transition-colors">Projects</Link>
@@ -237,9 +297,9 @@ export default function ProjectDetailView() {
           <div className="flex items-center gap-3">
             <span className="font-semibold">{project.displayName || project.name}</span>
             {project.configRepoReady ? (
-              <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-500">ready</Badge>
+              <Badge variant="outline" className="text-xs border-green-500/40 text-green-500">ready</Badge>
             ) : (
-              <Badge variant="secondary" className="text-[10px]">provisioning</Badge>
+              <Badge variant="secondary" className="text-xs">provisioning</Badge>
             )}
             <span className="text-xs text-muted-foreground">{project.runCount} runs</span>
             {project.totalCost && (
@@ -248,7 +308,7 @@ export default function ProjectDetailView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => navigate(`/new?project=${name}`)}>
+          <Button size="sm" variant="outline" onClick={() => navigate(`/new?project=${name}`)}>
             + new run
           </Button>
         </div>
@@ -267,10 +327,10 @@ export default function ProjectDetailView() {
           {/* Spec file tree */}
           <div className="w-56 border-r overflow-y-auto p-2">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Specs</span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider">Specs</span>
               <button
                 onClick={() => setShowNewSpec(!showNewSpec)}
-                className="text-[10px] text-muted-foreground hover:text-foreground"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 + new
               </button>
@@ -287,10 +347,10 @@ export default function ProjectDetailView() {
                   autoFocus
                 />
                 <div className="flex gap-1">
-                  <Button size="sm" className="h-5 text-[10px] flex-1" onClick={createSpec} disabled={creatingSpec || !newSpecName.trim()}>
+                  <Button size="sm" className="text-xs flex-1" onClick={createSpec} disabled={creatingSpec || !newSpecName.trim()}>
                     {creatingSpec ? "..." : "Create"}
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => setShowNewSpec(false)}>
+                  <Button size="sm" variant="ghost" className="text-xs" onClick={() => setShowNewSpec(false)}>
                     Cancel
                   </Button>
                 </div>
@@ -315,7 +375,7 @@ export default function ProjectDetailView() {
               );
             })}
 
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-4 mb-2">Other files</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider mt-4 mb-2">Other files</div>
             {files.filter((f) => !f.startsWith("openspec/specs/")).map((f) => (
               <div
                 key={f}
@@ -337,12 +397,11 @@ export default function ProjectDetailView() {
                   <span className="text-xs text-muted-foreground font-mono">{selectedFile}</span>
                   <div className="flex items-center gap-2">
                     {hasChanges && (
-                      <Badge variant="secondary" className="text-[10px]">modified</Badge>
+                      <Badge variant="secondary" className="text-xs">modified</Badge>
                     )}
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-6 text-[11px]"
                       disabled={!editedContent.trim() || improving}
                       onClick={improveWithAI}
                     >
@@ -351,7 +410,6 @@ export default function ProjectDetailView() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-6 text-[11px]"
                       disabled={!hasChanges || saving}
                       onClick={saveFile}
                     >
@@ -360,7 +418,6 @@ export default function ProjectDetailView() {
                     {selectedFile.endsWith("spec.md") && (
                       <Button
                         size="sm"
-                        className="h-6 text-[11px]"
                         onClick={() => {
                           const specName = selectedFile.replace("openspec/specs/", "").replace("/spec.md", "");
                           navigate(`/new?project=${name}&spec=${specName}`);
@@ -456,9 +513,124 @@ export default function ProjectDetailView() {
                   </Button>
                 </div>
               ))}
-              <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={addRepo}>
+              <Button size="sm" variant="ghost" className="text-xs text-muted-foreground" onClick={addRepo}>
                 + add repository
               </Button>
+            </div>
+
+            {/* Devbox Packages */}
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Devbox Packages</label>
+              {editDevboxPackages.map((pkg) => (
+                <div key={pkg} className="text-sm font-mono flex items-center gap-2 mb-1">
+                  <span className="flex-1">{pkg}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removePackage(pkg)}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ))}
+              <div className="flex gap-2 mt-1">
+                <Input
+                  className="h-8 text-sm flex-1"
+                  placeholder="e.g. go@1.22"
+                  value={newPackage}
+                  onChange={(e) => setNewPackage(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") addPackage(); }}
+                />
+                <Button size="sm" onClick={addPackage}>+</Button>
+              </div>
+            </div>
+
+            {/* Run Defaults */}
+            <div className="space-y-3">
+              <label className="text-xs text-muted-foreground block">Run Defaults</label>
+
+              <div className="grid grid-cols-3 gap-2">
+                {(["modelTier", "manageModelTier", "implementModelTier"] as const).map((field) => {
+                  const labels: Record<string, string> = {
+                    modelTier: "Model Tier",
+                    manageModelTier: "Manage Model Tier",
+                    implementModelTier: "Implement Model Tier",
+                  };
+                  return (
+                    <div key={field}>
+                      <label className="text-xs text-muted-foreground block mb-1">{labels[field]}</label>
+                      <select
+                        className="w-full h-8 text-sm border border-input bg-background rounded-md px-2"
+                        value={editDefaults[field]}
+                        onChange={(e) => { setEditDefaults({ ...editDefaults, [field]: e.target.value }); setSettingsDirty(true); }}
+                      >
+                        <option value="">—</option>
+                        <option value="economy">economy</option>
+                        <option value="standard">standard</option>
+                        <option value="performance">performance</option>
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">TTL (seconds)</label>
+                  <Input
+                    className="h-8 text-sm"
+                    type="number"
+                    value={editDefaults.ttlSeconds}
+                    onChange={(e) => { setEditDefaults({ ...editDefaults, ttlSeconds: e.target.value }); setSettingsDirty(true); }}
+                    placeholder="e.g. 3600"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Orchestration Mode</label>
+                  <select
+                    className="w-full h-8 text-sm border border-input bg-background rounded-md px-2"
+                    value={editDefaults.orchestrationMode}
+                    onChange={(e) => { setEditDefaults({ ...editDefaults, orchestrationMode: e.target.value }); setSettingsDirty(true); }}
+                  >
+                    <option value="">—</option>
+                    <option value="spec-driven">spec-driven</option>
+                    <option value="prompt-driven">prompt-driven</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-input accent-primary"
+                    checked={editDefaults.autoPush}
+                    onChange={(e) => { setEditDefaults({ ...editDefaults, autoPush: e.target.checked }); setSettingsDirty(true); }}
+                  />
+                  Auto Push
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-input accent-primary"
+                    checked={editDefaults.autoPR}
+                    onChange={(e) => { setEditDefaults({ ...editDefaults, autoPR: e.target.checked }); setSettingsDirty(true); }}
+                  />
+                  Auto PR
+                </label>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">PR Base Branch</label>
+                <Input
+                  className="h-8 text-sm"
+                  value={editDefaults.prBaseBranch}
+                  onChange={(e) => { setEditDefaults({ ...editDefaults, prBaseBranch: e.target.value }); setSettingsDirty(true); }}
+                  placeholder="main"
+                  disabled={!editDefaults.autoPR}
+                />
+              </div>
             </div>
 
             <div>
@@ -477,6 +649,17 @@ export default function ProjectDetailView() {
                   setEditRepos(project.repos || []);
                   setEditDisplayName(project.displayName || "");
                   setEditDescription(project.description || "");
+                  setEditDevboxPackages(project.devbox?.packages || []);
+                  setEditDefaults({
+                    modelTier: project.defaults?.modelTier || "",
+                    manageModelTier: project.defaults?.manageModelTier || "",
+                    implementModelTier: project.defaults?.implementModelTier || "",
+                    ttlSeconds: project.defaults?.ttlSeconds != null ? String(project.defaults.ttlSeconds) : "",
+                    orchestrationMode: project.defaults?.orchestrationMode || "",
+                    autoPush: project.defaults?.autoPush || false,
+                    autoPR: project.defaults?.autoPR || false,
+                    prBaseBranch: project.defaults?.prBaseBranch || "",
+                  });
                   setSettingsDirty(false);
                 }}>
                   Discard

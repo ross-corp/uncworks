@@ -142,22 +142,16 @@ export default function ScheduleDetailView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex flex-col gap-0.5">
-          <div className="text-xs text-muted-foreground">
-            <Link to="/schedules" className="hover:text-foreground transition-colors">&larr; Schedules</Link>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="font-semibold">{schedule.spec.displayName || schedule.metadata.name}</span>
-            {schedule.spec.suspend && (
-              <Badge variant="secondary" className="text-[10px]">suspended</Badge>
-            )}
-          </div>
-        </div>
+      <div className="h-12 border-b flex items-center px-4 gap-2">
+        <Link to="/schedules" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Schedules</Link>
+        <span className="text-muted-foreground">/</span>
+        <span className="font-semibold flex-1">{schedule.spec.displayName || schedule.metadata.name}</span>
+        {schedule.spec.suspend && (
+          <Badge variant="secondary" className="text-xs">suspended</Badge>
+        )}
         <Button
           size="sm"
           variant={schedule.spec.suspend ? "outline" : "ghost"}
-          className="h-7 text-[11px]"
           onClick={toggleSuspend}
           disabled={toggling}
         >
@@ -200,7 +194,6 @@ export default function ScheduleDetailView() {
             />
             <Button
               size="sm"
-              className="h-8 text-[11px]"
               disabled={!cronChanged || savingCron}
               onClick={saveCron}
             >
@@ -219,7 +212,7 @@ export default function ScheduleDetailView() {
             <div className="text-sm text-muted-foreground py-4">No executions yet</div>
           ) : (
             <div className="border rounded divide-y divide-border/50">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-3 py-1.5 text-[10px] text-muted-foreground uppercase tracking-wider">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-3 py-1.5 text-xs text-muted-foreground uppercase tracking-wider">
                 <span>Run</span>
                 <span>Status</span>
                 <span>Age</span>

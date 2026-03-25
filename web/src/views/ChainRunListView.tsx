@@ -42,7 +42,7 @@ export default function ChainRunListView() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
+      <div className="h-12 border-b flex items-center px-4 gap-2">
         <span className="font-semibold">Chain Runs</span>
       </div>
 
@@ -60,7 +60,7 @@ export default function ChainRunListView() {
         {!loading && chainRuns.map((cr) => (
           <div
             key={cr.metadata.name}
-            className="flex items-center gap-3 px-4 py-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors"
+            className="flex items-center gap-3 px-4 py-2.5 border-b border-border/40 cursor-pointer hover:bg-muted/30 transition-colors"
             onClick={() => navigate(`/chainrun/${cr.metadata.name}`)}
           >
             <div className="flex-1 min-w-0">
@@ -76,11 +76,11 @@ export default function ChainRunListView() {
                   </Badge>
                 )}
               </div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">
+              <div className="text-xs text-muted-foreground mt-0.5">
                 {cr.spec.triggeredBy && `triggered by ${cr.spec.triggeredBy}`}
               </div>
             </div>
-            <span className="text-[11px] text-muted-foreground shrink-0">{formatAge(cr.metadata.creationTimestamp)}</span>
+            <span className="text-xs text-muted-foreground shrink-0">{formatAge(cr.metadata.creationTimestamp)}</span>
           </div>
         ))}
       </div>

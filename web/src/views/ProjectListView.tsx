@@ -78,16 +78,16 @@ export default function ProjectListView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-3">
+      <div className="h-12 border-b flex items-center px-4 gap-2">
+        <div className="flex items-center gap-3 flex-1">
           <span className="font-semibold">Projects</span>
           <span className="text-muted-foreground text-xs">({projects.length})</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => navigate("/")}>
+          <Button size="sm" variant="ghost" onClick={() => navigate("/")}>
             Runs
           </Button>
-          <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setShowCreate(!showCreate)}>
+          <Button size="sm" variant="outline" onClick={() => setShowCreate(!showCreate)}>
             + new project
           </Button>
         </div>
@@ -139,7 +139,7 @@ export default function ProjectListView() {
         {projects.map((p) => (
           <div
             key={p.name}
-            className="flex items-center gap-3 px-4 py-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors"
+            className="flex items-center gap-3 px-4 py-2.5 border-b border-border/40 cursor-pointer hover:bg-muted/30 transition-colors"
             onClick={() => navigate(`/projects/${p.name}`)}
           >
             {/* Name and description */}
@@ -147,9 +147,9 @@ export default function ProjectListView() {
               <div className="flex items-center gap-2">
                 <span className="font-medium">{p.displayName || p.name}</span>
                 {p.configRepoReady ? (
-                  <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-500">ready</Badge>
+                  <Badge variant="outline" className="text-xs border-green-500/40 text-green-500">ready</Badge>
                 ) : (
-                  <Badge variant="secondary" className="text-[10px]">provisioning</Badge>
+                  <Badge variant="secondary" className="text-xs">provisioning</Badge>
                 )}
               </div>
               {p.description && (
@@ -160,24 +160,24 @@ export default function ProjectListView() {
             {/* Metadata */}
             <div className="flex items-center gap-3 shrink-0">
               {p.repos?.length > 0 && (
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {p.repos.length} repo{p.repos.length !== 1 ? "s" : ""}
                 </span>
               )}
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {p.runCount} run{p.runCount !== 1 ? "s" : ""}
               </span>
               {p.totalCost && (
-                <span className="text-[11px] text-muted-foreground">{p.totalCost}</span>
+                <span className="text-xs text-muted-foreground">{p.totalCost}</span>
               )}
-              <span className="text-[11px] text-muted-foreground w-8 text-right">{formatAge(p.createdAt)}</span>
+              <span className="text-xs text-muted-foreground w-8 text-right">{formatAge(p.createdAt)}</span>
             </div>
           </div>
         ))}
       </div>
 
       {/* Footer */}
-      <div className="border-t px-4 py-1 text-[10px] text-muted-foreground">
+      <div className="border-t px-4 py-1 text-xs text-muted-foreground">
         click project to view specs and runs
       </div>
     </div>

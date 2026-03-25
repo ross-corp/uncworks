@@ -300,7 +300,7 @@ export default function RunListView() {
       <div
         data-testid={`run-row-${run.id}`}
         className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-border/40 transition-colors ${
-          index === selected ? "bg-accent/40" : "hover:bg-muted/20"
+          index === selected ? "bg-accent/40" : "hover:bg-muted/30"
         } ${run.status.archived ? "opacity-40" : ""}`}
         onClick={() => selectMode ? toggleSelect(run.id) : navigate(`/run/${run.id}`)}
       >
@@ -354,9 +354,9 @@ export default function RunListView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b px-4 py-2.5 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="border-b px-4 space-y-2 pb-2">
+        <div className="h-12 flex items-center gap-2">
+          <div className="flex items-center gap-3 flex-1">
             <span className="font-semibold text-base">Runs</span>
             <span className="text-muted-foreground text-xs">{filtered.length}</span>
             {activeProject && (
@@ -367,7 +367,7 @@ export default function RunListView() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <Button size="sm" variant="default" className="h-7 text-xs px-3" onClick={() => navigate("/new")}>
+            <Button size="sm" variant="default" onClick={() => navigate("/new")}>
               + New Run
             </Button>
           </div>
@@ -477,10 +477,10 @@ export default function RunListView() {
       {selectMode && selectedIds.size > 0 && (
         <div className="flex items-center gap-3 border-b bg-blue-500/10 px-4 py-1.5">
           <span className="text-xs font-medium">{selectedIds.size} selected</span>
-          <Button size="sm" variant="destructive" className="h-6 text-[11px]" onClick={archiveSelected}>
+          <Button size="sm" variant="destructive" onClick={archiveSelected}>
             Archive
           </Button>
-          <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}>
+          <Button size="sm" variant="ghost" onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}>
             Cancel
           </Button>
         </div>

@@ -15,14 +15,16 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: "Runs", path: "/", icon: "▶", countKey: "runs" },
   { label: "Projects", path: "/projects", icon: "◈", countKey: "projects" },
+  { label: "Templates", path: "/templates", icon: "◻", countKey: "templates" },
   { label: "Chains", path: "/chains", icon: "⛓", countKey: "chains" },
-  { label: "Chain Runs", path: "/chainruns", icon: "⛓", countKey: "chainruns" },
+  { label: "Chain Runs", path: "/chainruns", icon: "↩", countKey: "chainruns" },
   { label: "Schedules", path: "/schedules", icon: "⏱", countKey: "schedules" },
 ];
 
 interface Counts {
   runs: number | null;
   projects: number | null;
+  templates: number | null;
   chains: number | null;
   chainruns: number | null;
   schedules: number | null;
@@ -39,6 +41,7 @@ export default function GlobalNav() {
   const [counts, setCounts] = useState<Counts>({
     runs: null,
     projects: null,
+    templates: null,
     chains: null,
     chainruns: null,
     schedules: null,
@@ -60,9 +63,10 @@ export default function GlobalNav() {
 
   async function fetchCounts() {
     try {
-      const [runsResp, projectsResp, chainsResp, chainrunsResp, schedulesResp] = await Promise.allSettled([
+      const [runsResp, projectsResp, templatesResp, chainsResp, chainrunsResp, schedulesResp] = await Promise.allSettled([
         apiFetch("/api/v1/runs"),
         apiFetch("/api/v1/projects"),
+        apiFetch("/api/v1/templates"),
         apiFetch("/api/v1/chains"),
         apiFetch("/api/v1/chainruns"),
         apiFetch("/api/v1/schedules"),
@@ -84,6 +88,12 @@ export default function GlobalNav() {
         projectsCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
       }
 
+      let templatesCount: number | null = null;
+      if (templatesResp.status === "fulfilled" && templatesResp.value.ok) {
+        const data = await templatesResp.value.json();
+        templatesCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
+      }
+
       let chainsCount: number | null = null;
       if (chainsResp.status === "fulfilled" && chainsResp.value.ok) {
         const data = await chainsResp.value.json();
@@ -102,7 +112,7 @@ export default function GlobalNav() {
         schedulesCount = Array.isArray(data) ? data.length : (data.items?.length ?? null);
       }
 
-      setCounts({ runs: runsCount, projects: projectsCount, chains: chainsCount, chainruns: chainrunsCount, schedules: schedulesCount });
+      setCounts({ runs: runsCount, projects: projectsCount, templates: templatesCount, chains: chainsCount, chainruns: chainrunsCount, schedules: schedulesCount });
     } catch {
       // silently ignore fetch errors for badge counts
     }
