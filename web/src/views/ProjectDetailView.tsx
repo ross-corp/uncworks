@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
@@ -10,6 +10,8 @@ import MarkdownEditor from "../components/MarkdownEditor";
 import RunStatusBadge from "../components/RunStatusBadge";
 import { formatAge } from "../lib/format";
 import type { AgentRun } from "../types/agent-run";
+import ChatSheet from "../components/ChatSheet";
+import { useCopilotContext } from "../hooks/useCopilotContext";
 
 interface ProjectDetail {
   name: string;
@@ -51,6 +53,24 @@ export default function ProjectDetailView() {
   const [editDescription, setEditDescription] = useState("");
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Register page context for global CopilotPanel.
+  const copilotCtx = useMemo(() => {
+    if (tab === "specs" && selectedFile && editedContent) {
+      return { type: "spec" as const, content: editedContent, label: selectedFile };
+    }
+    if (tab !== "specs" && project) {
+      return {
+        type: "project" as const,
+        content: project.description || project.name,
+        label: project.name,
+      };
+    }
+    return null;
+  }, [tab, selectedFile, editedContent, project]);
+  useCopilotContext(copilotCtx);
 
   // Devbox packages state
   const [editDevboxPackages, setEditDevboxPackages] = useState<string[]>([]);
@@ -446,9 +466,7 @@ export default function ProjectDetailView() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => {
-                            toast.info("Coming soon");
-                          }}
+                          onClick={() => setChatOpen(true)}
                         >
                           Chat about this spec
                         </Button>
@@ -706,6 +724,15 @@ export default function ProjectDetailView() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {selectedFile && (
+        <ChatSheet
+          open={chatOpen}
+          onOpenChange={setChatOpen}
+          context={{ type: "spec", content: editedContent, label: selectedFile }}
+          title={"Chat: " + selectedFile.split("/").pop()}
+        />
+      )}
     </div>
   );
 }
