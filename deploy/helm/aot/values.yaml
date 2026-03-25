@@ -11,6 +11,8 @@ llm:
   baseUrl: ""
   # -- API key for the LLM endpoint
   apiKey: ""
+  # -- Secret name containing the LiteLLM master key (key: "key")
+  masterKeySecretName: ""
 
 # -- GitHub integration
 github:

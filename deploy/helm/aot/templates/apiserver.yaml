@@ -50,6 +50,13 @@ spec:
             - name: LITELLM_BASE_URL
               value: {{ .Values.llm.baseUrl | quote }}
             {{- end }}
+            {{- if .Values.llm.masterKeySecretName }}
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.llm.masterKeySecretName }}
+                  key: LITELLM_MASTER_KEY
+            {{- end }}
             {{- if .Values.github.tokenSecretName }}
             - name: GITHUB_TOKEN
               valueFrom:
