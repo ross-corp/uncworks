@@ -354,6 +354,11 @@ export default function ProjectDetailView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {tab === "specs" && (
+            <Button size="sm" variant="ghost" onClick={() => setShowNewSpec(true)}>
+              + new spec
+            </Button>
+          )}
           <Button size="sm" onClick={() => navigate(`/new?project=${name}`)}>
             + new run
           </Button>
@@ -374,12 +379,6 @@ export default function ProjectDetailView() {
           <div className="w-56 border-r overflow-y-auto p-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-muted-foreground uppercase tracking-wider">Specs</span>
-              <button
-                onClick={() => setShowNewSpec(!showNewSpec)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                + new
-              </button>
             </div>
 
             {showNewSpec && (
@@ -487,7 +486,7 @@ export default function ProjectDetailView() {
               </>
             ) : (
               <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-                Select a file to view or create a new spec
+                Select a file to view
               </div>
             )}
           </div>

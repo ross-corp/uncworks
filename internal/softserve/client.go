@@ -138,6 +138,11 @@ func (c *Client) ScaffoldAndPush(scaffold ScaffoldProject) error {
 		return err
 	}
 
+	// Write embedded scaffold files (openspec skills, .pi/ directory, etc.)
+	if err := writeScaffoldFiles(tmpDir); err != nil {
+		return fmt.Errorf("write scaffold files: %w", err)
+	}
+
 	// Write .devcontainer/devcontainer.json
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".devcontainer"), 0755); err != nil {
 		return err

@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 go build -o /temporal-worker ./cmd/temporal-worker
 
 # Use Alpine instead of distroless — controller needs ssh for soft-serve
 FROM alpine:3.21
-RUN apk add --no-cache openssh-client ca-certificates
+RUN apk add --no-cache openssh-client ca-certificates git
 COPY --from=builder /apiserver /usr/local/bin/apiserver
 COPY --from=builder /controller /usr/local/bin/controller
 COPY --from=builder /temporal-worker /usr/local/bin/temporal-worker
