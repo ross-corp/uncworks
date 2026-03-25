@@ -319,12 +319,16 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	}
 	podIP := hydrationOutput.PodIP
 
-	// --- Handle cancel signal throughout pipeline ---
-	workflow.Go(ctx, func(gCtx workflow.Context) {
-		cancelCh.Receive(gCtx, nil)
-		state.Phase = "Cancelled"
-		state.Message = "Cancelled by user"
-	})
+	// checkCancel does a non-blocking drain of the cancel channel.
+	// Returns true if a cancel signal was pending (caller should return nil).
+	checkCancel := func() bool {
+		if cancelCh.ReceiveAsync(nil) {
+			state.Phase = "Cancelled"
+			state.Message = "Cancelled by user"
+			return true
+		}
+		return false
+	}
 
 	// --- Trace: create root pipeline span ---
 	traceID := newWorkflowUUID(ctx)
@@ -343,6 +347,9 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	// =============================================
 	// STAGE 1: PLAN — Generate OpenSpec change
 	// =============================================
+	if checkCancel() {
+		return nil
+	}
 	state.Message = "Planning: generating spec from prompt"
 
 	// --- Trace: open PLAN span ---
@@ -467,7 +474,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	var lastReviewFeedback string
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		if state.Phase == "Cancelled" {
+		if checkCancel() || state.Phase == "Cancelled" {
 			return fmt.Errorf("cancelled by user")
 		}
 

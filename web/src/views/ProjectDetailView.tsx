@@ -76,34 +76,6 @@ export default function ProjectDetailView() {
   // Runs tab
   const [runs, setRuns] = useState<AgentRun[]>([]);
 
-  const fetchProject = useCallback(async () => {
-    if (!name) return;
-    try {
-      const resp = await apiFetch(`/api/v1/projects/${name}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        setProject(data);
-        setEditRepos(data.repos || []);
-        setEditDisplayName(data.displayName || "");
-        setEditDescription(data.description || "");
-        setEditDevboxPackages(data.devbox?.packages || []);
-        setEditDefaults({
-          modelTier: data.defaults?.modelTier || "",
-          manageModelTier: data.defaults?.manageModelTier || "",
-          implementModelTier: data.defaults?.implementModelTier || "",
-          ttlSeconds: data.defaults?.ttlSeconds != null ? String(data.defaults.ttlSeconds) : "",
-          orchestrationMode: data.defaults?.orchestrationMode || "",
-          autoPush: data.defaults?.autoPush || false,
-          autoPR: data.defaults?.autoPR || false,
-          prBaseBranch: data.defaults?.prBaseBranch || "",
-        });
-        setSettingsDirty(false);
-      }
-    } catch (e) {
-      toast.error(`Failed to load project: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [name]);
-
   const fetchFiles = useCallback(async () => {
     if (!name) return;
     try {
@@ -114,29 +86,83 @@ export default function ProjectDetailView() {
     }
   }, [name]);
 
-  const fetchRuns = useCallback(async () => {
-    try {
-      const resp = await apiFetch("/api/v1/runs");
-      if (resp.ok) {
-        const data: AgentRun[] = await resp.json();
-        setRuns(data.filter((r) => r.spec.project === name));
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetch = async () => {
+      if (!name) return;
+      try {
+        const resp = await apiFetch(`/api/v1/projects/${name}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (!cancelled) {
+            setProject(data);
+            setEditRepos(data.repos || []);
+            setEditDisplayName(data.displayName || "");
+            setEditDescription(data.description || "");
+            setEditDevboxPackages(data.devbox?.packages || []);
+            setEditDefaults({
+              modelTier: data.defaults?.modelTier || "",
+              manageModelTier: data.defaults?.manageModelTier || "",
+              implementModelTier: data.defaults?.implementModelTier || "",
+              ttlSeconds: data.defaults?.ttlSeconds != null ? String(data.defaults.ttlSeconds) : "",
+              orchestrationMode: data.defaults?.orchestrationMode || "",
+              autoPush: data.defaults?.autoPush || false,
+              autoPR: data.defaults?.autoPR || false,
+              prBaseBranch: data.defaults?.prBaseBranch || "",
+            });
+            setSettingsDirty(false);
+          }
+        }
+      } catch (e) {
+        if (!cancelled) toast.error(`Failed to load project: ${e instanceof Error ? e.message : String(e)}`);
       }
-    } catch (e) {
-      toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
-    }
+
+      try {
+        const resp = await apiFetch(`/api/v1/projects/${name}/files`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (!cancelled) setFiles(data);
+        }
+      } catch (e) {
+        if (!cancelled) toast.error(`Failed to load files: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    };
+
+    fetch();
+
+    return () => {
+      cancelled = true;
+    };
   }, [name]);
 
   useEffect(() => {
-    fetchProject();
-    fetchFiles();
-  }, [fetchProject, fetchFiles]);
-
-  useEffect(() => {
     if (tab !== "runs") return;
-    fetchRuns();
-    const i = setInterval(fetchRuns, 10000);
-    return () => clearInterval(i);
-  }, [tab, fetchRuns]);
+
+    let cancelled = false;
+
+    const fetch = async () => {
+      try {
+        const resp = await apiFetch("/api/v1/runs");
+        if (resp.ok) {
+          const data: AgentRun[] = await resp.json();
+          if (!cancelled) setRuns(data.filter((r) => r.spec.project === name));
+        }
+      } catch (e) {
+        if (!cancelled) toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    };
+
+    fetch();
+    const i = setInterval(() => {
+      if (!cancelled) fetch();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(i);
+    };
+  }, [tab, name]);
 
   async function loadFile(path: string) {
     if (!name) return;
@@ -416,15 +442,26 @@ export default function ProjectDetailView() {
                       {saving ? "Saving..." : "Save"}
                     </Button>
                     {selectedFile.endsWith("spec.md") && (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          const specName = selectedFile.replace("openspec/specs/", "").replace("/spec.md", "");
-                          navigate(`/new?project=${name}&spec=${specName}`);
-                        }}
-                      >
-                        Run this spec
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            toast.info("Coming soon");
+                          }}
+                        >
+                          Chat about this spec
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const specName = selectedFile.replace("openspec/specs/", "").replace("/spec.md", "");
+                            navigate(`/new?project=${name}&spec=${specName}`);
+                          }}
+                        >
+                          Audit this spec
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>

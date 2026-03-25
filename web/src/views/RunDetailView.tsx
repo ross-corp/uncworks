@@ -23,6 +23,11 @@ import {
   SheetTitle,
   SheetDescription,
 } from "../components/ui/sheet";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 
 type Tab = "logs" | "traces" | "files" | "shell";
 
@@ -119,6 +124,7 @@ export default function RunDetailView() {
   const [hitlInput, setHitlInput] = useState("");
   const [hitlModalOpen, setHitlModalOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [pendingArchive, setPendingArchive] = useState(false);
   const prevPhaseRef = useRef<string | undefined>(undefined);
   const { spans } = useTraces(id || "");
 
@@ -324,20 +330,7 @@ export default function RunDetailView() {
           {/* Archive button - visible when not running */}
           {!isRunning && !run.status.archived && (
             <button
-              onClick={async () => {
-                if (!window.confirm("Archive this run? The workspace will be deleted.")) return;
-                try {
-                  await apiFetch(`/api/v1/runs/${id}/archive`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ archived: true }),
-                  });
-                  toast.success("Run archived");
-                  navigate("/");
-                } catch {
-                  toast.error("Failed to archive run");
-                }
-              }}
+              onClick={() => setPendingArchive(true)}
               className="px-2 py-0.5 text-xs border text-muted-foreground hover:text-foreground transition-colors"
             >
               Archive
@@ -390,20 +383,7 @@ export default function RunDetailView() {
           onViewTraces={() => setTab("traces")}
           onRetry={() => navigate(`/new?clone=${id}`)}
           onEditRetry={() => navigate(`/new?clone=${id}`)}
-          onArchive={async () => {
-            if (!window.confirm("Archive this run? The workspace will be deleted.")) return;
-            try {
-              await apiFetch(`/api/v1/runs/${id}/archive`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ archived: true }),
-              });
-              toast.success("Run archived");
-              navigate("/");
-            } catch {
-              toast.error("Failed to archive run");
-            }
-          }}
+          onArchive={() => setPendingArchive(true)}
         />
       )}
 
@@ -544,6 +524,34 @@ export default function RunDetailView() {
         </SheetContent>
       </Sheet>
 
+      <AlertDialog open={pendingArchive} onOpenChange={setPendingArchive}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The workspace will be deleted. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => {
+              setPendingArchive(false);
+              try {
+                const resp = await apiFetch(`/api/v1/runs/${id}/archive`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ archived: true }),
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                toast.success("Run archived");
+                navigate("/");
+              } catch {
+                toast.error("Failed to archive run");
+              }
+            }}>Archive</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

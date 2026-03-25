@@ -96,13 +96,17 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate signature when a secret is configured.
-	if wh.secret != "" {
-		sig := r.Header.Get("X-Hub-Signature-256")
-		if !validateSignature(body, sig, wh.secret) {
-			http.Error(w, "invalid signature", http.StatusUnauthorized)
-			return
-		}
+	// Require HMAC signature validation. If no secret is configured the
+	// endpoint is fail-closed (401) so that unconfigured deployments don't
+	// accept unauthenticated webhook triggers.
+	if wh.secret == "" {
+		http.Error(w, "webhook secret not configured", http.StatusUnauthorized)
+		return
+	}
+	sig := r.Header.Get("X-Hub-Signature-256")
+	if !validateSignature(body, sig, wh.secret) {
+		http.Error(w, "invalid signature", http.StatusUnauthorized)
+		return
 	}
 
 	eventType := r.Header.Get("X-GitHub-Event")

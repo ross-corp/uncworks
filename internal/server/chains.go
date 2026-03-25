@@ -11,6 +11,16 @@ import (
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 )
 
+const maxListItems = 500
+
+// capList returns items truncated to at most max elements.
+func capList[T any](items []T, max int) []T {
+	if len(items) > max {
+		return items[:max]
+	}
+	return items
+}
+
 // ChainHandler handles RunTemplate, Chain, ChainRun, and Schedule REST endpoints.
 type ChainHandler struct {
 	K8sClient client.Client
@@ -57,7 +67,7 @@ func (h *ChainHandler) handleListTemplates(w http.ResponseWriter, r *http.Reques
 	sort.Slice(list.Items, func(i, j int) bool {
 		return list.Items[j].CreationTimestamp.Before(&list.Items[i].CreationTimestamp)
 	})
-	writeJSON(w, http.StatusOK, list.Items)
+	writeJSON(w, http.StatusOK, capList(list.Items, maxListItems))
 }
 
 func (h *ChainHandler) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +180,7 @@ func (h *ChainHandler) handleListChains(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, list.Items)
+	writeJSON(w, http.StatusOK, capList(list.Items, maxListItems))
 }
 
 func (h *ChainHandler) handleCreateChain(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +280,7 @@ func (h *ChainHandler) handleListChainRuns(w http.ResponseWriter, r *http.Reques
 	sort.Slice(list.Items, func(i, j int) bool {
 		return list.Items[j].CreationTimestamp.Before(&list.Items[i].CreationTimestamp)
 	})
-	writeJSON(w, http.StatusOK, list.Items)
+	writeJSON(w, http.StatusOK, capList(list.Items, maxListItems))
 }
 
 func (h *ChainHandler) handleGetChainRun(w http.ResponseWriter, r *http.Request) {
@@ -291,7 +301,7 @@ func (h *ChainHandler) handleListSchedules(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, list.Items)
+	writeJSON(w, http.StatusOK, capList(list.Items, maxListItems))
 }
 
 func (h *ChainHandler) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {

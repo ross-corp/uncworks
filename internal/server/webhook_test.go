@@ -140,11 +140,11 @@ func TestWebhook_MissingSignature_Returns401(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-func TestWebhook_EmptySecret_SkipsValidation(t *testing.T) {
+func TestWebhook_EmptySecret_Returns401(t *testing.T) {
 	scheme := newTestScheme()
 	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
 	wh := &WebhookHandler{
-		secret:    "", // empty = skip validation
+		secret:    "", // not configured — fail-closed
 		k8sClient: k8s,
 		namespace: "default",
 	}
@@ -156,7 +156,7 @@ func TestWebhook_EmptySecret_SkipsValidation(t *testing.T) {
 	rec := httptest.NewRecorder()
 	wh.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 // ---------- Payload Parsing ----------
@@ -221,6 +221,7 @@ func TestWebhook_RepoNotAllowed_Returns200(t *testing.T) {
 	scheme := newTestScheme()
 	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
 	wh := &WebhookHandler{
+		secret:       "test-secret",
 		allowedRepos: []string{"org/allowed"},
 		k8sClient:    k8s,
 		namespace:    "default",
@@ -231,6 +232,7 @@ func TestWebhook_RepoNotAllowed_Returns200(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-Hub-Signature-256", signPayload(body, "test-secret"))
 	rec := httptest.NewRecorder()
 	wh.ServeHTTP(rec, req)
 
@@ -252,6 +254,7 @@ func TestWebhook_CreatesAgentRunForSpecFiles(t *testing.T) {
 	defer githubAPI.Close()
 
 	wh := &WebhookHandler{
+		secret:     "test-secret",
 		k8sClient:  k8s,
 		namespace:  "default",
 		httpClient: githubAPI.Client(),
@@ -278,6 +281,7 @@ func TestWebhook_CreatesAgentRunForSpecFiles(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-Hub-Signature-256", signPayload(body, "test-secret"))
 	rec := httptest.NewRecorder()
 	wh.ServeHTTP(rec, req)
 
@@ -304,6 +308,7 @@ func TestWebhook_NoSpecFiles_Returns200WithZeroCreated(t *testing.T) {
 	scheme := newTestScheme()
 	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
 	wh := &WebhookHandler{
+		secret:    "test-secret",
 		k8sClient: k8s,
 		namespace: "default",
 	}
@@ -314,6 +319,7 @@ func TestWebhook_NoSpecFiles_Returns200WithZeroCreated(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-Hub-Signature-256", signPayload(body, "test-secret"))
 	rec := httptest.NewRecorder()
 	wh.ServeHTTP(rec, req)
 
@@ -325,6 +331,7 @@ func TestWebhook_IgnoresNonPushEvent(t *testing.T) {
 	scheme := newTestScheme()
 	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
 	wh := &WebhookHandler{
+		secret:    "test-secret",
 		k8sClient: k8s,
 		namespace: "default",
 	}
@@ -332,6 +339,7 @@ func TestWebhook_IgnoresNonPushEvent(t *testing.T) {
 	body := []byte(`{"action":"opened"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "pull_request")
+	req.Header.Set("X-Hub-Signature-256", signPayload(body, "test-secret"))
 	rec := httptest.NewRecorder()
 	wh.ServeHTTP(rec, req)
 

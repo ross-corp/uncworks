@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
@@ -27,21 +27,33 @@ export default function ChainRunListView() {
   const [chainRuns, setChainRuns] = useState<ChainRunSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const resp = await apiFetch("/api/v1/chainruns");
-      if (resp.ok) setChainRuns(await resp.json());
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load data");
-    }
-    finally { setLoading(false); }
-  }, []);
-
   useEffect(() => {
-    fetchData();
-    const i = setInterval(fetchData, 10000);
-    return () => clearInterval(i);
-  }, [fetchData]);
+    let cancelled = false;
+
+    const fetch = async () => {
+      try {
+        const resp = await apiFetch("/api/v1/chainruns");
+        if (resp.ok) {
+          const data = await resp.json();
+          if (!cancelled) setChainRuns(data);
+        }
+      } catch (e) {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetch();
+    const i = setInterval(() => {
+      if (!cancelled) fetch();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(i);
+    };
+  }, []);
 
   return (
     <div className="flex h-full flex-col">

@@ -77,9 +77,10 @@ func (h *ProjectHandler) handleListProjects(w http.ResponseWriter, r *http.Reque
 		return list.Items[j].CreationTimestamp.Before(&list.Items[i].CreationTimestamp)
 	})
 
+	capped := capList(list.Items, maxListItems)
 	var resp []projectResponse
-	for i := range list.Items {
-		resp = append(resp, projectToResponse(&list.Items[i]))
+	for i := range capped {
+		resp = append(resp, projectToResponse(&capped[i]))
 	}
 	if resp == nil {
 		resp = []projectResponse{}

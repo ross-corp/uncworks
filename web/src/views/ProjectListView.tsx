@@ -43,10 +43,32 @@ export default function ProjectListView() {
   }, []);
 
   useEffect(() => {
-    fetchProjects();
-    const interval = setInterval(fetchProjects, 10000);
-    return () => clearInterval(interval);
-  }, [fetchProjects]);
+    let cancelled = false;
+
+    const fetch = async () => {
+      try {
+        const resp = await apiFetch("/api/v1/projects");
+        if (resp.ok) {
+          const data = await resp.json();
+          if (!cancelled) setProjects(data);
+        }
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetch();
+    const interval = setInterval(() => {
+      if (!cancelled) fetch();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   async function handleCreate() {
     if (!newName.trim()) return;

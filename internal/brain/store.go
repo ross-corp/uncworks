@@ -338,7 +338,7 @@ func (s *Store) SaveRunDiff(ctx context.Context, agentRunID, spanID, filePath, p
 func (s *Store) SaveRunSpan(ctx context.Context, agentRunID string, span TraceSpan) error {
 	metadataJSON, err := json.Marshal(span.Metadata)
 	if err != nil {
-		metadataJSON = []byte("{}")
+		return fmt.Errorf("marshal span metadata: %w", err)
 	}
 
 	var parentID *string
@@ -430,7 +430,10 @@ func (s *Store) GetRunSpans(ctx context.Context, agentRunID string) ([]TraceSpan
 			sp.Type = *spanType
 		}
 		if metadataJSON != nil {
-			_ = json.Unmarshal(metadataJSON, &sp.Metadata)
+			sp.Metadata = make(map[string]interface{})
+			if err := json.Unmarshal(metadataJSON, &sp.Metadata); err != nil {
+				return nil, fmt.Errorf("unmarshal span %s metadata: %w", sp.ID, err)
+			}
 		}
 		spans = append(spans, sp)
 	}
@@ -439,7 +442,7 @@ func (s *Store) GetRunSpans(ctx context.Context, agentRunID string) ([]TraceSpan
 
 // --- Vector Embedding Storage (Knowledge System) ---
 
-// SaveCodeChunks batch-inserts embedded code chunks into pgvector.
+// SaveCodeChunks batch-inserts embedded code chunks into pgvector atomically.
 func (s *Store) SaveCodeChunks(ctx context.Context, chunks []CodeChunkRecord) error {
 	if !s.pgvectorReady {
 		return fmt.Errorf("pgvector not available")
@@ -448,9 +451,15 @@ func (s *Store) SaveCodeChunks(ctx context.Context, chunks []CodeChunkRecord) er
 		return nil
 	}
 
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	for _, c := range chunks {
 		embeddingStr := float32SliceToVectorLiteral(c.Embedding)
-		_, err := s.pool.Exec(ctx, `
+		_, err := tx.Exec(ctx, `
 			INSERT INTO code_chunks (agent_run_id, diff_id, chunk_text, file_path, language, node_type, repo_url, boost, embedding)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		`, c.AgentRunID, nilIfEmpty(c.DiffID), c.ChunkText, c.FilePath, c.Language, c.NodeType, c.RepoURL, c.Boost, embeddingStr)
@@ -458,10 +467,10 @@ func (s *Store) SaveCodeChunks(ctx context.Context, chunks []CodeChunkRecord) er
 			return fmt.Errorf("insert code chunk: %w", err)
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
-// SaveTraceChunks batch-inserts embedded trace chunks into pgvector.
+// SaveTraceChunks batch-inserts embedded trace chunks into pgvector atomically.
 func (s *Store) SaveTraceChunks(ctx context.Context, chunks []TraceChunkRecord) error {
 	if !s.pgvectorReady {
 		return fmt.Errorf("pgvector not available")
@@ -470,9 +479,15 @@ func (s *Store) SaveTraceChunks(ctx context.Context, chunks []TraceChunkRecord) 
 		return nil
 	}
 
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	for _, c := range chunks {
 		embeddingStr := float32SliceToVectorLiteral(c.Embedding)
-		_, err := s.pool.Exec(ctx, `
+		_, err := tx.Exec(ctx, `
 			INSERT INTO trace_chunks (agent_run_id, span_id, chunk_text, chunk_type, severity, repo_url, embedding)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
 		`, c.AgentRunID, nilIfEmpty(c.SpanID), c.ChunkText, c.ChunkType, c.Severity, c.RepoURL, embeddingStr)
@@ -480,7 +495,7 @@ func (s *Store) SaveTraceChunks(ctx context.Context, chunks []TraceChunkRecord) 
 			return fmt.Errorf("insert trace chunk: %w", err)
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 // --- Vector Search (Knowledge System) ---

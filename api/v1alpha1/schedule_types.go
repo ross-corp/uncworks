@@ -5,6 +5,7 @@ import (
 )
 
 // ScheduleSpec defines a cron-triggered run or chain.
+// +kubebuilder:validation:XValidation:rule="!(has(self.chainRef) && has(self.templateRef) && self.chainRef != ” && self.templateRef != ”)",message="chainRef and templateRef are mutually exclusive"
 type ScheduleSpec struct {
 	// DisplayName is the human-readable schedule name.
 	// +optional

@@ -51,30 +51,53 @@ export default function ScheduleDetailView() {
     }
   }, [name]);
 
-  const fetchRuns = useCallback(async () => {
-    try {
-      const resp = await apiFetch("/api/v1/runs");
-      if (resp.ok) {
-        const data: AgentRun[] = await resp.json();
-        // Filter by schedule name via tags or spec fields — use spec.feature or spec.tags as fallback
-        const filtered = data.filter(
-          (r) =>
-            (r.spec.tags && r.spec.tags.includes(`schedule:${name}`)) ||
-            r.spec.feature === name
-        );
-        setRuns(filtered.slice(0, 10));
-      }
-    } catch (e) {
-      toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [name]);
-
   useEffect(() => {
-    fetchSchedule();
-    fetchRuns();
-    const i = setInterval(() => { fetchSchedule(); fetchRuns(); }, 10000);
-    return () => clearInterval(i);
-  }, [fetchSchedule, fetchRuns]);
+    let cancelled = false;
+
+    const fetchAll = async () => {
+      if (!name) return;
+
+      try {
+        const resp = await apiFetch(`/api/v1/schedules/${name}`);
+        if (resp.ok) {
+          const data: ScheduleDetail = await resp.json();
+          if (!cancelled) {
+            setSchedule(data);
+            setEditCron(data.spec.cron);
+          }
+        }
+      } catch (e) {
+        if (!cancelled) toast.error(`Failed to load schedule: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+
+      try {
+        const resp = await apiFetch("/api/v1/runs");
+        if (resp.ok) {
+          const data: AgentRun[] = await resp.json();
+          const filtered = data.filter(
+            (r) =>
+              (r.spec.tags && r.spec.tags.includes(`schedule:${name}`)) ||
+              r.spec.feature === name
+          );
+          if (!cancelled) setRuns(filtered.slice(0, 10));
+        }
+      } catch (e) {
+        if (!cancelled) toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    };
+
+    fetchAll();
+    const i = setInterval(() => {
+      if (!cancelled) fetchAll();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(i);
+    };
+  }, [name]);
 
   async function toggleSuspend() {
     if (!schedule) return;

@@ -719,9 +719,11 @@ func TestHydrator_CreateWorktree_Idempotent(t *testing.T) {
 }
 
 // TestHydrator_CloneRepo_Idempotent verifies that cloneRepo is idempotent:
-// if the bare dir already exists, it skips cloning.
+// if the bare dir already exists and is a valid git repo, it skips cloning.
 func TestHydrator_CloneRepo_Idempotent(t *testing.T) {
 	runner := NewMockRunner()
+	// Return success for git rev-parse (valid existing clone)
+	runner.On("git rev-parse --git-dir", MockResult{Output: "."})
 	tmpDir := t.TempDir()
 
 	// Pre-create the bare dir to simulate a restart scenario.
@@ -749,10 +751,10 @@ func TestHydrator_CloneRepo_Idempotent(t *testing.T) {
 		t.Fatalf("Run should succeed when bare dir already exists: %v", err)
 	}
 
-	// No git commands should have been run — both clone and worktree were skipped.
+	// Only git rev-parse should have run (validation), not git clone or worktree
 	for _, cmd := range runner.commands {
-		if cmd.Name == "git" {
-			t.Errorf("expected no git commands (idempotent skip), got: git %v", cmd.Args)
+		if cmd.Name == "git" && cmd.Args[0] != "rev-parse" {
+			t.Errorf("expected only rev-parse git command, got: git %v", cmd.Args)
 		}
 	}
 }
@@ -851,5 +853,89 @@ func TestHydrator_ComposeDevbox_InstallFailure(t *testing.T) {
 	// devbox install failure is now non-fatal (warning only)
 	if err != nil {
 		t.Fatalf("devbox install failure should be non-fatal, got error: %v", err)
+	}
+}
+
+// --- Path traversal validation ---
+
+func TestValidateRepoPath_TraversalRejected(t *testing.T) {
+	cases := []string{
+		"../../etc/passwd",
+		"../secret",
+		"foo/../../../etc",
+		"./../../bar",
+	}
+	for _, path := range cases {
+		if err := validateRepoPath(path); err == nil {
+			t.Errorf("expected error for path %q, got nil", path)
+		}
+	}
+}
+
+func TestValidateRepoPath_AbsoluteRejected(t *testing.T) {
+	cases := []string{"/workspace/malicious", "/etc/passwd"}
+	for _, path := range cases {
+		if err := validateRepoPath(path); err == nil {
+			t.Errorf("expected error for absolute path %q, got nil", path)
+		}
+	}
+}
+
+func TestValidateRepoPath_ValidAccepted(t *testing.T) {
+	cases := []string{"services/api", "myrepo", "nested/a/b"}
+	for _, path := range cases {
+		if err := validateRepoPath(path); err != nil {
+			t.Errorf("expected no error for path %q, got: %v", path, err)
+		}
+	}
+}
+
+func TestValidateRepoPath_EmptyAccepted(t *testing.T) {
+	if err := validateRepoPath(""); err != nil {
+		t.Errorf("empty path should be accepted (derives from URL), got: %v", err)
+	}
+}
+
+func TestHydrator_Run_PathTraversalRejected(t *testing.T) {
+	runner := NewMockRunner()
+	config := &Config{
+		Repos:        []RepoConfig{{URL: "https://github.com/org/repo.git", Path: "../../escape"}},
+		WorkspaceDir: t.TempDir(),
+	}
+	h := NewHydrator(config, runner)
+	if err := h.Run(context.Background()); err == nil {
+		t.Fatal("expected error for path traversal attempt, got nil")
+	}
+}
+
+// --- Token injection security ---
+
+func TestInjectTokenInURL_CraftedAtHost(t *testing.T) {
+	// Attacker-crafted URL: parsed host is "attacker.com", not "github.com"
+	got := injectTokenInURL("https://github.com@attacker.com/org/repo.git", "secret")
+	// Should be returned unchanged — host is not github.com
+	if got != "https://github.com@attacker.com/org/repo.git" {
+		// If the URL was altered in any way, that's a problem
+		if strings.Contains(got, "secret") {
+			t.Errorf("token must not be injected into crafted URL, got %q", got)
+		}
+	}
+}
+
+func TestInjectTokenInURL_SSHPassthrough(t *testing.T) {
+	ssh := "git@github.com:org/repo.git"
+	if got := injectTokenInURL(ssh, "token"); got != ssh {
+		t.Errorf("SSH URL should be unchanged, got %q", got)
+	}
+}
+
+// --- AOT_REPOS malformed JSON warning ---
+
+func TestConfigFromEnv_MalformedJSON(t *testing.T) {
+	t.Setenv("AOT_REPOS", `{invalid json}`)
+	t.Setenv("AOT_REPO_URL", "https://github.com/org/fallback.git")
+	config := ConfigFromEnv()
+	if len(config.Repos) != 1 || config.Repos[0].URL != "https://github.com/org/fallback.git" {
+		t.Errorf("expected fallback to single-repo mode, got repos: %v", config.Repos)
 	}
 }

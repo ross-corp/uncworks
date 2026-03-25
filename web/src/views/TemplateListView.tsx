@@ -28,10 +28,32 @@ export default function TemplateListView() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const i = setInterval(fetchData, 10000);
-    return () => clearInterval(i);
-  }, [fetchData]);
+    let cancelled = false;
+
+    const fetch = async () => {
+      try {
+        const resp = await apiFetch("/api/v1/templates");
+        if (resp.ok) {
+          const data = await resp.json();
+          if (!cancelled) setTemplates(data);
+        }
+      } catch (e) {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetch();
+    const i = setInterval(() => {
+      if (!cancelled) fetch();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(i);
+    };
+  }, []);
 
   async function deleteTemplate(name: string) {
     const resp = await apiFetch(`/api/v1/templates/${name}`, { method: "DELETE" });
