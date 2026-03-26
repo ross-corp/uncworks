@@ -118,6 +118,9 @@ func (m *Ci) Check(ctx context.Context, source *dagger.Directory) (string, error
 	_, err := m.nodeBase(source).
 		WithExec([]string{"bash", "-c", `
 			set -e
+			# Install @bufbuild/protobuf at repo root so gen/ts/ proto files
+			# can resolve it (they live outside any package's node_modules).
+			cd /src && npm install --no-save @bufbuild/protobuf@^2.0.0
 			cd /src/packages/shared && npm ci
 			cd /src/packages/pi-aot-extension && npm ci
 			cd /src/web && npm ci
