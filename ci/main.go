@@ -50,7 +50,9 @@ func (m *Ci) goBase(source *dagger.Directory) *dagger.Container {
 		WithWorkdir("/src").
 		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
 		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
-		WithEnvVariable("CGO_ENABLED", "0")
+		WithEnvVariable("CGO_ENABLED", "0").
+		// Stub dist/ so //go:embed dist/* in cmd/bff compiles without the real frontend build
+		WithExec([]string{"bash", "-c", "mkdir -p cmd/bff/dist && echo placeholder > cmd/bff/dist/index.html"})
 }
 
 // nodeBase returns a Node.js container with the source mounted and npm cached.
