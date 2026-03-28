@@ -50,20 +50,24 @@ task dev:web        # start Vite dev server for web dashboard
 
 Two gRPC APIs define all communication:
 
-- **`proto/api.proto`** — Client API (`AOTService` on `:50051`): CreateAgentRun, GetAgentRun, ListAgentRuns, WatchAgentRun (server-streaming), CancelAgentRun, SendHumanInput
+- **`proto/api.proto`** — Client API (`AOTService` on `:50055`): CreateAgentRun, GetAgentRun, ListAgentRuns, WatchAgentRun (server-streaming), CancelAgentRun, SendHumanInput
 - **`proto/agent.proto`** — Sidecar API (`AgentSidecarService` on `:50052`): StartAgent, StreamOutput, SendInput, GetStatus, StopAgent. Plus `AgentNotificationService` for sidecar→control-plane async events.
 
 Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `hack/proto-gen.sh`).
 
-### Five Go binaries (`cmd/`)
+### Go binaries (`cmd/`)
 
 | Binary | Role |
 |--------|------|
-| `apiserver` | gRPC server + WebSocket hub (`:50051` + `:8080`) |
+| `apiserver` | ConnectRPC server + REST endpoints (`:50055`) |
 | `controller` | K8s controller — watches AgentRun CRDs, creates pods |
 | `hydration` | Init-container — git clone + devbox setup |
-| `sidecar` | RPC Gateway — bridges agent process to control plane |
-| `aot` | CLI tool (`aot open` finds/opens UNCWORKS worktrees) |
+| `sidecar` | RPC Gateway — bridges agent process to control plane (`:50052`) |
+| `temporal-worker` | Temporal activity worker — executes pipeline stages |
+| `uncworks` | End-user CLI (`uncworks setup`, `uncworks open`, `uncworks tui`) |
+| `aot` | Internal CLI — workspace tooling (`aot open`) |
+| `bff` | BFF server for the macOS desktop app |
+| `uncworks-app` | macOS desktop app (Wails v2) |
 
 ### Key Go packages (`internal/`)
 
@@ -137,7 +141,7 @@ Releases use [Release Please](https://github.com/googleapis/release-please). Con
 - **Go module**: `github.com/uncworks/aot`
 - **CRD group**: `aot.uncworks.io/v1alpha1`
 - **Labels**: `aot.uncworks.io/parent`, `aot.uncworks.io/role`, `aot.uncworks.io/managed`
-- **Ports**: API server `:50051` (gRPC), `:8080` (HTTP/WS). Sidecar `:50052`.
+- **Ports**: API server `:50055` (ConnectRPC + REST). Sidecar `:50052`.
 - **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `ci:`, `chore:`).
 
 ## OpenSpec

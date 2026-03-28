@@ -242,17 +242,17 @@ tasks:
 
 
   k0s:setup:
-    desc: "[DEPRECATED] Initialize local k0s cluster — use 'uncworks setup' instead"
+    desc: "[DEPRECATED] Use 'uncworks setup' instead"
     cmds:
-      - echo "WARNING: task k0s:setup is deprecated. Use 'uncworks setup' instead."
-      - echo "         See docs/getting-started.md for the updated local setup guide."
-      - sudo ./hack/k0s-setup.sh
+      - echo "ERROR: task k0s:setup is removed. Use 'uncworks setup' instead."
+      - echo "       See docs/getting-started.md for the updated local setup guide."
+      - exit 1
 
   k0s:teardown:
-    desc: "[DEPRECATED] Tear down local k0s cluster — use 'uncworks teardown' instead"
+    desc: "[DEPRECATED] Use 'uncworks teardown' instead"
     cmds:
-      - echo "WARNING: task k0s:teardown is deprecated. Use 'uncworks teardown' instead."
-      - sudo ./hack/k0s-teardown.sh
+      - echo "ERROR: task k0s:teardown is removed. Use 'uncworks teardown' instead."
+      - exit 1
 
   k0s:crd:
     desc: Apply AgentRun CRD to cluster

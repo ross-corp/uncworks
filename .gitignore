@@ -74,13 +74,6 @@ dist
 kubeconfig
 *.kubeconfig
 
-# AOT Binaries
-/aot
-/aot-*
-/apiserver
-/controller
-/bin/
-
 # Playwright
 test-results/
 playwright-report/
@@ -104,7 +97,6 @@ Thumbs.db
 
 *storybook.log
 storybook-static
-/sidecar
 
 # Build binaries (root-level only, not internal/ dirs)
 /hydration
@@ -113,8 +105,10 @@ storybook-static
 /controller
 /sidecar
 /aot
+/aot-*
 /bin/
 /bff
+/uncworks
 !cmd/bff/dist/placeholder
 
 # Local databases — never commit runtime state
@@ -128,5 +122,4 @@ cmd/uncworks-app/frontend/dist/
 cmd/uncworks-app/build/bin/
 
 # Local dev state
-*.pid
 *.port
