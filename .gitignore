@@ -116,3 +116,16 @@ storybook-static
 /bin/
 /bff
 !cmd/bff/dist/placeholder
+
+# Temporal local dev database (never commit)
+.temporal.db
+*.temporal.db
+
+# Wails desktop app — built frontend (generated, not source)
+cmd/uncworks-app/frontend/dist/
+# Wails build output
+cmd/uncworks-app/build/bin/
+
+# Local dev state
+*.pid
+*.port
