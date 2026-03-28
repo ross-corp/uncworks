@@ -13,6 +13,14 @@ export interface AppSettings {
   portRangeStart: number;
   portRangeEnd: number;
   envOverrides: Record<string, string>;
+  // New fields added in settings-wizard
+  litellmURL: string;
+  githubAuthed: boolean;
+  updateChannel: string;
+  autoUpdateEnabled: boolean;
+  defaultManageModel: string;
+  defaultImplementModel: string;
+  wizardComplete: boolean;
 }
 
 export const SETTINGS_DEFAULTS: AppSettings = {
@@ -22,12 +30,21 @@ export const SETTINGS_DEFAULTS: AppSettings = {
   portRangeStart: 50100,
   portRangeEnd: 50120,
   envOverrides: {},
+  litellmURL: "http://litellm:4000",
+  githubAuthed: false,
+  updateChannel: "stable",
+  autoUpdateEnabled: false,
+  defaultManageModel: "",
+  defaultImplementModel: "",
+  wizardComplete: false,
 };
 
 // Features that require specific config
 export interface ConfigStatus {
   hasLLMKey: boolean;
   hasGitHubToken: boolean;
+  hasGitHubOAuth: boolean;
+  wizardComplete: boolean;
   // Derived capability flags
   canUseAI: boolean;
   canAccessPrivateRepos: boolean;
@@ -37,12 +54,15 @@ export interface ConfigStatus {
 export function deriveConfigStatus(s: AppSettings): ConfigStatus {
   const hasLLMKey = false;
   const hasGitHubToken = Boolean(s.githubToken?.trim());
+  const hasGitHubOAuth = Boolean(s.githubAuthed);
   return {
     hasLLMKey,
     hasGitHubToken,
+    hasGitHubOAuth,
+    wizardComplete: Boolean(s.wizardComplete),
     canUseAI: hasLLMKey,
-    canAccessPrivateRepos: hasGitHubToken,
-    canCreatePRs: hasGitHubToken,
+    canAccessPrivateRepos: hasGitHubToken || hasGitHubOAuth,
+    canCreatePRs: hasGitHubToken || hasGitHubOAuth,
   };
 }
 
