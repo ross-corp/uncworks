@@ -80,13 +80,13 @@ spec:
               drop: ["ALL"]
           livenessProbe:
             exec:
-              command: ["/bin/sh", "-c", "pgrep -x temporal-worker"]
+              command: ["/bin/sh", "-c", "pgrep -f temporal-worker"]
             initialDelaySeconds: 10
             periodSeconds: 30
             failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["/bin/sh", "-c", "pgrep -x temporal-worker"]
+              command: ["/bin/sh", "-c", "pgrep -f temporal-worker"]
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3

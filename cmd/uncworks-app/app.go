@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getlantern/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -30,9 +31,11 @@ func NewApp() *App {
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	_ = bootstrapConfig()
 	pollCtx, cancel := context.WithCancel(ctx)
 	a.statusPollStop = cancel
 	go a.pollStatus(pollCtx)
+	a.initTray()
 }
 
 // shutdown is called before the app exits.
@@ -41,13 +44,20 @@ func (a *App) shutdown(_ context.Context) {
 		a.statusPollStop()
 	}
 	a.pf.stopAll()
+	systray.Quit()
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 // GetSettings returns the persisted app settings.
+// GitHubAuthed is set dynamically from Keychain presence, not from the YAML file.
 func (a *App) GetSettings() (AppSettings, error) {
-	return loadAppSettings()
+	s, err := loadAppSettings()
+	if err != nil {
+		return s, err
+	}
+	s.GitHubAuthed = isGitHubAuthed()
+	return s, nil
 }
 
 // SaveSettings persists the app settings to disk.
@@ -94,6 +104,38 @@ func (a *App) GetEnvVars() ([]EnvVarInfo, error) {
 		}
 	}
 	return result, nil
+}
+
+// ── Kube helpers ──────────────────────────────────────────────────────────────
+
+// GetKubeContexts returns all kubeconfig context names.
+func (a *App) GetKubeContexts() ([]string, error) {
+	out, err := exec.Command("kubectl", "config", "get-contexts", "-o", "name").Output()
+	if err != nil {
+		return nil, err
+	}
+	var ctxs []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if t := strings.TrimSpace(line); t != "" {
+			ctxs = append(ctxs, t)
+		}
+	}
+	return ctxs, nil
+}
+
+// AutodetectNamespace tries to find the uncworks namespace in the given kubecontext.
+// Returns the detected namespace name, or empty string if not found.
+func (a *App) AutodetectNamespace(kubeContext string) string {
+	out, err := exec.Command("kubectl", "--context="+kubeContext, "get", "ns", "-o", "jsonpath={.items[*].metadata.name}").Output()
+	if err != nil {
+		return ""
+	}
+	for _, ns := range strings.Fields(string(out)) {
+		if ns == "uncworks" {
+			return ns
+		}
+	}
+	return ""
 }
 
 // ── Cluster lifecycle ─────────────────────────────────────────────────────────

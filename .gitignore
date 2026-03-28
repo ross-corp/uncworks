@@ -123,3 +123,5 @@ cmd/uncworks-app/build/bin/
 
 # Local dev state
 *.port
+uncworks-app
+cmd/uncworks-app/build/bin/
