@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useFiles } from "../hooks/useFiles";
 import FileTree from "./FileTree";
 import FilePreview from "./FilePreview";
+import type { AgentRunPhase } from "../types/agent-run";
 
-export default function FileExplorer({ runId }: { runId: string }) {
+export default function FileExplorer({ runId, phase }: { runId: string; phase?: AgentRunPhase }) {
   const { readFile } = useFiles();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function FileExplorer({ runId }: { runId: string }) {
     <div className="flex h-full">
       {/* File tree */}
       <div className="w-[250px] shrink-0 overflow-y-auto overscroll-none border-r border-border bg-background">
-        <FileTree runId={runId} onSelectFile={handleSelectFile} />
+        <FileTree runId={runId} phase={phase} onSelectFile={handleSelectFile} />
       </div>
 
       {/* File preview */}

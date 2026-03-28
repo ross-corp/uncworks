@@ -98,6 +98,19 @@ apiserver:
   # Defaults to localhost:3000,localhost:5173 for development.
   # Set to "*" to allow all origins (not recommended for production).
   allowedOrigins: ""
+  # -- Host path for local-path-provisioner PVC data.
+  # When set, the apiserver mounts this directory (read-only) so it can read
+  # logs, traces, and workspace files from completed runs whose pods are scaled
+  # to 0. Set to the provisioner's data directory for your local cluster:
+  #   k3s / k3d / Rancher Desktop: /var/lib/rancher/k3s/storage
+  #   OrbStack / Docker Desktop:   /opt/local-path-provisioner
+  #   kind:                        /var/local-path-provisioner
+  # Leave empty to disable (logs/traces/files will only work for running runs).
+  pvcDataHostPath: ""
+  # -- Run the apiserver as root (UID 0) when pvcDataHostPath is set.
+  # Required for k3s/colima where /var/lib/rancher/k3s/storage is mode 700.
+  # Safe for local dev only — do not enable in production.
+  pvcDataRunAsRoot: false
   # -- Per-IP rate limiting configuration.
   # NOTE: In-process only (single-replica). For multi-replica deployments, use an external
   # rate limiter (e.g. Redis-backed). Set enabled: true in production with conservative limits.

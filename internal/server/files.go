@@ -98,7 +98,8 @@ func (f *FileHandler) getDeploymentReplicas(ctx context.Context, runID string) (
 }
 
 // getPVCHostPath looks up the PVC aot-ws-{runID}, finds its bound PV,
-// and returns the PV's spec.hostPath.path (used by local-path-provisioner).
+// and returns the path on the host node. Supports both hostPath PVs (Docker Desktop,
+// OrbStack) and local PVs (k3s/colima local-path-provisioner).
 func (f *FileHandler) getPVCHostPath(ctx context.Context, runID string) (string, error) {
 	pvcName := "aot-ws-" + runID
 
@@ -122,11 +123,16 @@ func (f *FileHandler) getPVCHostPath(ctx context.Context, runID string) (string,
 		return "", fmt.Errorf("PV %q not found: %w", pvName, err)
 	}
 
-	if pv.Spec.HostPath == nil {
-		return "", fmt.Errorf("PV %q does not use hostPath", pvName)
+	// hostPath PV (Docker Desktop, OrbStack)
+	if pv.Spec.HostPath != nil {
+		return pv.Spec.HostPath.Path, nil
+	}
+	// local PV (k3s / colima local-path-provisioner)
+	if pv.Spec.Local != nil {
+		return pv.Spec.Local.Path, nil
 	}
 
-	return pv.Spec.HostPath.Path, nil
+	return "", fmt.Errorf("PV %q uses an unsupported volume type (not hostPath or local)", pvName)
 }
 
 func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {

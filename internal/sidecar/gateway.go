@@ -389,7 +389,8 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 }
 
 // stageSystemPrompt returns a stage-specific system prompt for spec-driven pipelines.
-// Returns empty string for default/single mode (uses pi's built-in prompt).
+// For default/single mode it returns a baseline prompt that orients the agent about
+// its working directory and git workflow, preventing writes outside the repo.
 func stageSystemPrompt(stage string) string {
 	switch stage {
 	case "plan":
@@ -440,7 +441,17 @@ Verification checks openspec list for task completion — tasks not marked [x] w
 Output JSON: {"pass": true/false, "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}`
 
 	default:
-		return ""
+		// Single/non-staged runs: orient the agent so it never writes outside the repo.
+		// cmd.Dir is set to the resolved repo root (e.g. /workspace/uncworks/), so the
+		// agent's CWD is already correct — but without this prompt it may still resolve
+		// absolute paths like /workspace/foo.txt relative to /workspace instead of the repo.
+		return `You are a coding agent. Your current working directory is the root of the git repository.
+
+Key rules:
+- Use RELATIVE paths (e.g. "src/foo.go", "README.md") for ALL file operations. Never write to /workspace directly.
+- If you must use absolute paths, the repo root is your CWD — files belong inside it, not at /workspace/<file>.
+- After making code changes, commit them with git (git add -A && git commit -m "...") and push (git push).
+- Run builds and tests before committing to verify correctness.`
 	}
 }
 

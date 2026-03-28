@@ -29,6 +29,14 @@ bff:
       memory: 64Mi
 
 apiserver:
+  # Mount the local-path-provisioner data directory so the apiserver can read
+  # logs, traces, and workspace files from completed runs (pods scaled to 0).
+  # Common paths by cluster tool:
+  #   OrbStack / Docker Desktop:   /opt/local-path-provisioner
+  #   k3s / k3d / Rancher Desktop: /var/lib/rancher/k3s/storage
+  #   kind:                        /var/local-path-provisioner
+  pvcDataHostPath: "/var/lib/rancher/k3s/storage"
+  pvcDataRunAsRoot: true
   resources:
     requests:
       cpu: 100m
