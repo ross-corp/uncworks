@@ -4,6 +4,15 @@ import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
 import { formatAge } from "../lib/format";
 import { Badge } from "../components/ui/badge";
+import { Spinner } from "../components/ui/spinner";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "../components/ui/empty";
+import { Button } from "../components/ui/button";
 
 interface ChainRunSummary {
   metadata: { name: string; creationTimestamp: string };
@@ -63,13 +72,21 @@ export default function ChainRunListView() {
 
       <div className="flex-1 overflow-y-auto">
         {loading && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
+          <div className="flex h-full items-center justify-center">
+            <Spinner className="text-muted-foreground" />
+          </div>
         )}
 
         {!loading && chainRuns.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            No chain runs yet
-          </div>
+          <Empty className="h-full border-0">
+            <EmptyHeader>
+              <EmptyTitle>No chain runs yet</EmptyTitle>
+              <EmptyDescription>Chain runs appear here when a chain is triggered manually or by a schedule.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" variant="ghost" onClick={() => navigate("/chains")}>View Chains</Button>
+            </EmptyContent>
+          </Empty>
         )}
 
         {!loading && chainRuns.map((cr) => (

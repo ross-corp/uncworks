@@ -1,11 +1,20 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
 import { usePoll } from "../hooks/usePoll";
 import { formatAge } from "../lib/format";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
+import { Spinner } from "../components/ui/spinner";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "../components/ui/empty";
 
 interface ProjectSummary {
   name: string;
@@ -36,8 +45,8 @@ export default function ProjectListView() {
         const data = await resp.json();
         setProjects(data);
       }
-    } catch {
-      // silent
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load projects");
     } finally {
       setLoading(false);
     }
@@ -50,8 +59,8 @@ export default function ProjectListView() {
         const data = await resp.json();
         setProjects(data);
       }
-    } catch {
-      // silent
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load projects");
     } finally {
       setLoading(false);
     }
@@ -137,12 +146,20 @@ export default function ProjectListView() {
       {/* Project list */}
       <div className="flex-1 overflow-y-auto">
         {loading && projects.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">Loading projects...</div>
+          <div className="flex h-full items-center justify-center">
+            <Spinner className="text-muted-foreground" />
+          </div>
         )}
         {!loading && projects.length === 0 && !showCreate && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            No projects yet — click "+ new project" to create one
-          </div>
+          <Empty className="h-full border-0">
+            <EmptyHeader>
+              <EmptyTitle>No projects yet</EmptyTitle>
+              <EmptyDescription>Create a project to group runs, attach repos, and set defaults.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" onClick={() => setShowCreate(true)}>+ new project</Button>
+            </EmptyContent>
+          </Empty>
         )}
 
         {projects.map((p) => (

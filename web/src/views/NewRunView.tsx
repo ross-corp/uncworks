@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
 import { useRunForm } from "../hooks/useRunForm";
+import { useSettings } from "../hooks/useSettings";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -34,6 +35,7 @@ interface ProjectOption {
 export default function NewRunView() {
   const client = useClient();
   const navigate = useNavigate();
+  const { configStatus, loading: settingsLoading } = useSettings();
 
   const [searchParams] = useSearchParams();
   const { form, set, reset } = useRunForm();
@@ -263,6 +265,22 @@ export default function NewRunView() {
           </Button>
         </div>
       </div>
+
+      {/* Config gate: warn when LLM key is missing */}
+      {!settingsLoading && !configStatus.hasLLMKey && (
+        <div className="border-b bg-amber-500/5 border-amber-500/30 px-4 py-2.5 flex items-center gap-3">
+          <span className="text-amber-500 shrink-0 text-sm">&#9888;</span>
+          <span className="text-xs text-muted-foreground flex-1">
+            No LLM API key configured. Runs will fail without one.
+          </span>
+          <Link
+            to="/settings"
+            className="text-xs text-amber-600 dark:text-amber-400 hover:underline shrink-0"
+          >
+            Configure &rarr;
+          </Link>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex-1 overflow-y-auto">
