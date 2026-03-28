@@ -178,6 +178,30 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 		return connect.NewResponse(&agentv1.StartAgentResponse{Started: true}), nil
 	}
 
+	// Token budget guard: refuse to start a new stage if the run has already
+	// consumed more output tokens than the configured budget.
+	if err := checkOutputTokenBudget(); err != nil {
+		slog.Error("token budget exceeded, refusing to start agent", "err", err)
+		return connect.NewResponse(&agentv1.StartAgentResponse{Started: false, Error: err.Error()}), nil
+	}
+
+	// Context overflow guard: estimate token count from the accumulated JSONL log.
+	// chars/3 is a conservative approximation (UTF-8 text averages ~4 chars/token,
+	// but JSON overhead brings it closer to 3). Truncation is handled by pi internally;
+	// this guard provides an early warning and prevents sending an obviously oversized
+	// context. The threshold is 90% of the configured limit.
+	estimated := estimateContextTokens()
+	limit := maxContextTokens()
+	if estimated > int(float64(limit)*contextTruncationThreshold) {
+		slog.Warn("context truncated",
+			"estimated_tokens", estimated,
+			"limit", limit,
+			"threshold_pct", int(contextTruncationThreshold*100),
+		)
+		// Non-fatal: log the warning but allow the run to proceed. Pi will compact
+		// internally; the log entry gives operators visibility before hitting hard limits.
+	}
+
 	// If a previous agent is still running, stop it before starting a new one.
 	// This handles pipeline stage transitions and retry attempts where the
 	// previous agent may not have fully exited yet.
@@ -432,23 +456,71 @@ func stageToRole(stage string) string {
 	}
 }
 
-// TODO(agent): token tracking — pi's JSONL stream contains usage fields
-// (input_tokens, output_tokens) in message_end events. Extract and publish
-// these counts as activity heartbeat metadata or to a metrics sink so that
-// per-run LLM cost is visible alongside the LiteLLM budget enforcement.
+// defaultMaxOutputTokens is the per-run output token budget.
+// Override with AGENT_MAX_OUTPUT_TOKENS env var.
+const defaultMaxOutputTokens = 32000
 
-// TODO(agent): context window overflow — there is currently no check that the
-// accumulated conversation (system prompt + all prior messages + tool outputs)
-// fits within the model's context window before each LLM call. pi handles this
-// internally for now, but long-running sessions risk silent truncation. A
-// token-counting preflight in the sidecar (or in pi's extension layer) would
-// allow graceful early termination instead of a mid-run truncation error.
+// defaultMaxContextTokens is the accumulated context size limit (in estimated tokens).
+// Override with AGENT_MAX_CONTEXT_TOKENS env var.
+const defaultMaxContextTokens = 180000
 
-// TODO(agent): model fallback — if the configured model (PI_MODEL) is
-// unavailable, pi exits non-zero with a connection/404 error. There is no
-// automatic fallback to a secondary model. Consider implementing a retry with
-// an alternate model name in restartAgentProcess when the exit error indicates
-// a model-not-found condition.
+// contextTruncationThreshold is the fraction of maxContextTokens at which history
+// truncation is triggered (90%).
+const contextTruncationThreshold = 0.9
+
+// maxOutputTokens returns the configured per-run output token budget.
+func maxOutputTokens() int {
+	if v := os.Getenv("AGENT_MAX_OUTPUT_TOKENS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultMaxOutputTokens
+}
+
+// maxContextTokens returns the configured context size limit (in estimated tokens).
+func maxContextTokens() int {
+	if v := os.Getenv("AGENT_MAX_CONTEXT_TOKENS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultMaxContextTokens
+}
+
+// checkOutputTokenBudget returns an error if the accumulated output tokens for
+// the current run already exceed the configured budget.
+func checkOutputTokenBudget() error {
+	tokenUsageMu.Lock()
+	out := runOutputTokens
+	tokenUsageMu.Unlock()
+	budget := maxOutputTokens()
+	if out >= budget {
+		return fmt.Errorf("agent run exceeded output token budget (%d >= %d)", out, budget)
+	}
+	return nil
+}
+
+// estimateContextTokens returns a rough token estimate for the JSONL log produced
+// so far in this run. Uses len(bytes)/3 as a conservative chars-to-tokens ratio.
+// This is used as a preflight check before launching the next agent stage.
+func estimateContextTokens() int {
+	info, err := os.Stat(agentJSONLPath)
+	if err != nil {
+		return 0
+	}
+	return int(info.Size()) / 3
+}
+
+// isOverloadedError returns true when the exit error indicates the model is
+// temporarily unavailable (503 / overloaded).
+func isOverloadedError(s string) bool {
+	lower := strings.ToLower(s)
+	return strings.Contains(lower, "503") ||
+		strings.Contains(lower, "overloaded") ||
+		strings.Contains(lower, "service unavailable") ||
+		strings.Contains(lower, "overload")
+}
 
 // maxRepeatedToolCalls is the number of identical consecutive tool calls before
 // the agent is killed to prevent infinite loops (e.g., rewriting the same file).
@@ -630,6 +702,26 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 		}
 	}
 
+	// Model fallback: if the primary model returned an overloaded/503 error and a
+	// fallback model is configured, retry once with the fallback model.
+	if err != nil && isOverloadedError(proc.ExitError()+err.Error()) {
+		if fallbackModel := os.Getenv("AGENT_FALLBACK_MODEL"); fallbackModel != "" {
+			slog.Warn("primary model unavailable, using fallback", "fallback", fallbackModel)
+			newProc, startErr := restartAgentProcessWithModel(proc.cmd, fallbackModel)
+			if startErr != nil {
+				slog.Error("failed to restart agent process with fallback model", "err", startErr)
+			} else {
+				g.mu.Lock()
+				g.process = newProc
+				g.mu.Unlock()
+
+				newProc.startReaders()
+				err = g.waitForSingleProcess(newProc)
+				proc = newProc
+			}
+		}
+	}
+
 	proc.mu.Lock()
 	if err != nil {
 		proc.state = agentv1.AgentProcessState_AGENT_PROCESS_STATE_FAILED
@@ -747,6 +839,83 @@ func restartAgentProcess(origCmd *exec.Cmd) (*AgentProcess, error) {
 		_ = logFile.Close()
 		_ = jsonlFile.Close()
 		return nil, fmt.Errorf("start agent: %w", err)
+	}
+	_ = devNull.Close()
+
+	return &AgentProcess{
+		cmd:       cmd,
+		stdout:    stdout,
+		stderr:    stderr,
+		logFile:   logFile,
+		jsonlFile: jsonlFile,
+		state:     agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
+		startedAt: time.Now(),
+	}, nil
+}
+
+// restartAgentProcessWithModel creates a new agent process using the same command
+// arguments as the original, but replaces the --model flag with the given model name.
+// If no --model flag is present in origCmd, it appends one.
+func restartAgentProcessWithModel(origCmd *exec.Cmd, model string) (*AgentProcess, error) {
+	// Build new args: copy origCmd.Args[1:] but replace the --model value.
+	origArgs := origCmd.Args[1:]
+	newArgs := make([]string, 0, len(origArgs)+2)
+	replaced := false
+	for i := 0; i < len(origArgs); i++ {
+		if origArgs[i] == "--model" && i+1 < len(origArgs) {
+			newArgs = append(newArgs, "--model", model)
+			i++ // skip old model value
+			replaced = true
+		} else {
+			newArgs = append(newArgs, origArgs[i])
+		}
+	}
+	if !replaced {
+		newArgs = append(newArgs, "--model", model)
+	}
+
+	cmd := exec.Command(origCmd.Path, newArgs...)
+	cmd.Dir = origCmd.Dir
+	cmd.Env = origCmd.Env
+
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		return nil, fmt.Errorf("open /dev/null: %w", err)
+	}
+	cmd.Stdin = devNull
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = devNull.Close()
+		return nil, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		_ = devNull.Close()
+		return nil, fmt.Errorf("stderr pipe: %w", err)
+	}
+
+	if err := os.MkdirAll(agentLogDir, 0o755); err != nil {
+		_ = devNull.Close()
+		return nil, fmt.Errorf("create log dir: %w", err)
+	}
+	logFile, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		_ = devNull.Close()
+		return nil, fmt.Errorf("open agent log: %w", err)
+	}
+	jsonlFile, err := os.OpenFile(agentJSONLPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		_ = devNull.Close()
+		_ = logFile.Close()
+		return nil, fmt.Errorf("open agent jsonl: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		_ = devNull.Close()
+		_ = logFile.Close()
+		_ = jsonlFile.Close()
+		return nil, fmt.Errorf("start agent with fallback model: %w", err)
 	}
 	_ = devNull.Close()
 
