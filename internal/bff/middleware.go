@@ -1,7 +1,9 @@
 package bff
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"net"
@@ -172,18 +174,46 @@ type sessionEntry struct {
 	createdAt time.Time
 }
 
+// signSession computes HMAC-SHA256(secret, sid) and returns sid + "." + hex(mac).
+func signSession(secret, sid string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(sid))
+	return sid + "." + hex.EncodeToString(mac.Sum(nil))
+}
+
+// verifySession splits a signed cookie value (sid.hex(mac)), recomputes the
+// expected HMAC using secret, and returns (sid, true) when the MAC is valid.
+// Constant-time comparison prevents timing-oracle attacks.
+func verifySession(secret, cookieValue string) (string, bool) {
+	dot := strings.LastIndex(cookieValue, ".")
+	if dot < 0 {
+		return "", false
+	}
+	sid := cookieValue[:dot]
+	gotMACHex := cookieValue[dot+1:]
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(sid))
+	wantMAC := mac.Sum(nil)
+
+	gotMAC, err := hex.DecodeString(gotMACHex)
+	if err != nil {
+		return "", false
+	}
+	if !hmac.Equal(gotMAC, wantMAC) {
+		return "", false
+	}
+	return sid, true
+}
+
 // SessionMiddleware creates or validates a session cookie on each request.
 // Sessions are stored in an in-memory map keyed by a random session ID.
+// The cookie value is sid + "." + hex(HMAC-SHA256(secret, sid)) so that a
+// guessed or leaked raw session ID cannot be forged without the secret.
 // The cookie is HttpOnly, Secure, SameSite=Strict.
 func SessionMiddleware(secret string) Middleware {
 	var mu sync.RWMutex
 	sessions := make(map[string]sessionEntry)
-	// TODO(security): Session IDs are random 128-bit values validated only by presence in
-	// the in-memory map; the secret is not yet used to HMAC-sign the cookie. This means
-	// a session ID that is guessed or leaked from memory could be accepted without the
-	// secret. Implement HMAC-SHA256(secret, sid) as the cookie value and verify on each
-	// request before the map lookup.
-	_ = secret
 
 	// Background sweep: evict sessions older than 24 hours every 5 minutes.
 	go func() {
@@ -202,6 +232,22 @@ func SessionMiddleware(secret string) Middleware {
 		}
 	}()
 
+	issueSession := func(w http.ResponseWriter) {
+		sid := generateSessionID()
+		mu.Lock()
+		sessions[sid] = sessionEntry{createdAt: time.Now()}
+		mu.Unlock()
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "aot_session",
+			Value:    signSession(secret, sid),
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			const cookieName = "aot_session"
@@ -209,43 +255,28 @@ func SessionMiddleware(secret string) Middleware {
 			cookie, err := r.Cookie(cookieName)
 			if err != nil || cookie.Value == "" {
 				// No valid session cookie — create a new session.
-				sid := generateSessionID()
-				mu.Lock()
-				sessions[sid] = sessionEntry{createdAt: time.Now()}
-				mu.Unlock()
-
-				http.SetCookie(w, &http.Cookie{
-					Name:     cookieName,
-					Value:    sid,
-					Path:     "/",
-					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteStrictMode,
-				})
+				issueSession(w)
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Validate existing session.
+			// Validate HMAC signature before consulting the map.
+			sid, ok := verifySession(secret, cookie.Value)
+			if !ok {
+				// Tampered or malformed cookie — issue a fresh session.
+				issueSession(w)
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Check whether the session exists in the store.
 			mu.RLock()
-			_, exists := sessions[cookie.Value]
+			_, exists := sessions[sid]
 			mu.RUnlock()
 
 			if !exists {
 				// Session expired or unknown — issue a new one.
-				sid := generateSessionID()
-				mu.Lock()
-				sessions[sid] = sessionEntry{createdAt: time.Now()}
-				mu.Unlock()
-
-				http.SetCookie(w, &http.Cookie{
-					Name:     cookieName,
-					Value:    sid,
-					Path:     "/",
-					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteStrictMode,
-				})
+				issueSession(w)
 			}
 
 			next.ServeHTTP(w, r)

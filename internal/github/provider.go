@@ -3,6 +3,7 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 )
 
@@ -27,6 +28,14 @@ func (p *PATProvider) Token(_ context.Context) (string, error) {
 		return "", fmt.Errorf("GITHUB_TOKEN not configured")
 	}
 	return p.token, nil
+}
+
+// BasicAuthHeader returns the value for an HTTP Authorization header that
+// authenticates git over HTTPS using a GitHub token without embedding it in
+// the remote URL. The returned string has the form "Basic <base64>".
+func BasicAuthHeader(token string) string {
+	encoded := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
+	return "Basic " + encoded
 }
 
 // InjectTokenInURL embeds a token into a GitHub HTTPS URL for authenticated git operations.

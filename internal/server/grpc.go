@@ -195,8 +195,20 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 		})
 	}
 
+	// Determine page size; clamp to [1, 100], default 50.
+	pageSize := int64(req.Msg.Limit)
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 50
+	}
+
+	// Use K8s server-side pagination via Limit + Continue token.
+	k8sListOpts := append(listOpts,
+		client.Limit(pageSize),
+		client.Continue(req.Msg.Cursor),
+	)
+
 	var list aotv1alpha1.AgentRunList
-	if err := s.K8sClient.List(ctx, &list, listOpts...); err != nil {
+	if err := s.K8sClient.List(ctx, &list, k8sListOpts...); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list agentruns: %w", err))
 	}
 
@@ -248,17 +260,10 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 		runs = append(runs, run)
 	}
 
-	limit := int(req.Msg.Limit)
-	if limit > 0 && len(runs) > limit {
-		runs = runs[:limit]
-	}
-
-	// TODO(audit): cursor-based pagination is declared in the proto (cursor input,
-	// next_cursor output) but not implemented. The current implementation fetches
-	// all runs from K8s and slices in-memory, which is unbounded and will not scale.
-	// Implement server-side pagination using the K8s List continue token or a
-	// creation-timestamp cursor before the run list grows large.
-	return connect.NewResponse(&apiv1.ListAgentRunsResponse{AgentRuns: runs}), nil
+	return connect.NewResponse(&apiv1.ListAgentRunsResponse{
+		AgentRuns:  runs,
+		NextCursor: list.Continue,
+	}), nil
 }
 
 func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Request[apiv1.WatchAgentRunRequest], stream *connect.ServerStream[apiv1.AgentRunEvent]) error {
