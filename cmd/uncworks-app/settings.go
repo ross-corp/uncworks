@@ -37,6 +37,9 @@ type AppSettings struct {
 	DefaultImplementModel string           `json:"defaultImplementModel" yaml:"defaultImplementModel,omitempty"`
 	// WizardComplete tracks whether the setup wizard has been completed.
 	WizardComplete       bool              `json:"wizardComplete"       yaml:"wizardComplete,omitempty"`
+	// APIServerURL is the base URL for the UNCWORKS API server.
+	// Defaults to http://localhost:50055 (local kubectl port-forward).
+	APIServerURL         string            `json:"apiserverURL"         yaml:"apiserverURL,omitempty"`
 }
 
 // EnvVarInfo describes a single environment variable — its current value
@@ -55,6 +58,7 @@ func defaultSettings() AppSettings {
 		PortRangeEnd:   50120,
 		LiteLLMURL:     "http://litellm:4000",
 		UpdateChannel:  "stable",
+		APIServerURL:   "http://localhost:50055",
 	}
 }
 

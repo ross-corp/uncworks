@@ -6,6 +6,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -107,7 +110,6 @@ var knownEnvVars = []struct {
 	{"XDG_CACHE_HOME",   "User cache directory (default: ~/.cache)"},
 	{"XDG_RUNTIME_DIR",  "Runtime files directory (sockets, PIDs)"},
 	{"KUBECONFIG",       "Path to kubeconfig file (default: ~/.kube/config)"},
-	{"ANTHROPIC_API_KEY","Anthropic API key (alternative to LLM key above)"},
 }
 
 // GetEnvVars returns the curated environment variables with their system
@@ -353,4 +355,33 @@ func (w *frontendWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+// ── API proxy middleware ───────────────────────────────────────────────────────
+
+// APIProxyMiddleware is a Wails AssetServer middleware that transparently proxies
+// ConnectRPC (/aot.api.v1.*) and REST API (/api/*) requests to the configured
+// UNCWORKS API server. This lets the embedded frontend reach the in-cluster
+// apiserver without needing VITE_API_URL set at build time.
+func (a *App) APIProxyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if !strings.HasPrefix(p, "/aot.api.v1.") && !strings.HasPrefix(p, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		s, _ := loadAppSettings()
+		target := s.APIServerURL
+		if target == "" {
+			target = "http://localhost:50055"
+		}
+		u, err := url.Parse(target)
+		if err != nil {
+			http.Error(w, "invalid apiserver URL", http.StatusBadGateway)
+			return
+		}
+		proxy := httputil.NewSingleHostReverseProxy(u)
+		r.Host = u.Host
+		proxy.ServeHTTP(w, r)
+	})
 }

@@ -69,7 +69,8 @@ func main() {
 		MinHeight: 600,
 		Menu:      appMenu,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets:     assets,
+			Middleware: app.APIProxyMiddleware,
 		},
 		BackgroundColour: &options.RGBA{R: 18, G: 18, B: 18, A: 1},
 		OnStartup:  app.startup,

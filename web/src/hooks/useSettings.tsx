@@ -21,6 +21,7 @@ export interface AppSettings {
   defaultManageModel: string;
   defaultImplementModel: string;
   wizardComplete: boolean;
+  apiserverURL: string;
 }
 
 export const SETTINGS_DEFAULTS: AppSettings = {
@@ -37,6 +38,7 @@ export const SETTINGS_DEFAULTS: AppSettings = {
   defaultManageModel: "",
   defaultImplementModel: "",
   wizardComplete: false,
+  apiserverURL: "http://localhost:50055",
 };
 
 // Features that require specific config
