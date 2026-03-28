@@ -6,6 +6,14 @@ import { apiFetch } from "../hooks/apiFetch";
 import { formatAge, formatRelative } from "../lib/format";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Spinner } from "../components/ui/spinner";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "../components/ui/empty";
 
 interface ScheduleSummary {
   metadata: { name: string; creationTimestamp: string };
@@ -32,8 +40,9 @@ export default function ScheduleListView() {
     try {
       const resp = await apiFetch("/api/v1/schedules");
       if (resp.ok) setSchedules(await resp.json());
-    } catch { /* silent */ }
-    finally { setLoading(false); }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load schedules");
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -46,8 +55,9 @@ export default function ScheduleListView() {
           const data = await resp.json();
           if (!cancelled) setSchedules(data);
         }
-      } catch { /* silent */ }
-      finally {
+      } catch (e) {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load schedules");
+      } finally {
         if (!cancelled) setLoading(false);
       }
     };
@@ -93,12 +103,20 @@ export default function ScheduleListView() {
 
       <div className="flex-1 overflow-y-auto">
         {loading && schedules.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
+          <div className="flex h-full items-center justify-center">
+            <Spinner className="text-muted-foreground" />
+          </div>
         )}
         {!loading && schedules.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            No schedules configured
-          </div>
+          <Empty className="h-full border-0">
+            <EmptyHeader>
+              <EmptyTitle>No schedules configured</EmptyTitle>
+              <EmptyDescription>Schedules run chains or templates automatically on a cron expression.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" onClick={() => navigate("/schedules/new")}>+ new schedule</Button>
+            </EmptyContent>
+          </Empty>
         )}
 
         {schedules.map((s) => (

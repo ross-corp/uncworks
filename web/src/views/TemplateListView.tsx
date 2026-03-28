@@ -5,6 +5,14 @@ import { apiFetch } from "../hooks/apiFetch";
 import { formatAge } from "../lib/format";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Spinner } from "../components/ui/spinner";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "../components/ui/empty";
 
 interface TemplateSummary {
   metadata: { name: string; creationTimestamp: string };
@@ -21,38 +29,23 @@ export default function TemplateListView() {
     try {
       const resp = await apiFetch("/api/v1/templates");
       if (resp.ok) setTemplates(await resp.json());
+      else toast.error("Failed to load templates");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load data");
-    }
-    finally { setLoading(false); }
+      toast.error(e instanceof Error ? e.message : "Failed to load templates");
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-
-    const fetch = async () => {
-      try {
-        const resp = await apiFetch("/api/v1/templates");
-        if (resp.ok) {
-          const data = await resp.json();
-          if (!cancelled) setTemplates(data);
-        }
-      } catch (e) {
-        if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load data");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    fetch();
+    fetchData();
     const i = setInterval(() => {
-      if (!cancelled) fetch();
+      if (!cancelled) fetchData();
     }, 10000);
-
     return () => {
       cancelled = true;
       clearInterval(i);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function deleteTemplate(name: string) {
@@ -77,14 +70,21 @@ export default function TemplateListView() {
 
       <div className="flex-1 overflow-y-auto">
         {loading && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
+          <div className="flex h-full items-center justify-center">
+            <Spinner className="text-muted-foreground" />
+          </div>
         )}
 
         {!loading && templates.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-            <span>No templates yet</span>
-            <Button size="sm" onClick={() => navigate("/templates/new")}>+ new template</Button>
-          </div>
+          <Empty className="h-full border-0">
+            <EmptyHeader>
+              <EmptyTitle>No templates yet</EmptyTitle>
+              <EmptyDescription>Templates are reusable run configurations you can compose into chains or trigger on a schedule.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" onClick={() => navigate("/templates/new")}>+ new template</Button>
+            </EmptyContent>
+          </Empty>
         )}
 
         {!loading && templates.map((t) => {

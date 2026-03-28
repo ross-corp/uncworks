@@ -5,6 +5,14 @@ import { apiFetch } from "../hooks/apiFetch";
 import { formatAge } from "../lib/format";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Spinner } from "../components/ui/spinner";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "../components/ui/empty";
 
 interface ChainSummary {
   metadata: { name: string; creationTimestamp: string };
@@ -88,13 +96,21 @@ export default function ChainListView() {
 
       <div className="flex-1 overflow-y-auto">
         {loading && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
+          <div className="flex h-full items-center justify-center">
+            <Spinner className="text-muted-foreground" />
+          </div>
         )}
 
         {!loading && chains.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            No chains defined
-          </div>
+          <Empty className="h-full border-0">
+            <EmptyHeader>
+              <EmptyTitle>No chains defined</EmptyTitle>
+              <EmptyDescription>Chains let you compose templates into multi-step automated workflows.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" onClick={() => navigate("/chains/new")}>+ new chain</Button>
+            </EmptyContent>
+          </Empty>
         )}
 
         {!loading && chains.map((c) => (
