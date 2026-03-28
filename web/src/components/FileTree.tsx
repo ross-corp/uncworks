@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { FileEntry } from "../hooks/useFiles";
 import { useFiles } from "../hooks/useFiles";
+import type { AgentRunPhase } from "../types/agent-run";
 
 interface FileTreeNode {
   entry: FileEntry;
@@ -10,11 +11,15 @@ interface FileTreeNode {
   loading: boolean;
 }
 
+const TERMINAL_PHASES = new Set<AgentRunPhase>(["succeeded", "failed", "cancelled"]);
+
 export default function FileTree({
   runId,
+  phase,
   onSelectFile,
 }: {
   runId: string;
+  phase?: AgentRunPhase;
   onSelectFile: (path: string) => void;
 }) {
   const { listDir } = useFiles();
@@ -247,6 +252,21 @@ export default function FileTree({
   }
 
   if (hydrating) {
+    // For completed runs the workspace pod is scaled down.
+    // Reading directly from the PVC host path requires the apiserver to have
+    // access to the node filesystem. If that fails, show a more accurate message
+    // and guide the user to start a debug session instead.
+    if (phase && TERMINAL_PHASES.has(phase)) {
+      return (
+        <div className="p-3 text-sm text-muted-foreground/60 space-y-2">
+          <div>Workspace unavailable.</div>
+          <div className="text-xs">
+            The run has {phase}. Use the <span className="font-medium text-foreground">Shell</span> tab
+            to start a debug session and browse files interactively.
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="p-3 text-sm text-muted-foreground/60">
         Workspace hydrating...

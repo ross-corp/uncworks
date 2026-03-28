@@ -114,8 +114,13 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            {{- if and .Values.apiserver.pvcDataHostPath .Values.apiserver.pvcDataRunAsRoot }}
+            runAsNonRoot: false
+            runAsUser: 0
+            {{- else }}
             runAsNonRoot: true
             runAsUser: 65532
+            {{- end }}
             capabilities:
               drop: ["ALL"]
           volumeMounts:
@@ -124,18 +129,27 @@ spec:
               mountPath: /etc/soft-serve
               readOnly: true
             {{- end }}
+            {{- if .Values.apiserver.pvcDataHostPath }}
+            - name: pvc-data
+              mountPath: {{ .Values.apiserver.pvcDataHostPath }}
+              readOnly: true
+            {{- end }}
           {{- with .Values.apiserver.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
       volumes:
-        # TODO(helm): the hostPath pvc-data volume was removed; it mounted /opt/local-path-provisioner
-        # which is a local-cluster-only artifact and must not be present in production deployments.
         {{- if .Values.softServe.enabled }}
         - name: soft-serve-key
           secret:
             secretName: soft-serve-admin-key
             defaultMode: 0600
+        {{- end }}
+        {{- if .Values.apiserver.pvcDataHostPath }}
+        - name: pvc-data
+          hostPath:
+            path: {{ .Values.apiserver.pvcDataHostPath }}
+            type: DirectoryOrCreate
         {{- end }}
 ---
 # PodDisruptionBudget: ensures at least one apiserver replica is available during node drains.

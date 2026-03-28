@@ -423,7 +423,7 @@ export default function RunDetailView() {
             />
           )}
           {tab === "files" && (
-            <FileExplorer runId={run.id} />
+            <FileExplorer runId={run.id} phase={run.status.phase} />
           )}
           {tab === "shell" && (
             <ShellTerminal runId={run.id} phase={run.status.phase} />
