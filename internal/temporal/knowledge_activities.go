@@ -29,6 +29,13 @@ type PersistRunDataInput struct {
 
 // PersistRunData reads logs and spans from the agent workspace and saves them to PostgreSQL.
 // This activity runs after agent completion, before scale-down.
+//
+// TODO(temporal): PersistRunData reads from the worker's local filesystem (os.ReadFile),
+// but the data lives on the agent pod's PVC (WorkspacePath = "/workspace"). These reads
+// will always produce empty results unless the worker mounts the same PVC.
+// Fix: route file reads through the sidecar ExecCommand RPC (like PlanRun/VerifyRun do),
+// or add a dedicated sidecar endpoint that streams log/span/diff data over gRPC.
+// Until then, BrainStore must be nil (no-op path) for this to be harmless.
 func (ka *KnowledgeActivities) PersistRunData(ctx context.Context, input PersistRunDataInput) error {
 	logger := activity.GetLogger(ctx)
 
@@ -233,6 +240,13 @@ type HydrateContextOutput struct {
 
 // HydrateContext queries pgvector for relevant past work and writes a context file
 // to the agent's workspace before the agent starts.
+//
+// TODO(temporal): HydrateContext writes the context file via os.WriteFile to
+// input.WorkspacePath on the worker's local filesystem, but the agent workspace
+// lives on the pod PVC. The write will silently succeed on the worker node but
+// the agent pod will never see the file.
+// Fix: write the context via the sidecar ExecCommand RPC (e.g., "echo '...' > /workspace/.aot/context/past-work.md"),
+// similar to how WriteTraceSpan works.
 func (ka *KnowledgeActivities) HydrateContext(ctx context.Context, input HydrateContextInput) (*HydrateContextOutput, error) {
 	logger := activity.GetLogger(ctx)
 

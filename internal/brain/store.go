@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -25,7 +26,9 @@ type AgentState struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	CompletedAt *time.Time
-	Metadata    map[string]string
+	// Metadata is intentionally not persisted: agent_states has no metadata column.
+	// Add a JSONB column and upsert clause before using this field.
+	Metadata map[string]string
 }
 
 // RunDiff represents a file diff produced by an agent run.
@@ -105,6 +108,29 @@ type TraceChunkResult struct {
 type Store struct {
 	pool          *pgxpool.Pool
 	pgvectorReady bool
+}
+
+// NewPool creates a pgxpool with sensible production defaults from a DSN.
+// Callers should defer pool.Close().
+// TODO(db): expose pool sizing via env vars (BRAIN_DB_MAX_CONNS, BRAIN_DB_MIN_CONNS)
+// once load profiles are known. Current defaults: max 10 / min 2 are conservative
+// but safe for a single-replica worker; increase for apiserver or high-throughput workers.
+func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse brain DB DSN: %w", err)
+	}
+	cfg.MaxConns = 10
+	cfg.MinConns = 2
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("open brain DB pool: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping brain DB: %w", err)
+	}
+	return pool, nil
 }
 
 // NewStore creates a new Store with the given connection pool.
@@ -249,12 +275,21 @@ func (s *Store) PgvectorReady() bool {
 }
 
 // SaveState upserts an agent state.
+// All mutable fields are updated on conflict so that replayed inserts stay consistent.
 func (s *Store) SaveState(ctx context.Context, state *AgentState) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO agent_states (id, agent_run_id, phase, message, prompt, repo_url, branch, trace_id, created_at, updated_at, completed_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (agent_run_id)
-		DO UPDATE SET phase = $3, message = $4, trace_id = $8, updated_at = $10, completed_at = $11
+		DO UPDATE SET
+			phase        = EXCLUDED.phase,
+			message      = EXCLUDED.message,
+			prompt       = EXCLUDED.prompt,
+			repo_url     = EXCLUDED.repo_url,
+			branch       = EXCLUDED.branch,
+			trace_id     = EXCLUDED.trace_id,
+			updated_at   = EXCLUDED.updated_at,
+			completed_at = EXCLUDED.completed_at
 	`, state.ID, state.AgentRunID, state.Phase, state.Message, state.Prompt, state.RepoURL, state.Branch, state.TraceID, state.CreatedAt, state.UpdatedAt, state.CompletedAt)
 	return err
 }
@@ -290,12 +325,17 @@ func (s *Store) UpdatePhase(ctx context.Context, agentRunID, phase, message stri
 	return nil
 }
 
-// ListByPhase returns all agent states matching the given phase.
+// defaultListByPhaseLimit caps the rows returned by ListByPhase to avoid unbounded scans.
+// Callers that need to page should use a dedicated paginated query.
+const defaultListByPhaseLimit = 500
+
+// ListByPhase returns up to defaultListByPhaseLimit agent states matching the given phase,
+// ordered by created_at ascending.
 func (s *Store) ListByPhase(ctx context.Context, phase string) ([]*AgentState, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, agent_run_id, phase, message, prompt, repo_url, branch, trace_id, created_at, updated_at, completed_at
-		FROM agent_states WHERE phase = $1 ORDER BY created_at
-	`, phase)
+		FROM agent_states WHERE phase = $1 ORDER BY created_at LIMIT $2
+	`, phase, defaultListByPhaseLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -303,15 +343,15 @@ func (s *Store) ListByPhase(ctx context.Context, phase string) ([]*AgentState, e
 
 	var states []*AgentState
 	for rows.Next() {
-		s := &AgentState{}
+		st := &AgentState{}
 		if err := rows.Scan(
-			&s.ID, &s.AgentRunID, &s.Phase, &s.Message,
-			&s.Prompt, &s.RepoURL, &s.Branch, &s.TraceID,
-			&s.CreatedAt, &s.UpdatedAt, &s.CompletedAt,
+			&st.ID, &st.AgentRunID, &st.Phase, &st.Message,
+			&st.Prompt, &st.RepoURL, &st.Branch, &st.TraceID,
+			&st.CreatedAt, &st.UpdatedAt, &st.CompletedAt,
 		); err != nil {
 			return nil, err
 		}
-		states = append(states, s)
+		states = append(states, st)
 	}
 	return states, rows.Err()
 }
@@ -335,6 +375,9 @@ func (s *Store) SaveRunDiff(ctx context.Context, agentRunID, spanID, filePath, p
 }
 
 // SaveRunSpan persists a trace span from an agent run.
+// TODO(db): PersistRunData calls this once per span in a loop (N+1 inserts).
+// Replace with a batch API using pgx.CopyFrom or a multi-value INSERT once the
+// call-site accumulates all spans before writing.
 func (s *Store) SaveRunSpan(ctx context.Context, agentRunID string, span TraceSpan) error {
 	metadataJSON, err := json.Marshal(span.Metadata)
 	if err != nil {
@@ -363,18 +406,20 @@ func (s *Store) GetRunLogs(ctx context.Context, agentRunID string) (string, erro
 	}
 	defer rows.Close()
 
-	var result string
+	var sb strings.Builder
+	first := true
 	for rows.Next() {
 		var content string
 		if err := rows.Scan(&content); err != nil {
 			return "", err
 		}
-		if result != "" {
-			result += "\n"
+		if !first {
+			sb.WriteByte('\n')
 		}
-		result += content
+		first = false
+		sb.WriteString(content)
 	}
-	return result, rows.Err()
+	return sb.String(), rows.Err()
 }
 
 // GetRunDiffs retrieves all diffs for an agent run.
