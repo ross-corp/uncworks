@@ -123,7 +123,7 @@ export default function ChainNewView() {
         <Badge variant="secondary" className="ml-auto text-xs">new</Badge>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-none">
         <form onSubmit={handleSubmit} className="max-w-2xl p-4 space-y-4">
           {/* Base fields */}
           <div className="space-y-1">

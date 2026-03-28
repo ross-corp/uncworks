@@ -7,7 +7,6 @@ import { isWails } from "../lib/wails-env";
 const go = () => (window as any).go?.main?.App;
 
 export interface AppSettings {
-  llmKey: string;
   githubToken: string;
   namespace: string;
   kubeContext: string;
@@ -17,7 +16,6 @@ export interface AppSettings {
 }
 
 export const SETTINGS_DEFAULTS: AppSettings = {
-  llmKey: "",
   githubToken: "",
   namespace: "uncworks",
   kubeContext: "",
@@ -37,7 +35,7 @@ export interface ConfigStatus {
 }
 
 export function deriveConfigStatus(s: AppSettings): ConfigStatus {
-  const hasLLMKey = Boolean(s.llmKey?.trim());
+  const hasLLMKey = false;
   const hasGitHubToken = Boolean(s.githubToken?.trim());
   return {
     hasLLMKey,

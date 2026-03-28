@@ -14,7 +14,7 @@ import (
 
 const (
 	// DefaultOllamaURL is the default Ollama endpoint in the k0s cluster.
-	DefaultOllamaURL = "http://ollama.aot.svc.cluster.local:11434"
+	DefaultOllamaURL = "http://ollama:11434"
 
 	// DefaultModel is the embedding model to use.
 	DefaultModel = "qwen2.5:0.5b"

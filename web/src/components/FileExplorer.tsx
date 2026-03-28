@@ -28,7 +28,7 @@ export default function FileExplorer({ runId }: { runId: string }) {
   return (
     <div className="flex h-full">
       {/* File tree */}
-      <div className="w-[250px] shrink-0 overflow-y-auto border-r border-border bg-background">
+      <div className="w-[250px] shrink-0 overflow-y-auto overscroll-none border-r border-border bg-background">
         <FileTree runId={runId} onSelectFile={handleSelectFile} />
       </div>
 

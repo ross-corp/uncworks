@@ -132,7 +132,7 @@ export default function ProjectListView() {
       )}
 
       {/* Project list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-none">
         {loading && projects.length === 0 && (
           <div className="flex h-full items-center justify-center">
             <Spinner className="text-muted-foreground" />

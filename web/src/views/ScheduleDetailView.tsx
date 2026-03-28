@@ -183,7 +183,7 @@ export default function ScheduleDetailView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 max-w-2xl">
+      <div className="flex-1 overflow-y-auto overscroll-none p-4 space-y-6 max-w-2xl">
         {/* Cron info */}
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground uppercase tracking-wider">Schedule</div>

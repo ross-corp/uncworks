@@ -245,7 +245,7 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
 
   return (
     <div className="relative h-full">
-      <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto p-4 space-y-1">
+      <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto overscroll-none p-4 space-y-1">
         {displayEntries.map((de, i) => (
           <EntryRow key={i} display={de} />
         ))}

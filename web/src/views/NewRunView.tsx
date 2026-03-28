@@ -308,7 +308,7 @@ export default function NewRunView() {
       )}
 
       {/* Tabs */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-none">
         <div className="mx-auto max-w-2xl p-6 space-y-6">
           <Tabs defaultValue="core">
             <TabsList>

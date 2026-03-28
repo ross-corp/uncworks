@@ -376,7 +376,7 @@ export default function ProjectDetailView() {
         {/* Specs tab */}
         <TabsContent value="specs" className="flex flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
           {/* Spec file tree */}
-          <div className="w-56 border-r overflow-y-auto p-2">
+          <div className="w-56 border-r overflow-y-auto overscroll-none p-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-muted-foreground uppercase tracking-wider">Specs</span>
             </div>
@@ -493,7 +493,7 @@ export default function ProjectDetailView() {
         </TabsContent>
 
         {/* Runs tab */}
-        <TabsContent value="runs" className="flex flex-col flex-1 min-h-0 overflow-y-auto mt-0">
+        <TabsContent value="runs" className="flex flex-col flex-1 min-h-0 overflow-y-auto overscroll-none mt-0">
           {runs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
               <span className="text-sm">No runs yet</span>
@@ -523,7 +523,7 @@ export default function ProjectDetailView() {
         </TabsContent>
 
         {/* Settings tab */}
-        <TabsContent value="settings" className="flex-1 overflow-y-auto mt-0">
+        <TabsContent value="settings" className="flex-1 overflow-y-auto overscroll-none mt-0">
           <div className="p-4 space-y-4 max-w-2xl">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">Display Name</label>

@@ -261,7 +261,7 @@ export default function FileTree({
   }
 
   return (
-    <div data-testid="file-tree" className="overflow-y-auto font-mono text-xs">
+    <div data-testid="file-tree" className="overflow-y-auto overscroll-none font-mono text-xs">
       {roots.map((node) => (
         <TreeNodeRow
           key={node.path}

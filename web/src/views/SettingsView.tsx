@@ -127,14 +127,12 @@ export default function SettingsView() {
 
   // Config notices — show only what actually breaks without each credential
   const notices: { key: string; message: string; anchor: string }[] = [];
-  if (!configStatus.hasLLMKey)
-    notices.push({ key: "llm", message: "AI agent runs require an LLM API key.", anchor: "field-llm-key" });
   if (!configStatus.hasGitHubToken)
     notices.push({ key: "gh", message: "Private repo cloning and PR creation require a GitHub token.", anchor: "field-github-token" });
 
   return (
     // Full-height scroll wrapper — scrollbar stays at viewport edge
-    <div className="flex-1 overflow-y-auto min-h-0">
+    <div className="flex-1 overflow-y-auto overscroll-none min-h-0">
       <div className="px-8 py-8 max-w-2xl">
         <h1 className="text-base font-semibold mb-6 tracking-tight">Settings</h1>
 
@@ -204,20 +202,6 @@ export default function SettingsView() {
 
         {/* Credentials */}
         <Section title="Credentials">
-          <Field
-            id="field-llm-key"
-            label="LLM API key"
-            hint="OpenRouter or OpenAI compatible key"
-            status={configStatus.hasLLMKey ? "ok" : "missing"}
-            statusLabel={configStatus.hasLLMKey ? "configured" : "required for AI runs"}
-          >
-            <SecretInput
-              value={local.llmKey}
-              onChange={e => set("llmKey", e.target.value)}
-              placeholder="sk-or-…"
-              disabled={!wails}
-            />
-          </Field>
           <Field
             id="field-github-token"
             label="GitHub token"

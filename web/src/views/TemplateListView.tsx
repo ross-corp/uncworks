@@ -67,7 +67,7 @@ export default function TemplateListView() {
         <Button size="sm" onClick={() => navigate("/templates/new")}>+ new template</Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-none">
         {loading && (
           <div className="flex h-full items-center justify-center">
             <Spinner className="text-muted-foreground" />
