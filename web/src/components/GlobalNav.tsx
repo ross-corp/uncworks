@@ -1,30 +1,38 @@
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { useThemeNew, type ColorMode } from "../hooks/useThemeNew";
-import { apiFetch } from "../hooks/apiFetch";
-import { usePoll } from "../hooks/usePoll";
+// GlobalNav.tsx — Resizable sidebar with ROSS CORP logo, nav items, and config status indicator.
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  Play,
+  FolderOpen,
+  LayoutTemplate,
+  Link2,
+  Clock,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { useSettings } from "../hooks/useSettings";
 
-const MODE_CYCLE: ColorMode[] = ["light", "dark", "system"];
+// ROSS CORP org avatar — same image works on light and dark backgrounds
+const LOGO_URL = "https://avatars.githubusercontent.com/u/172242530?s=64";
 
 interface NavItem {
   label: string;
   path: string;
-  icon: string;
+  Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
   countKey: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Runs", path: "/", icon: "▶", countKey: "runs" },
-  { label: "Projects", path: "/projects", icon: "◈", countKey: "projects" },
-  { label: "Templates", path: "/templates", icon: "◻", countKey: "templates" },
-  { label: "Chains", path: "/chains", icon: "⛓", countKey: "chains" },
-  { label: "Schedules", path: "/schedules", icon: "⏱", countKey: "schedules" },
+  { label: "Runs",      path: "/",          Icon: Play,           countKey: "runs"      },
+  { label: "Projects",  path: "/projects",  Icon: FolderOpen,     countKey: "projects"  },
+  { label: "Templates", path: "/templates", Icon: LayoutTemplate, countKey: "templates" },
+  { label: "Chains",    path: "/chains",    Icon: Link2,          countKey: "chains"    },
+  { label: "Schedules", path: "/schedules", Icon: Clock,          countKey: "schedules" },
 ];
 
-/** Matches CountsResponse from GET /api/v1/counts.
- *  `runs` here holds activeRuns (the badge-count for the Runs nav item). */
 interface Counts {
-  runs: number | null;       // maps to activeRuns
+  runs: number | null;
   projects: number | null;
   templates: number | null;
   chains: number | null;
@@ -32,59 +40,108 @@ interface Counts {
   schedules: number | null;
 }
 
+const MIN_WIDTH = 50;
+const COLLAPSED_WIDTH = 50;
+const DEFAULT_WIDTH = 200;
+const MAX_WIDTH = 320;
+
+function loadWidth(): number {
+  const v = localStorage.getItem("nav-width");
+  return v ? Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Number(v))) : DEFAULT_WIDTH;
+}
+
 export default function GlobalNav() {
   const location = useLocation();
-  const { mode, setMode } = useThemeNew();
+  const navigate = useNavigate();
+  const { configStatus } = useSettings();
 
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem("nav-collapsed") === "true";
-  });
-
+  const [width, setWidth] = useState<number>(loadWidth);
+  const [collapsed, setCollapsed] = useState<boolean>(() => loadWidth() <= COLLAPSED_WIDTH + 20);
   const [counts, setCounts] = useState<Counts>({
-    runs: null,
-    projects: null,
-    templates: null,
-    chains: null,
-    chainruns: null,
-    schedules: null,
+    runs: null, projects: null, templates: null,
+    chains: null, chainruns: null, schedules: null,
   });
+
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const startW = useRef(0);
+  const navRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem("nav-width", String(width));
+  }, [width]);
+
+  // Live counts from API
+  useEffect(() => {
+    let cancelled = false;
+    async function poll() {
+      try {
+        const resp = await fetch("/api/v1/counts");
+        if (!cancelled && resp.ok) {
+          const data = await resp.json();
+          setCounts({
+            runs: data.activeRuns ?? null,
+            projects: data.projects ?? null,
+            templates: data.templates ?? null,
+            chains: data.chains ?? null,
+            chainruns: data.chainruns ?? null,
+            schedules: data.schedules ?? null,
+          });
+        }
+      } catch { /* ignore — API may not be reachable */ }
+    }
+    poll();
+    const t = setInterval(poll, 10000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
+
+  // Settings navigation event (Cmd+, or macOS Preferences menu)
+  useEffect(() => {
+    function onOpenSettings() { navigate("/settings"); }
+    window.addEventListener("uncworks:open-settings", onOpenSettings);
+    return () => window.removeEventListener("uncworks:open-settings", onOpenSettings);
+  }, [navigate]);
+
+  // Drag-to-resize
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    startX.current = e.clientX;
+    startW.current = width;
+
+    function onMove(ev: MouseEvent) {
+      if (!dragging.current) return;
+      const next = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startW.current + ev.clientX - startX.current));
+      setWidth(next);
+      setCollapsed(next <= COLLAPSED_WIDTH + 20);
+    }
+    function onUp() {
+      dragging.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [width]);
 
   function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem("nav-collapsed", String(next));
-      return next;
-    });
-  }
-
-  function cycleMode() {
-    const idx = MODE_CYCLE.indexOf(mode);
-    const next = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
-    setMode(next);
-  }
-
-  usePoll(async () => {
-    try {
-      const resp = await apiFetch("/api/v1/counts");
-      if (resp.ok) {
-        const data = await resp.json();
-        setCounts({
-          runs: data.activeRuns ?? null,
-          projects: data.projects ?? null,
-          templates: data.templates ?? null,
-          chains: data.chains ?? null,
-          chainruns: data.chainruns ?? null,
-          schedules: data.schedules ?? null,
-        });
-      }
-    } catch (err) {
-      console.error("[GlobalNav]", err);
+    if (collapsed) {
+      setWidth(DEFAULT_WIDTH);
+      setCollapsed(false);
+    } else {
+      setWidth(COLLAPSED_WIDTH);
+      setCollapsed(true);
     }
-  }, 10000);
+  }
 
   function isActive(item: NavItem): boolean {
     if (item.path === "/") {
-      return location.pathname === "/" || location.pathname.startsWith("/run/") || location.pathname === "/new" || location.pathname.startsWith("/chainrun/");
+      return (
+        location.pathname === "/" ||
+        location.pathname.startsWith("/run/") ||
+        location.pathname === "/new" ||
+        location.pathname.startsWith("/chainrun/")
+      );
     }
     if (item.path === "/chains") {
       return location.pathname === "/chains" || location.pathname.startsWith("/chains/");
@@ -92,91 +149,126 @@ export default function GlobalNav() {
     return location.pathname === item.path || location.pathname.startsWith(item.path + "/");
   }
 
-  function getCount(key: string): number | null {
-    return counts[key as keyof Counts];
-  }
+  const isSettings = location.pathname === "/settings";
+
+  // Show a dot when config is incomplete (guides user to settings)
+  const configIncomplete = !configStatus.hasLLMKey || !configStatus.hasGitHubToken;
 
   return (
     <div
-      className={`flex flex-col h-screen border-r bg-background transition-all duration-200 shrink-0 ${
-        collapsed ? "w-[50px]" : "w-[200px]"
-      }`}
+      ref={navRef}
+      className="relative flex flex-col h-full border-r bg-background shrink-0 select-none"
+      style={{ width }}
     >
-      {/* Collapse toggle */}
-      <div className="flex items-center border-b px-2 py-2">
+      {/* Logo + collapse toggle */}
+      <div className={`flex items-center px-2 py-2.5 gap-2 ${collapsed ? "justify-center" : ""}`}>
+        {/* Logo — always visible */}
         <button
           onClick={toggleCollapsed}
-          className="flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs"
+          className="shrink-0 w-7 h-7 rounded-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? "→" : "←"}
+          <img
+            src={LOGO_URL}
+            alt="ROSS CORP"
+            className="w-full h-full object-cover"
+            draggable={false}
+          />
         </button>
+
+        {/* Expand / collapse chevron, only when not collapsed */}
         {!collapsed && (
-          <span className="ml-2 text-xs font-semibold tracking-widest text-muted-foreground">
-            NAV
-          </span>
+          <>
+            <span className="flex-1 text-xs font-semibold tracking-widest text-muted-foreground truncate">
+              UNCWORKS
+            </span>
+            <button
+              onClick={toggleCollapsed}
+              className="shrink-0 w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              title="Collapse sidebar"
+            >
+              <ChevronLeft size={14} strokeWidth={2} />
+            </button>
+          </>
         )}
       </div>
 
+      {/* Expand chevron when collapsed */}
+      {collapsed && (
+        <div className="flex justify-center px-2 pb-1">
+          <button
+            onClick={toggleCollapsed}
+            className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            title="Expand sidebar"
+          >
+            <ChevronRight size={14} strokeWidth={2} />
+          </button>
+        </div>
+      )}
+
       {/* Nav items */}
-      <nav className="flex-1 py-2 flex flex-col gap-0.5 px-1.5">
+      <nav className="flex-1 flex flex-col gap-0.5 px-1.5 pt-1 overflow-hidden">
         {NAV_ITEMS.map((item) => {
           const active = isActive(item);
-          const count = getCount(item.countKey);
+          const count = counts[item.countKey as keyof Counts];
           const showBadge = count !== null && count > 0;
-
           return (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+              className={`flex items-center gap-2.5 px-2 py-2 rounded-md text-sm transition-colors ${
                 active
-                  ? "bg-accent text-accent-foreground font-medium"
+                  ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               } ${collapsed ? "justify-center" : ""}`}
               title={collapsed ? item.label : undefined}
             >
-              <span className="w-4 text-center text-base leading-none shrink-0">{item.icon}</span>
+              <item.Icon size={15} strokeWidth={active ? 2.5 : 2} />
               {!collapsed && (
                 <>
                   <span className="flex-1 truncate">{item.label}</span>
                   {showBadge && (
-                    <span
-                      className={`text-xs font-mono px-1.5 py-0.5 rounded-full leading-none ${
-                        item.countKey === "runs"
-                          ? "bg-blue-500/20 text-blue-600 dark:text-blue-400"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
+                    <span className="text-xs font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-blue-500/15 text-blue-600 dark:text-blue-400">
                       {count}
                     </span>
                   )}
                 </>
-              )}
-              {collapsed && showBadge && (
-                <span
-                  className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-blue-500"
-                  style={{ position: "relative", marginLeft: "-4px", marginTop: "-8px" }}
-                />
               )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer: brand + theme toggle */}
-      <div className={`border-t px-2 py-2 flex items-center ${collapsed ? "flex-col gap-2 justify-center" : "justify-between"}`}>
-        <span className="text-xs text-muted-foreground tracking-widest font-semibold">
-          {collapsed ? "UW" : "UNCWORKS"}
-        </span>
-        <button
-          onClick={cycleMode}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
-          title={`Theme: ${mode}`}
+      {/* Settings link — with optional config-incomplete dot */}
+      <div className="px-1.5 pb-3 pt-2 border-t">
+        <Link
+          to="/settings"
+          className={`flex items-center gap-2.5 px-2 py-2 rounded-md text-sm transition-colors relative ${
+            isSettings
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          } ${collapsed ? "justify-center" : ""}`}
+          title={collapsed ? "Settings" : undefined}
         >
-          {collapsed ? "◐" : mode}
-        </button>
+          <div className="relative shrink-0">
+            <Settings size={15} strokeWidth={isSettings ? 2.5 : 2} />
+            {configIncomplete && (
+              <span
+                className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500"
+                title="Configuration incomplete"
+              />
+            )}
+          </div>
+          {!collapsed && <span className="flex-1 truncate">Settings</span>}
+        </Link>
       </div>
+
+      {/* Resize handle */}
+      <div
+        onMouseDown={onMouseDown}
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 active:bg-accent/60 transition-colors z-10"
+        style={{ touchAction: "none" }}
+      />
     </div>
   );
 }

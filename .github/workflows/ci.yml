@@ -36,3 +36,58 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  pre-release-tag:
+    name: Pre-release Tag
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create pre-release tag
+        run: |
+          # Read current version from release-please manifest
+          CURRENT=$(jq -r '."."' .release-please-manifest.json)
+
+          # Bump patch to get next version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+
+          DATE=$(date -u +%Y%m%d)
+          SHA=$(git rev-parse --short=7 HEAD)
+          TAG="v${NEXT}-pre.${DATE}.${SHA}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Pre-release build: ${TAG}"
+          git push origin "$TAG"
+          echo "Tagged: $TAG"
+
+  edge:
+    name: Edge Images
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dagger/dagger-for-github@v8.4.0
+        with:
+          version: latest
+          module: ./ci
+          call: >-
+            push-edge
+            --source .
+            --registry-user ${{ github.actor }}
+            --registry-pass env:GITHUB_TOKEN
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

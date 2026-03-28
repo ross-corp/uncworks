@@ -15,6 +15,7 @@ import ChainRunDetailView from "./views/ChainRunDetailView";
 import TemplateListView from "./views/TemplateListView";
 import TemplateNewView from "./views/TemplateNewView";
 import ScheduleNewView from "./views/ScheduleNewView";
+import SettingsView from "./views/SettingsView";
 
 /**
  * App shell — views with URL routing.
@@ -39,6 +40,7 @@ export default function AppNew() {
           <Route path="/chainruns" element={<ChainRunListView />} />
           <Route path="/schedules/new" element={<ScheduleNewView />} />
           <Route path="/chainrun/:name" element={<ChainRunDetailView />} />
+          <Route path="/settings" element={<SettingsView />} />
         </Route>
       </Routes>
     </BrowserRouter>

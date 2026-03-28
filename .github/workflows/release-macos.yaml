@@ -1,0 +1,64 @@
+name: Release macOS DMG
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-macos:
+    name: Build and Upload macOS Universal DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build web frontend
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: Copy frontend dist to Wails app
+        run: |
+          mkdir -p cmd/uncworks-app/frontend/dist
+          cp -r web/dist/. cmd/uncworks-app/frontend/dist/
+
+      - name: Build macOS universal app
+        run: |
+          cd cmd/uncworks-app
+          wails build -platform darwin/universal
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          hdiutil create \
+            -volname UNCWORKS \
+            -srcfolder "cmd/uncworks-app/build/bin/UNCWORKS.app" \
+            -ov \
+            -format UDZO \
+            "UNCWORKS-${VERSION}-darwin-universal.dmg"
+
+      - name: Upload DMG to GitHub Release
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release upload "$GITHUB_REF_NAME" "UNCWORKS-${VERSION}-darwin-universal.dmg"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

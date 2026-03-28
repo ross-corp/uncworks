@@ -1,0 +1,35 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-binaries:
+    name: Build and Upload CLI Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: dagger/dagger-for-github@v8.4.0
+        with:
+          version: latest
+          module: ./ci
+          call: >-
+            release-binaries
+            --source .
+            --version ${{ steps.version.outputs.version }}
+            --output ./dist
+
+      - name: Upload binaries to GitHub Release
+        run: gh release upload "$GITHUB_REF_NAME" dist/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
