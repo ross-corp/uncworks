@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+      - "!v*-pre.*"
 
 permissions:
   contents: write
@@ -21,7 +22,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.25"
 
       - uses: actions/setup-node@v4
         with:
@@ -59,6 +60,6 @@ jobs:
       - name: Upload DMG to GitHub Release
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          gh release upload "$GITHUB_REF_NAME" "UNCWORKS-${VERSION}-darwin-universal.dmg"
+          gh release upload "$GITHUB_REF_NAME" "UNCWORKS-${VERSION}-darwin-universal.dmg" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

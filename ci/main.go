@@ -223,7 +223,7 @@ func (m *Ci) PushImages(
 	registryUser string,
 	registryPass *dagger.Secret,
 	// +optional
-	// +default="ghcr.io/ross-corp"
+	// +default="ghcr.io/uncworks"
 	registry string,
 ) (string, error) {
 	type result struct {
