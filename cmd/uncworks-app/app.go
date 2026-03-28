@@ -31,11 +31,38 @@ func NewApp() *App {
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	bootstrapPATH()
 	_ = bootstrapConfig()
 	pollCtx, cancel := context.WithCancel(ctx)
 	a.statusPollStop = cancel
 	go a.pollStatus(pollCtx)
 	a.initTray()
+}
+
+// bootstrapPATH extends the process PATH to include common tool locations that
+// macOS GUI apps don't inherit from the user's shell environment.
+func bootstrapPATH() {
+	extra := []string{
+		"/opt/homebrew/bin",           // Homebrew (Apple Silicon)
+		"/usr/local/bin",              // Homebrew (Intel) + Docker Desktop
+		"/opt/homebrew/sbin",
+		"/usr/local/sbin",
+		"/nix/var/nix/profiles/default/bin", // Nix
+	}
+	// Also include nix per-user profile and macOS user profile (nix-darwin)
+	if home, err := os.UserHomeDir(); err == nil {
+		extra = append(extra,
+			home+"/.nix-profile/bin",
+			"/etc/profiles/per-user/"+os.Getenv("USER")+"/bin",
+		)
+	}
+	current := os.Getenv("PATH")
+	for _, p := range extra {
+		if !strings.Contains(current, p) {
+			current = p + ":" + current
+		}
+	}
+	_ = os.Setenv("PATH", current)
 }
 
 // shutdown is called before the app exits.
