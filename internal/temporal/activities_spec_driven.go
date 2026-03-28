@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -733,9 +733,12 @@ func execInSidecar(ctx context.Context, client agentv1connect.AgentSidecarServic
 }
 
 // pollUntilAgentDone polls the sidecar until the agent process completes.
+// The inter-poll sleep uses a select on ctx.Done() so that cancellation is
+// noticed within the sleep window rather than waiting the full 3 seconds.
 func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarServiceClient, runID string) error {
 	unspecifiedCount := 0
 	const maxUnspecified = 10
+	const pollInterval = 3 * time.Second
 
 	for {
 		select {
@@ -766,7 +769,13 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 			}
 		}
 
-		time.Sleep(3 * time.Second)
+		// Context-aware sleep: returns immediately on cancellation rather than
+		// blocking for the full poll interval after the activity context is done.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pollInterval):
+		}
 	}
 }
 

@@ -41,7 +41,7 @@ func setupScheduleReconciler(t *testing.T) (*ScheduleReconciler, client.Client, 
 		t.Fatalf("create client: %v", err)
 	}
 
-	reconciler := &ScheduleReconciler{Client: k8sClient}
+	reconciler := &ScheduleReconciler{Client: k8sClient, Scheme: scheme.Scheme}
 	return reconciler, k8sClient, func() { _ = testEnv.Stop() }
 }
 

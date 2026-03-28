@@ -425,6 +425,24 @@ func stageToRole(stage string) string {
 	}
 }
 
+// TODO(agent): token tracking — pi's JSONL stream contains usage fields
+// (input_tokens, output_tokens) in message_end events. Extract and publish
+// these counts as activity heartbeat metadata or to a metrics sink so that
+// per-run LLM cost is visible alongside the LiteLLM budget enforcement.
+
+// TODO(agent): context window overflow — there is currently no check that the
+// accumulated conversation (system prompt + all prior messages + tool outputs)
+// fits within the model's context window before each LLM call. pi handles this
+// internally for now, but long-running sessions risk silent truncation. A
+// token-counting preflight in the sidecar (or in pi's extension layer) would
+// allow graceful early termination instead of a mid-run truncation error.
+
+// TODO(agent): model fallback — if the configured model (PI_MODEL) is
+// unavailable, pi exits non-zero with a connection/404 error. There is no
+// automatic fallback to a secondary model. Consider implementing a retry with
+// an alternate model name in restartAgentProcess when the exit error indicates
+// a model-not-found condition.
+
 // maxRepeatedToolCalls is the number of identical consecutive tool calls before
 // the agent is killed to prevent infinite loops (e.g., rewriting the same file).
 const maxRepeatedToolCalls = 5
@@ -522,8 +540,12 @@ func (proc *AgentProcess) startReaders() {
 // maxRateLimitRetries is the number of times to retry the agent process on rate limit errors.
 const maxRateLimitRetries = 3
 
-// rateLimitRetryDelay is the delay before retrying after a rate limit error.
-const rateLimitRetryDelay = 10 * time.Second
+// rateLimitBaseDelay is the initial backoff delay before the first rate-limit retry.
+// Subsequent attempts use exponential backoff: base * 2^(attempt-1), capped at 5 minutes.
+const rateLimitBaseDelay = 10 * time.Second
+
+// rateLimitMaxDelay caps the exponential backoff to prevent excessively long waits.
+const rateLimitMaxDelay = 5 * time.Minute
 
 // isRateLimitError checks if the process stderr output indicates a rate limit error.
 func isRateLimitError(stderrOutput string) bool {
@@ -532,6 +554,19 @@ func isRateLimitError(stderrOutput string) bool {
 		strings.Contains(lower, "ratelimiterror") ||
 		strings.Contains(lower, "rate limit") ||
 		strings.Contains(lower, "rate_limit")
+}
+
+// rateLimitDelay returns the exponential backoff delay for the given attempt (1-based).
+func rateLimitDelay(attempt int) time.Duration {
+	delay := rateLimitBaseDelay
+	for i := 1; i < attempt; i++ {
+		delay *= 2
+		if delay > rateLimitMaxDelay {
+			delay = rateLimitMaxDelay
+			break
+		}
+	}
+	return delay
 }
 
 func (g *Gateway) waitForProcess(agentRunID string) {
@@ -545,13 +580,20 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 
 	err := g.waitForSingleProcess(proc)
 
-	// Check if this is a rate limit error and retry if so.
-	// We read the log file to check for rate limit indicators in stderr output.
+	// Check if this is a rate limit error and retry with exponential backoff.
+	// Uses exponential backoff (10s, 20s, 40s …) rather than a fixed delay so
+	// that burst rate limits resolve without hammering the upstream API again
+	// immediately on each retry.
 	if err != nil && isRateLimitError(proc.ExitError()+err.Error()) {
 		for attempt := 1; attempt <= maxRateLimitRetries; attempt++ {
-			slog.Warn("agent process hit rate limit, retrying", "attempt", attempt, "maxAttempts", maxRateLimitRetries, "delay", rateLimitRetryDelay)
+			delay := rateLimitDelay(attempt)
+			slog.Warn("agent process hit rate limit, retrying with backoff",
+				"attempt", attempt,
+				"maxAttempts", maxRateLimitRetries,
+				"delay", delay,
+			)
 
-			time.Sleep(rateLimitRetryDelay)
+			time.Sleep(delay)
 
 			// Re-read the original request args from the process to rebuild the command.
 			newProc, startErr := restartAgentProcess(proc.cmd)
@@ -907,6 +949,13 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// TODO(security): ExecCommand runs arbitrary bash commands from the Temporal control plane
+	// with the full process environment (including OPENAI_API_KEY, GITHUB_TOKEN, etc.).
+	// The sidecar is intentionally a privileged executor inside the agent pod, but this means
+	// a compromised Temporal server or worker can exfiltrate secrets. Mitigations to consider:
+	// 1. Strip secret env vars (OPENAI_API_KEY, GITHUB_TOKEN) from cmd.Env here.
+	// 2. Run the sidecar under a restricted user without access to env-injected secrets.
+	// 3. Use network policies to restrict sidecar egress outside the cluster.
 	cmd := exec.CommandContext(cmdCtx, "bash", "-c", req.Msg.Command)
 	cmd.Dir = workDir
 	cmd.Env = os.Environ()

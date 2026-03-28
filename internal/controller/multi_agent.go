@@ -6,14 +6,17 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 )
 
 // SpawnJunior creates a child AgentRun from a parent (senior) agent.
-func SpawnJunior(ctx context.Context, k8sClient client.Client, parentRun *aotv1alpha1.AgentRun, task string) (*aotv1alpha1.AgentRun, error) {
+// The junior is set as owned by the parent so it is GC'd when the parent is deleted.
+func SpawnJunior(ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme, parentRun *aotv1alpha1.AgentRun, task string) (*aotv1alpha1.AgentRun, error) {
 	logger := log.FromContext(ctx)
 
 	juniorName := fmt.Sprintf("%s-junior-%d", parentRun.Name, time.Now().UnixMilli()%100000)
@@ -36,6 +39,11 @@ func SpawnJunior(ctx context.Context, k8sClient client.Client, parentRun *aotv1a
 			TTLSeconds:   parentRun.Spec.TTLSeconds,
 			Image:        parentRun.Spec.Image,
 		},
+	}
+
+	// Set owner reference so the junior AgentRun is garbage collected when the parent is deleted.
+	if err := controllerutil.SetControllerReference(parentRun, junior, scheme); err != nil {
+		logger.Error(err, "Failed to set controller reference on junior AgentRun")
 	}
 
 	logger.Info("Spawning junior agent", "parent", parentRun.Name, "junior", juniorName)
