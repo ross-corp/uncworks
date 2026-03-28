@@ -53,6 +53,24 @@ Web image reference.
 {{- end }}
 
 {{/*
+Cudgel in-cluster endpoint. Defaults to the Service in the Release namespace.
+*/}}
+{{- define "aot.cudgelEndpoint" -}}
+{{- if .Values.cudgel.endpoint }}
+{{- .Values.cudgel.endpoint }}
+{{- else }}
+{{- printf "http://%s-cudgel.%s.svc.cluster.local:8080" (include "aot.fullname" .) .Release.Namespace }}
+{{- end }}
+{{- end }}
+
+{{/*
+BFF image reference.
+*/}}
+{{- define "aot.bffImage" -}}
+{{ .Values.images.bff.repository }}:{{ .Values.images.bff.tag | default .Chart.AppVersion }}
+{{- end }}
+
+{{/*
 Validate required values.
 */}}
 {{- define "aot.validateValues" -}}

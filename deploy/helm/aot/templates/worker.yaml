@@ -39,7 +39,14 @@ spec:
             - name: LITELLM_BASE_URL
               value: {{ .Values.llm.baseUrl | quote }}
             {{- end }}
-            {{- if .Values.llm.apiKey }}
+            {{- if .Values.llm.masterKeySecretName }}
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.llm.masterKeySecretName }}
+                  key: LITELLM_MASTER_KEY
+            {{- else if .Values.llm.apiKey }}
+            # TODO(helm): move llm.apiKey to a Secret reference (llm.masterKeySecretName) for production
             - name: LITELLM_MASTER_KEY
               value: {{ .Values.llm.apiKey | quote }}
             {{- end }}
@@ -62,9 +69,46 @@ spec:
             {{- end }}
             {{- if .Values.cudgel.enabled }}
             - name: CUDGEL_ENDPOINT
-              value: {{ .Values.cudgel.endpoint | quote }}
+              value: {{ include "aot.cudgelEndpoint" . | quote }}
             {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pgrep -x temporal-worker"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pgrep -x temporal-worker"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
           {{- with .Values.worker.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+---
+# PodDisruptionBudget: ensures at least one Temporal worker stays up during node drains.
+# With replicas=1 (default) this prevents eviction — increase worker.replicas to >=2 in
+# production for rolling-drain tolerance.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aot.fullname" . }}-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker

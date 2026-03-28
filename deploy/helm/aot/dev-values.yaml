@@ -9,7 +9,7 @@ softServe:
 cudgel:
   enabled: true
   image: ghcr.io/uncworks/aot-cudgel-shim:latest
-  endpoint: "http://cudgel.aot.svc.cluster.local:8080"
+  # endpoint defaults to http://<release>-cudgel.<namespace>.svc.cluster.local:8080 via _helpers.tpl
   resources:
     cpu: 250m
     memory: 256Mi

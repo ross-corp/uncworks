@@ -63,11 +63,24 @@ spec:
             limits:
               cpu: "500m"
               memory: "256Mi"
+          livenessProbe:
+            tcpSocket:
+              port: ssh
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
           readinessProbe:
             tcpSocket:
               port: ssh
             initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # soft-serve writes to /data (PVC) and /tmp
+            runAsNonRoot: false  # TODO(helm): upstream image runs as root; switch to non-root when image supports it
+            capabilities:
+              drop: ["ALL"]
       volumes:
         - name: data
           persistentVolumeClaim:

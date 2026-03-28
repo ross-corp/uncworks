@@ -9,9 +9,10 @@ temporal:
 llm:
   # -- LiteLLM/Ollama/OpenAI base URL (e.g. "http://ollama:11434")
   baseUrl: ""
-  # -- API key for the LLM endpoint
+  # -- API key for the LLM endpoint (dev convenience only — use masterKeySecretName in production)
   apiKey: ""
-  # -- Secret name containing the LiteLLM master key (key: "key")
+  # -- Secret name containing the LiteLLM master key (key: "LITELLM_MASTER_KEY").
+  # Preferred over llm.apiKey in production. Takes precedence when both are set.
   masterKeySecretName: ""
 
 # -- GitHub integration
@@ -54,22 +55,45 @@ controller:
   metricsPort: 8095
   # -- Number of days to retain Deployments and PVCs for completed runs before cleanup
   retentionDays: 7
-  resources: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 
 # -- Temporal Worker configuration
 worker:
   replicas: 1
-  resources: {}
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
 
 # -- API Server configuration
 apiserver:
   replicas: 1
   port: 50055
-  resources: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
   service:
     type: ClusterIP
-  # -- API key for authenticating requests (strongly recommended for production)
+  # -- API key for authenticating requests (strongly recommended for production).
+  # Prefer apiKeySecretName for production; apiKey is for dev convenience only.
   apiKey: ""
+  # -- Name of a k8s Secret with key "api-key" containing the API key.
+  # If set, takes precedence over apiKey.
+  # Create with: kubectl -n aot create secret generic aot-apiserver-apikey --from-literal=api-key=<key>
+  apiKeySecretName: ""
   # -- Comma-separated list of allowed CORS origins (e.g. "https://app.example.com")
   # Defaults to localhost:3000,localhost:5173 for development.
   # Set to "*" to allow all origins (not recommended for production).
@@ -117,6 +141,13 @@ bff:
   service:
     type: NodePort
     nodePort: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 
 # -- Web Dashboard configuration
 # TODO(7.4): The nginx web deployment will be removed once the BFF is
@@ -127,7 +158,13 @@ web:
   enabled: true
   replicas: 1
   port: 3000
-  resources: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
   service:
     type: ClusterIP
     # -- NodePort (only used when type is NodePort)
@@ -138,10 +175,12 @@ cudgel:
   # -- Enable the cudgel Deployment and Service
   enabled: false
   # -- Container image for the cudgel-shim (bundles Go shim + cudgel Rust binary)
+  # TODO(helm): pin to a versioned tag; :latest bypasses image digest verification
   image: ghcr.io/uncworks/aot-cudgel-shim:latest
   # -- Cluster-internal endpoint used by workers and the hydration init-container.
-  # Defaults to the in-cluster service DNS name; override if deploying outside the aot namespace.
-  endpoint: "http://cudgel.aot.svc.cluster.local:8080"
+  # Defaults to the in-cluster Service DNS name using the Release namespace.
+  # Override only if cudgel is deployed outside this release's namespace.
+  endpoint: ""
   resources:
     cpu: 250m
     memory: 256Mi
@@ -149,6 +188,7 @@ cudgel:
 # -- soft-serve Git server for project config repos
 softServe:
   enabled: true
+  # TODO(helm): pin to a versioned tag; :latest bypasses image digest verification
   image: charmcli/soft-serve:latest
   storage: 2Gi
   storageClass: local-path

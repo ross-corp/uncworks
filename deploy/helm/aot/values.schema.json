@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "AOT Helm chart values",
+  "type": "object",
+  "required": ["temporal"],
+  "properties": {
+    "temporal": {
+      "type": "object",
+      "description": "Temporal configuration",
+      "required": ["host"],
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Temporal Frontend gRPC address (e.g. temporal:7233)",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": "string",
+          "default": "default"
+        }
+      }
+    },
+    "llm": {
+      "type": "object",
+      "properties": {
+        "baseUrl": { "type": "string" },
+        "apiKey": { "type": "string" },
+        "masterKeySecretName": { "type": "string" }
+      }
+    },
+    "github": {
+      "type": "object",
+      "properties": {
+        "tokenSecretName": { "type": "string" }
+      }
+    },
+    "images": {
+      "type": "object",
+      "properties": {
+        "controlplane": { "$ref": "#/definitions/imageRef" },
+        "init": { "$ref": "#/definitions/imageRef" },
+        "sidecar": { "$ref": "#/definitions/imageRef" },
+        "agent": { "$ref": "#/definitions/imageRef" },
+        "web": { "$ref": "#/definitions/imageRef" },
+        "bff": { "$ref": "#/definitions/imageRef" }
+      }
+    },
+    "controller": {
+      "type": "object",
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "metricsPort": { "type": "integer" },
+        "retentionDays": { "type": "integer", "minimum": 0 },
+        "resources": { "$ref": "#/definitions/resourceRequirements" }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "resources": { "$ref": "#/definitions/resourceRequirements" }
+      }
+    },
+    "apiserver": {
+      "type": "object",
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "port": { "type": "integer" },
+        "apiKey": { "type": "string" },
+        "apiKeySecretName": { "type": "string" },
+        "allowedOrigins": { "type": "string" },
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+            }
+          }
+        },
+        "rateLimit": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "rps": { "type": "number", "minimum": 0 },
+            "burst": { "type": "integer", "minimum": 0 },
+            "llmRps": { "type": "number", "minimum": 0 },
+            "llmBurst": { "type": "integer", "minimum": 0 },
+            "webhookRps": { "type": "number", "minimum": 0 },
+            "webhookBurst": { "type": "integer", "minimum": 0 },
+            "ttlMinutes": { "type": "integer", "minimum": 1 },
+            "trustProxy": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "properties": {
+        "maxRetries": { "type": "integer", "minimum": 0 },
+        "planTimeout": { "type": "integer", "minimum": 1 },
+        "verifyModel": { "type": "string" }
+      }
+    },
+    "bff": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "authMode": { "type": "string", "enum": ["open", "oidc"] },
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+            },
+            "nodePort": { "type": ["string", "integer"] }
+          }
+        }
+      }
+    },
+    "web": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 1 },
+        "port": { "type": "integer" },
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+            },
+            "nodePort": { "type": ["string", "integer"] }
+          }
+        }
+      }
+    },
+    "cudgel": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string" },
+        "endpoint": { "type": "string" },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        }
+      }
+    },
+    "softServe": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string" },
+        "storage": { "type": "string" },
+        "storageClass": { "type": "string" },
+        "adminKey": { "type": "string" },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "imageRef": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string" },
+        "tag": { "type": "string" },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "resourceRequirements": {
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
