@@ -5,11 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"net/http"
+	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"go.temporal.io/sdk/activity"
 
+	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
+	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 	"github.com/uncworks/aot/internal/brain"
 	"github.com/uncworks/aot/internal/embeddings"
 )
@@ -25,17 +29,13 @@ type PersistRunDataInput struct {
 	AgentRunID    string
 	WorkspacePath string
 	RepoURL       string
+	PodIP         string
 }
 
 // PersistRunData reads logs and spans from the agent workspace and saves them to PostgreSQL.
 // This activity runs after agent completion, before scale-down.
-//
-// TODO(temporal): PersistRunData reads from the worker's local filesystem (os.ReadFile),
-// but the data lives on the agent pod's PVC (WorkspacePath = "/workspace"). These reads
-// will always produce empty results unless the worker mounts the same PVC.
-// Fix: route file reads through the sidecar ExecCommand RPC (like PlanRun/VerifyRun do),
-// or add a dedicated sidecar endpoint that streams log/span/diff data over gRPC.
-// Until then, BrainStore must be nil (no-op path) for this to be harmless.
+// File access is routed through the sidecar ExecCommand RPC so reads target the agent
+// pod's PVC rather than the Temporal worker's local filesystem.
 func (ka *KnowledgeActivities) PersistRunData(ctx context.Context, input PersistRunDataInput) error {
 	logger := activity.GetLogger(ctx)
 
@@ -44,24 +44,39 @@ func (ka *KnowledgeActivities) PersistRunData(ctx context.Context, input Persist
 		return nil
 	}
 
-	// Read and persist logs
-	logPath := input.WorkspacePath + "/.aot/logs/agent.log"
-	if content, err := os.ReadFile(logPath); err == nil && len(content) > 0 {
-		if err := ka.BrainStore.SaveRunLog(ctx, input.AgentRunID, string(content)); err != nil {
-			logger.Warn("Failed to save run logs", "error", err)
-		} else {
-			logger.Info("Persisted run logs", "agentRunID", input.AgentRunID, "bytes", len(content))
-		}
-	} else if err != nil && !os.IsNotExist(err) {
-		logger.Warn("Failed to read agent log", "path", logPath, "error", err)
+	if input.PodIP == "" {
+		logger.Warn("No pod IP provided, skipping run data persistence")
+		return nil
 	}
 
-	// Read and persist spans from JSONL file
+	sidecarURL := fmt.Sprintf("http://%s:%d", input.PodIP, sidecarPort)
+	sc := agentv1connect.NewAgentSidecarServiceClient(http.DefaultClient, sidecarURL)
+
+	// Read and persist logs via sidecar
+	logPath := input.WorkspacePath + "/.aot/logs/agent.log"
+	logResp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "cat " + logPath,
+		TimeoutSeconds: 30,
+	}))
+	if err == nil && logResp.Msg.ExitCode == 0 && len(logResp.Msg.Stdout) > 0 {
+		if err := ka.BrainStore.SaveRunLog(ctx, input.AgentRunID, logResp.Msg.Stdout); err != nil {
+			logger.Warn("Failed to save run logs", "error", err)
+		} else {
+			logger.Info("Persisted run logs", "agentRunID", input.AgentRunID, "bytes", len(logResp.Msg.Stdout))
+		}
+	} else if err != nil {
+		logger.Warn("Failed to read agent log via sidecar", "path", logPath, "error", err)
+	}
+
+	// Read and persist spans from JSONL file via sidecar
 	spansPath := input.WorkspacePath + "/.aot/traces/spans.jsonl"
-	if f, err := os.Open(spansPath); err == nil {
-		defer func() { _ = f.Close() }()
-		scanner := bufio.NewScanner(f)
-		spanCount := 0
+	spansResp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "cat " + spansPath,
+		TimeoutSeconds: 30,
+	}))
+	if err == nil && spansResp.Msg.ExitCode == 0 && len(spansResp.Msg.Stdout) > 0 {
+		scanner := bufio.NewScanner(strings.NewReader(spansResp.Msg.Stdout))
+		var spans []brain.TraceSpan
 		for scanner.Scan() {
 			line := scanner.Bytes()
 			if len(line) == 0 {
@@ -96,34 +111,41 @@ func (ka *KnowledgeActivities) PersistRunData(ctx context.Context, input Persist
 					span.EndTime = &t
 				}
 			}
-
-			if err := ka.BrainStore.SaveRunSpan(ctx, input.AgentRunID, span); err != nil {
-				logger.Warn("Failed to save run span", "error", err)
+			spans = append(spans, span)
+		}
+		if len(spans) > 0 {
+			if err := ka.BrainStore.SaveRunSpans(ctx, input.AgentRunID, spans); err != nil {
+				logger.Warn("Failed to save run spans", "error", err)
 			} else {
-				spanCount++
+				logger.Info("Persisted run spans", "agentRunID", input.AgentRunID, "count", len(spans))
 			}
 		}
-		if spanCount > 0 {
-			logger.Info("Persisted run spans", "agentRunID", input.AgentRunID, "count", spanCount)
-		}
-	} else if !os.IsNotExist(err) {
-		logger.Warn("Failed to read spans file", "path", spansPath, "error", err)
+	} else if err != nil {
+		logger.Warn("Failed to read spans file via sidecar", "path", spansPath, "error", err)
 	}
 
-	// Read diffs from workspace (git diff output or .aot/diffs/)
+	// List and read diffs from workspace via sidecar
 	diffsDir := input.WorkspacePath + "/.aot/diffs"
-	if entries, err := os.ReadDir(diffsDir); err == nil {
+	lsResp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "ls -1 " + diffsDir + " 2>/dev/null",
+		TimeoutSeconds: 15,
+	}))
+	if err == nil && lsResp.Msg.ExitCode == 0 && len(lsResp.Msg.Stdout) > 0 {
 		diffCount := 0
-		for _, entry := range entries {
-			if entry.IsDir() {
+		for _, name := range strings.Split(strings.TrimSpace(lsResp.Msg.Stdout), "\n") {
+			name = strings.TrimSpace(name)
+			if name == "" {
 				continue
 			}
-			content, err := os.ReadFile(diffsDir + "/" + entry.Name())
-			if err != nil {
+			catResp, catErr := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+				Command:        "cat " + diffsDir + "/" + name,
+				TimeoutSeconds: 15,
+			}))
+			if catErr != nil || catResp.Msg.ExitCode != 0 {
 				continue
 			}
-			if err := ka.BrainStore.SaveRunDiff(ctx, input.AgentRunID, "", entry.Name(), string(content)); err != nil {
-				logger.Warn("Failed to save run diff", "file", entry.Name(), "error", err)
+			if err := ka.BrainStore.SaveRunDiff(ctx, input.AgentRunID, "", name, catResp.Msg.Stdout); err != nil {
+				logger.Warn("Failed to save run diff", "file", name, "error", err)
 			} else {
 				diffCount++
 			}
@@ -231,6 +253,7 @@ type HydrateContextInput struct {
 	Prompt        string
 	RepoURL       string
 	AgentType     string // "senior", "orchestrator", or empty for junior/single
+	PodIP         string
 }
 
 // HydrateContextOutput contains the result of context hydration.
@@ -240,13 +263,8 @@ type HydrateContextOutput struct {
 
 // HydrateContext queries pgvector for relevant past work and writes a context file
 // to the agent's workspace before the agent starts.
-//
-// TODO(temporal): HydrateContext writes the context file via os.WriteFile to
-// input.WorkspacePath on the worker's local filesystem, but the agent workspace
-// lives on the pod PVC. The write will silently succeed on the worker node but
-// the agent pod will never see the file.
-// Fix: write the context via the sidecar ExecCommand RPC (e.g., "echo '...' > /workspace/.aot/context/past-work.md"),
-// similar to how WriteTraceSpan works.
+// The context file is written via the sidecar ExecCommand RPC so it lands on the
+// agent pod's PVC rather than the Temporal worker's local filesystem.
 func (ka *KnowledgeActivities) HydrateContext(ctx context.Context, input HydrateContextInput) (*HydrateContextOutput, error) {
 	logger := activity.GetLogger(ctx)
 
@@ -257,6 +275,11 @@ func (ka *KnowledgeActivities) HydrateContext(ctx context.Context, input Hydrate
 
 	if !ka.BrainStore.PgvectorReady() {
 		logger.Warn("pgvector not available, skipping context hydration")
+		return &HydrateContextOutput{}, nil
+	}
+
+	if input.PodIP == "" {
+		logger.Warn("No pod IP provided, skipping context hydration")
 		return &HydrateContextOutput{}, nil
 	}
 
@@ -292,16 +315,34 @@ func (ka *KnowledgeActivities) HydrateContext(ctx context.Context, input Hydrate
 	// Format context file
 	contextContent := formatContextFile(codeResults, traceResults)
 
-	// Write context file
+	// Write context file to agent pod PVC via sidecar ExecCommand.
+	// Use tee so the content flows through stdin and lands in the right place.
 	contextDir := input.WorkspacePath + "/.aot/context"
-	if err := os.MkdirAll(contextDir, 0o755); err != nil {
-		logger.Warn("Failed to create context directory", "error", err)
+	contextPath := contextDir + "/past-work.md"
+
+	sidecarURL := fmt.Sprintf("http://%s:%d", input.PodIP, sidecarPort)
+	sc := agentv1connect.NewAgentSidecarServiceClient(http.DefaultClient, sidecarURL)
+
+	// First, ensure the directory exists on the pod
+	mkdirResp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "mkdir -p " + contextDir,
+		TimeoutSeconds: 10,
+	}))
+	if err != nil || mkdirResp.Msg.ExitCode != 0 {
+		logger.Warn("Failed to create context directory via sidecar", "error", err)
 		return &HydrateContextOutput{}, nil
 	}
 
-	contextPath := contextDir + "/past-work.md"
-	if err := os.WriteFile(contextPath, []byte(contextContent), 0o644); err != nil {
-		logger.Warn("Failed to write context file", "error", err)
+	// Write via bash printf to handle arbitrary content safely
+	writeCmd := fmt.Sprintf("printf '%%s' %s > %s",
+		shellescape(contextContent), contextPath)
+	writeResp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        writeCmd,
+		TimeoutSeconds: 15,
+	}))
+	if err != nil || writeResp.Msg.ExitCode != 0 {
+		logger.Warn("Failed to write context file via sidecar", "error", err,
+			"stderr", writeResp.Msg.Stderr)
 		return &HydrateContextOutput{}, nil
 	}
 
@@ -311,6 +352,12 @@ func (ka *KnowledgeActivities) HydrateContext(ctx context.Context, input Hydrate
 		"traceResults", len(traceResults))
 
 	return &HydrateContextOutput{ContextWritten: true}, nil
+}
+
+// shellescape wraps a string in single quotes and escapes any embedded single quotes
+// so it can be safely passed as a shell argument.
+func shellescape(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 // formatContextFile produces a markdown context file from search results.

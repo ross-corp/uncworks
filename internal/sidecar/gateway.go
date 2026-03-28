@@ -235,6 +235,13 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 	lastCheckpointSHA = ""
 	checkpointMu.Unlock()
 
+	// Reset token usage counters for this run
+	tokenUsageMu.Lock()
+	runInputTokens = 0
+	runOutputTokens = 0
+	runCacheReadTokens = 0
+	tokenUsageMu.Unlock()
+
 	// Write an initial trace span so the traces tab has data immediately.
 	stageName := spanPrefix() + ".started"
 	appendTraceSpan(TraceSpan{
@@ -661,6 +668,22 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 
 	// Wait for readers to drain all remaining pipe data
 	proc.readerWg.Wait()
+
+	// Emit run-level token usage after all events have been processed
+	tokenUsageMu.Lock()
+	totalIn := runInputTokens
+	totalOut := runOutputTokens
+	totalCache := runCacheReadTokens
+	tokenUsageMu.Unlock()
+	if totalIn > 0 || totalOut > 0 {
+		slog.Info("agent run token usage",
+			"input_tokens", totalIn,
+			"output_tokens", totalOut,
+			"cache_read_tokens", totalCache,
+			"total_tokens", totalIn+totalOut,
+		)
+		// TODO(agent): wire to cost tracking / budget enforcement
+	}
 
 	// Close log files after streams are drained
 	if proc.logFile != nil {
@@ -1333,6 +1356,13 @@ var (
 	// Text accumulator for thought spans — collects text_delta events
 	thoughtTextMu      sync.Mutex
 	thoughtTextBuilder strings.Builder
+
+	// Token usage accumulators — summed across all message_end events in a run.
+	// Reset by StartAgent; logged at run completion.
+	tokenUsageMu         sync.Mutex
+	runInputTokens       int
+	runOutputTokens      int
+	runCacheReadTokens   int
 )
 
 // modelContextWindows maps model names to their context window sizes (in tokens).
@@ -1639,6 +1669,12 @@ func maybeCaptureStreamEvent(evt *piEvent, raw string) {
 						span.Metadata["gen_ai.context.window_size"] = windowSize
 						span.Metadata["gen_ai.context.utilization_pct"] = int(float64(msg.Usage.Input) / float64(windowSize) * 100)
 					}
+					// Accumulate run-level token totals for end-of-run logging
+					tokenUsageMu.Lock()
+					runInputTokens += msg.Usage.Input
+					runOutputTokens += msg.Usage.Output
+					runCacheReadTokens += msg.Usage.CacheRead
+					tokenUsageMu.Unlock()
 				}
 			}
 
