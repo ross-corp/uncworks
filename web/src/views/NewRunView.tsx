@@ -63,17 +63,24 @@ export default function NewRunView() {
 
   // Fetch Project CRDs for the project selector
   useEffect(() => {
-    apiFetch("/api/v1/projects").then(async (resp) => {
+    const ac = new AbortController();
+    apiFetch("/api/v1/projects", { signal: ac.signal }).then(async (resp) => {
       if (resp.ok) {
         const data = await resp.json() as ProjectOption[];
         setAvailableProjects(data);
       }
-    }).catch((err) => { console.error("[NewRunView]", err); toast.error("Failed to load projects"); });
+    }).catch((err) => {
+      if (err instanceof Error && err.name === "AbortError") return;
+      console.error("[NewRunView]", err); toast.error("Failed to load projects");
+    });
+    return () => ac.abort();
   }, []);
 
   // Fetch existing projects/features for suggestions
   useEffect(() => {
+    let cancelled = false;
     client.listAgentRuns().then((runs) => {
+      if (cancelled) return;
       const projects = new Set<string>();
       const features = new Set<string>();
       for (const r of runs) {
@@ -82,14 +89,20 @@ export default function NewRunView() {
       }
       setExistingProjects(Array.from(projects).sort());
       setExistingFeatures(Array.from(features).sort());
-    }).catch((err) => { console.error("[NewRunView]", err); toast.error("Failed to load run history"); });
+    }).catch((err) => {
+      if (cancelled) return;
+      console.error("[NewRunView]", err); toast.error("Failed to load run history");
+    });
+    return () => { cancelled = true; };
   }, [client]);
 
   // Clone support
   useEffect(() => {
     const cloneId = searchParams.get("clone");
     if (!cloneId) return;
+    let cancelled = false;
     client.getAgentRun(cloneId).then((raw) => {
+      if (cancelled) return;
       const run = mapRun(raw);
       set.prompt(run.spec.prompt || "");
       if (run.spec.repos?.length) {
@@ -104,37 +117,49 @@ export default function NewRunView() {
       if (run.spec.project) { set.project(run.spec.project); userEditedProject.current = true; }
       if (run.spec.feature) { set.feature(run.spec.feature); userEditedFeature.current = true; }
       if (run.spec.tags?.length) { set.tags(run.spec.tags.join(", ")); userEditedTags.current = true; }
-    }).catch((err) => { console.error("[NewRunView]", err); toast.error("Failed to load run to clone"); });
-  }, [searchParams, client]);
+    }).catch((err) => {
+      if (cancelled) return;
+      console.error("[NewRunView]", err); toast.error("Failed to load run to clone");
+    });
+    return () => { cancelled = true; };
+  }, [searchParams, client, set]);
 
   // Pre-fill from project/spec query params
   useEffect(() => {
     const projName = searchParams.get("project");
+    const specName = searchParams.get("spec");
+    let cancelled = false;
+    const ac = new AbortController();
+
     if (projName) {
       set.projectRef(projName);
       set.project(projName);
       userEditedProject.current = true;
       // Fetch project details for defaults
-      apiFetch(`/api/v1/projects/${projName}`).then(async (resp) => {
-        if (!resp.ok) return;
+      apiFetch(`/api/v1/projects/${projName}`, { signal: ac.signal }).then(async (resp) => {
+        if (!resp.ok || cancelled) return;
         const proj = await resp.json();
+        if (cancelled) return;
         if (proj.repos?.length) set.repos(proj.repos.map((r: { url: string; branch: string }) => ({ url: r.url, branch: r.branch || "main" })));
         if (proj.defaults?.modelTier) set.modelTier(proj.defaults.modelTier);
         if (proj.defaults?.orchestrationMode) set.orchestrationMode(proj.defaults.orchestrationMode);
         if (proj.displayName || proj.name) set.project(proj.displayName || proj.name);
-      }).catch((err) => { console.error("[NewRunView]", err); });
+      }).catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        console.error("[NewRunView]", err);
+      });
     }
-    const specName = searchParams.get("spec");
     if (specName) {
       set.specRef(specName);
       set.mode("spec");
       set.orchestrationMode("spec-driven");
     }
-  }, [searchParams]);
+    return () => { cancelled = true; ac.abort(); };
+  }, [searchParams, set]);
 
   useEffect(() => {
     if (mode === "spec") set.orchestrationMode("spec-driven");
-  }, [mode]);
+  }, [mode, set]);
 
   const classifyPrompt = useCallback(async () => {
     if (prompt.trim().length <= 10) return;

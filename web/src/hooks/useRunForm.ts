@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { OrchestrationMode } from "../types/agent-run";
 
 interface RepoEntry {
@@ -50,17 +50,29 @@ export interface UseRunFormReturn {
   reset: () => void;
 }
 
+/**
+ * useRunForm — manages run creation form state.
+ *
+ * The `set` object is stable across renders (built once via a ref) so callers
+ * can safely include individual setters in useEffect/useCallback dependency
+ * arrays without causing infinite loops.
+ */
 export function useRunForm(): UseRunFormReturn {
   const [form, setForm] = useState<RunFormState>({ ...DEFAULT_FORM });
 
-  const set = {} as SetField;
-  (Object.keys(DEFAULT_FORM) as (keyof RunFormState)[]).forEach((key) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (set as any)[key] = (value: unknown) =>
-      setForm((prev) => ({ ...prev, [key]: value }));
-  });
+  // Build each setter once and store in a ref so the identity is stable.
+  const setRef = useRef<SetField | null>(null);
+  if (setRef.current === null) {
+    const set = {} as SetField;
+    (Object.keys(DEFAULT_FORM) as (keyof RunFormState)[]).forEach((key) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (set as any)[key] = (value: unknown) =>
+        setForm((prev) => ({ ...prev, [key]: value }));
+    });
+    setRef.current = set;
+  }
 
   const reset = useCallback(() => setForm({ ...DEFAULT_FORM }), []);
 
-  return { form, set, reset };
+  return { form, set: setRef.current, reset };
 }

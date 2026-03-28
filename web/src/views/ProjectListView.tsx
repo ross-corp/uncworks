@@ -52,19 +52,7 @@ export default function ProjectListView() {
     }
   }, []);
 
-  usePoll(async () => {
-    try {
-      const resp = await apiFetch("/api/v1/projects");
-      if (resp.ok) {
-        const data = await resp.json();
-        setProjects(data);
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load projects");
-    } finally {
-      setLoading(false);
-    }
-  }, 10000);
+  usePoll(fetchProjects, 10000);
 
   async function handleCreate() {
     if (!newName.trim()) return;
