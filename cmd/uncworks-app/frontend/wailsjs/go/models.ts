@@ -124,6 +124,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class LiteLLMCheckResult {
+	    ok: boolean;
+	    models: string[];
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LiteLLMCheckResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.models = source["models"];
+	        this.error = source["error"];
+	    }
+	}
 	export class ServiceInfo {
 	    name: string;
 	    displayName: string;
@@ -144,6 +160,26 @@ export namespace main {
 	        this.localPort = source["localPort"];
 	        this.ready = source["ready"];
 	        this.forwarding = source["forwarding"];
+	    }
+	}
+	export class UpdateInfo {
+	    localBuild: boolean;
+	    upToDate: boolean;
+	    currentVersion?: string;
+	    latestVersion?: string;
+	    releaseURL?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.localBuild = source["localBuild"];
+	        this.upToDate = source["upToDate"];
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.releaseURL = source["releaseURL"];
 	    }
 	}
 

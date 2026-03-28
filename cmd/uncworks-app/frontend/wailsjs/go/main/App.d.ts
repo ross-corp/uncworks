@@ -4,6 +4,10 @@ import {main} from '../models';
 
 export function AutodetectNamespace(arg1:string):Promise<string>;
 
+export function CheckForUpdate():Promise<main.UpdateInfo>;
+
+export function CheckLiteLLM(arg1:string):Promise<main.LiteLLMCheckResult>;
+
 export function ClusterStatus():Promise<string>;
 
 export function DisconnectGitHub():Promise<void>;
