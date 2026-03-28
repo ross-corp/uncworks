@@ -254,6 +254,12 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			}
 			persistCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
 				StartToCloseTimeout: 2 * time.Minute,
+				RetryPolicy: &temporal.RetryPolicy{
+					InitialInterval:    5 * time.Second,
+					BackoffCoefficient: 2.0,
+					MaximumInterval:    30 * time.Second,
+					MaximumAttempts:    3,
+				},
 			})
 			if err := workflow.ExecuteActivity(persistCtx, ActivityPersistRunData, PersistRunDataInput{
 				AgentRunID:    input.AgentRunName,
@@ -266,6 +272,12 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			// Embed run data asynchronously (does not block workflow completion)
 			embedCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
 				StartToCloseTimeout: 5 * time.Minute,
+				RetryPolicy: &temporal.RetryPolicy{
+					InitialInterval:    5 * time.Second,
+					BackoffCoefficient: 2.0,
+					MaximumInterval:    60 * time.Second,
+					MaximumAttempts:    2,
+				},
 			})
 			if err := workflow.ExecuteActivity(embedCtx, ActivityEmbedRunData, EmbedRunDataInput{
 				AgentRunID: input.AgentRunName,

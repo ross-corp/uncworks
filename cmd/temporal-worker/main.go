@@ -5,7 +5,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -34,7 +34,8 @@ func init() {
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatalf("Worker failed: %v", err)
+		slog.Error("worker failed", "err", err)
+		os.Exit(1)
 	}
 }
 
@@ -43,8 +44,7 @@ func run() error {
 	temporalNamespace := envOrDefault("TEMPORAL_NAMESPACE", "default")
 	taskQueue := envOrDefault("TEMPORAL_TASK_QUEUE", aottemporal.TaskQueue)
 
-	log.Printf("Connecting to Temporal at %s (namespace: %s, queue: %s)",
-		temporalHost, temporalNamespace, taskQueue)
+	slog.Info("connecting to Temporal", "host", temporalHost, "namespace", temporalNamespace, "queue", taskQueue)
 
 	// Initialize controller-runtime K8s client for pod management activities
 	restConfig := ctrl.GetConfigOrDie()
@@ -69,14 +69,15 @@ func run() error {
 	litellmMasterKey := os.Getenv("LITELLM_MASTER_KEY")
 	if litellmBaseURL != "" && litellmMasterKey != "" {
 		litellmClient = litellm.NewClient(litellmBaseURL, litellmMasterKey)
-		log.Printf("LiteLLM client configured: %s", litellmBaseURL)
+		slog.Info("LiteLLM client configured", "baseURL", litellmBaseURL)
 	}
 
 	// Log configured images
-	log.Printf("Agent images: agent=%s sidecar=%s init=%s",
-		envOrDefault("AOT_AGENT_IMAGE", "ghcr.io/uncworks/aot-agent:latest"),
-		envOrDefault("AOT_SIDECAR_IMAGE", "ghcr.io/uncworks/aot-sidecar:latest"),
-		envOrDefault("AOT_INIT_IMAGE", "ghcr.io/uncworks/aot-init:latest"))
+	slog.Info("agent images",
+		"agent", envOrDefault("AOT_AGENT_IMAGE", "ghcr.io/uncworks/aot-agent:latest"),
+		"sidecar", envOrDefault("AOT_SIDECAR_IMAGE", "ghcr.io/uncworks/aot-sidecar:latest"),
+		"init", envOrDefault("AOT_INIT_IMAGE", "ghcr.io/uncworks/aot-init:latest"),
+	)
 
 	// Create GitHub token provider from environment
 	ghProvider := aotgithub.NewPATProvider(os.Getenv("GITHUB_TOKEN"))
@@ -96,21 +97,25 @@ func run() error {
 
 	// Register workflows
 	w.RegisterWorkflow(aottemporal.AgentRunWorkflow)
+	w.RegisterWorkflow(aottemporal.SpawnJuniorWorkflow)
 
 	// Register activities
 	w.RegisterActivity(activities)
 
-	// Register knowledge activities (context hydration, run data persistence, embedding)
+	// Register knowledge activities (context hydration, run data persistence, embedding).
+	// TODO(temporal): KnowledgeActivities.BrainStore and .Embedder are never wired here.
+	// Until wired, all knowledge activities run as no-ops (guarded by nil checks).
+	// Wire via env-driven PostgreSQL/pgvector client initialization when the brain store is ready.
 	knowledgeActivities := &aottemporal.KnowledgeActivities{}
 	w.RegisterActivity(knowledgeActivities)
 
 	// Start worker (blocks until interrupted)
-	log.Printf("Starting Temporal worker on queue %s", taskQueue)
+	slog.Info("starting Temporal worker", "queue", taskQueue)
 	if err := w.Run(worker.InterruptCh()); err != nil {
 		return fmt.Errorf("run worker: %w", err)
 	}
 
-	log.Println("Worker stopped")
+	slog.Info("worker stopped")
 	return nil
 }
 
