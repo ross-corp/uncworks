@@ -34,16 +34,16 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	// specDir = where OpenSpec artifacts live (/workspace — NOT inside the repo)
 	workDir := input.RepoPath
 	specDir := "/workspace"
-	log.Printf("[PlanRun %s] repoDir=%s specDir=%s", input.AgentRunName, workDir, specDir)
+	slog.Info("[PlanRun] workspace dirs", "run", input.AgentRunName, "repoDir", workDir, "specDir", specDir)
 
 	// Step 2: OpenSpec init in workspace root (not inside repo)
 	activity.RecordHeartbeat(ctx, "initializing openspec in workspace")
 	initOut, initErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir,
 		"test -f openspec/config.yaml || openspec init --tools pi --force")
 	if initErr != nil {
-		log.Printf("[PlanRun %s] openspec init warning (non-fatal): %v stdout=%q", input.AgentRunName, initErr, initOut)
+		slog.Warn("[PlanRun] openspec init warning (non-fatal)", "run", input.AgentRunName, "err", initErr, "stdout", initOut)
 	} else {
-		log.Printf("[PlanRun %s] openspec init OK: %s", input.AgentRunName, truncate(initOut, 200))
+		slog.Info("[PlanRun] openspec init OK", "run", input.AgentRunName, "stdout", truncate(initOut, 200))
 	}
 
 	// Step 3: Scaffold the change BEFORE starting the agent (idempotent — skip if already exists)
@@ -51,14 +51,14 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	checkCmd := fmt.Sprintf("test -d openspec/changes/%q && echo exists || echo missing", input.AgentRunName)
 	checkOut, _ := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir, checkCmd)
 	if strings.TrimSpace(checkOut) == "exists" {
-		log.Printf("[PlanRun %s] change directory already exists, skipping scaffold", input.AgentRunName)
+		slog.Info("[PlanRun] change directory already exists, skipping scaffold", "run", input.AgentRunName)
 	} else {
 		newChangeCmd := fmt.Sprintf("openspec new change %q", input.AgentRunName)
 		newOut, newErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir, newChangeCmd)
 		if newErr != nil {
 			return PlanRunOutput{}, fmt.Errorf("scaffold openspec change: %w (output: %s)", newErr, newOut)
 		}
-		log.Printf("[PlanRun %s] scaffolded change: %s", input.AgentRunName, truncate(newOut, 200))
+		slog.Info("[PlanRun] scaffolded change", "run", input.AgentRunName, "output", truncate(newOut, 200))
 	}
 
 	// Step 4: Verify the change was created via status
@@ -68,7 +68,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	if scaffoldStatusErr != nil {
 		return PlanRunOutput{}, fmt.Errorf("verify scaffolded change: %w (output: %s)", scaffoldStatusErr, scaffoldStatusOut)
 	}
-	log.Printf("[PlanRun %s] status response: %s", input.AgentRunName, truncate(scaffoldStatusOut, 300))
+	slog.Info("[PlanRun] scaffolded change status", "run", input.AgentRunName, "status", truncate(scaffoldStatusOut, 300))
 
 	scaffoldStatus, scaffoldParseErr := parseOpenSpecStatusResponse(scaffoldStatusOut)
 	if scaffoldParseErr != nil {
@@ -87,10 +87,10 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 		if t, parseErr := parseOpenSpecInstructionsResponse(proposalInstrOut); parseErr == nil {
 			proposalTemplate = t
 		} else {
-			log.Printf("[PlanRun %s] parse proposal instructions warning: %v", input.AgentRunName, parseErr)
+			slog.Warn("[PlanRun] parse proposal instructions warning", "run", input.AgentRunName, "err", parseErr)
 		}
 	} else {
-		log.Printf("[PlanRun %s] openspec instructions proposal warning: %v", input.AgentRunName, err)
+		slog.Warn("[PlanRun] openspec instructions proposal warning", "run", input.AgentRunName, "err", err)
 	}
 
 	specsInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir,
@@ -99,10 +99,10 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 		if t, parseErr := parseOpenSpecInstructionsResponse(specsInstrOut); parseErr == nil {
 			specsTemplate = t
 		} else {
-			log.Printf("[PlanRun %s] parse specs instructions warning: %v", input.AgentRunName, parseErr)
+			slog.Warn("[PlanRun] parse specs instructions warning", "run", input.AgentRunName, "err", parseErr)
 		}
 	} else {
-		log.Printf("[PlanRun %s] openspec instructions specs warning: %v", input.AgentRunName, err)
+		slog.Warn("[PlanRun] openspec instructions specs warning", "run", input.AgentRunName, "err", err)
 	}
 
 	tasksInstrOut, err := execInSidecar(ctx, sidecarClient, input.AgentRunName, specDir,
@@ -111,10 +111,10 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 		if t, parseErr := parseOpenSpecInstructionsResponse(tasksInstrOut); parseErr == nil {
 			tasksTemplate = t
 		} else {
-			log.Printf("[PlanRun %s] parse tasks instructions warning: %v", input.AgentRunName, parseErr)
+			slog.Warn("[PlanRun] parse tasks instructions warning", "run", input.AgentRunName, "err", parseErr)
 		}
 	} else {
-		log.Printf("[PlanRun %s] openspec instructions tasks warning: %v", input.AgentRunName, err)
+		slog.Warn("[PlanRun] openspec instructions tasks warning", "run", input.AgentRunName, "err", err)
 	}
 
 	// Step 5: Build structured agent prompt with exact paths and templates
@@ -126,7 +126,7 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 		envVars["PI_MODEL"] = input.Model
 	}
 
-	log.Printf("[PlanRun %s] starting plan agent in workDir=%s", input.AgentRunName, workDir)
+	slog.Info("[PlanRun] starting plan agent", "run", input.AgentRunName, "workDir", workDir)
 	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
 		AgentRunId:   input.AgentRunName,
 		Prompt:       prompt,
@@ -207,7 +207,7 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	// workDir = repo dir (resolved by sidecar), specDir = /workspace for openspec
 	workDir := input.RepoPath
 	specDir := "/workspace"
-	log.Printf("[VerifyRun %s] repoDir=%s specDir=%s", input.AgentRunName, workDir, specDir)
+	slog.Info("[VerifyRun] workspace dirs", "run", input.AgentRunName, "repoDir", workDir, "specDir", specDir)
 
 	result := VerificationResult{
 		AutomatedChecks: []AutomatedCheck{},
@@ -400,10 +400,10 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		EnvVars:      map[string]string{"PI_MODEL": manageModel},
 	}))
 	if err != nil {
-		log.Printf("Manage agent review failed to start: %v", err)
+		slog.Warn("manage agent review failed to start", "err", err)
 	} else {
 		if pollErr := pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName+"-verify"); pollErr != nil {
-			log.Printf("Manage agent review failed: %v", pollErr)
+			slog.Warn("manage agent review failed", "err", pollErr)
 		} else {
 			activity.RecordHeartbeat(ctx, "parsing manage agent verdict")
 			verdictJSON, readErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
@@ -438,7 +438,7 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	if archiveErr != nil {
 		// Fix 8: report archive errors (was swallowed with || true)
 		// Archive failure is informational, not a gate blocker
-		log.Printf("openspec archive warning: %v (output: %s)", archiveErr, archiveOut)
+		slog.Warn("openspec archive warning", "err", archiveErr, "output", archiveOut)
 		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
 			Name: "archive", Pass: false, Output: fmt.Sprintf("archive failed: %v", archiveErr),
 		})
@@ -697,7 +697,7 @@ func writeVerificationResult(repoPath, changeName string, result VerificationRes
 	for _, dir := range candidates {
 		if _, err := os.Stat(dir); err == nil {
 			if writeErr := os.WriteFile(filepath.Join(dir, "verification-result.json"), data, 0o644); writeErr != nil {
-				log.Printf("failed to write verification result to %s: %v", dir, writeErr)
+				slog.Warn("failed to write verification result", "dir", dir, "err", writeErr)
 			}
 			return
 		}
@@ -705,11 +705,11 @@ func writeVerificationResult(repoPath, changeName string, result VerificationRes
 
 	fallbackDir := filepath.Join(repoPath, ".aot", "verification")
 	if mkdirErr := os.MkdirAll(fallbackDir, 0o755); mkdirErr != nil {
-		log.Printf("failed to create fallback verification dir %s: %v", fallbackDir, mkdirErr)
+		slog.Warn("failed to create fallback verification dir", "dir", fallbackDir, "err", mkdirErr)
 		return
 	}
 	if writeErr := os.WriteFile(filepath.Join(fallbackDir, changeName+"-result.json"), data, 0o644); writeErr != nil {
-		log.Printf("failed to write fallback verification result to %s: %v", fallbackDir, writeErr)
+		slog.Warn("failed to write fallback verification result", "dir", fallbackDir, "err", writeErr)
 	}
 }
 
