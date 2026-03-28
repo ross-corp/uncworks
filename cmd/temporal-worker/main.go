@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -20,6 +21,8 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
+	"github.com/uncworks/aot/internal/brain"
+	"github.com/uncworks/aot/internal/embeddings"
 	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/litellm"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
@@ -103,10 +106,30 @@ func run() error {
 	w.RegisterActivity(activities)
 
 	// Register knowledge activities (context hydration, run data persistence, embedding).
-	// TODO(temporal): KnowledgeActivities.BrainStore and .Embedder are never wired here.
-	// Until wired, all knowledge activities run as no-ops (guarded by nil checks).
-	// Wire via env-driven PostgreSQL/pgvector client initialization when the brain store is ready.
+	// Wire brain store and embedder when BRAIN_DATABASE_URL and EMBEDDER_BASE_URL are set.
 	knowledgeActivities := &aottemporal.KnowledgeActivities{}
+	if brainDSN := os.Getenv("BRAIN_DATABASE_URL"); brainDSN != "" {
+		brainPool, err := brain.NewPool(context.Background(), brainDSN)
+		if err != nil {
+			slog.Warn("failed to connect to brain DB — knowledge activities will be no-ops", "err", err)
+		} else {
+			defer brainPool.Close()
+			store := brain.NewStore(brainPool)
+			if err := store.Migrate(context.Background()); err != nil {
+				slog.Warn("brain DB migration failed — knowledge activities will be no-ops", "err", err)
+			} else {
+				knowledgeActivities.BrainStore = store
+				slog.Info("brain store connected and migrated")
+			}
+		}
+	} else {
+		slog.Warn("BRAIN_DATABASE_URL not set — knowledge activities (persist/embed/hydrate) are no-ops")
+	}
+	if embedderURL := os.Getenv("EMBEDDER_BASE_URL"); embedderURL != "" && knowledgeActivities.BrainStore != nil {
+		model := os.Getenv("EMBEDDER_MODEL") // empty string falls back to DefaultModel
+		knowledgeActivities.Embedder = embeddings.NewEmbedder(embedderURL, model, &http.Client{Timeout: 30 * time.Second})
+		slog.Info("embedder configured", "baseURL", embedderURL)
+	}
 	w.RegisterActivity(knowledgeActivities)
 
 	// Start worker (blocks until interrupted)

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -201,7 +201,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 
 	// Knowledge system tables: vector embeddings (requires pgvector extension)
 	if err := s.migrateVectorTables(ctx); err != nil {
-		log.Printf("WARNING: pgvector tables not created (pgvector extension may not be available): %v", err)
+		slog.Warn("pgvector tables not created (pgvector extension may not be available)", "err", err)
 		// Graceful degradation: run artifacts are stored, but embedding/search is unavailable.
 	}
 
