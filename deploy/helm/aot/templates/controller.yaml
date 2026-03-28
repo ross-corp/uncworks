@@ -26,6 +26,10 @@ spec:
           imagePullPolicy: {{ .Values.images.controlplane.pullPolicy }}
           command: ["/usr/local/bin/controller"]
           env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: TEMPORAL_HOST
               value: {{ .Values.temporal.host | quote }}
             - name: TEMPORAL_NAMESPACE
@@ -40,7 +44,7 @@ spec:
             {{- end }}
             {{- if .Values.cudgel.enabled }}
             - name: CUDGEL_ENDPOINT
-              value: {{ .Values.cudgel.endpoint | quote }}
+              value: {{ include "aot.cudgelEndpoint" . | quote }}
             {{- end }}
             {{- if .Values.softServe.enabled }}
             - name: SOFT_SERVE_ADDR
@@ -51,6 +55,27 @@ spec:
           ports:
             - name: metrics
               containerPort: {{ .Values.controller.metricsPort }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop: ["ALL"]
           {{- if .Values.softServe.enabled }}
           volumeMounts:
             - name: soft-serve-key

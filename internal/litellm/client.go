@@ -9,7 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 )
+
+// defaultHTTPTimeout is the per-request timeout for all LiteLLM Admin API calls.
+// Without a timeout an unresponsive proxy stalls the activity worker indefinitely.
+const defaultHTTPTimeout = 30 * time.Second
 
 // Client communicates with the LiteLLM Admin API.
 type Client struct {
@@ -21,15 +27,45 @@ type Client struct {
 // NewClient creates a LiteLLM Admin API client.
 func NewClient(baseURL, masterKey string) *Client {
 	return &Client{
-		baseURL:    baseURL,
-		masterKey:  masterKey,
-		httpClient: &http.Client{},
+		baseURL:   baseURL,
+		masterKey: masterKey,
+		// Explicit timeout prevents stalled requests from blocking activity workers
+		// indefinitely when the LiteLLM proxy is unresponsive.
+		httpClient: &http.Client{Timeout: defaultHTTPTimeout},
 	}
 }
 
 // MasterKey returns the master API key.
 func (c *Client) MasterKey() string {
 	return c.masterKey
+}
+
+// safeBody reads up to 512 bytes from a response body and redacts any value
+// that resembles a bearer key (starts with "sk-") to prevent secret leakage
+// in error messages that are propagated through Temporal and may be logged.
+func safeBody(b []byte) string {
+	const maxLen = 512
+	if len(b) > maxLen {
+		b = b[:maxLen]
+	}
+	s := string(b)
+	// Blank out sk-* tokens so they do not appear in logs or error payloads.
+	var out strings.Builder
+	for {
+		idx := strings.Index(s, "sk-")
+		if idx < 0 {
+			out.WriteString(s)
+			break
+		}
+		out.WriteString(s[:idx])
+		out.WriteString("sk-[REDACTED]")
+		s = s[idx+3:]
+		// skip to the first delimiter after the token value
+		for len(s) > 0 && s[0] != '"' && s[0] != ' ' && s[0] != ',' && s[0] != '}' {
+			s = s[1:]
+		}
+	}
+	return out.String()
 }
 
 // GenerateKeyRequest is the request body for POST /key/generate.
@@ -84,7 +120,8 @@ func (c *Client) GenerateKey(ctx context.Context, req GenerateKeyRequest) (*Gene
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("key/generate returned %d: %s", resp.StatusCode, string(respBody))
+		// safeBody redacts any sk-* tokens to prevent key material in error logs.
+		return nil, fmt.Errorf("key/generate returned %d: %s", resp.StatusCode, safeBody(respBody))
 	}
 
 	var result GenerateKeyResponse
@@ -116,7 +153,7 @@ func (c *Client) DeleteKey(ctx context.Context, keys []string) (*DeleteKeyRespon
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("key/delete returned %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("key/delete returned %d: %s", resp.StatusCode, safeBody(respBody))
 	}
 
 	var result DeleteKeyResponse
@@ -155,7 +192,7 @@ func (c *Client) ListModels(ctx context.Context) (*ListModelsResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("/v1/models returned %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("/v1/models returned %d: %s", resp.StatusCode, safeBody(respBody))
 	}
 
 	var result ListModelsResponse

@@ -65,7 +65,7 @@ func TestSpawnJunior(t *testing.T) {
 	}
 
 	// Spawn junior
-	junior, err := SpawnJunior(ctx, k8sClient, parent, "Fix the CSS layout")
+	junior, err := SpawnJunior(ctx, k8sClient, scheme.Scheme, parent, "Fix the CSS layout")
 	if err != nil {
 		t.Fatalf("SpawnJunior: %v", err)
 	}

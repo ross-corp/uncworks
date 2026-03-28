@@ -54,11 +54,17 @@ func run() error {
 	defer tc.Close()
 
 	metricsAddr := envOrDefault("METRICS_ADDR", ":8090")
+	// LeaderElection is required for safe multi-replica deployments.
+	// The controller.replicas value in the Helm chart may be >1, so we must
+	// elect a single active replica to prevent split-brain reconciliation.
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsconfig.Options{
 			BindAddress: metricsAddr,
 		},
+		LeaderElection:          true,
+		LeaderElectionID:        "aot-controller-leader",
+		LeaderElectionNamespace: os.Getenv("POD_NAMESPACE"),
 	})
 	if err != nil {
 		return fmt.Errorf("start manager: %w", err)
@@ -103,6 +109,7 @@ func run() error {
 	// Set up Schedule controller (cron-triggered runs)
 	if err = (&controller.ScheduleReconciler{
 		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("create schedule controller: %w", err)
 	}
@@ -110,6 +117,7 @@ func run() error {
 	// Set up ChainRun controller (DAG executor)
 	if err = (&controller.ChainRunReconciler{
 		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("create chain run controller: %w", err)
 	}

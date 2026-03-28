@@ -7,8 +7,10 @@ import (
 
 	"github.com/robfig/cron"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
@@ -17,6 +19,7 @@ import (
 // ScheduleReconciler watches Schedule CRDs and creates runs/chain-runs on cron tick.
 type ScheduleReconciler struct {
 	client.Client
+	Scheme *runtime.Scheme
 }
 
 func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -104,6 +107,10 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			ChainRef:    sched.Spec.ChainRef,
 			TriggeredBy: fmt.Sprintf("schedule:%s", sched.Name),
 		}
+		// Owner reference ensures ChainRun is GC'd when the Schedule is deleted.
+		if err := controllerutil.SetControllerReference(&sched, cr, r.Scheme); err != nil {
+			logger.Error(err, "Failed to set controller reference on ChainRun")
+		}
 		if err := r.Create(ctx, cr); err != nil {
 			return ctrl.Result{}, fmt.Errorf("create chain run: %w", err)
 		}
@@ -136,6 +143,10 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		run.Labels = map[string]string{
 			"aot.uncworks.io/template": tmpl.Name,
 			"aot.uncworks.io/schedule": sched.Name,
+		}
+		// Owner reference ensures AgentRun is GC'd when the Schedule is deleted.
+		if err := controllerutil.SetControllerReference(&sched, run, r.Scheme); err != nil {
+			logger.Error(err, "Failed to set controller reference on AgentRun")
 		}
 		if err := r.Create(ctx, run); err != nil {
 			return ctrl.Result{}, fmt.Errorf("create agent run: %w", err)

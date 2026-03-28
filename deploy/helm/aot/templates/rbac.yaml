@@ -12,6 +12,11 @@ metadata:
   name: {{ include "aot.fullname" . }}
   labels:
     {{- include "aot.labels" . | nindent 4 }}
+# TODO(security): Replace verbs: ["*"] with explicit verb lists per resource.
+# The controller needs create/get/list/watch/update/patch on most resources and
+# delete only on agentruns (for cleanup). Status and finalizer subresources only
+# need update/patch. Using "*" grants delete on CRDs cluster-wide; tighten when
+# the verb requirements are fully mapped.
 rules:
   - apiGroups: ["aot.uncworks.io"]
     resources: ["agentruns"]
@@ -37,9 +42,12 @@ rules:
   - apiGroups: ["aot.uncworks.io"]
     resources: ["chainruns/status", "schedules/status", "runtemplates/status"]
     verbs: ["*"]
+  - apiGroups: ["aot.uncworks.io"]
+    resources: ["chainruns/finalizers", "schedules/finalizers"]
+    verbs: ["update"]
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create"]
@@ -61,6 +69,10 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]
+  # Required for leader election lease management.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

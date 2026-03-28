@@ -6,18 +6,24 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 )
 
-const chainReconcileInterval = 10 * time.Second
+const (
+	chainReconcileInterval = 10 * time.Second
+	chainFinalizerName     = "aot.uncworks.io/chainrun-cleanup"
+)
 
 // ChainRunReconciler watches ChainRun CRDs and manages the DAG execution.
 type ChainRunReconciler struct {
 	client.Client
+	Scheme *runtime.Scheme
 }
 
 func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -26,6 +32,36 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	var cr aotv1alpha1.ChainRun
 	if err := r.Get(ctx, req.NamespacedName, &cr); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Handle deletion: remove child AgentRuns that have not yet completed.
+	if !cr.DeletionTimestamp.IsZero() {
+		if controllerutil.ContainsFinalizer(&cr, chainFinalizerName) {
+			for _, s := range cr.Status.Steps {
+				if s.RunID == "" {
+					continue
+				}
+				var run aotv1alpha1.AgentRun
+				if err := r.Get(ctx, client.ObjectKey{Namespace: cr.Namespace, Name: s.RunID}, &run); err == nil {
+					if err := r.Delete(ctx, &run); err != nil {
+						logger.Error(err, "Failed to delete child AgentRun on ChainRun deletion", "run", s.RunID)
+					}
+				}
+			}
+			controllerutil.RemoveFinalizer(&cr, chainFinalizerName)
+			if err := r.Update(ctx, &cr); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Ensure finalizer is set.
+	if !controllerutil.ContainsFinalizer(&cr, chainFinalizerName) {
+		controllerutil.AddFinalizer(&cr, chainFinalizerName)
+		if err := r.Update(ctx, &cr); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Skip terminal states
@@ -198,6 +234,10 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			"aot.uncworks.io/step":      s.Name,
 		}
 
+		// Set owner reference so the AgentRun is garbage collected when this ChainRun is deleted.
+		if err := controllerutil.SetControllerReference(&cr, run, r.Scheme); err != nil {
+			logger.Error(err, "Failed to set controller reference on chain step AgentRun", "step", s.Name)
+		}
 		if err := r.Create(ctx, run); err != nil {
 			s.Phase = aotv1alpha1.ChainRunStepPhaseFailed
 			s.Message = fmt.Sprintf("create run: %v", err)

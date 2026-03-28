@@ -40,7 +40,7 @@ func setupChainReconciler(t *testing.T) (*ChainRunReconciler, client.Client, fun
 		t.Fatalf("create client: %v", err)
 	}
 
-	reconciler := &ChainRunReconciler{Client: k8sClient}
+	reconciler := &ChainRunReconciler{Client: k8sClient, Scheme: scheme.Scheme}
 	return reconciler, k8sClient, func() { _ = testEnv.Stop() }
 }
 
