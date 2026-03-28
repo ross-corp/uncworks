@@ -63,7 +63,7 @@ export default function TemplateNewView() {
         <span className="font-semibold text-sm">New Template</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-none">
         <form onSubmit={handleSubmit} className="max-w-2xl p-4 space-y-4">
           <div className="space-y-1">
             <label className="text-sm font-medium">Name <span className="text-destructive">*</span></label>

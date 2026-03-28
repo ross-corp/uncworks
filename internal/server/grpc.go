@@ -53,7 +53,7 @@ type AOTServiceHandler struct {
 func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namespace string) *AOTServiceHandler {
 	litellmURL := os.Getenv("LITELLM_BASE_URL")
 	if litellmURL == "" {
-		litellmURL = "http://litellm.aot.svc.cluster.local:4000"
+		litellmURL = "http://litellm:4000"
 	}
 	return &AOTServiceHandler{
 		K8sClient:      k8sClient,

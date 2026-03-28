@@ -45,7 +45,7 @@ type HTTPClient struct {
 
 // NewHTTPClient creates a new HTTPClient pointed at the given endpoint.
 // endpoint should be the base URL of the cudgel-shim service, e.g.
-// "http://cudgel.aot.svc.cluster.local:8080".
+// "http://cudgel:8080".
 func NewHTTPClient(endpoint string) *HTTPClient {
 	return &HTTPClient{
 		endpoint: endpoint,

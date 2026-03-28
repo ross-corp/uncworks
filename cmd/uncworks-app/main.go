@@ -33,7 +33,11 @@ func main() {
 	// Application menu (UNCWORKS)
 	appMenuItem := appMenu.AddSubmenu("UNCWORKS")
 	appMenuItem.AddText("About UNCWORKS", nil, func(_ *menu.CallbackData) {
-		runtime.WindowShow(app.ctx)
+		runtime.MessageDialog(app.ctx, runtime.MessageDialogOptions{ //nolint:errcheck
+			Type:    runtime.InfoDialog,
+			Title:   "UNCWORKS",
+			Message: "Agentic development environment\n\nVersion: dev\n\n© ROSS CORP",
+		})
 	})
 	appMenuItem.AddSeparator()
 	appMenuItem.AddText("Preferences…", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
@@ -44,15 +48,17 @@ func main() {
 		runtime.Quit(app.ctx)
 	})
 
-	// Edit menu — gives us system cut/copy/paste/select-all
+	// Edit menu — accelerators are intentionally omitted (nil) so WKWebView handles
+	// Cmd+C/V/X/Z natively. Adding accelerators with nil callbacks causes Wails to
+	// intercept and swallow the key events, breaking clipboard operations entirely.
 	editMenu := appMenu.AddSubmenu("Edit")
-	editMenu.AddText("Undo", keys.CmdOrCtrl("z"), nil)
-	editMenu.AddText("Redo", keys.Combo("z", keys.CmdOrCtrlKey, keys.ShiftKey), nil)
+	editMenu.AddText("Undo", nil, nil)
+	editMenu.AddText("Redo", nil, nil)
 	editMenu.AddSeparator()
-	editMenu.AddText("Cut", keys.CmdOrCtrl("x"), nil)
-	editMenu.AddText("Copy", keys.CmdOrCtrl("c"), nil)
-	editMenu.AddText("Paste", keys.CmdOrCtrl("v"), nil)
-	editMenu.AddText("Select All", keys.CmdOrCtrl("a"), nil)
+	editMenu.AddText("Cut", nil, nil)
+	editMenu.AddText("Copy", nil, nil)
+	editMenu.AddText("Paste", nil, nil)
+	editMenu.AddText("Select All", nil, nil)
 
 	err := wails.Run(&options.App{
 		Title:     "UNCWORKS",

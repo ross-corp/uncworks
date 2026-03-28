@@ -217,7 +217,7 @@ export default function ChainRunDetailView() {
         )}
 
         {tab === "timeline" && (
-          <div className="overflow-y-auto p-6 h-full">
+          <div className="overflow-y-auto overscroll-none p-6 h-full">
             <div className="max-w-2xl mx-auto space-y-2">
               {steps.length === 0 && (
                 <div className="text-center text-muted-foreground text-sm">No steps yet.</div>

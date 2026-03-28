@@ -85,7 +85,7 @@ export default function ScheduleListView() {
         <Button size="sm" onClick={() => navigate("/schedules/new")}>+ new schedule</Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-none">
         {loading && schedules.length === 0 && (
           <div className="flex h-full items-center justify-center">
             <Spinner className="text-muted-foreground" />

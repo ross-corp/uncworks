@@ -130,7 +130,7 @@ export default function FeatureDetailView() {
       </div>
 
       {/* Run rows */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-none">
         {loading && featureRuns.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
         )}

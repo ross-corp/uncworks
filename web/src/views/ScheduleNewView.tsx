@@ -98,7 +98,7 @@ export default function ScheduleNewView() {
         <span className="text-sm font-medium">New Schedule</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-none">
         <form onSubmit={handleSubmit} className="max-w-2xl p-4 space-y-4">
           {/* name */}
           <div className="space-y-1">

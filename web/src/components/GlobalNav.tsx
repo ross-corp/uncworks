@@ -1,6 +1,7 @@
 // GlobalNav.tsx — Resizable sidebar with ROSS CORP logo, nav items, and config status indicator.
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { isWails } from "../lib/wails-env";
 import {
   Play,
   FolderOpen,
@@ -23,12 +24,32 @@ interface NavItem {
   countKey: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { label: "Runs",      path: "/",          Icon: Play,           countKey: "runs"      },
-  { label: "Projects",  path: "/projects",  Icon: FolderOpen,     countKey: "projects"  },
-  { label: "Templates", path: "/templates", Icon: LayoutTemplate, countKey: "templates" },
-  { label: "Chains",    path: "/chains",    Icon: Link2,          countKey: "chains"    },
-  { label: "Schedules", path: "/schedules", Icon: Clock,          countKey: "schedules" },
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "Activity",
+    items: [
+      { label: "Runs", path: "/", Icon: Play, countKey: "runs" },
+    ],
+  },
+  {
+    label: "Library",
+    items: [
+      { label: "Projects",  path: "/projects",  Icon: FolderOpen,     countKey: "projects"  },
+      { label: "Templates", path: "/templates", Icon: LayoutTemplate, countKey: "templates" },
+    ],
+  },
+  {
+    label: "Automation",
+    items: [
+      { label: "Chains",    path: "/chains",    Icon: Link2,  countKey: "chains"    },
+      { label: "Schedules", path: "/schedules", Icon: Clock,  countKey: "schedules" },
+    ],
+  },
 ];
 
 interface Counts {
@@ -54,6 +75,7 @@ export default function GlobalNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { configStatus } = useSettings();
+  const wails = isWails();
 
   const [width, setWidth] = useState<number>(loadWidth);
   const [collapsed, setCollapsed] = useState<boolean>(() => loadWidth() <= COLLAPSED_WIDTH + 20);
@@ -152,7 +174,7 @@ export default function GlobalNav() {
   const isSettings = location.pathname === "/settings";
 
   // Show a dot when config is incomplete (guides user to settings)
-  const configIncomplete = !configStatus.hasLLMKey || !configStatus.hasGitHubToken;
+  const configIncomplete = !configStatus.hasGitHubToken;
 
   return (
     <div
@@ -161,7 +183,7 @@ export default function GlobalNav() {
       style={{ width }}
     >
       {/* Logo + collapse toggle */}
-      <div className={`flex items-center px-2 py-2.5 gap-2 ${collapsed ? "justify-center" : ""}`}>
+      <div className={`flex items-center px-2 py-2.5 gap-2 ${collapsed ? "justify-center" : ""}${wails ? " pt-7" : ""}`}>
         {/* Logo — always visible */}
         <button
           onClick={toggleCollapsed}
@@ -208,35 +230,44 @@ export default function GlobalNav() {
 
       {/* Nav items */}
       <nav className="flex-1 flex flex-col gap-0.5 px-1.5 pt-1 overflow-hidden">
-        {NAV_ITEMS.map((item) => {
-          const active = isActive(item);
-          const count = counts[item.countKey as keyof Counts];
-          const showBadge = count !== null && count > 0;
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-2.5 px-2 py-2 rounded-md text-sm transition-colors ${
-                active
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              } ${collapsed ? "justify-center" : ""}`}
-              title={collapsed ? item.label : undefined}
-            >
-              <item.Icon size={15} strokeWidth={active ? 2.5 : 2} />
-              {!collapsed && (
-                <>
-                  <span className="flex-1 truncate">{item.label}</span>
-                  {showBadge && (
-                    <span className="text-xs font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-blue-500/15 text-blue-600 dark:text-blue-400">
-                      {count}
-                    </span>
+        {NAV_GROUPS.map((group, groupIdx) => (
+          <div key={group.label} className={groupIdx > 0 ? "mt-2" : ""}>
+            {!collapsed && (
+              <span className="block px-2 pb-0.5 text-[10px] font-semibold tracking-widest uppercase text-muted-foreground/50">
+                {group.label}
+              </span>
+            )}
+            {group.items.map((item) => {
+              const active = isActive(item);
+              const count = counts[item.countKey as keyof Counts];
+              const showBadge = count !== null && count > 0;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-center gap-2.5 px-2 py-2 rounded-md text-sm transition-colors ${
+                    active
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  } ${collapsed ? "justify-center" : ""}`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <item.Icon size={15} strokeWidth={active ? 2.5 : 2} />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {showBadge && (
+                        <span className="text-xs font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                          {count}
+                        </span>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-            </Link>
-          );
-        })}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* Settings link — with optional config-incomplete dot */}

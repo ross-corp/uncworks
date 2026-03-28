@@ -453,7 +453,7 @@ export function SpanDetail({
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3 space-y-4 text-xs">
+      <div className="flex-1 overflow-y-auto overscroll-none min-h-0 px-4 py-3 space-y-4 text-xs">
         {/* Metadata grid */}
         <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
           {!isStage && role && (
@@ -1127,7 +1127,7 @@ export default function TraceTimeline({
           {/* Virtualized waterfall body */}
           <div
             ref={containerRef}
-            className="flex-1 overflow-y-auto min-h-0"
+            className="flex-1 overflow-y-auto overscroll-none min-h-0"
             onScroll={handleScroll}
           >
             <div style={{ height: totalHeight, position: "relative" }}>

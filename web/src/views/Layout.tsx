@@ -6,6 +6,7 @@ import { useCopilotContextValue } from "../hooks/useCopilotContext";
 import CopilotBottomPanel from "../components/CopilotBottomPanel";
 import { HealthProvider } from "../hooks/useHealthContext";
 import { SettingsProvider } from "../hooks/useSettings";
+import { isWails } from "../lib/wails-env";
 
 // TITLEBAR_H: height of the macOS hidden-inset title bar.
 // The drag region spans the full window width at this height so the window
@@ -14,13 +15,16 @@ const TITLEBAR_H = 36;
 
 function LayoutInner() {
   const { open, panelHeight } = useCopilotContextValue();
+  const wails = isWails();
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground font-mono text-sm flex flex-col">
-      {/* Full-width macOS title bar drag zone */}
-      <div
-        className="shrink-0 w-full border-b border-border/50"
-        style={{ height: TITLEBAR_H, WebkitAppRegion: "drag" } as React.CSSProperties}
-      />
+      {/* Full-width macOS title bar drag zone — only rendered in Wails desktop */}
+      {wails && (
+        <div
+          className="shrink-0 w-full border-b border-border/50"
+          style={{ height: TITLEBAR_H, WebkitAppRegion: "drag" } as React.CSSProperties}
+        />
+      )}
 
       {/* Content below the title bar */}
       <div

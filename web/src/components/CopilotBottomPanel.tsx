@@ -295,7 +295,7 @@ export default function CopilotBottomPanel() {
       </div>
 
       {/* Message list */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+      <div className="flex-1 overflow-y-auto overscroll-none px-4 py-3 space-y-3 min-h-0">
         {activeMessages.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
             {context ? `Ask anything about ${context.label}` : "Ask anything about the platform"}
