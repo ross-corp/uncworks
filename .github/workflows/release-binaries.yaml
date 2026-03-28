@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+      - "!v*-pre.*"
 
 permissions:
   contents: write
@@ -30,6 +31,6 @@ jobs:
             --output ./dist
 
       - name: Upload binaries to GitHub Release
-        run: gh release upload "$GITHUB_REF_NAME" dist/*
+        run: gh release upload "$GITHUB_REF_NAME" dist/* --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
