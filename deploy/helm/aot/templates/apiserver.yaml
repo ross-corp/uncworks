@@ -38,7 +38,14 @@ spec:
               value: {{ .Values.temporal.host | quote }}
             - name: TEMPORAL_NAMESPACE
               value: {{ .Values.temporal.namespace | quote }}
-            {{- if .Values.apiserver.apiKey }}
+            {{- if .Values.apiserver.apiKeySecretName }}
+            - name: AOT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.apiserver.apiKeySecretName }}
+                  key: api-key
+            {{- else if .Values.apiserver.apiKey }}
+            # TODO(helm): move apiserver.apiKey to a Secret reference (apiserver.apiKeySecretName) for production
             - name: AOT_API_KEY
               value: {{ .Values.apiserver.apiKey | quote }}
             {{- end }}
@@ -96,16 +103,22 @@ spec:
               port: {{ .Values.apiserver.port }}
             initialDelaySeconds: 5
             periodSeconds: 30
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /readyz
               port: {{ .Values.apiserver.port }}
             initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
-            - name: pvc-data
-              mountPath: /opt/local-path-provisioner
-              readOnly: true
             {{- if .Values.softServe.enabled }}
             - name: soft-serve-key
               mountPath: /etc/soft-serve
@@ -116,16 +129,32 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
       volumes:
-        - name: pvc-data
-          hostPath:
-            path: /opt/local-path-provisioner
-            type: DirectoryOrCreate
+        # TODO(helm): the hostPath pvc-data volume was removed; it mounted /opt/local-path-provisioner
+        # which is a local-cluster-only artifact and must not be present in production deployments.
         {{- if .Values.softServe.enabled }}
         - name: soft-serve-key
           secret:
             secretName: soft-serve-admin-key
             defaultMode: 0600
         {{- end }}
+---
+# PodDisruptionBudget: ensures at least one apiserver replica is available during node drains.
+# With replicas=1 (default) this prevents eviction — increase apiserver.replicas to >=2 in
+# production for rolling-drain tolerance.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aot.fullname" . }}-apiserver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: apiserver
 ---
 apiVersion: v1
 kind: Service

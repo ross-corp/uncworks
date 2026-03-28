@@ -4,7 +4,7 @@ import (
 	"context"
 	"embed"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,6 +22,10 @@ func main() {
 	apiserverURL := envOrDefault("APISERVER_URL", "http://localhost:50055")
 	sessionSecret := envOrDefault("SESSION_SECRET", "dev-secret-change-in-prod")
 	authMode := envOrDefault("AUTH_MODE", "open")
+	// BFF_ALLOWED_ORIGIN controls the CORS Access-Control-Allow-Origin header.
+	// Default to localhost dev URL only. Production deployments MUST set this
+	// to the actual frontend origin (e.g. "https://app.example.com").
+	allowedOrigin := envOrDefault("BFF_ALLOWED_ORIGIN", "http://localhost:5173")
 
 	proxy := bff.NewProxy(apiserverURL)
 
@@ -37,7 +41,7 @@ func main() {
 	// Middleware chain
 	handler := bff.Chain(
 		bff.RequestIDMiddleware(),
-		bff.CORSMiddleware("*"),
+		bff.CORSMiddleware(allowedOrigin),
 		bff.RateLimitMiddleware(100),
 	)(mux)
 
@@ -52,8 +56,10 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: handler,
+		Addr:              ":" + port,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Graceful shutdown
@@ -66,9 +72,10 @@ func main() {
 		_ = server.Shutdown(ctx)
 	}()
 
-	log.Printf("BFF listening on :%s (apiserver: %s, auth: %s)", port, apiserverURL, authMode)
+	slog.Info("BFF listening", "port", port, "apiserver", apiserverURL, "auth", authMode)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatalf("BFF server error: %v", err)
+		slog.Error("BFF server error", "err", err)
+		os.Exit(1)
 	}
 }
 

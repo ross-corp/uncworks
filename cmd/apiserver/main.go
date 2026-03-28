@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -311,7 +312,7 @@ func withCORS(h http.Handler, allowedOrigins []string) http.Handler {
 		origin := r.Header.Get("Origin")
 		if origin != "" && isOriginAllowed(origin, allowedOrigins) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout, X-Grpc-Web, X-User-Agent")
 			w.Header().Set("Access-Control-Expose-Headers", "Grpc-Status, Grpc-Message, Grpc-Status-Details-Bin")
 			w.Header().Set("Access-Control-Max-Age", "7200")
@@ -354,7 +355,8 @@ func withAuth(h http.Handler, apiKey string) http.Handler {
 		if token == "" {
 			token = r.URL.Query().Get("token")
 		}
-		if token != apiKey {
+		// Use constant-time comparison to prevent timing-oracle attacks.
+		if subtle.ConstantTimeCompare([]byte(token), []byte(apiKey)) != 1 {
 			http.Error(w, `{"error":"invalid or missing API key"}`, http.StatusUnauthorized)
 			return
 		}

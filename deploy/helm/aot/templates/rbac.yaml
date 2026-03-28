@@ -12,39 +12,36 @@ metadata:
   name: {{ include "aot.fullname" . }}
   labels:
     {{- include "aot.labels" . | nindent 4 }}
-# TODO(security): Replace verbs: ["*"] with explicit verb lists per resource.
-# The controller needs create/get/list/watch/update/patch on most resources and
-# delete only on agentruns (for cleanup). Status and finalizer subresources only
-# need update/patch. Using "*" grants delete on CRDs cluster-wide; tighten when
-# the verb requirements are fully mapped.
 rules:
   - apiGroups: ["aot.uncworks.io"]
     resources: ["agentruns"]
-    verbs: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["aot.uncworks.io"]
     resources: ["agentruns/status"]
-    verbs: ["*"]
+    verbs: ["get", "update", "patch"]
   - apiGroups: ["aot.uncworks.io"]
     resources: ["agentruns/finalizers"]
-    verbs: ["*"]
+    verbs: ["update"]
   - apiGroups: ["aot.uncworks.io"]
     resources: ["projects"]
-    verbs: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["aot.uncworks.io"]
     resources: ["projects/status"]
-    verbs: ["*"]
+    verbs: ["get", "update", "patch"]
   - apiGroups: ["aot.uncworks.io"]
     resources: ["projects/finalizers"]
-    verbs: ["*"]
+    verbs: ["update"]
   - apiGroups: ["aot.uncworks.io"]
     resources: ["runtemplates", "chains", "chainruns", "schedules"]
-    verbs: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["aot.uncworks.io"]
     resources: ["chainruns/status", "schedules/status", "runtemplates/status"]
-    verbs: ["*"]
+    verbs: ["get", "update", "patch"]
   - apiGroups: ["aot.uncworks.io"]
     resources: ["chainruns/finalizers", "schedules/finalizers"]
     verbs: ["update"]
+  # TODO(helm): secrets get/list is cluster-scoped because agents may need secrets from
+  # multiple namespaces. Tighten to a namespaced Role once namespace isolation is enforced.
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
