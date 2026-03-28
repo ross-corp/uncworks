@@ -3,25 +3,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cudgel
+  name: {{ include "aot.fullname" . }}-cudgel
   namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: cudgel
-    app.kubernetes.io/part-of: aot
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cudgel
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: cudgel
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cudgel
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: cudgel
-        app.kubernetes.io/part-of: aot
+        {{- include "aot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: cudgel
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
       containers:
         - name: cudgel-shim
           image: {{ .Values.cudgel.image | default "ghcr.io/uncworks/aot-cudgel-shim:latest" }}
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080
@@ -41,9 +46,21 @@ spec:
             limits:
               cpu: "1000m"
               memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /search
+              path: /healthz
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -52,14 +69,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: cudgel
+  name: {{ include "aot.fullname" . }}-cudgel
   namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: cudgel
-    app.kubernetes.io/part-of: aot
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cudgel
 spec:
   selector:
-    app.kubernetes.io/name: cudgel
+    {{- include "aot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: cudgel
   ports:
     - name: http
       port: 8080
