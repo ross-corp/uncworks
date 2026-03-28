@@ -1,0 +1,33 @@
+# values.dev.yaml — Local dev image overrides for development builds.
+# Usage (on top of values.local.yaml):
+#   uncworks setup ... --values deploy/helm/values.local.yaml --values deploy/helm/values.dev.yaml
+#
+# Images must be built and loaded into the cluster first:
+#   task dev:images
+#
+# For colima/containerd clusters, images are loaded via colima nerdctl.
+images:
+  controlplane:
+    repository: docker.io/library/aot-controlplane
+    tag: local
+    pullPolicy: Never
+  init:
+    repository: docker.io/library/aot-init
+    tag: local
+    pullPolicy: Never
+  sidecar:
+    repository: docker.io/library/aot-sidecar
+    tag: local
+    pullPolicy: Never
+  agent:
+    repository: docker.io/library/aot-agent
+    tag: local
+    pullPolicy: Never
+  web:
+    repository: docker.io/library/aot-web
+    tag: local
+    pullPolicy: Never
+  bff:
+    repository: docker.io/library/aot-bff
+    tag: local
+    pullPolicy: Never
