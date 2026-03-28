@@ -375,9 +375,6 @@ func (s *Store) SaveRunDiff(ctx context.Context, agentRunID, spanID, filePath, p
 }
 
 // SaveRunSpan persists a trace span from an agent run.
-// TODO(db): PersistRunData calls this once per span in a loop (N+1 inserts).
-// Replace with a batch API using pgx.CopyFrom or a multi-value INSERT once the
-// call-site accumulates all spans before writing.
 func (s *Store) SaveRunSpan(ctx context.Context, agentRunID string, span TraceSpan) error {
 	metadataJSON, err := json.Marshal(span.Metadata)
 	if err != nil {
@@ -394,6 +391,53 @@ func (s *Store) SaveRunSpan(ctx context.Context, agentRunID string, span TraceSp
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, agentRunID, parentID, span.Name, span.Type, span.StartTime, span.EndTime, metadataJSON)
 	return err
+}
+
+// SaveRunSpans batch-inserts trace spans for an agent run using pgx.CopyFrom.
+// This is significantly more efficient than calling SaveRunSpan in a loop.
+func (s *Store) SaveRunSpans(ctx context.Context, agentRunID string, spans []TraceSpan) error {
+	if len(spans) == 0 {
+		return nil
+	}
+
+	rows := make([][]interface{}, 0, len(spans))
+	for _, span := range spans {
+		metadataJSON, err := json.Marshal(span.Metadata)
+		if err != nil {
+			return fmt.Errorf("marshal span metadata: %w", err)
+		}
+
+		var parentID *string
+		if span.ParentID != "" {
+			parentID = &span.ParentID
+		}
+
+		var spanType *string
+		if span.Type != "" {
+			spanType = &span.Type
+		}
+
+		rows = append(rows, []interface{}{
+			agentRunID,
+			parentID,
+			span.Name,
+			spanType,
+			span.StartTime,
+			span.EndTime,
+			metadataJSON,
+		})
+	}
+
+	_, err := s.pool.CopyFrom(
+		ctx,
+		pgx.Identifier{"run_spans"},
+		[]string{"agent_run_id", "parent_id", "name", "type", "start_time", "end_time", "metadata"},
+		pgx.CopyFromRows(rows),
+	)
+	if err != nil {
+		return fmt.Errorf("batch insert run spans: %w", err)
+	}
+	return nil
 }
 
 // GetRunLogs retrieves concatenated log content for an agent run.

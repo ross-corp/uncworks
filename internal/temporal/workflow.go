@@ -237,6 +237,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	var podName string
 	var deploymentName string
 	var llmKey string
+	var podIP string
 	defer func() {
 		cleanupCtx, _ := workflow.NewDisconnectedContext(ctx)
 		cleanupCtx = workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
@@ -265,6 +266,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 				AgentRunID:    input.AgentRunName,
 				WorkspacePath: "/workspace",
 				RepoURL:       repoURL,
+				PodIP:         podIP,
 			}).Get(persistCtx, nil); err != nil {
 				workflow.GetLogger(ctx).Warn("Failed to persist run data", "error", err)
 			}
@@ -387,7 +389,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		state.Message = fmt.Sprintf("Hydration failed: %v", err)
 		return err
 	}
-	podIP := hydrationOutput.PodIP
+	podIP = hydrationOutput.PodIP
 
 	// Use the workspace root as the working directory for multi-repo support.
 	workspacePath := "/workspace"
@@ -413,6 +415,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			Prompt:        input.Prompt,
 			RepoURL:       repoURL,
 			AgentType:     agentType,
+			PodIP:         podIP,
 		}).Get(hydrateCtx, &hydrateOutput); err != nil {
 			workflow.GetLogger(ctx).Warn("Context hydration failed (proceeding without)", "error", err)
 		} else if hydrateOutput.ContextWritten {
