@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -31,7 +31,8 @@ func init() {
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatalf("Controller failed: %v", err)
+		slog.Error("controller failed", "err", err)
+		os.Exit(1)
 	}
 }
 

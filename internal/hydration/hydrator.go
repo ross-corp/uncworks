@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -53,7 +53,7 @@ func ConfigFromEnv() *Config {
 	if reposJSON := os.Getenv("AOT_REPOS"); reposJSON != "" {
 		var repos []RepoConfig
 		if err := json.Unmarshal([]byte(reposJSON), &repos); err != nil {
-			log.Printf("WARNING: failed to parse AOT_REPOS as JSON: %v, falling back to single-repo", err)
+			slog.Warn("failed to parse AOT_REPOS as JSON, falling back to single-repo", "err", err)
 		} else if len(repos) > 0 {
 			config.Repos = repos
 			return config
@@ -205,7 +205,7 @@ func (h *Hydrator) Run(ctx context.Context) error {
 		agentType = os.Getenv("AOT_MODEL_TIER")
 	}
 	if seedErr := h.SeedCodebaseContext(ctx, prompt, agentType); seedErr != nil {
-		log.Printf("WARNING: SeedCodebaseContext failed: %v (proceeding without codebase context)", seedErr)
+		slog.Warn("SeedCodebaseContext failed, proceeding without codebase context", "err", seedErr)
 	}
 
 	// Devbox setup: use explicit config if set, otherwise auto-compose
@@ -310,7 +310,7 @@ func (h *Hydrator) composeDevbox(ctx context.Context) error {
 	// the agent can still work, it just won't have devbox-managed deps.
 	_, err = h.runner.Run(ctx, h.config.WorkspaceDir, "devbox", "install")
 	if err != nil {
-		log.Printf("WARNING: devbox install failed: %v (agent will work without devbox deps)", err)
+		slog.Warn("devbox install failed, agent will work without devbox deps", "err", err)
 	}
 
 	return nil
@@ -406,7 +406,7 @@ func (h *Hydrator) cloneRepo(ctx context.Context, repoURL, bareDir string) error
 		// Directory exists — validate it's actually a git repo
 		if _, gitErr := h.runner.Run(ctx, bareDir, "git", "rev-parse", "--git-dir"); gitErr != nil {
 			// Broken or partial clone; remove and re-clone
-			log.Printf("WARNING: removing broken bare clone at %s: %v", bareDir, gitErr)
+			slog.Warn("removing broken bare clone", "dir", bareDir, "err", gitErr)
 			if rmErr := os.RemoveAll(bareDir); rmErr != nil {
 				return fmt.Errorf("remove broken bare dir: %w", rmErr)
 			}
@@ -539,7 +539,7 @@ func (h *Hydrator) SeedCodebaseContext(ctx context.Context, prompt, agentType st
 	}
 	symbols, err := client.SemanticSearch(queryCtx, prompt, k)
 	if err != nil {
-		log.Printf("WARNING: cudgel SemanticSearch failed: %v", err)
+		slog.Warn("cudgel SemanticSearch failed", "err", err)
 		return nil
 	}
 	if len(symbols) == 0 {
