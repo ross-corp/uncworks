@@ -140,7 +140,7 @@ message NotifyEventResponse {
 
 // ExecCommandRequest runs a bash command in the workspace.
 message ExecCommandRequest {
-  string command = 1;
+  string command = 1 [(buf.validate.field).string.min_len = 1];
   string working_dir = 2;
   int32 timeout_seconds = 3;
 }
