@@ -35,37 +35,20 @@ export default function ChainListView() {
       if (resp.ok) setChains(await resp.json());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load data");
-    }
-    finally { setLoading(false); }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-
-    const fetch = async () => {
-      try {
-        const resp = await apiFetch("/api/v1/chains");
-        if (resp.ok) {
-          const data = await resp.json();
-          if (!cancelled) setChains(data);
-        }
-      } catch (e) {
-        if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load data");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    fetch();
+    fetchData();
     const i = setInterval(() => {
-      if (!cancelled) fetch();
+      if (!cancelled) fetchData();
     }, 10000);
-
     return () => {
       cancelled = true;
       clearInterval(i);
     };
-  }, []);
+  }, [fetchData]);
 
   async function triggerChain(name: string) {
     await apiFetch(`/api/v1/chains/${name}/trigger`, { method: "POST" });

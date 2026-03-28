@@ -45,8 +45,7 @@ export default function TemplateListView() {
       cancelled = true;
       clearInterval(i);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchData]);
 
   async function deleteTemplate(name: string) {
     const resp = await apiFetch(`/api/v1/templates/${name}`, { method: "DELETE" });

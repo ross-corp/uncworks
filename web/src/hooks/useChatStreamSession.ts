@@ -2,8 +2,9 @@
  * Like useChatStream but messages state is externally owned (via session store).
  * The caller provides the current messages and an updater function.
  */
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
+import { apiFetch } from "./apiFetch";
 import type { ChatContext, Message } from "./useChatStream";
 
 interface UseChatStreamSessionReturn {
@@ -14,6 +15,13 @@ interface UseChatStreamSessionReturn {
 export function useChatStreamSession(): UseChatStreamSessionReturn {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight stream when the hook's owning component unmounts.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const send = useCallback(async (
     userText: string,
@@ -33,13 +41,14 @@ export function useChatStreamSession(): UseChatStreamSessionReturn {
     // History sent to API: all messages except the streaming placeholder
     const history = [...currentMessages, userMessage];
 
-    abortRef.current = new AbortController();
+    const ac = new AbortController();
+    abortRef.current = ac;
 
     try {
-      const resp = await fetch("/api/v1/chat/stream", {
+      const resp = await apiFetch("/api/v1/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: abortRef.current.signal,
+        signal: ac.signal,
         body: JSON.stringify({
           messages: history.map((m) => ({ role: m.role, content: m.content })),
           context: context ?? undefined,

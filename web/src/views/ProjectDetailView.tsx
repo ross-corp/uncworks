@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
+import { useClient, mapRun } from "../hooks/useClient";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
@@ -37,6 +38,7 @@ interface ProjectDetail {
 export default function ProjectDetailView() {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
+  const client = useClient();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -160,28 +162,27 @@ export default function ProjectDetailView() {
 
     let cancelled = false;
 
-    const fetch = async () => {
+    const doFetch = async () => {
       try {
-        const resp = await apiFetch("/api/v1/runs");
-        if (resp.ok) {
-          const data: AgentRun[] = await resp.json();
-          if (!cancelled) setRuns(data.filter((r) => r.spec.project === name));
-        }
+        // Use the ConnectRPC client so the response goes through mapRun and all
+        // extended status fields (totalCost, lastCIStatus, etc.) are populated.
+        const raw = await client.listAgentRuns();
+        if (!cancelled) setRuns(raw.map(mapRun).filter((r) => r.spec.project === name));
       } catch (e) {
         if (!cancelled) toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
       }
     };
 
-    fetch();
+    doFetch();
     const i = setInterval(() => {
-      if (!cancelled) fetch();
+      if (!cancelled) doFetch();
     }, 10000);
 
     return () => {
       cancelled = true;
       clearInterval(i);
     };
-  }, [tab, name]);
+  }, [tab, name, client]);
 
   async function loadFile(path: string) {
     if (!name) return;

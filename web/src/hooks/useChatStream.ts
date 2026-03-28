@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { apiFetch } from "./apiFetch";
 
 export interface Message {
   role: "user" | "assistant";
@@ -23,8 +24,12 @@ interface UseChatStreamReturn {
 export function useChatStream(): UseChatStreamReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  // Keep an AbortController so we can cancel an in-flight stream on unmount
+  // or when the user sends a new message while one is already streaming.
+  const abortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {
+    abortRef.current?.abort();
     setMessages([]);
     setIsStreaming(false);
   }, []);
@@ -39,12 +44,24 @@ export function useChatStream(): UseChatStreamReturn {
     setIsStreaming(true);
 
     // Build conversation history for the API (exclude the streaming placeholder).
-    const history: Message[] = [...messages, userMessage];
+    // Capture messages at this point in time via the functional updater below.
+    let history: Message[] = [];
+    setMessages((prev) => {
+      // prev already contains the new userMessage and streaming placeholder;
+      // history is everything except the trailing streaming placeholder.
+      history = prev.slice(0, -1);
+      return prev;
+    });
+
+    // Create a fresh AbortController for this stream.
+    const ac = new AbortController();
+    abortRef.current = ac;
 
     try {
-      const resp = await fetch("/api/v1/chat/stream", {
+      const resp = await apiFetch("/api/v1/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           messages: history.map((m) => ({ role: m.role, content: m.content })),
           context,
@@ -121,12 +138,13 @@ export function useChatStream(): UseChatStreamReturn {
         return next;
       });
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       toast.error("Chat unavailable");
       setMessages((prev) => prev.slice(0, -1)); // remove streaming placeholder
     } finally {
       setIsStreaming(false);
     }
-  }, [messages, isStreaming]);
+  }, [isStreaming]);
 
   return { messages, send, isStreaming, reset };
 }
