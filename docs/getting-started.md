@@ -1,148 +1,132 @@
 # Getting Started
 
-This guide walks through setting up a local UNCWORKS instance using the `aot-local` development environment with k0s.
+This guide walks through setting up a local UNCWORKS instance using `uncworks setup`.
 
 ## Prerequisites
 
 | Tool | Purpose |
 |------|---------|
-| **k0s** | Single-binary Kubernetes distribution (the local dev cluster) |
-| **Docker** | Building container images |
-| **Task** | Task runner (`go-task/task`) -- used instead of Make |
-| **Helm** | Kubernetes package manager |
+| **uncworks CLI** | UNCWORKS setup and management (`brew install uncworks/tap/uncworks`) |
 | **kubectl** | Kubernetes CLI |
-| **Go 1.25+** | Building control plane binaries |
-| **Node.js 22+** | Building the web dashboard |
+| **helm** | Kubernetes package manager |
+| **A local Kubernetes cluster** | See options below |
 
-## Clone the Repository
+### Local Kubernetes Cluster
 
-```
-git clone <repo-url>
-cd uncworks
-```
+UNCWORKS runs on Kubernetes. You need a local cluster — any of the following work:
 
-The `aot-local/` directory (located at `../aot-local` relative to uncworks) contains the local cluster configuration, Taskfile, and Helm value overrides.
+**macOS:**
+- [Docker Desktop](https://docs.docker.com/desktop/kubernetes/) — enable Kubernetes in Preferences > Kubernetes
+- [OrbStack](https://orbstack.dev/) — `brew install orbstack` (fastest)
+- [Rancher Desktop](https://rancherdesktop.io/) — `brew install --cask rancher`
 
-## Start the Cluster
+**Linux:**
+- [k3d](https://k3d.io/) — `curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash` (requires Docker)
+- [kind](https://kind.sigs.k8s.io/) — `go install sigs.k8s.io/kind@latest` (requires Docker)
 
-From the `aot-local/` directory:
+## Install the CLI
 
-```
-task up
-```
+```bash
+# macOS / Linux (Homebrew)
+brew install uncworks/tap/uncworks
 
-This single command:
-1. Builds all Docker images (hydration, sidecar, agent-base, controlplane, web/BFF)
-2. Imports them into the k0s container runtime
-3. Applies the AgentRun and Project CRDs
-4. Deploys Temporal, Ollama, LiteLLM, Soft-Serve, and the UNCWORKS Helm chart
-5. Waits for all deployments to become ready
-
-## Pull a Model
-
-After the cluster is running, pull at least one Ollama model:
-
-```
-kubectl -n aot exec deploy/ollama -- ollama pull qwen2.5:0.5b
+# Or download a binary directly from GitHub Releases:
+# https://github.com/uncworks/uncworks/releases
 ```
 
-For better results, pull the default model:
+## Setup
 
+Run the interactive setup wizard:
+
+```bash
+uncworks setup
 ```
-kubectl -n aot exec deploy/ollama -- ollama pull qwen3:8b
+
+The wizard will:
+1. Detect your local Kubernetes context and let you select one
+2. Check that the cluster has sufficient resources (min 2 CPU / 2Gi memory, recommended 4/4Gi)
+3. Prompt for required configuration (LLM API key, GitHub token, Temporal address)
+4. Deploy UNCWORKS via Helm (`helm upgrade --install`)
+5. Print the web UI URL
+
+For non-interactive / scripted setup:
+
+```bash
+uncworks setup \
+  --context docker-desktop \
+  --llm-key sk-... \
+  --github-token ghp_... \
+  --temporal-host temporal:7233
 ```
+
+### Using the Local Values Preset
+
+For local clusters, pass the included values preset for lighter resource usage and NodePort exposure:
+
+```bash
+uncworks setup --values deploy/helm/values.local.yaml
+```
+
+This sets NodePort 30300 for the web UI, reduces resource requests, and disables Ollama by default.
 
 ## Access the UI
 
-The web dashboard is exposed via NodePort:
+After setup:
 
-```
-http://<host-ip>:30300
-```
-
-The Temporal UI is available at:
-
-```
-http://<host-ip>:30823
+```bash
+uncworks open    # starts port-forward + opens browser
 ```
 
-## Verify the Installation
+Or navigate directly to `http://localhost:30300` if your cluster exposes NodePorts on localhost (Docker Desktop, OrbStack, Rancher Desktop).
 
-```
-task status
+## Terminal UI
+
+```bash
+uncworks tui     # launch the Bubble Tea terminal UI
 ```
 
-This shows all pods, services, and access URLs. Expected pods in the `aot` namespace:
+The TUI shows active runs, streams logs, and lets you submit new runs — all from the terminal.
 
+## Connecting to a Remote Server
+
+```bash
+uncworks connect grpc.example.com:50055   # store remote address
+uncworks tui                               # TUI connects to remote server
 ```
-aot-apiserver-*        API Server (ConnectRPC + REST)
-aot-controller-*       K8s Controller (AgentRun + Project reconcilers)
-aot-worker-*           Temporal Worker
-aot-web-*              Web Dashboard (React + nginx BFF)
-temporal-*             Temporal Server
-ollama-*               Local LLM inference
-litellm-*              LLM routing proxy
-soft-serve-*           In-cluster Git server
+
+## Status and Teardown
+
+```bash
+uncworks status      # show pod health
+uncworks teardown    # uninstall UNCWORKS (keeps PVCs by default)
+uncworks teardown --purge   # also delete PVCs (destroys workspace data)
 ```
 
 ## Create Your First Run
 
-1. Open the web dashboard at `http://<host-ip>:30300`
-2. Click "New Run" in the top navigation
+1. Open the web dashboard via `uncworks open`
+2. Click "New Run"
 3. Fill in the form:
    - **Prompt**: Describe the task (e.g., "Add a health check endpoint to the API")
    - **Repository URL**: GitHub repo URL (e.g., `https://github.com/owner/repo.git`)
-   - **Branch**: Branch to check out (defaults to the repo's default branch)
+   - **Branch**: Branch to check out (defaults to main)
    - **Model**: Select a model tier (`default` for local Ollama, `default-cloud` for OpenRouter)
-   - **Mode**: Choose `single` for a simple task or `spec-driven` for the full plan/execute/verify pipeline
+   - **Mode**: `single` for a simple task or `spec-driven` for the full plan/execute/verify pipeline
 4. Click "Create Run"
-5. The run detail page shows real-time progress:
-   - Activity feed with agent output
-   - File browser showing workspace changes
-   - Trace timeline showing tool calls and stage transitions
-   - Verification panel (spec-driven mode)
-
-## Create a Project
-
-Projects group related runs and provide default configuration.
-
-1. Navigate to the Projects page in the dashboard
-2. Click "New Project"
-3. Configure:
-   - **Name**: Kebab-case identifier (e.g., `my-api`)
-   - **Display Name**: Human-readable name
-   - **Repositories**: Add one or more GitHub repos
-   - **Devbox Packages**: Nix packages to install in every workspace (e.g., `go@1.22`, `nodejs@20`)
-   - **Defaults**: Default model tier, TTL, auto-push/PR settings
-4. The controller automatically creates a soft-serve config repo for the project
-5. Future runs can reference the project via `projectRef` to inherit defaults
 
 ## Configure Cloud Models (Optional)
 
-To use cloud LLMs via OpenRouter, add your API key to the LiteLLM configuration:
+Pass your API key during setup:
 
+```bash
+uncworks setup --llm-key sk-or-...   # OpenRouter or OpenAI key
 ```
-kubectl -n aot edit configmap litellm-config
-```
-
-Add an OpenRouter model entry and restart the LiteLLM pod.
-
-## Configure GitHub Integration (Optional)
-
-For auto-push, PR creation, and CI autofix:
-
-1. Create a GitHub personal access token with `repo` scope
-2. Store it as a Kubernetes secret:
-   ```
-   kubectl -n aot create secret generic github-token --from-literal=token=ghp_...
-   ```
-3. Set `GITHUB_TOKEN_SECRET_NAME=github-token` on the API server
-4. For webhooks, set `GITHUB_WEBHOOK_SECRET` and configure the webhook URL in your GitHub repo settings
 
 ## Next Steps
 
-- [Creating Runs](guides/creating-runs.md) -- Detailed guide on run creation options
-- [Model Configuration](guides/models.md) -- Add and configure LLM models
-- [Spec-Driven Runs](guides/spec-driven.md) -- Using the plan/execute/verify pipeline
-- [API Reference](reference/api.md) -- ConnectRPC and REST endpoint documentation
-- [CRD Reference](reference/crd.md) -- AgentRun and Project CRD field reference
+- [Creating Runs](guides/creating-runs.md) — Detailed guide on run creation options
+- [Model Configuration](guides/models.md) — Add and configure LLM models
+- [Spec-Driven Runs](guides/spec-driven.md) — Using the plan/execute/verify pipeline
+- [API Reference](reference/api.md) — ConnectRPC and REST endpoint documentation
+- [CRD Reference](reference/crd.md) — AgentRun and Project CRD field reference
+- [macOS App](guides/macos-app.md) — Installing the native UNCWORKS.app

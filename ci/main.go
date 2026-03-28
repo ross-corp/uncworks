@@ -288,7 +288,7 @@ func (m *Ci) PushChart(
 	registryUser string,
 	registryPass *dagger.Secret,
 	// +optional
-	// +default="oci://ghcr.io/ross-corp/charts"
+	// +default="oci://ghcr.io/uncworks/charts"
 	registry string,
 ) (string, error) {
 	out, err := m.helmBase(source).
@@ -317,10 +317,10 @@ func (m *Ci) Release(
 	registryUser string,
 	registryPass *dagger.Secret,
 	// +optional
-	// +default="ghcr.io/ross-corp"
+	// +default="ghcr.io/uncworks"
 	imageRegistry string,
 	// +optional
-	// +default="oci://ghcr.io/ross-corp/charts"
+	// +default="oci://ghcr.io/uncworks/charts"
 	chartRegistry string,
 ) (string, error) {
 	// Gate: all checks must pass first
@@ -357,6 +357,38 @@ func (m *Ci) Release(
 		return "", fmt.Errorf("release failed:\n%s", joinLines(failures))
 	}
 	return fmt.Sprintf("release %s complete", version), nil
+}
+
+// BuildBinaries cross-compiles the uncworks CLI for all supported platforms.
+// Returns a directory containing binaries named uncworks-<os>-<arch>.
+func (m *Ci) BuildBinaries(ctx context.Context, source *dagger.Directory, version string) *dagger.Directory {
+	type platform struct{ goos, goarch string }
+	platforms := []platform{
+		{"linux", "amd64"},
+		{"linux", "arm64"},
+		{"darwin", "amd64"},
+		{"darwin", "arm64"},
+	}
+
+	out := dag.Directory()
+	for _, p := range platforms {
+		name := fmt.Sprintf("uncworks-%s-%s", p.goos, p.goarch)
+		binary := m.goBase(source).
+			WithEnvVariable("GOOS", p.goos).
+			WithEnvVariable("GOARCH", p.goarch).
+			WithEnvVariable("CGO_ENABLED", "0").
+			WithExec([]string{"go", "build", "-ldflags", fmt.Sprintf("-X main.version=%s", version),
+				"-o", "/out/" + name, "./cmd/uncworks"}).
+			File("/out/" + name)
+		out = out.WithFile(name, binary)
+	}
+	return out
+}
+
+// ReleaseBinaries builds cross-platform binaries and the Helm chart for a release.
+// Used by the GitHub Actions release workflow to produce release assets.
+func (m *Ci) ReleaseBinaries(ctx context.Context, source *dagger.Directory, version string) *dagger.Directory {
+	return m.BuildBinaries(ctx, source, version)
 }
 
 func joinLines(ss []string) string {

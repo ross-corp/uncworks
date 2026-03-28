@@ -1,0 +1,25 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "UNCWORKS",
+  "outputfilename": "UNCWORKS",
+  "frontenddevserverurl": "http://localhost:5173",
+  "reloaddirs": "frontend/dist",
+  "build:tags": "darwin",
+  "info": {
+    "companyName": "UNCWORKS",
+    "productName": "UNCWORKS",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © UNCWORKS",
+    "comments": "Agentic development environment"
+  },
+  "nsisType": "multiple",
+  "obfuscated": false,
+  "garbleargs": "",
+  "bindings": {
+    "ts_generation": {
+      "prefix": "",
+      "suffix": "",
+      "outputType": "bundle"
+    }
+  }
+}

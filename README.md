@@ -23,12 +23,26 @@ UNCWORKS is a Kubernetes-native platform that runs AI coding agents against git 
 See [docs/getting-started.md](docs/getting-started.md) for full setup instructions.
 
 ```bash
+# Install the CLI (macOS / Linux)
+brew install uncworks/tap/uncworks
+
+# Deploy to your local Kubernetes cluster (Docker Desktop, OrbStack, etc.)
+uncworks setup
+
+# Open the web UI
+uncworks open
+
+# Or use the terminal UI
+uncworks tui
+```
+
+**For contributors** (building from source):
+
+```bash
 devbox shell          # enter Nix dev environment
 task install          # install Go + Node.js dependencies
-task k0s:setup        # initialize local k0s cluster
-task k0s:crd          # apply AgentRun CRD
 task build            # build all Go binaries
-task dev:web          # start web dashboard
+task dev:web          # start Vite dev server
 ```
 
 ---
