@@ -156,6 +156,20 @@ tasks:
       - GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-amd64 ./cmd/uncworks
       - GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-arm64 ./cmd/uncworks
 
+  dev:images:
+    desc: Build local images and load them into the colima-uncworks cluster
+    vars:
+      COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
+    cmds:
+      - npm install --no-save @bufbuild/protobuf@^2.0.0
+      - cd web && npm run build
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-controlplane:local --file docker/Dockerfile.controlplane .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-web:local --file docker/Dockerfile.web web/
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-sidecar:local --file docker/Dockerfile.sidecar .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-init:local --file docker/Dockerfile.hydration .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-agent:local --file docker/Dockerfile.agent-base .
+      - echo "All images loaded into colima-{{.COLIMA_PROFILE}}"
+
   app:build:
     desc: Build the native macOS app (requires Wails v2 and macOS)
     cmds:

@@ -32,7 +32,9 @@ func runSetup(args []string) error {
 	githubToken := fs.String("github-token", "", "GitHub personal access token")
 	temporalHost := fs.String("temporal-host", "", "Temporal gRPC address (e.g. temporal:7233)")
 	chartVersion := fs.String("version", "", "Chart version to install (default: latest)")
+	chartRef := fs.String("chart", "", "Helm chart ref or local path (default: oci://ghcr.io/uncworks/charts/aot)")
 	valuesFile := fs.String("values", "", "Additional Helm values file")
+	withTemporal := fs.Bool("with-temporal", false, "Deploy a Temporal dev server into the cluster (for local dev)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks setup [flags]\n\nDeploy UNCWORKS into a local Kubernetes cluster.")
 		fs.PrintDefaults()
@@ -45,9 +47,13 @@ func runSetup(args []string) error {
 		return err
 	}
 
+	ref := "oci://ghcr.io/uncworks/charts/aot"
+	if *chartRef != "" {
+		ref = *chartRef
+	}
 	cfg := &setupConfig{
 		Namespace:    *namespace,
-		ChartRef:     "oci://ghcr.io/uncworks/charts/aot",
+		ChartRef:     ref,
 		ChartVersion: *chartVersion,
 		ValuesFile:   *valuesFile,
 	}
@@ -64,6 +70,11 @@ func runSetup(args []string) error {
 	}
 
 	// Collect required values (interactive if not provided via flags).
+	// --with-temporal overrides temporal-host after deploying it.
+	if *withTemporal && *temporalHost == "" {
+		// Points at the ExternalName service created by deployTemporalDev.
+		*temporalHost = fmt.Sprintf("temporal-dev.%s.svc.cluster.local:7233", cfg.Namespace)
+	}
 	if err := collectValues(cfg, *llmKey, *githubToken, *temporalHost); err != nil {
 		return err
 	}
@@ -71,6 +82,13 @@ func runSetup(args []string) error {
 	// Preflight: check cluster resources.
 	if err := resourcePreflight(cfg.KubeContext); err != nil {
 		return err
+	}
+
+	// Deploy Temporal dev server if requested.
+	if *withTemporal {
+		if err := deployTemporalDev(cfg.KubeContext, cfg.Namespace); err != nil {
+			return fmt.Errorf("deploy temporal: %w", err)
+		}
 	}
 
 	// Deploy via Helm.
@@ -243,6 +261,58 @@ func printPostInstall(cfg *setupConfig) {
 	fmt.Printf("  TUI:     uncworks tui\n")
 	fmt.Printf("  Status:  uncworks status\n\n")
 	fmt.Printf("Run 'uncworks open' to start port-forward and open the web UI.\n")
+}
+
+// deployTemporalDev creates a k8s ExternalName service that points cluster traffic
+// at the host machine's Temporal dev server (temporal server start-dev).
+// The host is reachable from k3s/Colima pods at host.docker.internal.
+func deployTemporalDev(kubeCtx, namespace string) error {
+	fmt.Println("Setting up Temporal dev endpoint (host.docker.internal:7233)...")
+	fmt.Println("  Make sure 'temporal server start-dev --ip 0.0.0.0' is running on your Mac.")
+
+	// ExternalName service routes cluster-internal DNS to the host.
+	manifest := `apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-dev
+spec:
+  type: ExternalName
+  externalName: host.docker.internal
+  ports:
+  - port: 7233
+    targetPort: 7233
+`
+
+	f, err := os.CreateTemp("", "temporal-dev-*.yaml")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.WriteString(manifest); err != nil {
+		return err
+	}
+	f.Close()
+
+	// Ensure namespace exists.
+	nsCreateArgs := []string{"create", "namespace", namespace}
+	if kubeCtx != "" {
+		nsCreateArgs = append([]string{"--context", kubeCtx}, nsCreateArgs...)
+	}
+	cmd := exec.Command("kubectl", nsCreateArgs...)
+	_ = cmd.Run() // ignore error if namespace already exists
+
+	kubectlArgs := []string{"apply", "--namespace", namespace, "-f", f.Name()}
+	if kubeCtx != "" {
+		kubectlArgs = append([]string{"--context", kubeCtx}, kubectlArgs...)
+	}
+	cmd = exec.Command("kubectl", kubectlArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("apply temporal service: %w", err)
+	}
+	fmt.Println("Temporal ExternalName service created → host.docker.internal:7233")
+	return nil
 }
 
 // printNoClusterInstructions prints platform-specific cluster install recommendations.

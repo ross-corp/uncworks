@@ -14,7 +14,8 @@
     "kubernetes-helm@latest",
     "temporal-cli@latest",
     "go-task@latest",
-    "setup-envtest@latest"
+    "setup-envtest@latest",
+    "wails@latest"
   ],
   "shell": {
     "init_hook": [
