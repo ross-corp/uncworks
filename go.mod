@@ -11,7 +11,7 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/getlantern/systray v1.2.2
+	github.com/energye/systray v1.0.3
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/jackc/pgx/v5 v5.8.0
@@ -77,12 +77,6 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
-	github.com/getlantern/context v0.0.0-20190109183933-c447772a6520 // indirect
-	github.com/getlantern/errors v0.0.0-20190325191628-abdb3e3e36f7 // indirect
-	github.com/getlantern/golog v0.0.0-20190830074920-4ef2e798c2d7 // indirect
-	github.com/getlantern/hex v0.0.0-20190417191902-c6586a6fe0b7 // indirect
-	github.com/getlantern/hidden v0.0.0-20190325191715-f02dbb02be55 // indirect
-	github.com/getlantern/ops v0.0.0-20190325191751-d70cb0d6f85f // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
@@ -90,7 +84,6 @@ require (
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
-	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -142,7 +135,6 @@ require (
 	github.com/nexus-rpc/sdk-go v0.6.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

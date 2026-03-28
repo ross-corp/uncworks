@@ -5,7 +5,7 @@
 package main
 
 import (
-	"github.com/getlantern/systray"
+	"github.com/energye/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -25,18 +25,13 @@ func (a *App) onTrayReady() {
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit UNCWORKS", "Fully quit the application")
 
-	go func() {
-		for {
-			select {
-			case <-mShow.ClickedCh:
-				runtime.WindowShow(a.ctx)
-			case <-mQuit.ClickedCh:
-				systray.Quit()
-				runtime.Quit(a.ctx)
-				return
-			}
-		}
-	}()
+	mShow.Click(func() {
+		runtime.WindowShow(a.ctx)
+	})
+	mQuit.Click(func() {
+		systray.Quit()
+		runtime.Quit(a.ctx)
+	})
 }
 
 func (a *App) onTrayExit() {}

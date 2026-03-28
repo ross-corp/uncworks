@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getlantern/systray"
+	"github.com/energye/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

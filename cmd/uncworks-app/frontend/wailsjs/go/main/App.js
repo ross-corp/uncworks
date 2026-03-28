@@ -6,6 +6,14 @@ export function AutodetectNamespace(arg1) {
   return window['go']['main']['App']['AutodetectNamespace'](arg1);
 }
 
+export function CheckForUpdate() {
+  return window['go']['main']['App']['CheckForUpdate']();
+}
+
+export function CheckLiteLLM(arg1) {
+  return window['go']['main']['App']['CheckLiteLLM'](arg1);
+}
+
 export function ClusterStatus() {
   return window['go']['main']['App']['ClusterStatus']();
 }
