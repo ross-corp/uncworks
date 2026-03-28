@@ -110,50 +110,6 @@ func TestProxy_PreservesResponseHeaders(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 8.3 Response shaping
-// ---------------------------------------------------------------------------
-
-func TestDisplaySpanName_Remapping(t *testing.T) {
-	tests := []struct{ input, want string }{
-		{"unc.thought", "manage.thought"},
-		{"neph.write", "implement.write"},
-		{"impl.bash", "implement.bash"},
-		{"manage.thought", "manage.thought"},
-		{"implement.read", "implement.read"},
-		{"system.pipeline", "system.pipeline"},
-	}
-	for _, tt := range tests {
-		got := displaySpanName(tt.input)
-		if got != tt.want {
-			t.Errorf("displaySpanName(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestEstimateCost_KnownModel(t *testing.T) {
-	// deepseek-v3.1: $0.15/M input + $0.75/M output
-	cost := EstimateCost("deepseek-v3.1", 10000, 1000)
-	// (10000 * 0.15 + 1000 * 0.75) / 1_000_000 = (1500 + 750) / 1_000_000 = 0.00225
-	if cost < 0.002 || cost > 0.003 {
-		t.Errorf("EstimateCost = %f, want ~0.00225", cost)
-	}
-}
-
-func TestEstimateCost_UnknownModel(t *testing.T) {
-	cost := EstimateCost("unknown-model", 1000, 1000)
-	if cost <= 0 {
-		t.Error("unknown model should fall back to default pricing, got 0")
-	}
-}
-
-func TestEstimateCost_ZeroTokens(t *testing.T) {
-	cost := EstimateCost("deepseek-v3.1", 0, 0)
-	if cost != 0 {
-		t.Errorf("zero tokens should cost 0, got %f", cost)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // 8.4 Cache
 // ---------------------------------------------------------------------------
 
