@@ -91,29 +91,27 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		proposalContent, _ = gitExec(ctx, sc, input.AgentRunName, input.RepoPath, catCmd)
 	}
 
-	// TODO(security): The authenticated remote URL embeds the token in plain text.
-	// If git logs or error messages capture the URL, the token will appear in Temporal
-	// workflow history and sidecar logs. Consider using git credential helpers or
-	// a short-lived installation token via GitHub App rather than a long-lived PAT.
-	// Inject token into remote URL for authenticated push
+	// Push to remote using git's http.extraHeader to pass the token so it never
+	// appears in the remote URL (and thus not in Temporal history or git error logs).
+	pushCmd := fmt.Sprintf("git push --force origin %s", input.BranchName)
 	if a.GitHubProvider != nil && input.RepoURL != "" {
 		token, tokenErr := a.GitHubProvider.Token(ctx)
 		if tokenErr == nil && token != "" {
-			authedURL := aotgithub.InjectTokenInURL(input.RepoURL, token)
-			setURLCmd := fmt.Sprintf("git remote set-url origin %s", authedURL)
+			// Ensure the remote URL is the plain (unauthenticated) URL.
+			setURLCmd := fmt.Sprintf("git remote set-url origin %s", input.RepoURL)
 			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, setURLCmd); err != nil {
-				return nil, fmt.Errorf("set authenticated remote URL: %w", err)
+				return nil, fmt.Errorf("set remote URL: %w", err)
 			}
-			// Restore original URL after push (regardless of push success)
-			defer func() {
-				restoreCmd := fmt.Sprintf("git remote set-url origin %s", input.RepoURL)
-				_, _ = gitExec(ctx, sc, input.AgentRunName, input.RepoPath, restoreCmd)
-			}()
+			// Pass the credential via git -c http.<url>.extraHeader so the token
+			// is injected at the transport layer and never embedded in the URL.
+			authHeader := aotgithub.BasicAuthHeader(token)
+			pushCmd = fmt.Sprintf(
+				"git -c http.https://github.com/.extraHeader=%q push --force origin %s",
+				"Authorization: "+authHeader,
+				input.BranchName,
+			)
 		}
 	}
-
-	// Push to remote (force to handle re-runs reusing the same branch)
-	pushCmd := fmt.Sprintf("git push --force origin %s", input.BranchName)
 	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, pushCmd); err != nil {
 		return nil, fmt.Errorf("git push: %w", err)
 	}
