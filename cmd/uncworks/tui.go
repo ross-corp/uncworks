@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -359,7 +360,8 @@ func (m tuiModel) doSubmit() tea.Cmd {
 
 func (m tuiModel) View() string {
 	if m.err != nil {
-		return styleError.Render(fmt.Sprintf("Error: %v\n\nRun 'uncworks open' to start the local server.\nPress q to quit.", m.err))
+		msg := humanizeErr(m.err)
+		return styleError.Render(fmt.Sprintf("Error: %s\n\nRun 'uncworks open' to start the local server, or 'uncworks connect <addr>' to set a remote address.\nPress q to quit.", msg))
 	}
 
 	switch m.view {
@@ -454,6 +456,41 @@ func tickEvery(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(_ time.Time) tea.Msg {
 		return tickMsg{}
 	})
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// humanizeErr converts a connect-rpc or network error into a short, readable message.
+func humanizeErr(err error) string {
+	if err == nil {
+		return ""
+	}
+	var connectErr *connect.Error
+	if errors.As(err, &connectErr) {
+		switch connectErr.Code() {
+		case connect.CodeUnavailable:
+			return "server unavailable — is UNCWORKS running?"
+		case connect.CodeUnauthenticated:
+			return "authentication required — check your credentials"
+		case connect.CodePermissionDenied:
+			return "permission denied"
+		case connect.CodeNotFound:
+			return "resource not found"
+		case connect.CodeUnimplemented:
+			return "this operation is not supported by the server version"
+		default:
+			return connectErr.Message()
+		}
+	}
+	msg := err.Error()
+	// connection refused is the most common failure for local setups
+	if strings.Contains(msg, "connection refused") {
+		return "connection refused — is 'uncworks open' running?"
+	}
+	if strings.Contains(msg, "no such host") {
+		return fmt.Sprintf("host not found — check 'uncworks connect' address")
+	}
+	return msg
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────

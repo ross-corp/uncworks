@@ -78,8 +78,18 @@ func TestFindAOTWorktrees(t *testing.T) {
 		t.Fatalf("expected 1 AOT worktree, got %d", len(worktrees))
 	}
 
-	if worktrees[0] != wtDir {
-		t.Errorf("expected worktree at %s, got %s", wtDir, worktrees[0])
+	// On macOS /var/folders is a symlink to /private/var/folders; resolve both
+	// sides before comparing so the test is not fragile to symlink expansion.
+	gotResolved, err := filepath.EvalSymlinks(worktrees[0])
+	if err != nil {
+		gotResolved = worktrees[0]
+	}
+	wantResolved, err := filepath.EvalSymlinks(wtDir)
+	if err != nil {
+		wantResolved = wtDir
+	}
+	if gotResolved != wantResolved {
+		t.Errorf("expected worktree at %s, got %s", wantResolved, gotResolved)
 	}
 }
 

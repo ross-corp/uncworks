@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 const defaultReleaseName = "uncworks"
@@ -15,8 +16,9 @@ func runTeardown(args []string) error {
 	purge := fs.Bool("purge", false, "Also delete PVCs (destroys all workspace data)")
 	namespace := fs.String("namespace", defaultNamespace, "Kubernetes namespace")
 	context := fs.String("context", "", "Kubeconfig context to use")
+	yes := fs.Bool("yes", false, "Skip confirmation prompt")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks teardown [flags]\n\nUninstall UNCWORKS from the current cluster.")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks teardown [flags]\n\nUninstall UNCWORKS from the current cluster.\nThis is a destructive operation. Use --yes to skip the confirmation prompt.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -25,6 +27,21 @@ func runTeardown(args []string) error {
 
 	if err := checkPrereqs(); err != nil {
 		return err
+	}
+
+	// Confirmation prompt for destructive action.
+	if !*yes {
+		if *purge {
+			fmt.Printf("WARNING: This will uninstall UNCWORKS and permanently delete all PVCs (workspace data) in namespace %q.\n", *namespace)
+		} else {
+			fmt.Printf("This will uninstall UNCWORKS from namespace %q (PVCs will be retained).\n", *namespace)
+		}
+		fmt.Print("Continue? [y/N]: ")
+		line := readLine()
+		if strings.ToLower(strings.TrimSpace(line)) != "y" {
+			fmt.Println("Teardown cancelled.")
+			return nil
+		}
 	}
 
 	helmArgs := []string{"uninstall", defaultReleaseName, "--namespace", *namespace}

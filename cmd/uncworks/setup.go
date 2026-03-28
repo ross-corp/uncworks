@@ -10,7 +10,20 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	// isTerminal is used to detect whether stdin is attached to a TTY.
+	// We use a direct syscall so we avoid adding a new dependency.
 )
+
+// isTTY reports whether os.Stdin is connected to an interactive terminal.
+func isTTY() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	// ModeCharDevice is set on TTY file descriptors on both Linux and macOS.
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
 
 // setupConfig holds all values needed to install UNCWORKS.
 type setupConfig struct {
@@ -122,6 +135,17 @@ func selectContext() (string, error) {
 		return contexts[0].Name, nil
 	}
 
+	// Non-interactive: use the active context without prompting.
+	if !isTTY() {
+		for _, ctx := range contexts {
+			if ctx.Active {
+				fmt.Printf("Using active Kubernetes context: %s (%s)\n", ctx.Name, ctx.ServerURL)
+				return ctx.Name, nil
+			}
+		}
+		return "", fmt.Errorf("multiple Kubernetes contexts found but stdin is not a terminal — pass --context to choose one")
+	}
+
 	fmt.Println("Available Kubernetes contexts:")
 	for i, ctx := range contexts {
 		active := "  "
@@ -145,19 +169,32 @@ func selectContext() (string, error) {
 }
 
 // collectValues prompts for any required values not supplied via flags.
+// When stdin is not a TTY (e.g. CI), missing required values are an error.
 func collectValues(cfg *setupConfig, llmKey, githubToken, temporalHost string) error {
 	cfg.LLMKey = llmKey
 	cfg.GitHubToken = githubToken
 	cfg.TemporalHost = temporalHost
 
+	tty := isTTY()
+
 	if cfg.LLMKey == "" {
+		if !tty {
+			return fmt.Errorf("--llm-key is required (stdin is not a terminal)")
+		}
 		cfg.LLMKey = readSecret("LLM API key (OpenRouter/OpenAI): ")
 	}
 	if cfg.GitHubToken == "" {
+		if !tty {
+			return fmt.Errorf("--github-token is required (stdin is not a terminal)")
+		}
 		cfg.GitHubToken = readSecret("GitHub personal access token: ")
 	}
 	if cfg.TemporalHost == "" {
-		cfg.TemporalHost = readPrompt("Temporal gRPC address", "temporal:7233")
+		if !tty {
+			cfg.TemporalHost = "temporal:7233"
+		} else {
+			cfg.TemporalHost = readPrompt("Temporal gRPC address", "temporal:7233")
+		}
 	}
 	return nil
 }
@@ -184,9 +221,13 @@ func resourcePreflight(kubeCtx string) error {
 	if res.CPUMillicores < recCPU || res.MemoryBytes < recMem {
 		fmt.Printf("warning: below recommended resources (%dm CPU / %dMi memory). Install may be slow.\n",
 			res.CPUMillicores, res.MemoryBytes/1024/1024)
-		fmt.Print("Continue anyway? [Y/n]: ")
-		if line := readLine(); strings.ToLower(line) == "n" {
-			return fmt.Errorf("setup cancelled")
+		if isTTY() {
+			fmt.Print("Continue anyway? [Y/n]: ")
+			if line := readLine(); strings.ToLower(line) == "n" {
+				return fmt.Errorf("setup cancelled")
+			}
+		} else {
+			fmt.Println("Non-interactive mode: proceeding despite low resources.")
 		}
 	} else {
 		fmt.Printf("OK (%dm CPU / %dMi)\n", res.CPUMillicores, res.MemoryBytes/1024/1024)
@@ -317,16 +358,19 @@ spec:
 
 // printNoClusterInstructions prints platform-specific cluster install recommendations.
 func printNoClusterInstructions() {
-	fmt.Println("No Kubernetes contexts found. You need a local Kubernetes cluster to use UNCWORKS.\n")
+	fmt.Println("No Kubernetes contexts found. You need a local Kubernetes cluster to use UNCWORKS.")
+	fmt.Println()
 	if runtime.GOOS == "darwin" {
 		fmt.Println("Recommended options for macOS:")
 		fmt.Println("  Docker Desktop  → Enable Kubernetes in Preferences > Kubernetes")
 		fmt.Println("  OrbStack        → brew install orbstack  (fastest option)")
-		fmt.Println("  Rancher Desktop → brew install --cask rancher\n")
+		fmt.Println("  Rancher Desktop → brew install --cask rancher")
+		fmt.Println()
 	} else {
 		fmt.Println("Recommended options for Linux:")
 		fmt.Println("  k3d  → curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash")
-		fmt.Println("  kind → go install sigs.k8s.io/kind@latest\n")
+		fmt.Println("  kind → go install sigs.k8s.io/kind@latest")
+		fmt.Println()
 	}
 	fmt.Println("After installing, run 'uncworks setup' again.")
 }
@@ -348,11 +392,15 @@ func readPrompt(label, defaultVal string) string {
 	return line
 }
 
-// readSecret reads a value with masked input (no terminal echo).
-// Falls back to visible input if terminal manipulation fails.
+// readSecret reads a value with masked input (no terminal echo) when on a TTY.
+// Falls back to plain visible input when stdin is not a terminal.
 func readSecret(label string) string {
 	fmt.Print(label)
-	// Try to disable echo via stty.
+	if !isTTY() {
+		// Non-interactive: read plaintext (e.g. piped value in scripts).
+		return readLine()
+	}
+	// Disable echo via stty so the secret is not visible as the user types.
 	sttyOff := exec.Command("stty", "-echo")
 	sttyOff.Stdin = os.Stdin
 	_ = sttyOff.Run()
