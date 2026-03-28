@@ -19,9 +19,10 @@ func runOpen(args []string) error {
 	fs := flag.NewFlagSet("open", flag.ContinueOnError)
 	namespace := fs.String("namespace", defaultNamespace, "Kubernetes namespace")
 	context := fs.String("context", "", "Kubeconfig context to use")
-	port := fs.Int("port", defaultWebLocalPort, "Local port to forward to")
+	port := fs.Int("port", defaultWebLocalPort, "Local port to forward to the web UI")
+	noBrowser := fs.Bool("no-browser", false, "Start port-forward without opening a browser tab")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks open [flags]\n\nStart port-forward for the web UI and open it in your browser.")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks open [flags]\n\nStart a kubectl port-forward for the UNCWORKS web UI and open it in your browser.\nCtrl-C stops the port-forward.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -58,10 +59,12 @@ func runOpen(args []string) error {
 	}
 
 	url := fmt.Sprintf("http://localhost:%d", *port)
-	fmt.Printf("Web UI available at %s\n", url)
-	if err := openBrowser(url); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not open browser: %v\n", err)
-		fmt.Printf("Open %s in your browser.\n", url)
+	fmt.Printf("Web UI available at %s (Ctrl-C to stop)\n", url)
+	if !*noBrowser {
+		if err := openBrowser(url); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not open browser: %v\n", err)
+			fmt.Printf("Open %s in your browser.\n", url)
+		}
 	}
 
 	// Block until the port-forward exits.
