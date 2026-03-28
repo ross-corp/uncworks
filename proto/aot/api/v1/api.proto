@@ -196,7 +196,7 @@ message CreateAgentRunResponse {
 }
 
 message GetAgentRunRequest {
-  string id = 1;
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 message ListAgentRunsRequest {
@@ -223,7 +223,7 @@ message ListAgentRunsResponse {
 }
 
 message WatchAgentRunRequest {
-  string id = 1;
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 message AgentRunEvent {
@@ -243,7 +243,7 @@ enum AgentRunEventType {
 }
 
 message CancelAgentRunRequest {
-  string id = 1;
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 message CancelAgentRunResponse {
@@ -251,8 +251,8 @@ message CancelAgentRunResponse {
 }
 
 message SendHumanInputRequest {
-  string agent_run_id = 1;
-  string input = 2;
+  string agent_run_id = 1 [(buf.validate.field).string.min_len = 1];
+  string input = 2 [(buf.validate.field).string.min_len = 1];
 }
 
 message SendHumanInputResponse {
@@ -260,7 +260,7 @@ message SendHumanInputResponse {
 }
 
 message GetRunGraphRequest {
-  string id = 1;
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 message RunGraphNode {

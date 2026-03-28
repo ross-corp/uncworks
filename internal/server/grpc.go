@@ -89,11 +89,11 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 	if labels == nil {
 		labels = make(map[string]string)
 	}
-	if crd.Spec.Project != "" {
-		labels["aot.uncworks.io/project"] = crd.Spec.Project
+	if v := sanitizeLabelValue(crd.Spec.Project); v != "" {
+		labels["aot.uncworks.io/project"] = v
 	}
-	if crd.Spec.Feature != "" {
-		labels["aot.uncworks.io/feature"] = crd.Spec.Feature
+	if v := sanitizeLabelValue(crd.Spec.Feature); v != "" {
+		labels["aot.uncworks.io/feature"] = v
 	}
 	// Tags stored as annotation (not label) because label values can't contain commas
 	if len(crd.Spec.Tags) > 0 {
@@ -103,7 +103,9 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		crd.Annotations["aot.uncworks.io/tags"] = strings.Join(crd.Spec.Tags, ",")
 	}
 	if len(crd.Spec.Repos) > 0 {
-		labels["aot.uncworks.io/repo"] = repoNameFromURL(crd.Spec.Repos[0].URL)
+		if v := sanitizeLabelValue(repoNameFromURL(crd.Spec.Repos[0].URL)); v != "" {
+			labels["aot.uncworks.io/repo"] = v
+		}
 	}
 	crd.Labels = labels
 
@@ -127,14 +129,28 @@ func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Reques
 
 	run := crdToProto(crd)
 
-	// Enrich with real-time Temporal state
+	// Enrich with real-time Temporal state.
+	// Only overwrite the fields that Temporal knows about (Phase, Message, PodName,
+	// PrUrl); preserve the richer CRD-sourced fields (TraceId, LogOutput,
+	// WorktreePath, Stage, RetryCount, VerificationResult, DebugActive,
+	// StartedAt, CompletedAt, RetainUntil) that mapWorkflowStateToProto does not
+	// populate.
 	if s.TemporalClient != nil {
 		workflowID := fmt.Sprintf("agentrun-%s", req.Msg.Id)
 		resp, err := s.TemporalClient.QueryWorkflow(ctx, workflowID, "", aottemporal.QueryGetState)
 		if err == nil {
 			var state aottemporal.WorkflowState
 			if resp.Get(&state) == nil {
-				run.Status = mapWorkflowStateToProto(state)
+				enriched := mapWorkflowStateToProto(state)
+				// Merge: only overwrite the fields Temporal provides.
+				run.Status.Phase = enriched.Phase
+				run.Status.Message = enriched.Message
+				if enriched.PodName != "" {
+					run.Status.PodName = enriched.PodName
+				}
+				if enriched.PrUrl != "" {
+					run.Status.PrUrl = enriched.PrUrl
+				}
 			}
 		}
 	}
@@ -237,6 +253,11 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 		runs = runs[:limit]
 	}
 
+	// TODO(audit): cursor-based pagination is declared in the proto (cursor input,
+	// next_cursor output) but not implemented. The current implementation fetches
+	// all runs from K8s and slices in-memory, which is unbounded and will not scale.
+	// Implement server-side pagination using the K8s List continue token or a
+	// creation-timestamp cursor before the run list grows large.
 	return connect.NewResponse(&apiv1.ListAgentRunsResponse{AgentRuns: runs}), nil
 }
 
@@ -554,6 +575,19 @@ func crdTagsOrLabel(crd *aotv1alpha1.AgentRun) []string {
 		}
 	}
 	return nil
+}
+
+// sanitizeLabelValue truncates and strips characters that are illegal in
+// Kubernetes label values (must match [a-zA-Z0-9._-]{0,63}).
+// An empty result means the value should not be applied as a label.
+func sanitizeLabelValue(v string) string {
+	v = regexp.MustCompile(`[^a-zA-Z0-9._-]`).ReplaceAllString(v, "-")
+	v = regexp.MustCompile(`^[^a-zA-Z0-9]+`).ReplaceAllString(v, "")
+	v = regexp.MustCompile(`[^a-zA-Z0-9]+$`).ReplaceAllString(v, "")
+	if len(v) > 63 {
+		v = v[:63]
+	}
+	return v
 }
 
 // isTerminalPhase returns true for phases that indicate a completed run.
