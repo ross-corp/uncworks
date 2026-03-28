@@ -1,12 +1,14 @@
 import { Outlet } from "react-router-dom";
+import { useState, useEffect } from "react";
 import GlobalNav from "../components/GlobalNav";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { CopilotContextProvider } from "../hooks/useCopilotContext";
 import { useCopilotContextValue } from "../hooks/useCopilotContext";
 import CopilotBottomPanel from "../components/CopilotBottomPanel";
 import { HealthProvider } from "../hooks/useHealthContext";
-import { SettingsProvider } from "../hooks/useSettings";
+import { SettingsProvider, useSettings } from "../hooks/useSettings";
 import { isWails } from "../lib/wails-env";
+import SetupWizardModal from "../components/SetupWizard";
 
 // TITLEBAR_H: height of the macOS hidden-inset title bar.
 // The drag region spans the full window width at this height so the window
@@ -15,9 +17,23 @@ const TITLEBAR_H = 36;
 
 function LayoutInner() {
   const { open, panelHeight } = useCopilotContextValue();
+  const { settings, configStatus, reload } = useSettings();
   const wails = isWails();
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardChecked, setWizardChecked] = useState(false);
+
+  // Auto-show wizard on first launch if not yet complete
+  useEffect(() => {
+    if (!wails || wizardChecked || !settings) return;
+    setWizardChecked(true);
+    if (!configStatus.wizardComplete) {
+      setWizardOpen(true);
+    }
+  }, [wails, settings, configStatus, wizardChecked]);
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground font-mono text-sm flex flex-col">
+      {wizardOpen && <SetupWizardModal onClose={() => { setWizardOpen(false); reload(); }} />}
       {/* Full-width macOS title bar drag zone — only rendered in Wails desktop */}
       {wails && (
         <div

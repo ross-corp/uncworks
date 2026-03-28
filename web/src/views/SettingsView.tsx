@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { isWails } from "../lib/wails-env";
 import { useThemeNew, type ColorMode } from "../hooks/useThemeNew";
 import { useSettings, type AppSettings } from "../hooks/useSettings";
+import SetupWizardModal from "../components/SetupWizard";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const go = () => (window as any).go?.main?.App;
@@ -47,6 +48,19 @@ export default function SettingsView() {
   const [forwarding, setForwarding] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+
+  // LiteLLM check state
+  const [litellmChecking, setLitellmChecking] = useState(false);
+  const [litellmResult, setLitellmResult] = useState<{ ok: boolean; models: string[]; error?: string } | null>(null);
+
+  // GitHub auth state
+  const [ghUser, setGhUser] = useState<string | null>(null);
+  const [ghLoading, setGhLoading] = useState(false);
+
+  // Auto-update state
+  const [updateInfo, setUpdateInfo] = useState<{ localBuild?: boolean; upToDate?: boolean; currentVersion?: string; latestVersion?: string; releaseURL?: string } | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
 
   const [fontSize, setFontSizeState] = useState<number>(() => {
     const v = localStorage.getItem(FONT_KEY);
@@ -73,7 +87,50 @@ export default function SettingsView() {
     }
   }, [wails]);
 
-  useEffect(() => { loadOperational(); }, [loadOperational]);
+  const loadGitHubUser = useCallback(async () => {
+    if (!wails) return;
+    try {
+      const user = await go().GetGitHubUser();
+      setGhUser(user || null);
+    } catch { setGhUser(null); }
+  }, [wails]);
+
+  useEffect(() => { loadOperational(); loadGitHubUser(); }, [loadOperational, loadGitHubUser]);
+
+  async function checkLiteLLM() {
+    if (!wails) return;
+    setLitellmChecking(true);
+    setLitellmResult(null);
+    try {
+      const result = await go().CheckLiteLLM(local.litellmURL || "");
+      setLitellmResult(result);
+    } catch (e: any) {
+      setLitellmResult({ ok: false, models: [], error: String(e) });
+    } finally {
+      setLitellmChecking(false);
+    }
+  }
+
+  async function disconnectGitHub() {
+    if (!wails) return;
+    setGhLoading(true);
+    try {
+      await go().DisconnectGitHub();
+      await reloadGlobal();
+      setGhUser(null);
+    } catch (e: any) { setError(String(e)); }
+    finally { setGhLoading(false); }
+  }
+
+  async function checkUpdate() {
+    if (!wails) return;
+    setUpdateChecking(true);
+    try {
+      const info = await go().CheckForUpdate();
+      setUpdateInfo(info);
+    } catch (e: any) { setError(String(e)); }
+    finally { setUpdateChecking(false); }
+  }
 
   function set<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setLocal(s => ({ ...s, [key]: value }));
@@ -127,14 +184,25 @@ export default function SettingsView() {
 
   // Config notices — show only what actually breaks without each credential
   const notices: { key: string; message: string; anchor: string }[] = [];
-  if (!configStatus.hasGitHubToken)
-    notices.push({ key: "gh", message: "Private repo cloning and PR creation require a GitHub token.", anchor: "field-github-token" });
+  if (!configStatus.hasGitHubToken && !configStatus.hasGitHubOAuth)
+    notices.push({ key: "gh", message: "Private repo cloning and PR creation require GitHub authentication.", anchor: "section-github" });
 
   return (
     // Full-height scroll wrapper — scrollbar stays at viewport edge
     <div className="flex-1 overflow-y-auto overscroll-none min-h-0">
+      {showWizard && <SetupWizardModal onClose={() => { setShowWizard(false); reloadGlobal(); loadGitHubUser(); }} />}
       <div className="px-8 py-8 max-w-2xl">
-        <h1 className="text-base font-semibold mb-6 tracking-tight">Settings</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-base font-semibold tracking-tight">Settings</h1>
+          {wails && (
+            <button
+              onClick={() => setShowWizard(true)}
+              className="text-xs text-muted-foreground hover:text-foreground border rounded-md px-2.5 py-1 transition-colors"
+            >
+              Re-run setup wizard
+            </button>
+          )}
+        </div>
 
         {/* Config notices */}
         {notices.length > 0 && (
@@ -200,18 +268,46 @@ export default function SettingsView() {
           </Field>
         </Section>
 
-        {/* Credentials */}
-        <Section title="Credentials">
+        {/* GitHub */}
+        <Section id="section-github" title="GitHub">
+          {configStatus.hasGitHubOAuth ? (
+            <Field label="GitHub account" status="ok" statusLabel="connected">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-mono">{ghUser ? `@${ghUser}` : "authenticated"}</span>
+                <button
+                  onClick={disconnectGitHub}
+                  disabled={ghLoading}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                >
+                  {ghLoading ? "Disconnecting…" : "Disconnect"}
+                </button>
+              </div>
+            </Field>
+          ) : (
+            <Field
+              label="GitHub OAuth"
+              hint="Connect via GitHub device flow to enable private repo access and PR creation"
+              status="optional"
+              statusLabel="not connected"
+            >
+              {wails ? (
+                <button
+                  onClick={() => setShowWizard(true)}
+                  className="px-3 py-1.5 rounded-md border text-sm hover:bg-accent transition-colors"
+                >
+                  Connect GitHub
+                </button>
+              ) : (
+                <span className="text-xs text-muted-foreground">Available in the desktop app.</span>
+              )}
+            </Field>
+          )}
           <Field
             id="field-github-token"
             label="GitHub token"
-            hint="Personal access token with repo scope"
+            hint="Personal access token (alternative to OAuth)"
             status={configStatus.hasGitHubToken ? "ok" : "optional"}
-            statusLabel={
-              configStatus.hasGitHubToken
-                ? "configured"
-                : "needed for private repos + PRs"
-            }
+            statusLabel={configStatus.hasGitHubToken ? "configured" : "optional"}
           >
             <SecretInput
               value={local.githubToken}
@@ -221,6 +317,121 @@ export default function SettingsView() {
             />
           </Field>
         </Section>
+
+        {/* LiteLLM */}
+        <Section title="LiteLLM">
+          <Field label="Proxy URL" hint="OpenAI-compatible endpoint for LLM requests">
+            <div className="flex gap-2">
+              <TextInput
+                value={local.litellmURL || ""}
+                onChange={e => set("litellmURL", e.target.value)}
+                placeholder="http://litellm:4000"
+                disabled={!wails}
+              />
+              {wails && (
+                <button
+                  onClick={checkLiteLLM}
+                  disabled={litellmChecking}
+                  className="px-3 py-1.5 rounded-md border text-xs hover:bg-accent transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  {litellmChecking ? "Checking…" : "Test"}
+                </button>
+              )}
+            </div>
+            {litellmResult && (
+              <div className={`mt-2 text-xs ${litellmResult.ok ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+                {litellmResult.ok
+                  ? `${litellmResult.models.length} model(s): ${litellmResult.models.join(", ")}`
+                  : litellmResult.error || "Connection failed"}
+              </div>
+            )}
+          </Field>
+        </Section>
+
+        {/* Default Models */}
+        <Section title="Default Models">
+          <Field label="Manage phase" hint="Model used for the manage/planning agent">
+            <TextInput
+              value={local.defaultManageModel || ""}
+              onChange={e => set("defaultManageModel", e.target.value)}
+              placeholder="default"
+              disabled={!wails}
+            />
+          </Field>
+          <Field label="Implement phase" hint="Model used for the implement/coding agent">
+            <TextInput
+              value={local.defaultImplementModel || ""}
+              onChange={e => set("defaultImplementModel", e.target.value)}
+              placeholder="default"
+              disabled={!wails}
+            />
+          </Field>
+        </Section>
+
+        {/* Auto-update */}
+        {wails && (
+          <Section title="Updates">
+            <Field label="Auto-update">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={local.autoUpdateEnabled || false}
+                  onChange={e => set("autoUpdateEnabled", e.target.checked)}
+                  className="rounded"
+                />
+                <span className="text-sm">Check for updates at launch</span>
+              </label>
+            </Field>
+            <Field label="Channel">
+              <div className="flex gap-2">
+                {["stable", "nightly"].map(ch => (
+                  <button
+                    key={ch}
+                    onClick={() => set("updateChannel", ch)}
+                    className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                      (local.updateChannel || "stable") === ch
+                        ? "bg-accent text-accent-foreground border-transparent font-medium"
+                        : "text-muted-foreground border-border hover:text-foreground"
+                    }`}
+                  >
+                    {ch.charAt(0).toUpperCase() + ch.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Version">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground font-mono">
+                  {updateInfo
+                    ? updateInfo.localBuild
+                      ? "local build"
+                      : updateInfo.currentVersion || "unknown"
+                    : "—"}
+                </span>
+                <button
+                  onClick={checkUpdate}
+                  disabled={updateChecking}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  {updateChecking ? "Checking…" : "Check now"}
+                </button>
+                {updateInfo && !updateInfo.localBuild && !updateInfo.upToDate && (
+                  <a
+                    href={updateInfo.releaseURL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-accent-foreground hover:underline"
+                  >
+                    {updateInfo.latestVersion} available →
+                  </a>
+                )}
+                {updateInfo && !updateInfo.localBuild && updateInfo.upToDate && (
+                  <span className="text-xs text-green-600 dark:text-green-400">Up to date</span>
+                )}
+              </div>
+            </Field>
+          </Section>
+        )}
 
         {/* Cluster connection */}
         <Section title="Cluster">
@@ -386,9 +597,9 @@ export default function SettingsView() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ id, title, children }: { id?: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-8">
+    <section id={id} className="mb-8 scroll-mt-4">
       <h2 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-4 border-b pb-1">
         {title}
       </h2>

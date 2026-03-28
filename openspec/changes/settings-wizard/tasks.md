@@ -28,11 +28,11 @@
 
 ## 5. Auto-Update
 
-- [ ] 5.1 Embed build version via `-ldflags "-X main.Version=..."` in `wails build` call; add `Version` var to `cmd/uncworks-app/main.go`
-- [ ] 5.2 Implement `CheckForUpdate() (UpdateInfo, error)` in `cmd/uncworks-app/update.go` — queries GitHub Releases API for latest stable or pre-release tag; returns new version string or empty if up-to-date
-- [ ] 5.3 Local build detection: if `Version == ""` or `Version == "dev"`, return `UpdateInfo{LocalBuild: true}`
-- [ ] 5.4 Cache update check result in-process for the session (don't re-query on every Settings visit)
-- [ ] 5.5 Expose `CheckForUpdate` as Wails binding
+- [x] 5.1 Embed build version via `-ldflags "-X main.Version=..."` in `wails build` call; add `Version` var to `cmd/uncworks-app/main.go`
+- [x] 5.2 Implement `CheckForUpdate() (UpdateInfo, error)` in `cmd/uncworks-app/update.go` — queries GitHub Releases API for latest stable or pre-release tag; returns new version string or empty if up-to-date
+- [x] 5.3 Local build detection: if `Version == ""` or `Version == "dev"`, return `UpdateInfo{LocalBuild: true}`
+- [x] 5.4 Cache update check result in-process for the session (don't re-query on every Settings visit)
+- [x] 5.5 Expose `CheckForUpdate` as Wails binding
 
 ## 6. Frontend — Setup Wizard
 
