@@ -206,3 +206,44 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary);
 }
+
+/* ============================================================
+   Wails desktop overrides  (active when data-wails="true")
+   ============================================================ */
+
+/* No rubber-band bounce at document edges — feels more native */
+html[data-wails] body {
+  overscroll-behavior: none;
+}
+
+/* Overlay-style scrollbars that fade in on hover (macOS native feel) */
+html[data-wails] ::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+html[data-wails] ::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+}
+
+html[data-wails] ::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.25);
+  border-radius: 10px;
+}
+
+html[data-wails] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
+}
+
+/* Suppress browser text selection highlight colour — use native */
+html[data-wails] ::selection {
+  background: highlight;
+  color: highlighttext;
+}
+
+/* Prevent accidental drag of images/links */
+html[data-wails] img,
+html[data-wails] a {
+  -webkit-user-drag: none;
+}

@@ -19,6 +19,7 @@ import (
 	"context"
 	"dagger/ci/internal/dagger"
 	"fmt"
+	"strings"
 )
 
 type Ci struct{}
@@ -266,6 +267,80 @@ func (m *Ci) PushImages(
 		return "", fmt.Errorf("push failed:\n%s", joinLines(failures))
 	}
 	return fmt.Sprintf("pushed %d images:\n%s", len(published), joinLines(published)), nil
+}
+
+// PushEdge builds all images and publishes them with :edge and :sha-{sha7} tags.
+// Called on every push to main for a rolling "latest main" image channel.
+func (m *Ci) PushEdge(
+	ctx context.Context,
+	source *dagger.Directory,
+	registryUser string,
+	registryPass *dagger.Secret,
+	// +optional
+	// +default="ghcr.io/uncworks"
+	registry string,
+) (string, error) {
+	// Derive short SHA from git inside a container.
+	sha7, err := dag.Container().
+		From("alpine/git:latest").
+		WithMountedDirectory("/src", source).
+		WithWorkdir("/src").
+		WithExec([]string{"git", "rev-parse", "--short=7", "HEAD"}).
+		Stdout(ctx)
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse: %w", err)
+	}
+	sha7 = strings.TrimSpace(sha7)
+
+	type result struct {
+		name string
+		refs []string
+		err  error
+	}
+	ch := make(chan result, len(images))
+
+	for _, img := range images {
+		img := img
+		go func() {
+			contextDir := source
+			if img.Context != "." {
+				contextDir = source.Directory(img.Context)
+			}
+			container := contextDir.DockerBuild(dagger.DirectoryDockerBuildOpts{
+				Dockerfile: img.Dockerfile,
+			})
+
+			var refs []string
+			var pushErr error
+			for _, tag := range []string{"edge", "sha-" + sha7} {
+				ref := fmt.Sprintf("%s/%s:%s", registry, img.Name, tag)
+				if _, err := container.
+					WithRegistryAuth(registry, registryUser, registryPass).
+					Publish(ctx, ref); err != nil {
+					pushErr = err
+					break
+				}
+				refs = append(refs, ref)
+			}
+			ch <- result{img.Name, refs, pushErr}
+		}()
+	}
+
+	var published []string
+	var failures []string
+	for range len(images) {
+		r := <-ch
+		if r.err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", r.name, r.err))
+		} else {
+			published = append(published, r.refs...)
+		}
+	}
+
+	if len(failures) > 0 {
+		return "", fmt.Errorf("edge push failed:\n%s", joinLines(failures))
+	}
+	return fmt.Sprintf("pushed %d refs (sha: %s):\n%s", len(published), sha7, joinLines(published)), nil
 }
 
 // PackageChart packages the Helm chart with the given version.

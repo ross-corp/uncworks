@@ -770,6 +770,54 @@
           "store_path": "/nix/store/cbh2rg6v7fr14yr4f3dz8mm4qag1wlww-temporal-cli-1.5.1"
         }
       }
+    },
+    "wails@latest": {
+      "last_modified": "2026-03-21T07:29:51Z",
+      "resolved": "github:NixOS/nixpkgs/09061f748ee21f68a089cd5d91ec1859cd93d0be#wails",
+      "source": "devbox-search",
+      "version": "2.11.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/gq0slkj6fls6yq0x7ymyc4vcwvs0sn5k-wails-2.11.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/gq0slkj6fls6yq0x7ymyc4vcwvs0sn5k-wails-2.11.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/0dmmx34spgn0viil5dq4xs1snvygkr88-wails-2.11.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/0dmmx34spgn0viil5dq4xs1snvygkr88-wails-2.11.0"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/3fwi3x2add9gvisk4pb6gldws1yvdyvy-wails-2.11.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/3fwi3x2add9gvisk4pb6gldws1yvdyvy-wails-2.11.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/xb3050aj0dsnmh57y3rpj790p10x8b5z-wails-2.11.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/xb3050aj0dsnmh57y3rpj790p10x8b5z-wails-2.11.0"
+        }
+      }
     }
   }
 }

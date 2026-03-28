@@ -1,8 +1,7 @@
 //go:build darwin
 
 // cmd/uncworks-app — UNCWORKS native macOS application (Wails v2).
-// Embeds the React web frontend in a native WKWebView window with a menu bar
-// status icon for managing the local Kubernetes cluster lifecycle.
+// Embeds the React web frontend in a native WKWebView window.
 //
 // Build requirements:
 //   - macOS 13+ (Ventura or later)
@@ -15,9 +14,12 @@ import (
 	"embed"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
@@ -26,12 +28,39 @@ var assets embed.FS
 func main() {
 	app := NewApp()
 
+	appMenu := menu.NewMenu()
+
+	// Application menu (UNCWORKS)
+	appMenuItem := appMenu.AddSubmenu("UNCWORKS")
+	appMenuItem.AddText("About UNCWORKS", nil, func(_ *menu.CallbackData) {
+		runtime.WindowShow(app.ctx)
+	})
+	appMenuItem.AddSeparator()
+	appMenuItem.AddText("Preferences…", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+		runtime.EventsEmit(app.ctx, "app:open-settings")
+	})
+	appMenuItem.AddSeparator()
+	appMenuItem.AddText("Quit UNCWORKS", keys.CmdOrCtrl("q"), func(_ *menu.CallbackData) {
+		runtime.Quit(app.ctx)
+	})
+
+	// Edit menu — gives us system cut/copy/paste/select-all
+	editMenu := appMenu.AddSubmenu("Edit")
+	editMenu.AddText("Undo", keys.CmdOrCtrl("z"), nil)
+	editMenu.AddText("Redo", keys.Combo("z", keys.CmdOrCtrlKey, keys.ShiftKey), nil)
+	editMenu.AddSeparator()
+	editMenu.AddText("Cut", keys.CmdOrCtrl("x"), nil)
+	editMenu.AddText("Copy", keys.CmdOrCtrl("c"), nil)
+	editMenu.AddText("Paste", keys.CmdOrCtrl("v"), nil)
+	editMenu.AddText("Select All", keys.CmdOrCtrl("a"), nil)
+
 	err := wails.Run(&options.App{
 		Title:     "UNCWORKS",
 		Width:     1280,
 		Height:    800,
 		MinWidth:  800,
 		MinHeight: 600,
+		Menu:      appMenu,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
@@ -42,8 +71,8 @@ func main() {
 			app,
 		},
 		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHiddenInset(),
-			Appearance: mac.NSAppearanceNameDarkAqua,
+			TitleBar:             mac.TitleBarHiddenInset(),
+			Appearance:           mac.NSAppearanceNameDarkAqua,
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
 			About: &mac.AboutInfo{
