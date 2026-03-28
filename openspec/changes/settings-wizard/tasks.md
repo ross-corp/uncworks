@@ -1,30 +1,30 @@
 ## 1. Foundation — Config Bootstrap & Settings Struct
 
-- [ ] 1.1 Bootstrap `~/.config/uncworks/` on first launch in `cmd/uncworks-app/app.go` `startup()`
-- [ ] 1.2 Extend `AppSettings` struct: add `litellmURL`, `githubAuthed`, `updateChannel`, `autoUpdateEnabled`, `defaultManageModel`, `defaultImplementModel`; remove `llmKey`/`namespace` (autodetected)
-- [ ] 1.3 Add `GetKubeContexts() []string` and `AutodetectNamespace(ctx string) string` Wails bindings in `cmd/uncworks-app/app.go`
+- [x] 1.1 Bootstrap `~/.config/uncworks/` on first launch in `cmd/uncworks-app/app.go` `startup()`
+- [x] 1.2 Extend `AppSettings` struct: add `litellmURL`, `githubAuthed`, `updateChannel`, `autoUpdateEnabled`, `defaultManageModel`, `defaultImplementModel`; remove `llmKey`/`namespace` (autodetected)
+- [x] 1.3 Add `GetKubeContexts() []string` and `AutodetectNamespace(ctx string) string` Wails bindings in `cmd/uncworks-app/app.go`
 - [ ] 1.4 Migrate existing `config.json` on load: ignore `llmKey`, populate defaults for new fields
 
 ## 2. Go Dependencies
 
-- [ ] 2.1 Add `golang.org/x/oauth2` to `go.mod` (for GitHub device flow)
-- [ ] 2.2 Add `github.com/zalando/go-keyring` to `go.mod` (macOS Keychain)
-- [ ] 2.3 Run `go mod tidy`
+- [x] 2.1 Add `golang.org/x/oauth2` to `go.mod` (for GitHub device flow)
+- [x] 2.2 Add `github.com/zalando/go-keyring` to `go.mod` (macOS Keychain)
+- [x] 2.3 Run `go mod tidy`
 
 ## 3. GitHub Device Flow OAuth
 
-- [ ] 3.1 Implement `StartGitHubDeviceFlow() (userCode, verificationURL string, err error)` in `cmd/uncworks-app/github_auth.go`
-- [ ] 3.2 Implement `PollGitHubDeviceFlow(deviceCode string) (token string, done bool, err error)` — polls GitHub token endpoint
-- [ ] 3.3 Implement `SaveGitHubToken(token string)` → writes to Keychain service `uncworks`/account `github-token`
-- [ ] 3.4 Implement `GetGitHubUser() (login string, err error)` — reads token from Keychain, calls `GET api.github.com/user`
-- [ ] 3.5 Implement `DisconnectGitHub()` — removes token from Keychain, sets `githubAuthed: false`
-- [ ] 3.6 Expose above as Wails bindings
+- [x] 3.1 Implement `StartGitHubDeviceFlow() (userCode, verificationURL string, err error)` in `cmd/uncworks-app/github_auth.go`
+- [x] 3.2 Implement `PollGitHubDeviceFlow(deviceCode string) (token string, done bool, err error)` — polls GitHub token endpoint
+- [x] 3.3 Implement `SaveGitHubToken(token string)` → writes to Keychain service `uncworks`/account `github-token`
+- [x] 3.4 Implement `GetGitHubUser() (login string, err error)` — reads token from Keychain, calls `GET api.github.com/user`
+- [x] 3.5 Implement `DisconnectGitHub()` — removes token from Keychain, sets `githubAuthed: false`
+- [x] 3.6 Expose above as Wails bindings
 
 ## 4. LiteLLM Config & Health
 
-- [ ] 4.1 Implement `CheckLiteLLM(url string) (models []string, err error)` in `cmd/uncworks-app/litellm.go` — calls `GET {url}/models`
-- [ ] 4.2 Add LiteLLM to services health check in `cmd/uncworks-app/health.go` using configured URL
-- [ ] 4.3 Expose `CheckLiteLLM` as Wails binding
+- [x] 4.1 Implement `CheckLiteLLM(url string) (models []string, err error)` in `cmd/uncworks-app/litellm.go` — calls `GET {url}/models`
+- [x] 4.2 Add LiteLLM to services health check in `cmd/uncworks-app/health.go` using configured URL
+- [x] 4.3 Expose `CheckLiteLLM` as Wails binding
 
 ## 5. Auto-Update
 

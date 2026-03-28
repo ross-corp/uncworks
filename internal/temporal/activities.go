@@ -47,9 +47,12 @@ func envOrDefault(key, fallback string) string {
 	return fallback
 }
 
-// imagePullPolicy returns Never for local images (no registry prefix), Always otherwise.
+// imagePullPolicy returns Never for local images (no registry prefix or :local tag), Always otherwise.
 func imagePullPolicy(image string) corev1.PullPolicy {
 	if !strings.Contains(image, "/") {
+		return corev1.PullNever
+	}
+	if strings.HasSuffix(image, ":local") {
 		return corev1.PullNever
 	}
 	return corev1.PullAlways
@@ -472,6 +475,11 @@ type RevokeLLMKeyInput struct {
 // RevokeLLMKey revokes a LiteLLM virtual key.
 func (a *Activities) RevokeLLMKey(ctx context.Context, input RevokeLLMKeyInput) error {
 	if a.LiteLLMClient == nil || input.Key == "" {
+		return nil
+	}
+	// Skip revocation if the key is the master key — it was used as a fallback
+	// when no DB is configured and cannot be deleted via the key management API.
+	if input.Key == a.LiteLLMClient.MasterKey() {
 		return nil
 	}
 

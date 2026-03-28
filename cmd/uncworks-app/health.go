@@ -44,6 +44,11 @@ func (a *App) HealthCheck() HealthReport {
 		ns = "uncworks"
 	}
 
+	litellmURL := s.LiteLLMURL
+	if litellmURL == "" {
+		litellmURL = "http://litellm:4000"
+	}
+
 	components := []HealthComponent{
 		checkKubernetes(ns),
 		checkDeploy(ns, "apiserver", "API Server"),
@@ -51,6 +56,7 @@ func (a *App) HealthCheck() HealthReport {
 		checkDeploy(ns, "controller", "Controller"),
 		checkDeploy(ns, "web", "Web UI"),
 		checkAPIHTTP(a),
+		checkLiteLLM(a, litellmURL),
 	}
 
 	overall := HealthOK
@@ -149,6 +155,29 @@ func checkDeploy(namespace, name, label string) HealthComponent {
 		Label:   label,
 		Status:  HealthOK,
 		Message: fmt.Sprintf("%d/%d replicas Ready", obj.Status.ReadyReplicas, obj.Status.Replicas),
+	}
+}
+
+// checkLiteLLM probes the LiteLLM proxy's /v1/models endpoint.
+func checkLiteLLM(a *App, url string) HealthComponent {
+	result := a.CheckLiteLLM(url)
+	if !result.OK {
+		msg := result.Error
+		if msg == "" {
+			msg = "unreachable"
+		}
+		return HealthComponent{
+			Name:    "litellm",
+			Label:   "LiteLLM",
+			Status:  HealthDown,
+			Message: msg,
+		}
+	}
+	return HealthComponent{
+		Name:    "litellm",
+		Label:   "LiteLLM",
+		Status:  HealthOK,
+		Message: fmt.Sprintf("%d model(s) available", len(result.Models)),
 	}
 }
 

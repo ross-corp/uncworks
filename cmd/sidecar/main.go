@@ -117,7 +117,10 @@ func writePiModelsConfig(baseURL string) error {
 		apiKey = "OPENAI_API_KEY"
 	}
 
-	models, err := fetchModelsFromProxy(baseURL, apiKey)
+	// OPENAI_BASE_URL is set as LiteLLMBaseURL+"/v1" so the agent SDK can use it directly.
+	// The litellm.Client expects the base URL without the /v1 suffix (it appends /v1/models itself).
+	litellmBase := strings.TrimSuffix(baseURL, "/v1")
+	models, err := fetchModelsFromProxy(litellmBase, apiKey)
 	if err != nil {
 		slog.Warn("failed to fetch models from LiteLLM proxy, using fallback", "err", err)
 		models = fallbackModels()
