@@ -57,14 +57,14 @@ spec:
               containerPort: {{ .Values.controller.metricsPort }}
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /metrics
               port: metrics
             initialDelaySeconds: 10
             periodSeconds: 30
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /metrics
               port: metrics
             initialDelaySeconds: 5
             periodSeconds: 10
