@@ -9,10 +9,14 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// initTray starts the system tray icon in a goroutine.
-// Must be called after the Wails app context is available.
+// initTray registers the system tray icon using RunWithExternalLoop so that
+// energye/systray does not attempt to start its own Cocoa run loop (which
+// Wails already owns on the main thread).  nativeStart() creates an
+// NSStatusBarWindow which must be called on the main thread, so we schedule it
+// via GCD dispatch_async on the main queue (see tray_dispatch.go).
 func (a *App) initTray() {
-	go systray.Run(a.onTrayReady, a.onTrayExit)
+	start, _ := systray.RunWithExternalLoop(a.onTrayReady, a.onTrayExit)
+	trayDispatchMain(start)
 }
 
 func (a *App) onTrayReady() {

@@ -14,6 +14,7 @@ export namespace main {
 	    defaultManageModel: string;
 	    defaultImplementModel: string;
 	    wizardComplete: boolean;
+	    apiserverURL: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -34,6 +35,7 @@ export namespace main {
 	        this.defaultManageModel = source["defaultManageModel"];
 	        this.defaultImplementModel = source["defaultImplementModel"];
 	        this.wizardComplete = source["wizardComplete"];
+	        this.apiserverURL = source["apiserverURL"];
 	    }
 	}
 	export class DeviceFlowStart {

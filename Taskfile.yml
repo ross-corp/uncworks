@@ -182,7 +182,7 @@ tasks:
           echo "ERROR: wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
           exit 1
         fi
-      - cd cmd/uncworks-app && wails build -o UNCWORKS.app
+      - cd cmd/uncworks-app && wails build -clean -o UNCWORKS
 
   docker:build:
     desc: Build all Docker images locally

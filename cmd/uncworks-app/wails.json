@@ -2,7 +2,6 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "UNCWORKS",
   "outputfilename": "UNCWORKS",
-  "frontenddevserverurl": "http://localhost:3000",
   "reloaddirs": "frontend/dist",
   "build:tags": "darwin",
   "info": {
