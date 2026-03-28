@@ -91,6 +91,10 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		proposalContent, _ = gitExec(ctx, sc, input.AgentRunName, input.RepoPath, catCmd)
 	}
 
+	// TODO(security): The authenticated remote URL embeds the token in plain text.
+	// If git logs or error messages capture the URL, the token will appear in Temporal
+	// workflow history and sidecar logs. Consider using git credential helpers or
+	// a short-lived installation token via GitHub App rather than a long-lived PAT.
 	// Inject token into remote URL for authenticated push
 	if a.GitHubProvider != nil && input.RepoURL != "" {
 		token, tokenErr := a.GitHubProvider.Token(ctx)

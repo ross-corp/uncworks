@@ -2,9 +2,12 @@ package bff
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -142,10 +145,17 @@ func RateLimitMiddleware(reqPerSec int) Middleware {
 }
 
 // extractIP returns the client IP address, stripping the port if present.
+// X-Forwarded-For is only trusted when BFF_TRUST_PROXY=true is set, to prevent
+// IP spoofing attacks in deployments not behind a trusted reverse proxy.
 func extractIP(r *http.Request) string {
-	// Prefer X-Forwarded-For when behind a proxy.
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
+	if trustProxy := os.Getenv("BFF_TRUST_PROXY"); trustProxy == "true" {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// Take the leftmost (client-provided) address.
+			if i := strings.Index(xff, ","); i != -1 {
+				return strings.TrimSpace(xff[:i])
+			}
+			return strings.TrimSpace(xff)
+		}
 	}
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -168,7 +178,12 @@ type sessionEntry struct {
 func SessionMiddleware(secret string) Middleware {
 	var mu sync.RWMutex
 	sessions := make(map[string]sessionEntry)
-	_ = secret // reserved for future HMAC signing of session IDs
+	// TODO(security): Session IDs are random 128-bit values validated only by presence in
+	// the in-memory map; the secret is not yet used to HMAC-sign the cookie. This means
+	// a session ID that is guessed or leaked from memory could be accepted without the
+	// secret. Implement HMAC-SHA256(secret, sid) as the cookie value and verify on each
+	// request before the map lookup.
+	_ = secret
 
 	// Background sweep: evict sessions older than 24 hours every 5 minutes.
 	go func() {
@@ -323,7 +338,8 @@ func CSRFMiddleware() Middleware {
 			// For state-changing methods, verify the token.
 			if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete {
 				reqToken := r.Header.Get("X-CSRF-Token")
-				if reqToken == "" || reqToken != token {
+				// Use constant-time comparison to prevent timing-oracle attacks.
+				if reqToken == "" || subtle.ConstantTimeCompare([]byte(reqToken), []byte(token)) != 1 {
 					http.Error(w, "invalid or missing CSRF token", http.StatusForbidden)
 					return
 				}
