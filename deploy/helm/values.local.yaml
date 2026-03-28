@@ -1,0 +1,66 @@
+# values.local.yaml — Helm values for local development on a laptop cluster.
+# Usage: helm upgrade --install uncworks oci://ghcr.io/uncworks/charts/aot \
+#            -f deploy/helm/values.local.yaml --set temporal.host=<addr> ...
+#
+# Compatible with: Docker Desktop, OrbStack, Rancher Desktop, Colima, k3d, kind.
+
+# Expose the web UI on a known NodePort so uncworks open can find it.
+# Docker Desktop, OrbStack, and Rancher Desktop route localhost:<nodePort> directly.
+# Colima and minikube users: use 'uncworks open' which runs kubectl port-forward instead.
+web:
+  service:
+    type: NodePort
+    nodePort: 30300
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+bff:
+  service:
+    type: NodePort
+    nodePort: ""  # unset; bff is optional, use web NodePort above
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+apiserver:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+worker:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+controller:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+# Ollama is disabled by default — most local users route to OpenRouter or OpenAI.
+# To enable: add --set ollama.enabled=true to your helm command.
+# Note: Ollama requires ~4GB disk and is GPU/CPU intensive.
+ollama:
+  enabled: false
+
+# Storage: leave storageClass unset to use the cluster's default provisioner.
+# All common local cluster tools (Docker Desktop, OrbStack, k3d, kind) provide
+# a working default storage class for ReadWriteOnce PVCs.

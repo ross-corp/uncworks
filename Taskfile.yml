@@ -146,6 +146,29 @@ tasks:
       - go build -o ./bin/sidecar ./cmd/sidecar
       - go build -o ./bin/aot ./cmd/aot
       - go build -o ./bin/temporal-worker ./cmd/temporal-worker
+      - CGO_ENABLED=0 go build -o ./bin/uncworks ./cmd/uncworks
+
+  build:uncworks:
+    desc: Build the uncworks CLI for all platforms
+    cmds:
+      - GOOS=linux  GOARCH=amd64 CGO_ENABLED=0 go build -o ./bin/uncworks-linux-amd64  ./cmd/uncworks
+      - GOOS=linux  GOARCH=arm64 CGO_ENABLED=0 go build -o ./bin/uncworks-linux-arm64  ./cmd/uncworks
+      - GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-amd64 ./cmd/uncworks
+      - GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-arm64 ./cmd/uncworks
+
+  app:build:
+    desc: Build the native macOS app (requires Wails v2 and macOS)
+    cmds:
+      - |
+        if [ "$(uname)" != "Darwin" ]; then
+          echo "ERROR: macOS app can only be built on macOS"; exit 1
+        fi
+      - |
+        if ! command -v wails &>/dev/null; then
+          echo "ERROR: wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
+          exit 1
+        fi
+      - cd cmd/uncworks-app && wails build -o UNCWORKS.app
 
   docker:build:
     desc: Build all Docker images locally
@@ -205,13 +228,16 @@ tasks:
 
 
   k0s:setup:
-    desc: Initialize local k0s cluster (requires sudo)
+    desc: "[DEPRECATED] Initialize local k0s cluster — use 'uncworks setup' instead"
     cmds:
+      - echo "WARNING: task k0s:setup is deprecated. Use 'uncworks setup' instead."
+      - echo "         See docs/getting-started.md for the updated local setup guide."
       - sudo ./hack/k0s-setup.sh
 
   k0s:teardown:
-    desc: Tear down local k0s cluster (requires sudo)
+    desc: "[DEPRECATED] Tear down local k0s cluster — use 'uncworks teardown' instead"
     cmds:
+      - echo "WARNING: task k0s:teardown is deprecated. Use 'uncworks teardown' instead."
       - sudo ./hack/k0s-teardown.sh
 
   k0s:crd:
