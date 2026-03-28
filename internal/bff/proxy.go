@@ -2,7 +2,7 @@ package bff
 
 import (
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -22,7 +22,8 @@ type Proxy struct {
 func NewProxy(apiserverURL string) *Proxy {
 	target, err := url.Parse(apiserverURL)
 	if err != nil {
-		log.Fatalf("invalid apiserver URL %q: %v", apiserverURL, err)
+		slog.Error("invalid apiserver URL", "url", apiserverURL, "err", err)
+		panic("invalid apiserver URL: " + err.Error())
 	}
 
 	rp := httputil.NewSingleHostReverseProxy(target)
@@ -115,7 +116,7 @@ func (p *Proxy) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Now hijack the client side.
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
-		log.Printf("websocket proxy: hijack failed: %v", err)
+		slog.Error("websocket proxy: hijack failed", "err", err, "path", r.URL.Path)
 		return
 	}
 	defer func() { _ = clientConn.Close() }()
