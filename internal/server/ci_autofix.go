@@ -101,7 +101,7 @@ func (ci *CIAutofix) HandleCheckRunEvent(ctx context.Context, body []byte) (bool
 	sha := payload.CheckRun.HeadSHA
 	checkSuiteID := payload.CheckRun.CheckSuite.ID
 
-	slog.Info("CI failure detected", "check", payload.CheckRun.Name, "repo", repo, "branch", branch, "sha", sha[:8])
+	slog.Info("CI failure detected", "check", payload.CheckRun.Name, "repo", repo, "branch", branch, "sha", sha[:min(8, len(sha))])
 
 	// Check retry count
 	attempts, err := ci.getFixAttemptCount(ctx, branch)
@@ -176,7 +176,7 @@ func (ci *CIAutofix) createFixRun(ctx context.Context, repoFullName, branch, sha
 		TTLSeconds:        1800,
 		ModelTier:         "deepseek-v3.1",
 		OrchestrationMode: aotv1alpha1.OrchestrationModeSpecDriven,
-		SpecSource:        fmt.Sprintf("ci-autofix:%s/%s#%s", owner, repo, sha[:8]),
+		SpecSource:        fmt.Sprintf("ci-autofix:%s/%s#%s", owner, repo, sha[:min(8, len(sha))]),
 		AutoPush:          true,
 		AutoPR:            false, // push to existing branch, don't create new PR
 		Feature:           "ci-autofix",
