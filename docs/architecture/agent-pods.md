@@ -4,46 +4,31 @@ Each agent run provisions a Kubernetes Deployment with a PersistentVolumeClaim (
 
 ## Pod Architecture
 
-```
-+================================================================+
-|                         Agent Pod                              |
-|                                                                |
-|  +-------------------+                                         |
-|  | Init: hydration   |  Runs first. Clones repos as bare +    |
-|  | (cmd/hydration)   |  worktree. Exits when ready.           |
-|  +--------+----------+                                         |
-|           | writes to /workspace                               |
-|           v                                                    |
-|  +=============================+  +==========================+|
-|  | Container: agent            |  | Container: rpc-gateway   ||
-|  | (sleep infinity)            |  | (sidecar :50052)         ||
-|  |                             |  |                          ||
-|  | Holds the pod alive.        |  | ConnectRPC server (h2c)  ||
-|  | Workspace available for     |  | Launches pi-coding-agent ||
-|  | debug/exec access.          |  | Streams stdout/stderr    ||
-|  |                             |  | Captures trace spans     ||
-|  +=============================+  | Manages agent lifecycle  ||
-|           |                       +====+=====+===============+|
-|           |   shared volume            |     |                |
-|  +--------+----------------------------+-----+----------+     |
-|  |              /workspace (PVC, 2Gi)                    |     |
-|  |                                                       |     |
-|  |  .bare/              -- bare git clone                |     |
-|  |  <repo-name>/        -- git worktree (checked out)    |     |
-|  |  openspec/           -- OpenSpec artifacts             |     |
-|  |  .aot/               -- UNCWORKS runtime data         |     |
-|  |    logs/             -- agent.log, agent.jsonl         |     |
-|  |    traces/           -- spans.jsonl                    |     |
-|  |    input/            -- HITL question.json/response    |     |
-|  +-------------------------------------------------------+     |
-+================================================================+
-         |                              |
-         | LLM API calls               | ConnectRPC from
-         v                             | Temporal Worker
-  +---------------+              +---------------+
-  | LiteLLM Proxy |              | Temporal      |
-  | :4000         |              | Worker        |
-  +---------------+              +---------------+
+```mermaid
+flowchart TD
+    subgraph pod["Agent Pod"]
+        init["Init: hydration\n(cmd/hydration)\nRuns first. Clones repos as bare +\nworktree. Exits when ready."]
+
+        init -->|"writes to /workspace"| agent
+        init -->|"writes to /workspace"| sidecar
+
+        agent["Container: agent\n(sleep infinity)\n\nHolds the pod alive.\nWorkspace available for\ndebug/exec access."]
+
+        sidecar["Container: rpc-gateway\n(sidecar :50052)\n\nConnectRPC server (h2c)\nLaunches pi-coding-agent\nStreams stdout/stderr\nCaptures trace spans\nManages agent lifecycle"]
+
+        subgraph pvc["/workspace (PVC, 2Gi)"]
+            bare[".bare/ — bare git clone"]
+            repo["&lt;repo-name&gt;/ — git worktree (checked out)"]
+            openspec["openspec/ — OpenSpec artifacts"]
+            aot[".aot/ — UNCWORKS runtime data\n  logs/ — agent.log, agent.jsonl\n  traces/ — spans.jsonl\n  input/ — HITL question.json/response"]
+        end
+
+        agent --- pvc
+        sidecar --- pvc
+    end
+
+    agent -->|"LLM API calls"| litellm["LiteLLM Proxy\n:4000"]
+    sidecar -->|"ConnectRPC from\nTemporal Worker"| temporal["Temporal Worker"]
 ```
 
 ## Container Details
@@ -214,33 +199,30 @@ The Temporal workflow writes stage-level trace spans (PLAN, EXECUTE, VERIFY) via
 
 ## Agent Lifecycle
 
-```
-Temporal Worker                Sidecar Gateway              pi-coding-agent
-     |                              |                            |
-     |--- StartAgent(prompt, ------>|                            |
-     |    stage, model)             |--- exec pi -p --mode json  |
-     |                              |    --no-session             |
-     |<--- Started: true -----------|    --extension aot-det...  |-->
-     |                              |    --system-prompt <stage> |
-     |                              |    --model litellm/<tier>  |
-     |                              |    <prompt>                |
-     |                              |                            |
-     |--- GetStatus() ------------->|                            |
-     |<--- RUNNING -----------------|    [agent reads/writes     |
-     |     (poll every 5s)          |     files in /workspace]   |
-     |                              |                            |
-     |--- GetStatus() ------------->|    [tool call detected     |
-     |<--- RUNNING -----------------|     via JSONL parsing:     |
-     |                              |     capture git diff,      |
-     |                              |     write trace span]      |
-     |                              |                            |
-     |                              |<--- exit 0 ----------------|
-     |--- GetStatus() ------------->|                            |
-     |<--- COMPLETED ---------------|                            |
-     |                              |                            |
-     |--- [workflow continues       |                            |
-     |     to next stage or         |                            |
-     |     cleanup]                 |                            |
+```mermaid
+sequenceDiagram
+    participant TW as Temporal Worker
+    participant SG as Sidecar Gateway
+    participant PI as pi-coding-agent
+
+    TW->>SG: StartAgent(prompt, stage, model)
+    SG->>PI: exec pi -p --mode json<br/>--no-session<br/>--extension aot-det...<br/>--system-prompt &lt;stage&gt;<br/>--model litellm/&lt;tier&gt;<br/>&lt;prompt&gt;
+    SG-->>TW: Started: true
+
+    TW->>SG: GetStatus()
+    SG-->>TW: RUNNING
+    Note over SG,PI: poll every 5s
+    Note right of PI: agent reads/writes<br/>files in /workspace
+
+    TW->>SG: GetStatus()
+    SG-->>TW: RUNNING
+    Note over SG,PI: tool call detected via JSONL parsing:<br/>capture git diff, write trace span
+
+    PI-->>SG: exit 0
+    TW->>SG: GetStatus()
+    SG-->>TW: COMPLETED
+
+    Note over TW: workflow continues<br/>to next stage or cleanup
 ```
 
 **Rate limit handling:** HTTP 429 errors from the LLM provider trigger automatic retry of the agent process up to 3 times with a 10-second delay between attempts.

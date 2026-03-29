@@ -100,12 +100,18 @@ Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `buf
 - **`brain/`** — PostgreSQL state store (pgx). Agent state, metadata, priority queue
 - **`hydration/`** — Git bare clone → worktree creation → devbox setup
 - **`sidecar/`** — RPC Gateway running inside agent pods
+- **`bff/`** — Desktop app BFF proxy, cache, SPA serving
 - **`cli/`** — `aot open` implementation
+- **`embeddings/`** — Embedding generation for knowledge search (Ollama)
+- **`eventbus/`** — In-memory pub/sub for SSE/WebSocket real-time events
+- **`github/`** — GitHub App/PAT client, webhook handling, PR creation
+- **`litellm/`** — LiteLLM admin API client, key provisioning/revocation
+- **`softserve/`** — Soft-serve Git client, project config repo scaffolding
 - **`testutil/`** — Shared test helpers (auto-resolves envtest assets)
 
 ### CRD types (`api/v1alpha1/`)
 
-`AgentRun` with `AgentRunSpec` (backend, repoURL, branch, prompt, devboxConfig, ttlSeconds, envVars, image) and `AgentRunStatus` (phase, message, podName, traceID). Phases: Pending → Running → Succeeded/Failed/Cancelled. WaitingForInput for HITL.
+CRDs: `AgentRun`, `Project`, `Chain`, `Schedule`, `RunTemplate`. `AgentRun` is the primary resource with spec (repos, prompt, modelTier, orchestrationMode, pipelineConfig, autoPush, autoPR) and status (phase, stage, verificationResult, prUrl, totalCost). Phases: Pending → Running → Succeeded/Failed/Cancelled. WaitingForInput for HITL.
 
 ### TypeScript packages (`packages/`)
 
@@ -118,7 +124,7 @@ Each agent run gets a persistent workspace on a PVC mounted at `/workspace`:
 
 ```
 /workspace/
-├── src/                    # Cloned repositories
+├── <repo-name>/            # Git worktree (checked-out working copy)
 ├── .aot/
 │   ├── logs/agent.log     # Agent stdout/stderr
 │   ├── traces/spans.jsonl # Execution trace spans
@@ -129,7 +135,7 @@ Each agent run gets a persistent workspace on a PVC mounted at `/workspace`:
 └── devbox.json            # Composed devbox config
 ```
 
-- `src/` contains git clones of the specified repositories
+- `<repo-name>/` contains git worktree checkouts of specified repositories
 - `.aot/logs/agent.log` is tee'd from agent stdout/stderr by the sidecar
 - `.aot/traces/spans.jsonl` records tool calls, LLM interactions, and git diffs as JSONL
 - `.aot/metadata.json` snapshots the run spec (repos, prompt, model tier, etc.)
@@ -138,7 +144,7 @@ Each agent run gets a persistent workspace on a PVC mounted at `/workspace`:
 
 ### Web dashboard (`web/`)
 
-SolidJS + Vite. Connects to API server via WebSocket for real-time updates.
+React 19 + React Router 7 + Vite + Tailwind CSS. Connects to API server via ConnectRPC and WebSocket/SSE for real-time updates.
 
 ## Data Flow
 
@@ -210,7 +216,7 @@ openspec view                    # interactive dashboard
 
 ### Active changes (as of last update)
 
-`add-rate-limiting`, `deployment-modes`, `frontend-quality`, `go-concurrency-fixes`, `keybindings`, `settings-wizard`, `ui-polish`
+`deployment-modes`, `keybindings`
 
 ## Multi-Agent Claude Code Workflow
 
