@@ -540,12 +540,20 @@ export default function SettingsView() {
                 ))}
               </div>
             )}
-            <button
-              onClick={loadOperational}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Refresh
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={loadOperational}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Refresh
+              </button>
+              <button
+                onClick={() => go().OpenLogInConsole().catch(() => {})}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Open in Console.app
+              </button>
+            </div>
           </Section>
         )}
 

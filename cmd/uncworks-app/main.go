@@ -28,6 +28,12 @@ import (
 var assets embed.FS
 
 func main() {
+	_, closeLog := setupLogging()
+	defer closeLog()
+	withCrashReporting(run)
+}
+
+func run() {
 	app := NewApp()
 
 	// Resolve title bar style from persisted settings before the window opens.
