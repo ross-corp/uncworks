@@ -21,6 +21,8 @@ type ProjectReconciler struct {
 	SoftServe softserve.RepoManager
 }
 
+// Reconcile handles changes to Project resources, ensuring a soft-serve config repo
+// is created and ready for the project.
 func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -139,6 +141,7 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager registers ProjectReconciler with the controller manager.
 func (r *ProjectReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.Project{}).

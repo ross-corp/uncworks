@@ -96,6 +96,29 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
+	// Replace policy: terminate all active runs before creating the new one.
+	if sched.Spec.ConcurrencyPolicy == "Replace" && len(sched.Status.Active) > 0 {
+		logger.Info("Replacing active runs (Replace policy)", "schedule", sched.Name, "count", len(sched.Status.Active))
+		for _, id := range sched.Status.Active {
+			// Try ChainRun first
+			var cr aotv1alpha1.ChainRun
+			if err := r.Get(ctx, client.ObjectKey{Namespace: sched.Namespace, Name: id}, &cr); err == nil {
+				if err := r.Delete(ctx, &cr); err != nil {
+					logger.Error(err, "Failed to delete active ChainRun for Replace policy", "chainRun", id)
+				}
+				continue
+			}
+			// Fall back to AgentRun
+			var ar aotv1alpha1.AgentRun
+			if err := r.Get(ctx, client.ObjectKey{Namespace: sched.Namespace, Name: id}, &ar); err == nil {
+				if err := r.Delete(ctx, &ar); err != nil {
+					logger.Error(err, "Failed to delete active AgentRun for Replace policy", "agentRun", id)
+				}
+			}
+		}
+		sched.Status.Active = nil
+	}
+
 	// Fire the schedule
 	logger.Info("Firing schedule", "schedule", sched.Name, "cron", sched.Spec.Cron)
 
@@ -155,6 +178,14 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		runID = run.Name
 		logger.Info("Created agent run from schedule", "run", run.Name, "template", sched.Spec.TemplateRef)
+
+		// Update RunTemplate status to track usage.
+		now := metav1.Now()
+		tmpl.Status.LastTriggeredAt = &now
+		tmpl.Status.RunCount++
+		if updateErr := r.Status().Update(ctx, tmpl); updateErr != nil {
+			logger.Error(updateErr, "Failed to update RunTemplate status", "template", tmpl.Name)
+		}
 	}
 
 	// Update status

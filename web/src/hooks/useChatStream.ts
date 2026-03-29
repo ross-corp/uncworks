@@ -21,7 +21,7 @@ interface UseChatStreamReturn {
   reset: () => void;
 }
 
-export function useChatStream(): UseChatStreamReturn {
+export function useChatStream(model?: string): UseChatStreamReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   // Keep an AbortController so we can cancel an in-flight stream on unmount
@@ -72,6 +72,7 @@ export function useChatStream(): UseChatStreamReturn {
         body: JSON.stringify({
           messages: history.map((m) => ({ role: m.role, content: m.content })),
           context,
+          ...(model ? { model } : {}),
         }),
       });
 

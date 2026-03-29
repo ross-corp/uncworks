@@ -25,7 +25,7 @@ export interface RunFormState {
 
 const DEFAULT_FORM: RunFormState = {
   prompt: "",
-  repos: [{ url: "https://github.com/roshbhatia/neph.nvim", branch: "main" }],
+  repos: [],
   mode: "prompt",
   specContent: "",
   modelTier: "default",

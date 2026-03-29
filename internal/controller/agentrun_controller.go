@@ -15,6 +15,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -118,28 +119,42 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	// Handle archive: delete Deployment + PVC when status.archived transitions to true
+	// Handle archive: delete Deployment + PVC when status.archived transitions to true.
+	// Only run once — skip if the annotationArchived annotation is already set, which
+	// means the cleanup already completed in a prior reconcile cycle.
 	if agentRun.Status.Archived {
-		if agentRun.Status.DeploymentName != "" {
-			dep := &appsv1.Deployment{
+		alreadyCleaned := agentRun.Annotations != nil && agentRun.Annotations[annotationArchived] == "true"
+		if !alreadyCleaned {
+			if agentRun.Status.DeploymentName != "" {
+				dep := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      agentRun.Status.DeploymentName,
+						Namespace: agentRun.Namespace,
+					},
+				}
+				if err := r.Delete(ctx, dep); err != nil && !errors.IsNotFound(err) {
+					logger.Error(err, "Failed to delete Deployment on archive", "deployment", agentRun.Status.DeploymentName)
+				}
+			}
+			pvcName := fmt.Sprintf("aot-ws-%s", agentRun.Name)
+			pvc := &corev1.PersistentVolumeClaim{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      agentRun.Status.DeploymentName,
+					Name:      pvcName,
 					Namespace: agentRun.Namespace,
 				},
 			}
-			if err := r.Delete(ctx, dep); err != nil && !errors.IsNotFound(err) {
-				logger.Error(err, "Failed to delete Deployment on archive", "deployment", agentRun.Status.DeploymentName)
+			if err := r.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
+				logger.Error(err, "Failed to delete PVC on archive", "pvc", pvcName)
 			}
-		}
-		pvcName := fmt.Sprintf("aot-ws-%s", agentRun.Name)
-		pvc := &corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      pvcName,
-				Namespace: agentRun.Namespace,
-			},
-		}
-		if err := r.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
-			logger.Error(err, "Failed to delete PVC on archive", "pvc", pvcName)
+			// Mark as cleaned up so subsequent reconciles skip the delete calls.
+			if agentRun.Annotations == nil {
+				agentRun.Annotations = make(map[string]string)
+			}
+			agentRun.Annotations[annotationArchived] = "true"
+			if err := r.Update(ctx, &agentRun); err != nil {
+				logger.Error(err, "Failed to annotate AgentRun as archived after status.archived cleanup")
+				return ctrl.Result{}, err
+			}
 		}
 		return ctrl.Result{}, nil
 	}
@@ -239,6 +254,13 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		if !stderrors.As(err, &alreadyStarted) {
 			logger.Error(err, "Failed to start Temporal workflow, will retry")
 			agentRun.Status.Message = fmt.Sprintf("Retrying workflow start: %v", err)
+			meta.SetStatusCondition(&agentRun.Status.Conditions, metav1.Condition{
+				Type:               "WorkflowStarted",
+				Status:             metav1.ConditionFalse,
+				Reason:             "WorkflowStartFailed",
+				Message:            err.Error(),
+				LastTransitionTime: metav1.Now(),
+			})
 			if updateErr := r.Status().Update(ctx, agentRun); updateErr != nil {
 				logger.Error(updateErr, "Failed to update status after workflow start failure")
 			}
@@ -270,6 +292,13 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 	agentRun.Status.PodName = fmt.Sprintf("agentrun-%s", agentRun.Name)
 	agentRun.Status.StartedAt = &now
 	agentRun.Status.Message = "Temporal workflow started"
+	meta.SetStatusCondition(&agentRun.Status.Conditions, metav1.Condition{
+		Type:               "WorkflowStarted",
+		Status:             metav1.ConditionTrue,
+		Reason:             "WorkflowStarted",
+		Message:            fmt.Sprintf("Temporal workflow %s started", workflowID),
+		LastTransitionTime: now,
+	})
 	if err := r.Status().Update(ctx, agentRun); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -332,10 +361,29 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 		updated = true
 	}
 
-	// Set CompletedAt for terminal states
+	// Set CompletedAt and Completed condition for terminal states
 	if isTerminal(newPhase) && agentRun.Status.CompletedAt == nil {
 		now := metav1.Now()
 		agentRun.Status.CompletedAt = &now
+		updated = true
+	}
+	if isTerminal(newPhase) {
+		condStatus := metav1.ConditionTrue
+		condReason := "Succeeded"
+		if newPhase == aotv1alpha1.AgentRunPhaseFailed {
+			condStatus = metav1.ConditionFalse
+			condReason = "Failed"
+		} else if newPhase == aotv1alpha1.AgentRunPhaseCancelled {
+			condStatus = metav1.ConditionFalse
+			condReason = "Cancelled"
+		}
+		meta.SetStatusCondition(&agentRun.Status.Conditions, metav1.Condition{
+			Type:               "Completed",
+			Status:             condStatus,
+			Reason:             condReason,
+			Message:            agentRun.Status.Message,
+			LastTransitionTime: metav1.Now(),
+		})
 		updated = true
 	}
 
@@ -392,6 +440,24 @@ func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *
 			agentRun.Status.CompletedAt = &now
 		}
 	}
+
+	// Record Completed condition
+	condStatus := metav1.ConditionTrue
+	condReason := "Succeeded"
+	if agentRun.Status.Phase == aotv1alpha1.AgentRunPhaseFailed {
+		condStatus = metav1.ConditionFalse
+		condReason = "Failed"
+	} else if agentRun.Status.Phase == aotv1alpha1.AgentRunPhaseCancelled {
+		condStatus = metav1.ConditionFalse
+		condReason = "Cancelled"
+	}
+	meta.SetStatusCondition(&agentRun.Status.Conditions, metav1.Condition{
+		Type:               "Completed",
+		Status:             condStatus,
+		Reason:             condReason,
+		Message:            agentRun.Status.Message,
+		LastTransitionTime: metav1.Now(),
+	})
 
 	if err := r.Status().Update(ctx, agentRun); err != nil {
 		return ctrl.Result{}, err

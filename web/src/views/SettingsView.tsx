@@ -397,6 +397,14 @@ export default function SettingsView() {
               disabled={!wails}
             />
           </Field>
+          <Field label="Copilot" hint="Model used for the copilot chat panel (⌘K). Leave blank to use the endpoint default.">
+            <TextInput
+              value={local.copilotModel ?? ""}
+              onChange={e => set("copilotModel", e.target.value)}
+              placeholder="default"
+              disabled={!wails}
+            />
+          </Field>
         </Section>
 
         {/* Auto-update */}

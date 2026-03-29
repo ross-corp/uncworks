@@ -12,7 +12,7 @@ interface UseChatStreamSessionReturn {
   isStreaming: boolean;
 }
 
-export function useChatStreamSession(): UseChatStreamSessionReturn {
+export function useChatStreamSession(model?: string): UseChatStreamSessionReturn {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -55,6 +55,7 @@ export function useChatStreamSession(): UseChatStreamSessionReturn {
         body: JSON.stringify({
           messages: history.map((m) => ({ role: m.role, content: m.content })),
           context: context ?? undefined,
+          ...(model ? { model } : {}),
         }),
       });
 
