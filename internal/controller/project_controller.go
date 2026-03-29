@@ -48,12 +48,15 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// Ensure finalizer
+	// Ensure finalizer. Return immediately after persisting so the next reconcile
+	// starts from a committed state and does not attempt repo creation before the
+	// finalizer is durably recorded.
 	if !containsFinalizer(project.Finalizers, projectFinalizerName) {
 		project.Finalizers = append(project.Finalizers, projectFinalizerName)
 		if err := r.Update(ctx, &project); err != nil {
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{}, nil
 	}
 
 	// Create soft-serve repo if not ready
@@ -63,6 +66,16 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		exists, err := r.SoftServe.RepoExists(project.Name)
 		if err != nil {
 			logger.Error(err, "Failed to check repo existence")
+			meta.SetStatusCondition(&project.Status.Conditions, metav1.Condition{
+				Type:               "ConfigRepoReady",
+				Status:             metav1.ConditionFalse,
+				Reason:             "RepoExistenceCheckFailed",
+				Message:            err.Error(),
+				LastTransitionTime: metav1.Now(),
+			})
+			if statusErr := r.Status().Update(ctx, &project); statusErr != nil {
+				logger.Error(statusErr, "Failed to update status after repo existence check failure")
+			}
 			return ctrl.Result{}, err
 		}
 
@@ -92,6 +105,16 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				Packages: packages,
 			}); err != nil {
 				logger.Error(err, "Failed to scaffold project repo")
+				meta.SetStatusCondition(&project.Status.Conditions, metav1.Condition{
+					Type:               "ConfigRepoReady",
+					Status:             metav1.ConditionFalse,
+					Reason:             "ScaffoldFailed",
+					Message:            err.Error(),
+					LastTransitionTime: metav1.Now(),
+				})
+				if statusErr := r.Status().Update(ctx, &project); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status after scaffold failure")
+				}
 				return ctrl.Result{}, err
 			}
 		}

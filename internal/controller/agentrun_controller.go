@@ -7,6 +7,7 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
 	temporalclient "go.temporal.io/sdk/client"
 
@@ -105,12 +107,15 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	// Ensure finalizer is set
+	// Ensure finalizer is set. Return immediately after persisting so the next
+	// reconcile starts from a clean, committed state rather than falling through
+	// into startWorkflow before the finalizer is durably recorded.
 	if !controllerutil.ContainsFinalizer(&agentRun, finalizerName) {
 		controllerutil.AddFinalizer(&agentRun, finalizerName)
 		if err := r.Update(ctx, &agentRun); err != nil {
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{}, nil
 	}
 
 	// Handle archive: delete Deployment + PVC when status.archived transitions to true
@@ -161,14 +166,21 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 	logger := log.FromContext(ctx)
 
 	// Resolve project defaults (inherit repos, model, spec content) before building workflow input.
+	// If the project is not yet ready (e.g., ConfigRepoReady=false or SoftServe unreachable),
+	// requeue rather than starting the workflow with incomplete inputs.
 	if agentRun.Spec.ProjectRef != "" {
 		if _, err := ResolveProjectDefaults(ctx, r.Client, r.SoftServe, agentRun, agentRun.Namespace); err != nil {
-			logger.Error(err, "Failed to resolve project defaults, continuing with partial config")
-		} else {
-			// Persist the resolved fields back so the spec reflects what was actually used.
-			if err := r.Update(ctx, agentRun); err != nil {
-				logger.Error(err, "Failed to persist resolved project defaults")
+			logger.Error(err, "Failed to resolve project defaults, requeueing")
+			agentRun.Status.Message = fmt.Sprintf("Waiting for project %q to become ready: %v", agentRun.Spec.ProjectRef, err)
+			if updateErr := r.Status().Update(ctx, agentRun); updateErr != nil {
+				logger.Error(updateErr, "Failed to update status while waiting for project")
 			}
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+		// Persist the resolved fields back so the spec reflects what was actually used.
+		if err := r.Update(ctx, agentRun); err != nil {
+			logger.Error(err, "Failed to persist resolved project defaults")
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -220,21 +232,29 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		TaskQueue: taskQueue,
 	}, aottemporal.AgentRunWorkflow, workflowInput)
 	if err != nil {
-		logger.Error(err, "Failed to start Temporal workflow, will retry")
-		agentRun.Status.Message = fmt.Sprintf("Retrying workflow start: %v", err)
-		if updateErr := r.Status().Update(ctx, agentRun); updateErr != nil {
-			logger.Error(updateErr, "Failed to update status after workflow start failure")
+		// WorkflowExecutionAlreadyStarted means the workflow is already running but we
+		// never persisted the annotation (e.g., the annotation Update failed last time).
+		// Treat it as success: the workflow ID is deterministic, so proceed to annotate.
+		var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
+		if !stderrors.As(err, &alreadyStarted) {
+			logger.Error(err, "Failed to start Temporal workflow, will retry")
+			agentRun.Status.Message = fmt.Sprintf("Retrying workflow start: %v", err)
+			if updateErr := r.Status().Update(ctx, agentRun); updateErr != nil {
+				logger.Error(updateErr, "Failed to update status after workflow start failure")
+			}
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		logger.Info("Temporal workflow already running, recovering annotation", "workflowID", workflowID)
+	} else {
+		logger.Info("Started Temporal workflow", "workflowID", run.GetID(), "runID", run.GetRunID())
 	}
 
-	logger.Info("Started Temporal workflow", "workflowID", run.GetID(), "runID", run.GetRunID())
-
-	// Annotate CRD with workflow ID
+	// Annotate CRD with workflow ID.
+	// workflowID is used directly because run may be nil in the AlreadyStarted recovery path.
 	if agentRun.Annotations == nil {
 		agentRun.Annotations = make(map[string]string)
 	}
-	agentRun.Annotations[annotationWorkflowID] = run.GetID()
+	agentRun.Annotations[annotationWorkflowID] = workflowID
 	if err := r.Update(ctx, agentRun); err != nil {
 		return ctrl.Result{}, err
 	}
