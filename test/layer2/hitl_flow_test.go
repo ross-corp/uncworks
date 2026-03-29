@@ -14,6 +14,7 @@ import (
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
+	"github.com/uncworks/aot/test/testutil"
 )
 
 // TestHITLFlow_PhaseTransitionToWaitingForInput verifies that a run's status
@@ -23,11 +24,7 @@ func TestHITLFlow_PhaseTransitionToWaitingForInput(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Ask me a question",
-		},
+		Spec: testutil.MinimalSpec("Ask me a question"),
 	}))
 	require.NoError(t, err)
 	runID := createResp.Msg.AgentRun.Id
@@ -35,7 +32,7 @@ func TestHITLFlow_PhaseTransitionToWaitingForInput(t *testing.T) {
 	// Simulate the controller pausing the run and awaiting human input.
 	crd := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      runID,
 	}, crd))
 	crd.Status.Phase = aotv1alpha1.AgentRunPhaseWaitingForInput
@@ -58,11 +55,7 @@ func TestHITLFlow_SendHumanInput_WhenNotWaiting(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Run quietly without pausing",
-		},
+		Spec: testutil.MinimalSpec("Run quietly without pausing"),
 	}))
 	require.NoError(t, err)
 	runID := createResp.Msg.AgentRun.Id
@@ -99,11 +92,7 @@ func TestHITLFlow_SendHumanInput_WhenWaiting_NoTemporal(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Pause for input",
-		},
+		Spec: testutil.MinimalSpec("Pause for input"),
 	}))
 	require.NoError(t, err)
 	runID := createResp.Msg.AgentRun.Id
@@ -111,7 +100,7 @@ func TestHITLFlow_SendHumanInput_WhenWaiting_NoTemporal(t *testing.T) {
 	// Move the run into WaitingForInput.
 	crd := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      runID,
 	}, crd))
 	crd.Status.Phase = aotv1alpha1.AgentRunPhaseWaitingForInput
@@ -136,27 +125,19 @@ func TestHITLFlow_WaitingForInput_IsListable(t *testing.T) {
 
 	// Create two runs; move one to WaitingForInput.
 	createWaiting, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Will pause",
-		},
+		Spec: testutil.MinimalSpec("Will pause"),
 	}))
 	require.NoError(t, err)
 	waitingID := createWaiting.Msg.AgentRun.Id
 
 	_, err = c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Will not pause",
-		},
+		Spec: testutil.MinimalSpec("Will not pause"),
 	}))
 	require.NoError(t, err)
 
 	crd := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      waitingID,
 	}, crd))
 	crd.Status.Phase = aotv1alpha1.AgentRunPhaseWaitingForInput
