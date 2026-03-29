@@ -192,6 +192,7 @@ export default function GlobalNav() {
         <button
           onClick={toggleCollapsed}
           className="shrink-0 w-7 h-7 rounded-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <img
@@ -211,6 +212,7 @@ export default function GlobalNav() {
             <button
               onClick={toggleCollapsed}
               className="shrink-0 w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Collapse sidebar"
               title="Collapse sidebar"
             >
               <ChevronLeft size={14} strokeWidth={2} />
@@ -225,6 +227,7 @@ export default function GlobalNav() {
           <button
             onClick={toggleCollapsed}
             className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Expand sidebar"
             title="Expand sidebar"
           >
             <ChevronRight size={14} strokeWidth={2} />

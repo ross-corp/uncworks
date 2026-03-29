@@ -447,6 +447,7 @@ export function SpanDetail({
         </div>
         <button
           onClick={onClose}
+          aria-label="Close span detail"
           className="flex-shrink-0 p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
         >
           <XIcon className="h-4 w-4" />
@@ -1073,6 +1074,7 @@ export default function TraceTimeline({
           {filterText && (
             <button
               onClick={() => setFilterText("")}
+              aria-label="Clear search filter"
               className="absolute right-1.5 text-muted-foreground hover:text-foreground"
             >
               <XIcon className="h-3 w-3" />
@@ -1221,7 +1223,9 @@ export default function TraceTimeline({
                         >
                           {/* Collapse toggle for stage/parent spans */}
                           {hasChildren ? (
-                            <span
+                            <button
+                              aria-label={isCollapsed ? `Expand span ${displaySpanName(span.name)}` : `Collapse span ${displaySpanName(span.name)}`}
+                              aria-expanded={!isCollapsed}
                               className="flex items-center gap-1 flex-shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1239,7 +1243,7 @@ export default function TraceTimeline({
                               ) : (
                                 <ChevronDownIcon className="h-3 w-3" />
                               )}
-                            </span>
+                            </button>
                           ) : (
                             <span className="inline-block w-3 flex-shrink-0" />
                           )}

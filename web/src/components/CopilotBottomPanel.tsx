@@ -229,7 +229,11 @@ export default function CopilotBottomPanel() {
     >
       {/* Resize handle */}
       <div
-        className="h-1.5 w-full cursor-row-resize flex items-center justify-center shrink-0 hover:bg-primary/20 transition-colors"
+        role="separator"
+        aria-label="Resize panel"
+        aria-orientation="horizontal"
+        tabIndex={0}
+        className="h-1.5 w-full cursor-row-resize flex items-center justify-center shrink-0 hover:bg-primary/20 transition-colors focus:outline-none focus-visible:bg-primary/20"
         onPointerDown={onResizePointerDown}
         onPointerMove={onResizePointerMove}
         onPointerUp={onResizePointerUp}
@@ -288,6 +292,7 @@ export default function CopilotBottomPanel() {
           <Button
             size="sm"
             variant="ghost"
+            aria-label="Close Copilot panel"
             className="h-6 w-6 p-0 text-muted-foreground"
             onClick={() => setOpen(false)}
           >
@@ -304,7 +309,7 @@ export default function CopilotBottomPanel() {
           </div>
         )}
         {activeMessages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+          <div key={`${msg.role}-${i}`} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             {msg.role === "user" ? (
               <span className="max-w-[80%] rounded-2xl px-3 py-1.5 text-xs bg-primary text-primary-foreground">
                 {msg.content}

@@ -240,9 +240,9 @@ export default function ShellTerminalInner({
         </span>
         <div className="flex items-center gap-2">
           <span className={`text-xs ${
-            status === "connected" ? "text-green-500" :
-            status === "connecting" || status === "starting_debug" ? "text-yellow-500" :
-            "text-red-400"
+            status === "connected" ? "text-emerald-500" :
+            status === "connecting" || status === "starting_debug" ? "text-amber-500" :
+            "text-destructive"
           }`}>
             {status === "connecting" && "Connecting..."}
             {status === "connected" && "Connected"}
@@ -253,6 +253,7 @@ export default function ShellTerminalInner({
           {status === "disconnected" && (
             <button
               onClick={reconnect}
+              aria-label="Reconnect terminal"
               className="px-2 py-0.5 text-xs bg-primary text-primary-foreground hover:opacity-90"
             >
               Reconnect
@@ -261,7 +262,8 @@ export default function ShellTerminalInner({
           {status === "connected" && (
             <button
               onClick={stopDebug}
-              className="px-2 py-0.5 text-xs bg-red-600 text-white hover:bg-red-700"
+              aria-label="Stop debug session"
+              className="px-2 py-0.5 text-xs bg-destructive text-destructive-foreground hover:opacity-90"
             >
               Stop
             </button>
@@ -273,14 +275,15 @@ export default function ShellTerminalInner({
       <div ref={containerRef} className="flex-1 relative">
         {/* Overlay for pod_down state */}
         {status === "pod_down" && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/80">
-            <p className="text-sm text-amber-400">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/90">
+            <p className="text-sm text-amber-500">
               {podIsDown
                 ? `Run ${phase}. Start a debug session to explore the workspace.`
                 : "Pod is not running."}
             </p>
             <button
               onClick={startDebug}
+              aria-label="Start debug session"
               className="px-3 py-1.5 text-sm bg-primary text-primary-foreground hover:opacity-90"
             >
               Start Debug Session
@@ -288,8 +291,8 @@ export default function ShellTerminalInner({
           </div>
         )}
         {status === "starting_debug" && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/80">
-            <p className="text-sm text-cyan-400 animate-pulse">Starting pod...</p>
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/90">
+            <p className="text-sm text-primary animate-pulse">Starting pod...</p>
           </div>
         )}
       </div>
