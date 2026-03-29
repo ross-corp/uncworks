@@ -91,5 +91,8 @@ spec:
         - name: soft-serve-key
           secret:
             secretName: soft-serve-admin-key
-            defaultMode: 0600
+            # 0444: world-readable so the nonroot UID (65532) can read it.
+            # The Go client copies it to a 0600 temp file before ssh uses it,
+            # so ssh never sees the permissive mode.
+            defaultMode: 0444
       {{- end }}

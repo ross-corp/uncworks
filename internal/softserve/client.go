@@ -28,14 +28,21 @@ func (c *Client) sshCmd(args ...string) (string, error) {
 		port = parts[1]
 	}
 
+	// When running as a nonroot UID in a Kubernetes pod, the SSH key mounted
+	// from a Secret is owned by root (UID 0). The ssh binary refuses to use
+	// keys that aren't owned by the current user. Copy the key to a temp file
+	// owned by the current process so the permission check passes.
+	keyPath, cleanup, err := ensureKeyOwnership(c.KeyPath)
+	if err != nil {
+		return "", fmt.Errorf("prepare SSH key: %w", err)
+	}
+	defer cleanup()
+
 	cmdArgs := []string{
-		"-i", c.KeyPath,
+		"-i", keyPath,
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
-		// StrictModes=no bypasses key file permission checks — necessary when the
-		// key is mounted from a k8s Secret (owned by root, not the running UID).
-		"-o", "StrictModes=no",
 		"-p", port,
 		host,
 	}
@@ -50,6 +57,31 @@ func (c *Client) sshCmd(args ...string) (string, error) {
 		return "", fmt.Errorf("ssh command failed: %w: %s", err, stderr.String())
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+// ensureKeyOwnership copies the SSH key to a temp file with correct ownership
+// so the ssh binary accepts it. Returns the path to use and a cleanup function.
+func ensureKeyOwnership(keyPath string) (string, func(), error) {
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		// If we can't read the original (e.g., already owned correctly), fall through.
+		return keyPath, func() {}, nil
+	}
+	tmp, err := os.CreateTemp("", "ss-key-*")
+	if err != nil {
+		return keyPath, func() {}, nil
+	}
+	if err := os.Chmod(tmp.Name(), 0600); err != nil {
+		_ = os.Remove(tmp.Name())
+		return keyPath, func() {}, nil
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return keyPath, func() {}, nil
+	}
+	_ = tmp.Close()
+	return tmp.Name(), func() { _ = os.Remove(tmp.Name()) }, nil
 }
 
 // CreateRepo creates a new repository in soft-serve.
@@ -266,10 +298,12 @@ func (c *Client) ListFiles(repoName string) ([]string, error) {
 }
 
 func (c *Client) gitExec(dir string, args ...string) error {
+	keyPath, cleanup, _ := ensureKeyOwnership(c.KeyPath)
+	defer cleanup()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR", c.KeyPath),
+		fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR", keyPath),
 	)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
