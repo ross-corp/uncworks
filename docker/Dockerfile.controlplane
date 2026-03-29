@@ -12,7 +12,12 @@ RUN CGO_ENABLED=0 go build -o /temporal-worker ./cmd/temporal-worker
 
 # Use Alpine instead of distroless — controller needs ssh for soft-serve
 FROM alpine:3.21
-RUN apk add --no-cache openssh-client ca-certificates git
+RUN apk add --no-cache openssh-client ca-certificates git && \
+    # Add a user entry for UID 65532 (the nonroot UID used by the controller/worker pods).
+    # Without this, the ssh binary fails with "No user exists for uid 65532" because
+    # it calls getpwuid() to find the home directory for ~/.ssh/config lookups.
+    addgroup -g 65532 -S nonroot && \
+    adduser -u 65532 -G nonroot -S -D -h /home/nonroot nonroot
 COPY --from=builder /apiserver /usr/local/bin/apiserver
 COPY --from=builder /controller /usr/local/bin/controller
 COPY --from=builder /temporal-worker /usr/local/bin/temporal-worker

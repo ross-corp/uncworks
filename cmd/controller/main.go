@@ -79,12 +79,16 @@ func run() error {
 			retentionDays = n
 		}
 	}
-	// Set up soft-serve client (shared by AgentRun + Project controllers)
-	softServeAddr := envOrDefault("SOFT_SERVE_ADDR", "soft-serve.aot.svc:23231")
-	softServeKeyPath := envOrDefault("SOFT_SERVE_KEY_PATH", "/etc/soft-serve/id_ed25519")
-	ssClient := &softserve.Client{
-		SSHAddr: softServeAddr,
-		KeyPath: softServeKeyPath,
+	// Set up soft-serve client (shared by AgentRun + Project controllers).
+	// When SOFT_SERVE_ADDR is unset the client is nil; controllers skip soft-serve
+	// operations gracefully (projects remain ConfigRepoReady=false, runs proceed
+	// without a config repo).
+	var ssClient softserve.RepoManager
+	if softServeAddr := os.Getenv("SOFT_SERVE_ADDR"); softServeAddr != "" {
+		ssClient = &softserve.Client{
+			SSHAddr: softServeAddr,
+			KeyPath: envOrDefault("SOFT_SERVE_KEY_PATH", "/etc/soft-serve/id_ed25519"),
+		}
 	}
 
 	if err = (&controller.AgentRunReconciler{

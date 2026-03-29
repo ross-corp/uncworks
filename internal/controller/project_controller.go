@@ -59,8 +59,8 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// Create soft-serve repo if not ready
-	if !project.Status.ConfigRepoReady {
+	// Create soft-serve repo if not ready (skip when soft-serve is not configured)
+	if !project.Status.ConfigRepoReady && r.SoftServe != nil {
 		logger.Info("Creating soft-serve repo", "project", project.Name)
 
 		exists, err := r.SoftServe.RepoExists(project.Name)
