@@ -316,10 +316,10 @@ interface ProviderPreset {
 }
 
 const PROVIDER_PRESETS: ProviderPreset[] = [
-  { label: "Cluster (built-in)",   url: "http://litellm:4000",         hint: "Uses the LiteLLM proxy deployed in your cluster." },
-  { label: "OpenRouter",           url: "https://openrouter.ai/api/v1", hint: "Route to any model via openrouter.ai. Set your API key in the cluster." },
-  { label: "OpenAI",               url: "https://api.openai.com/v1",    hint: "Connect directly to OpenAI. Set your API key in the cluster." },
-  { label: "Custom",               url: "",                             hint: "Any OpenAI-compatible endpoint." },
+  { label: "Cluster (built-in)",   url: "http://litellm:4000",         hint: "Uses the LiteLLM proxy deployed in your cluster. No API key needed here." },
+  { label: "OpenRouter",           url: "https://openrouter.ai/api/v1", hint: "Route to any model via openrouter.ai. Enter your OpenRouter API key below." },
+  { label: "OpenAI",               url: "https://api.openai.com/v1",    hint: "Connect directly to OpenAI. Enter your OpenAI API key below." },
+  { label: "Custom",               url: "",                             hint: "Any OpenAI-compatible endpoint. Enter an API key if required." },
 ];
 
 function ModelsStep({ onFinish }: { onFinish: () => void }) {
@@ -334,6 +334,7 @@ function ModelsStep({ onFinish }: { onFinish: () => void }) {
 
   const [preset, setPreset] = useState(initialPreset);
   const [url, setUrl] = useState(settings.litellmURL || "http://litellm:4000");
+  const [apiKey, setApiKey] = useState(settings.llmApiKey ?? "");
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; models: string[]; error?: string } | null>(null);
 
@@ -358,7 +359,13 @@ function ModelsStep({ onFinish }: { onFinish: () => void }) {
   }
 
   async function finish() {
-    await save({ ...settings, litellmURL: url, wizardComplete: true });
+    const isCluster = preset === "Cluster (built-in)";
+    await save({
+      ...settings,
+      litellmURL: url,
+      llmApiKey: isCluster ? "" : apiKey,
+      wizardComplete: true,
+    });
     onFinish();
   }
 
@@ -394,7 +401,7 @@ function ModelsStep({ onFinish }: { onFinish: () => void }) {
             type="text"
             value={url}
             onChange={e => { setUrl(e.target.value); setResult(null); }}
-            placeholder="https://..."
+            placeholder="https://openrouter.ai/api/v1"
             className="flex-1 px-2.5 py-1.5 rounded-md border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <button
@@ -419,6 +426,20 @@ function ModelsStep({ onFinish }: { onFinish: () => void }) {
         )}
       </div>
 
+      {!isCluster && (
+        <div className="mb-4">
+          <label className="text-xs font-medium mb-1 block">API Key</label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder="sk-..."
+            autoComplete="off"
+            className="w-full px-2.5 py-1.5 rounded-md border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring font-mono"
+          />
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <button
           onClick={finish}
@@ -432,6 +453,31 @@ function ModelsStep({ onFinish }: { onFinish: () => void }) {
         >
           Finish
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Standalone GitHub auth modal ────────────────────────────────────────────────
+// Used from the Settings page so users can connect GitHub without going through
+// the full setup wizard.
+
+export function GitHubAuthModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="relative w-full max-w-md bg-background border rounded-xl shadow-2xl overflow-hidden">
+        <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between">
+          <h2 className="text-base font-semibold">Connect GitHub</h2>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="p-6">
+          <GitHubStep onNext={onClose} onSkip={onClose} />
+        </div>
       </div>
     </div>
   );

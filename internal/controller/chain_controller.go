@@ -206,7 +206,9 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Use branch from dependency if specified
 		branch := ""
 		if def.BranchFrom != "" {
-			branch = fmt.Sprintf("aot/%s", stepStatus[def.BranchFrom].RunID)
+			if branchDep := stepStatus[def.BranchFrom]; branchDep != nil {
+				branch = fmt.Sprintf("aot/%s", branchDep.RunID)
+			}
 		}
 
 		repos := tmpl.Spec.Repos

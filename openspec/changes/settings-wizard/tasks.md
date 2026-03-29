@@ -3,7 +3,7 @@
 - [x] 1.1 Bootstrap `~/.config/uncworks/` on first launch in `cmd/uncworks-app/app.go` `startup()`
 - [x] 1.2 Extend `AppSettings` struct: add `litellmURL`, `githubAuthed`, `updateChannel`, `autoUpdateEnabled`, `defaultManageModel`, `defaultImplementModel`; remove `llmKey`/`namespace` (autodetected)
 - [x] 1.3 Add `GetKubeContexts() []string` and `AutodetectNamespace(ctx string) string` Wails bindings in `cmd/uncworks-app/app.go`
-- [ ] 1.4 Migrate existing `config.json` on load: ignore `llmKey`, populate defaults for new fields
+- [x] 1.4 Migrate existing `config.json` on load: ignore `llmKey`, populate defaults for new fields
 
 ## 2. Go Dependencies
 
@@ -55,9 +55,9 @@
 
 ## 8. Frontend — Run Submission Model Picker
 
-- [ ] 8.1 Add model picker to run submission form (collapsible "Advanced" section)
-- [ ] 8.2 Pre-fill manage/implement model pickers from `settings.defaultManageModel` / `settings.defaultImplementModel`
-- [ ] 8.3 Pass selected models as fields in run submission payload
+- [x] 8.1 Add model picker to run submission form (collapsible "Advanced" section)
+- [x] 8.2 Pre-fill manage/implement model pickers from `settings.defaultManageModel` / `settings.defaultImplementModel`
+- [x] 8.3 Pass selected models as fields in run submission payload
 
 ## 9. CSS — Overscroll Fix
 
@@ -67,8 +67,8 @@
 ## 10. Traffic Light UX Fixes
 
 - [x] 10.1 Increase top padding in Wails window chrome: 36px drag zone in Layout.tsx clears traffic lights
-- [ ] 10.2 Add `showTrafficLights` toggle to `AppSettings` struct
-- [ ] 10.3 Wire toggle to conditionally use `TitleBarHiddenInset` vs `TitleBarHidden` in `mac.TitleBar`
+- [x] 10.2 Add `showTrafficLights` toggle to `AppSettings` struct
+- [x] 10.3 Wire toggle to conditionally use `TitleBarHiddenInset` vs `TitleBarHidden` in `mac.TitleBar`
 
 ## 11. Sidebar Navigation Grouping
 

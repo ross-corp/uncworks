@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"mime"
@@ -165,7 +166,7 @@ func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 		stdout, stderr, err := f.execInPod(r.Context(), podName, []string{"ls", "-la", "--time-style=long-iso", dirPath})
 		if err != nil {
 			slog.Error("exec ls in pod failed", "pod", podName, "err", err, "stderr", stderr)
-			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list files: " + err.Error()})
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list files"})
 			return
 		}
 
@@ -206,12 +207,16 @@ func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Error("failed to read directory", "path", diskPath, "err", err)
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list files: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list files"})
 		return
 	}
 
-	entries := make([]FileEntry, 0, len(dirEntries))
+	const maxDirEntries = 5000
+	entries := make([]FileEntry, 0, min(len(dirEntries), maxDirEntries))
 	for _, de := range dirEntries {
+		if len(entries) >= maxDirEntries {
+			break
+		}
 		if isHiddenDir(de.Name()) {
 			continue
 		}
@@ -276,7 +281,7 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 			slog.Error("exec cat in pod failed", "pod", podName, "err", err, "stderr", stderr)
-			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read file: " + err.Error()})
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read file"})
 			return
 		}
 
@@ -315,7 +320,7 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		slog.Error("failed to read file", "path", diskPath, "err", err)
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read file: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read file"})
 		return
 	}
 
@@ -494,7 +499,7 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		stream, err := logReq.Stream(r.Context())
 		if err != nil {
 			slog.Error("failed to stream logs for pod", "pod", podName, "err", err)
-			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("failed to get logs: %s", err.Error())})
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get logs"})
 			return
 		}
 		defer func() { _ = stream.Close() }()
@@ -525,7 +530,7 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Error("failed to read log file", "path", logPath, "err", err)
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("failed to read logs: %s", err.Error())})
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read logs"})
 		return
 	}
 
@@ -563,17 +568,25 @@ func (f *FileHandler) handleStructuredLogs(w http.ResponseWriter, r *http.Reques
 	}
 
 	jsonlPath := filepath.Join(hostPath, ".aot", "logs", "agent.jsonl")
-	data, err := os.ReadFile(jsonlPath)
-	if err != nil {
-		if os.IsNotExist(err) {
+	// Cap to 32 MB to prevent OOM on large runs.
+	const maxAgentLogBytes = 32 << 20
+	logFile, openErr := os.Open(jsonlPath)
+	if openErr != nil {
+		if os.IsNotExist(openErr) {
 			writeJSON(w, http.StatusOK, []AgentLogEntry{})
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read agent log"})
 		return
 	}
+	defer func() { _ = logFile.Close() }()
+	rawBytes, err := io.ReadAll(io.LimitReader(logFile, maxAgentLogBytes))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read agent log"})
+		return
+	}
 
-	entries := parseAgentJSONL(string(data))
+	entries := parseAgentJSONL(string(rawBytes))
 
 	// Inject Temporal pipeline events from the CRD status
 	crd := &aotv1alpha1.AgentRun{}

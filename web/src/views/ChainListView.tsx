@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
 import { formatAge } from "../lib/format";
@@ -26,6 +26,7 @@ interface ChainSummary {
 
 export default function ChainListView() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [chains, setChains] = useState<ChainSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,20 +52,46 @@ export default function ChainListView() {
   }, [fetchData]);
 
   async function triggerChain(name: string) {
-    await apiFetch(`/api/v1/chains/${name}/trigger`, { method: "POST" });
-    fetchData();
+    try {
+      const resp = await apiFetch(`/api/v1/chains/${name}/trigger`, { method: "POST" });
+      if (resp.ok) {
+        toast.success("Chain triggered");
+        fetchData();
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to trigger chain");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to trigger chain");
+    }
   }
 
+  // Keyboard shortcut: n → navigate to new chain form
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (location.pathname !== "/chains") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "n") navigate("/chains/new");
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [location.pathname, navigate]);
+
   async function deleteChain(name: string) {
-    const resp = await apiFetch(`/api/v1/chains/${name}`, { method: "DELETE" });
-    if (resp.status === 409) {
-      const data = await resp.json().catch(() => ({}));
-      toast.error(data.error || "Cannot delete chain");
-    } else if (resp.ok) {
-      toast.success("Chain deleted");
-      fetchData();
-    } else {
-      toast.error("Failed to delete chain");
+    try {
+      const resp = await apiFetch(`/api/v1/chains/${name}`, { method: "DELETE" });
+      if (resp.status === 409) {
+        const data = await resp.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Cannot delete chain");
+      } else if (resp.ok) {
+        toast.success("Chain deleted");
+        fetchData();
+      } else {
+        toast.error("Failed to delete chain");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete chain");
     }
   }
 
@@ -72,9 +99,6 @@ export default function ChainListView() {
     <div className="flex h-full flex-col">
       <div className="h-12 border-b flex items-center px-4 gap-2">
         <span className="font-semibold flex-1">Chains</span>
-        <Button size="sm" onClick={() => navigate("/chains/new")}>
-          + new chain
-        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-none">
@@ -91,7 +115,7 @@ export default function ChainListView() {
               <EmptyDescription>Chains let you compose templates into multi-step automated workflows.</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button size="sm" onClick={() => navigate("/chains/new")}>+ new chain</Button>
+              <span className="text-xs text-muted-foreground">Press <kbd className="font-mono">n</kbd> to create</span>
             </EmptyContent>
           </Empty>
         )}
@@ -137,6 +161,9 @@ export default function ChainListView() {
             </div>
           </div>
         ))}
+      </div>
+      <div className="border-t px-4 py-1.5 text-xs text-muted-foreground">
+        n new
       </div>
     </div>
   );

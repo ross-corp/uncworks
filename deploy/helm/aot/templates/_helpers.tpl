@@ -47,9 +47,15 @@ Controlplane image reference.
 
 {{/*
 Web image reference.
+The web image is a third-party nginx image and must always have an explicit tag in values.yaml.
+We do NOT fall back to Chart.AppVersion here (unlike controlplane images) because the repository
+is not a custom image and the appVersion tag would not exist on DockerHub.
 */}}
 {{- define "aot.webImage" -}}
-{{ .Values.images.web.repository }}:{{ .Values.images.web.tag | default .Chart.AppVersion }}
+{{- if not .Values.images.web.tag }}
+{{- fail "images.web.tag is required (e.g. 'stable-alpine'). Chart.AppVersion is not a valid fallback for the nginx web image." }}
+{{- end -}}
+{{ .Values.images.web.repository }}:{{ .Values.images.web.tag }}
 {{- end }}
 
 {{/*

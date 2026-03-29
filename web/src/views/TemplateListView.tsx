@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
 import { formatAge } from "../lib/format";
@@ -22,6 +22,7 @@ interface TemplateSummary {
 
 export default function TemplateListView() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,16 +48,36 @@ export default function TemplateListView() {
     };
   }, [fetchData]);
 
-  async function deleteTemplate(name: string) {
-    const resp = await apiFetch(`/api/v1/templates/${name}`, { method: "DELETE" });
-    if (resp.status === 409) {
-      const data = await resp.json();
-      toast.error(data.error);
-      return;
+  // Keyboard shortcut: n → navigate to new template form
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (location.pathname !== "/templates") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "n") navigate("/templates/new");
     }
-    if (resp.ok) {
-      toast.success("Template deleted");
-      fetchData();
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [location.pathname, navigate]);
+
+  async function deleteTemplate(name: string) {
+    if (!window.confirm(`Delete template "${name}"? This cannot be undone.`)) return;
+    try {
+      const resp = await apiFetch(`/api/v1/templates/${name}`, { method: "DELETE" });
+      if (resp.status === 409) {
+        const data = await resp.json();
+        toast.error(data.error);
+        return;
+      }
+      if (resp.ok) {
+        toast.success("Template deleted");
+        fetchData();
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to delete template");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete template");
     }
   }
 
@@ -64,7 +85,6 @@ export default function TemplateListView() {
     <div className="flex h-full flex-col">
       <div className="h-12 border-b flex items-center px-4 gap-2">
         <span className="font-semibold flex-1">Templates</span>
-        <Button size="sm" onClick={() => navigate("/templates/new")}>+ new template</Button>
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-none">
@@ -81,7 +101,7 @@ export default function TemplateListView() {
               <EmptyDescription>Templates are reusable run configurations you can compose into chains or trigger on a schedule.</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button size="sm" onClick={() => navigate("/templates/new")}>+ new template</Button>
+              <span className="text-xs text-muted-foreground">Press <kbd className="font-mono">n</kbd> to create</span>
             </EmptyContent>
           </Empty>
         )}
@@ -121,6 +141,9 @@ export default function TemplateListView() {
             </div>
           );
         })}
+      </div>
+      <div className="border-t px-4 py-1.5 text-xs text-muted-foreground">
+        n new
       </div>
     </div>
   );

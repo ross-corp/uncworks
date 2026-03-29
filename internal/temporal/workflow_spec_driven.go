@@ -174,6 +174,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	}
 
 	cancelCh := workflow.GetSignalChannel(ctx, SignalCancel)
+	humanInputCh := workflow.GetSignalChannel(ctx, SignalHumanInput)
 
 	// Activity options driven by per-stage config.
 	planOpts := workflow.ActivityOptions{
@@ -541,7 +542,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		}
 
 		// Poll for agent completion (reuse existing polling logic).
-		if err := pollAgentStatus(ctx, state, podName, input.Namespace, podIP, input.TTLSeconds, cancelCh); err != nil {
+		if err := pollAgentStatus(ctx, state, podName, input.Namespace, podIP, input.AgentRunName, input.TTLSeconds, cancelCh, humanInputCh); err != nil {
 			return err
 		}
 
@@ -949,7 +950,9 @@ func writeStageSpan(ctx workflow.Context, agentRunName, podIP string, span Trace
 
 // pollAgentStatus reuses the existing agent status polling logic from the
 // single-agent workflow. It blocks until the agent completes, fails, or is cancelled.
-func pollAgentStatus(ctx workflow.Context, state *WorkflowState, podName, namespace, podIP string, ttlSeconds int32, cancelCh workflow.ReceiveChannel) error {
+// humanInputCh is the human-input signal channel — signals received during polling
+// are forwarded to the agent via ForwardHumanInput. Pass nil to disable forwarding.
+func pollAgentStatus(ctx workflow.Context, state *WorkflowState, podName, namespace, podIP, agentRunName string, ttlSeconds int32, cancelCh, humanInputCh workflow.ReceiveChannel) error {
 	activityOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: activityTimeout,
 		HeartbeatTimeout:    heartbeatInterval * 3,
@@ -985,6 +988,27 @@ func pollAgentStatus(ctx workflow.Context, state *WorkflowState, podName, namesp
 				PodIP:     podIP,
 			}).Get(ctx, nil)
 		})
+
+		// Forward human-input signals to the agent sidecar during execution.
+		if humanInputCh != nil {
+			selector.AddReceive(humanInputCh, func(ch workflow.ReceiveChannel, more bool) {
+				var signal HumanInputSignal
+				ch.Receive(ctx, &signal)
+
+				if err := workflow.ExecuteActivity(actCtx, ActivityForwardHumanInput, ForwardHumanInputInput{
+					AgentRunID: agentRunName,
+					PodName:    podName,
+					Namespace:  namespace,
+					PodIP:      podIP,
+					Input:      signal.Input,
+				}).Get(ctx, nil); err != nil {
+					workflow.GetLogger(ctx).Warn("Failed to forward human input during spec-driven execution", "error", err)
+				}
+
+				state.Phase = "Running"
+				state.Message = "Human input forwarded"
+			})
+		}
 
 		selector.AddFuture(ttlTimer, func(f workflow.Future) {
 			state.Phase = "Failed"

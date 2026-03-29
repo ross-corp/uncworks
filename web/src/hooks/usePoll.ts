@@ -19,7 +19,13 @@ export function usePoll(
 
     const invoke = async () => {
       if (!cancelled) {
-        await fnRef.current();
+        try {
+          await fnRef.current();
+        } catch (err) {
+          // Swallow errors so a single callback failure does not kill the poll
+          // interval. Callers are responsible for their own error handling.
+          console.error("[usePoll] callback threw:", err);
+        }
       }
     };
 

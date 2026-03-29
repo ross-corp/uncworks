@@ -173,9 +173,15 @@ export default function RunListView() {
       } else {
         toast.error("Failed to load agent runs");
       }
-      if (chainResp.status === "fulfilled" && chainResp.value.ok) {
-        const data = await chainResp.value.json();
-        setChainRuns(data);
+      if (chainResp.status === "fulfilled") {
+        if (chainResp.value.ok) {
+          const data = await chainResp.value.json();
+          setChainRuns(data);
+        } else {
+          console.error("Failed to fetch chain runs:", chainResp.value.status, chainResp.value.statusText);
+        }
+      } else {
+        console.error("Chain runs fetch error:", chainResp.reason);
       }
     } catch {
       toast.error("Failed to load runs");
@@ -241,9 +247,10 @@ export default function RunListView() {
     return groups;
   }, [filtered]);
 
+  // Agent-run list used by features/all view modes and as the keyboard nav source for those modes.
   const visibleRuns = useMemo((): AgentRun[] => {
     if (viewMode === "all") return filtered;
-    if (viewMode === "unified") return filtered; // used only for keyboard nav in unified mode
+    if (viewMode === "unified") return filtered;
     const result: AgentRun[] = [];
     for (const group of featureGroups) {
       if (!collapsedFeatures.has(group.feature)) result.push(...group.runs);
@@ -251,7 +258,7 @@ export default function RunListView() {
     return result;
   }, [viewMode, filtered, featureGroups, collapsedFeatures]);
 
-  // Unified view: merge agent + chain runs sorted newest first
+  // Unified view: merge agent + chain runs sorted newest first.
   const unifiedRuns = useMemo((): UnifiedRun[] => {
     const agentEntries: UnifiedRun[] = filtered.map((r) => {
       const isScheduled = !!(r.spec as { scheduleName?: string }).scheduleName;
@@ -294,6 +301,11 @@ export default function RunListView() {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   }, [filtered, chainRuns, filter, statusFilter]);
+
+  // The list keyboard nav actually operates on, depending on active view mode.
+  // In unified mode j/k/Enter/d/c index into unifiedRuns (agent + chain).
+  // In features/all modes they index into visibleRuns (agent-only).
+  const navList = viewMode === "unified" ? unifiedRuns : visibleRuns;
 
   const toggleFeature = useCallback((feature: string) => {
     setCollapsedFeatures((prev) => {
@@ -339,8 +351,20 @@ export default function RunListView() {
     setFilterField(null);
   }
 
+  // Build an empty-state message that distinguishes "no runs exist" from "filter matches nothing".
+  function emptyStateMessage(listEmpty: boolean): string {
+    if (!listEmpty) return "";
+    if (filter) return "No runs match filter";
+    if (statusFilter !== "all") return `No ${statusFilter} runs`;
+    return "No runs yet — press n to create one";
+  }
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      // Don't fire shortcuts when the user is typing in a focused input/select/textarea.
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+
       if (projectPickerOpen) {
         if (e.key === "Escape") setProjectPickerOpen(false);
         return;
@@ -353,34 +377,61 @@ export default function RunListView() {
       if (filterDef) { e.preventDefault(); setFilterField(filterDef.field); return; }
 
       switch (e.key) {
-        case "j": setSelected((s) => Math.min(s + 1, visibleRuns.length - 1)); break;
+        case "j": setSelected((s) => Math.min(s + 1, navList.length - 1)); break;
         case "k": setSelected((s) => Math.max(s - 1, 0)); break;
-        case "Enter": if (visibleRuns[selected]) navigate(`/run/${visibleRuns[selected].id}`); break;
+        case "Enter": {
+          const cur = navList[selected];
+          if (!cur) break;
+          if ("agentRun" in cur && cur.agentRun) navigate(`/run/${cur.id}`);
+          else if ("chainRun" in cur && cur.chainRun) navigate(`/chainrun/${cur.id}`);
+          else navigate(`/run/${cur.id}`);
+          break;
+        }
         case "n": navigate("/new"); break;
         case "p": setProjectPickerOpen(true); break;
-        case "x": setSelectMode(!selectMode); setSelectedIds(new Set()); break;
+        case "x": setSelectMode((prev) => !prev); setSelectedIds(new Set()); break;
         case "a":
-          if (selectMode) { setShowArchived(!showArchived); }
+          if (selectMode) { setShowArchived((prev) => !prev); }
           break;
         case "1": setViewMode("features"); setSelected(0); break;
         case "2": setViewMode("all"); setSelected(0); break;
-        case "d":
-          if (visibleRuns[selected]) {
-            setPendingDeleteRun(visibleRuns[selected]);
+        case "3": setViewMode("unified"); setSelected(0); break;
+        case "d": {
+          // d only deletes agent runs; chain runs have no delete endpoint.
+          const cur = navList[selected];
+          if (!cur) break;
+          const agentRun = "agentRun" in cur ? cur.agentRun : undefined;
+          if (agentRun) {
+            setPendingDeleteRun(agentRun);
+          } else if (!("agentRun" in cur)) {
+            // non-unified view: navList is AgentRun[]
+            setPendingDeleteRun(cur as unknown as AgentRun);
           }
           break;
-        case "c":
-          if (visibleRuns[selected]) navigate(`/new?clone=${visibleRuns[selected].id}`);
+        }
+        case "c": {
+          // c clones the focused agent run; silently no-ops for chain runs.
+          const cur = navList[selected];
+          if (!cur) break;
+          const agentRun = "agentRun" in cur ? cur.agentRun : undefined;
+          if (agentRun) {
+            navigate(`/new?clone=${agentRun.id}`);
+          } else if (!("agentRun" in cur)) {
+            // non-unified view: navList is AgentRun[]
+            navigate(`/new?clone=${(cur as unknown as AgentRun).id}`);
+          }
           break;
+        }
       }
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [visibleRuns, selected, filterField, projectPickerOpen, selectMode, showArchived, navigate, fetchRuns]);
+  }, [navList, selected, filterField, projectPickerOpen, selectMode, showArchived, navigate]);
 
+  // Clamp selection when the list shrinks.
   useEffect(() => {
-    if (selected >= visibleRuns.length) setSelected(Math.max(0, visibleRuns.length - 1));
-  }, [visibleRuns.length, selected]);
+    if (selected >= navList.length) setSelected(Math.max(0, navList.length - 1));
+  }, [navList.length, selected]);
 
   function RunRow({ run, index }: { run: AgentRun; index: number }) {
     const hasDiff = !!(run.status.totalAdditions || run.status.totalDeletions);
@@ -388,7 +439,7 @@ export default function RunListView() {
       <div
         data-testid={`run-row-${run.id}`}
         className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-border/40 transition-colors ${
-          index === selected ? "bg-accent/40" : "hover:bg-muted/30"
+          index === selected ? "bg-accent/40 outline outline-1 outline-border/60" : "hover:bg-muted/30"
         } ${run.status.archived ? "opacity-40" : ""}`}
         onClick={() => selectMode ? toggleSelect(run.id) : navigate(`/run/${run.id}`)}
       >
@@ -441,11 +492,13 @@ export default function RunListView() {
     scheduled: { label: "scheduled", className: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
   };
 
-  function UnifiedRunRow({ ur }: { ur: UnifiedRun }) {
+  function UnifiedRunRow({ ur, index }: { ur: UnifiedRun; index: number }) {
     const badge = KIND_BADGE[ur.kind];
     return (
       <div
-        className="flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-border/40 transition-colors hover:bg-muted/30"
+        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-border/40 transition-colors ${
+          index === selected ? "bg-accent/40 outline outline-1 outline-border/60" : "hover:bg-muted/30"
+        }`}
         onClick={() => {
           if (ur.agentRun) navigate(`/run/${ur.id}`);
           else navigate(`/chainrun/${ur.id}`);
@@ -512,11 +565,6 @@ export default function RunListView() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <Button size="sm" onClick={() => navigate("/new")}>
-              + New Run
-            </Button>
-          </div>
         </div>
 
         {/* Filter row */}
@@ -639,17 +687,17 @@ export default function RunListView() {
         )}
         {!loading && viewMode === "unified" && unifiedRuns.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
-            {filter ? "No runs match filter" : "No runs yet — press n to create one"}
+            {emptyStateMessage(true)}
           </div>
         )}
         {!loading && viewMode !== "unified" && filtered.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
-            {filter ? "No runs match filter" : "No runs yet — press n to create one"}
+            {emptyStateMessage(true)}
           </div>
         )}
 
         {viewMode === "unified"
-          ? unifiedRuns.map((ur) => <UnifiedRunRow key={`${ur.kind}-${ur.id}`} ur={ur} />)
+          ? unifiedRuns.map((ur, i) => <UnifiedRunRow key={`${ur.kind}-${ur.id}`} ur={ur} index={i} />)
           : viewMode === "features"
           ? featureGroups.map((group) => (
               <div key={group.feature}>
@@ -690,7 +738,9 @@ export default function RunListView() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
               if (pendingDeleteRun) {
-                apiFetch(`/api/v1/runs/${pendingDeleteRun.id}`, { method: "DELETE" }).then(() => fetchRuns());
+                apiFetch(`/api/v1/runs/${pendingDeleteRun.id}`, { method: "DELETE" })
+                  .then(() => fetchRuns())
+                  .catch(() => toast.error("Delete failed — try again"));
                 setPendingDeleteRun(null);
               }
             }}>Delete</AlertDialogAction>

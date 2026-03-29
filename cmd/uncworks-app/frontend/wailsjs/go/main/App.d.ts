@@ -29,7 +29,9 @@ export function ListServices():Promise<Array<main.ServiceInfo>>;
 
 export function OpenService(arg1:string):Promise<void>;
 
-export function PollGitHubDeviceFlow(arg1:string):Promise<string>;
+export function OpenURL(arg1:string):Promise<void>;
+
+export function PollGitHubDeviceFlow(arg1:string):Promise<main.DeviceFlowPollResult>;
 
 export function RestartService(arg1:string):Promise<void>;
 

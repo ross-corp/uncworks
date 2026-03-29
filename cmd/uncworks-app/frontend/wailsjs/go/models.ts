@@ -15,6 +15,9 @@ export namespace main {
 	    defaultImplementModel: string;
 	    wizardComplete: boolean;
 	    apiserverURL: string;
+	    llmApiKey: string;
+	    llmKeyConfigured: boolean;
+	    showTrafficLights: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -36,6 +39,23 @@ export namespace main {
 	        this.defaultImplementModel = source["defaultImplementModel"];
 	        this.wizardComplete = source["wizardComplete"];
 	        this.apiserverURL = source["apiserverURL"];
+	        this.llmApiKey = source["llmApiKey"];
+	        this.llmKeyConfigured = source["llmKeyConfigured"];
+	        this.showTrafficLights = source["showTrafficLights"];
+	    }
+	}
+	export class DeviceFlowPollResult {
+	    done: boolean;
+	    token?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceFlowPollResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.done = source["done"];
+	        this.token = source["token"];
 	    }
 	}
 	export class DeviceFlowStart {
@@ -170,6 +190,7 @@ export namespace main {
 	    currentVersion?: string;
 	    latestVersion?: string;
 	    releaseURL?: string;
+	    error?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateInfo(source);
@@ -182,6 +203,7 @@ export namespace main {
 	        this.currentVersion = source["currentVersion"];
 	        this.latestVersion = source["latestVersion"];
 	        this.releaseURL = source["releaseURL"];
+	        this.error = source["error"];
 	    }
 	}
 

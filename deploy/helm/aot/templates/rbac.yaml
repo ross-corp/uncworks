@@ -6,6 +6,10 @@ metadata:
   labels:
     {{- include "aot.labels" . | nindent 4 }}
 ---
+# ClusterRole: covers cluster-scoped resources and CRDs that the controller/worker
+# must watch across namespaces. Core namespace-scoped resources (secrets, events,
+# leases, PVCs, pods, deployments) are granted via the Role below to minimize
+# cluster-wide read access.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -40,8 +44,38 @@ rules:
   - apiGroups: ["aot.uncworks.io"]
     resources: ["chainruns/finalizers", "schedules/finalizers"]
     verbs: ["update"]
-  # TODO(helm): secrets get/list is cluster-scoped because agents may need secrets from
-  # multiple namespaces. Tighten to a namespaced Role once namespace isolation is enforced.
+  # PersistentVolumes are cluster-scoped; needed to resolve volume details for completed runs.
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "aot.fullname" . }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "aot.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "aot.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# Role: namespace-scoped permissions for pods, deployments, PVCs, secrets, events,
+# and leader-election leases. Secrets access is intentionally limited to the release
+# namespace — if agents ever need cross-namespace secrets, introduce a dedicated
+# ServiceAccount with explicit per-namespace RoleBindings.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "aot.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -54,9 +88,6 @@ rules:
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "watch", "create", "delete"]
-  - apiGroups: [""]
-    resources: ["persistentvolumes"]
-    verbs: ["get", "list"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -66,20 +97,21 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]
-  # Required for leader election lease management.
+  # Leader election lease management.
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
   name: {{ include "aot.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "aot.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: Role
   name: {{ include "aot.fullname" . }}
 subjects:
   - kind: ServiceAccount

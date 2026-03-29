@@ -15,10 +15,13 @@ interface UseChatStreamSessionReturn {
 export function useChatStreamSession(): UseChatStreamSessionReturn {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
 
   // Abort any in-flight stream when the hook's owning component unmounts.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       abortRef.current?.abort();
     };
   }, []);
@@ -36,7 +39,7 @@ export function useChatStreamSession(): UseChatStreamSessionReturn {
 
     const withUser = [...currentMessages, userMessage, assistantPlaceholder];
     onUpdate(withUser);
-    setIsStreaming(true);
+    if (mountedRef.current) setIsStreaming(true);
 
     // History sent to API: all messages except the streaming placeholder
     const history = [...currentMessages, userMessage];
@@ -82,8 +85,10 @@ export function useChatStreamSession(): UseChatStreamSessionReturn {
               content: accumulated,
               streaming: false,
             });
-            onUpdate(finalMsgs);
-            setIsStreaming(false);
+            if (mountedRef.current) {
+              onUpdate(finalMsgs);
+              setIsStreaming(false);
+            }
             return;
           }
 
@@ -91,8 +96,10 @@ export function useChatStreamSession(): UseChatStreamSessionReturn {
             const parsed = JSON.parse(payload);
             if (parsed.error) {
               toast.error(`Chat error: ${parsed.error}`);
-              onUpdate(currentMessages); // revert to before user message
-              setIsStreaming(false);
+              if (mountedRef.current) {
+                onUpdate(currentMessages); // revert to before user message
+                setIsStreaming(false);
+              }
               return;
             }
             const delta =
@@ -100,12 +107,14 @@ export function useChatStreamSession(): UseChatStreamSessionReturn {
               parsed?.choices?.[0]?.delta?.reasoning_content;
             if (typeof delta === "string") {
               accumulated += delta;
-              const streamingMsgs = withUser.slice(0, -1).concat({
-                role: "assistant",
-                content: accumulated,
-                streaming: true,
-              });
-              onUpdate(streamingMsgs);
+              if (mountedRef.current) {
+                const streamingMsgs = withUser.slice(0, -1).concat({
+                  role: "assistant",
+                  content: accumulated,
+                  streaming: true,
+                });
+                onUpdate(streamingMsgs);
+              }
             }
           } catch {
             // Non-JSON line — skip
@@ -114,18 +123,20 @@ export function useChatStreamSession(): UseChatStreamSessionReturn {
       }
 
       // Stream ended without [DONE]
-      const finalMsgs = withUser.slice(0, -1).concat({
-        role: "assistant",
-        content: accumulated,
-        streaming: false,
-      });
-      onUpdate(finalMsgs);
+      if (mountedRef.current) {
+        const finalMsgs = withUser.slice(0, -1).concat({
+          role: "assistant",
+          content: accumulated,
+          streaming: false,
+        });
+        onUpdate(finalMsgs);
+      }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
       toast.error("Chat unavailable");
-      onUpdate(currentMessages);
+      if (mountedRef.current) onUpdate(currentMessages);
     } finally {
-      setIsStreaming(false);
+      if (mountedRef.current) setIsStreaming(false);
     }
   }, [isStreaming]);
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "./apiFetch";
 
@@ -27,6 +27,13 @@ export function useChatStream(): UseChatStreamReturn {
   // Keep an AbortController so we can cancel an in-flight stream on unmount
   // or when the user sends a new message while one is already streaming.
   const abortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight stream when the hook's owning component unmounts.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();

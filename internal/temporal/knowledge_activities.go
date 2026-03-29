@@ -185,7 +185,8 @@ func (ka *KnowledgeActivities) EmbedRunData(ctx context.Context, input EmbedRunD
 		logger.Warn("Failed to get run diffs for embedding", "error", err)
 	} else {
 		var codeChunks []brain.CodeChunkRecord
-		for _, diff := range diffs {
+		for i, diff := range diffs {
+			activity.RecordHeartbeat(ctx, fmt.Sprintf("embedding diff %d/%d", i+1, len(diffs)))
 			chunks := embeddings.ChunkCodeSimple(diff.Patch, detectLanguage(diff.FilePath))
 			for _, chunk := range chunks {
 				vec, err := ka.Embedder.Embed(ctx, chunk.Text)
@@ -221,7 +222,8 @@ func (ka *KnowledgeActivities) EmbedRunData(ctx context.Context, input EmbedRunD
 	} else if logContent != "" {
 		textChunks := embeddings.ChunkText(logContent, 512, 64)
 		var traceChunks []brain.TraceChunkRecord
-		for _, text := range textChunks {
+		for i, text := range textChunks {
+			activity.RecordHeartbeat(ctx, fmt.Sprintf("embedding log chunk %d/%d", i+1, len(textChunks)))
 			vec, err := ka.Embedder.Embed(ctx, text)
 			if err != nil {
 				return fmt.Errorf("embed trace chunk: %w", err)

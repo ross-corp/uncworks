@@ -6,11 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	aotgithub "github.com/uncworks/aot/internal/github"
 )
+
+// maxSpecBodyBytes caps the request body for spec push operations at 1 MB.
+const maxSpecBodyBytes = 1 << 20
 
 // GitHubClient communicates with the GitHub Contents API.
 type GitHubClient struct {
@@ -84,12 +88,13 @@ func (g *GitHubClient) RegisterHandlers(mux *http.ServeMux) {
 func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
 	token, err := g.getToken(r.Context())
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		slog.Error("github token unavailable", "err", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "GitHub integration not configured"})
 		return
 	}
 
 	var req pushRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body: " + err.Error()})
 		return
 	}
@@ -171,7 +176,8 @@ func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
 func (g *GitHubClient) handlePull(w http.ResponseWriter, r *http.Request) {
 	token, err := g.getToken(r.Context())
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		slog.Error("github token unavailable", "err", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "GitHub integration not configured"})
 		return
 	}
 

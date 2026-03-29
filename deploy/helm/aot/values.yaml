@@ -150,6 +150,7 @@ pipeline:
 bff:
   # -- Enable the BFF. Start disabled; enable when ready to switch from nginx.
   enabled: false
+  replicas: 1
   authMode: "open"
   service:
     type: NodePort

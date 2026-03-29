@@ -54,6 +54,10 @@ export function OpenService(arg1) {
   return window['go']['main']['App']['OpenService'](arg1);
 }
 
+export function OpenURL(arg1) {
+  return window['go']['main']['App']['OpenURL'](arg1);
+}
+
 export function PollGitHubDeviceFlow(arg1) {
   return window['go']['main']['App']['PollGitHubDeviceFlow'](arg1);
 }

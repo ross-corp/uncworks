@@ -21,7 +21,7 @@ interface CopilotContextValue {
   activeMessages: Message[];
   createSession: () => string;
   selectSession: (id: string) => void;
-  updateActiveMessages: (messages: Message[]) => void;
+  updateActiveMessages: (messages: Message[], sessionIdOverride?: string) => void;
 }
 
 const CopilotContext = createContext<CopilotContextValue>({
@@ -36,7 +36,7 @@ const CopilotContext = createContext<CopilotContextValue>({
   activeMessages: [],
   createSession: () => "",
   selectSession: () => {},
-  updateActiveMessages: () => {},
+  updateActiveMessages: (_msgs, _id) => {},
 });
 
 export function CopilotContextProvider({ children }: { children: ReactNode }) {
@@ -48,9 +48,10 @@ export function CopilotContextProvider({ children }: { children: ReactNode }) {
     useCopilotSessions();
 
   const updateActiveMessages = useCallback(
-    (messages: Message[]) => {
-      if (activeSessionId) {
-        updateSession(activeSessionId, messages);
+    (messages: Message[], sessionIdOverride?: string) => {
+      const id = sessionIdOverride ?? activeSessionId;
+      if (id) {
+        updateSession(id, messages);
       }
     },
     [activeSessionId, updateSession]
@@ -96,9 +97,12 @@ export function useCopilotContext(ctx: ChatContext | null) {
   useEffect(() => {
     if (prevRef.current !== serialized) {
       prevRef.current = serialized;
+      // ctx and serialized are always in sync — parse only when value changed
       setContext(ctx);
     }
-  }, [serialized, setContext, ctx]);
+    // ctx intentionally omitted: serialized covers its value identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serialized, setContext]);
 
   useEffect(() => {
     return () => setContext(null);

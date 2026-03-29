@@ -3,6 +3,8 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -14,6 +16,9 @@ import (
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/softserve"
 )
+
+// maxProjectBodyBytes caps request bodies for project mutations at 256 KB.
+const maxProjectBodyBytes = 256 << 10
 
 // ProjectHandler handles Project REST endpoints.
 type ProjectHandler struct {
@@ -35,22 +40,25 @@ func (h *ProjectHandler) RegisterProjectHandlers(mux *http.ServeMux) {
 }
 
 type projectResponse struct {
-	Name            string                       `json:"name"`
-	DisplayName     string                       `json:"displayName"`
-	Description     string                       `json:"description"`
-	Repos           []aotv1alpha1.Repository     `json:"repos"`
-	Devbox          *aotv1alpha1.DevboxConfig    `json:"devbox,omitempty"`
-	Defaults        *aotv1alpha1.ProjectDefaults `json:"defaults,omitempty"`
-	ConfigRepoReady bool                         `json:"configRepoReady"`
-	ConfigRepoURL   string                       `json:"configRepoURL"`
-	RunCount        int32                        `json:"runCount"`
-	LastRunID       string                       `json:"lastRunId"`
-	TotalCost       string                       `json:"totalCost"`
-	CreatedAt       string                       `json:"createdAt"`
+	Name                 string                       `json:"name"`
+	DisplayName          string                       `json:"displayName"`
+	Description          string                       `json:"description"`
+	Repos                []aotv1alpha1.Repository     `json:"repos"`
+	Devbox               *aotv1alpha1.DevboxConfig    `json:"devbox,omitempty"`
+	Defaults             *aotv1alpha1.ProjectDefaults `json:"defaults,omitempty"`
+	ConfigRepoReady      bool                         `json:"configRepoReady"`
+	ConfigRepoURL        string                       `json:"configRepoURL"`
+	// ConfigRepoMessage is set when ConfigRepoReady is false and the controller
+	// has recorded a reason — e.g. "Failed to reach soft-serve: connection refused".
+	ConfigRepoMessage    string                       `json:"configRepoMessage,omitempty"`
+	RunCount             int32                        `json:"runCount"`
+	LastRunID            string                       `json:"lastRunId"`
+	TotalCost            string                       `json:"totalCost"`
+	CreatedAt            string                       `json:"createdAt"`
 }
 
 func projectToResponse(p *aotv1alpha1.Project) projectResponse {
-	return projectResponse{
+	r := projectResponse{
 		Name:            p.Name,
 		DisplayName:     p.Spec.DisplayName,
 		Description:     p.Spec.Description,
@@ -64,12 +72,23 @@ func projectToResponse(p *aotv1alpha1.Project) projectResponse {
 		TotalCost:       p.Status.TotalCost,
 		CreatedAt:       p.CreationTimestamp.Format("2006-01-02T15:04:05Z"),
 	}
+	// Surface the condition message so the UI can show why provisioning is stuck.
+	if !p.Status.ConfigRepoReady {
+		for _, c := range p.Status.Conditions {
+			if c.Type == "ConfigRepoReady" && c.Status == "False" && c.Message != "" {
+				r.ConfigRepoMessage = c.Message
+				break
+			}
+		}
+	}
+	return r
 }
 
 func (h *ProjectHandler) handleListProjects(w http.ResponseWriter, r *http.Request) {
 	var list aotv1alpha1.ProjectList
 	if err := h.K8sClient.List(r.Context(), &list, client.InNamespace(h.Namespace)); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		slog.Error("list projects", "err", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list projects"})
 		return
 	}
 
@@ -97,7 +116,7 @@ func (h *ProjectHandler) handleCreateProject(w http.ResponseWriter, r *http.Requ
 		Devbox      *aotv1alpha1.DevboxConfig    `json:"devbox"`
 		Defaults    *aotv1alpha1.ProjectDefaults `json:"defaults"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxProjectBodyBytes)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON"})
 		return
 	}
@@ -118,7 +137,8 @@ func (h *ProjectHandler) handleCreateProject(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.K8sClient.Create(r.Context(), project); err != nil {
-		writeJSON(w, http.StatusConflict, errorResponse{Error: fmt.Sprintf("create failed: %v", err)})
+		slog.Error("create project", "name", project.Name, "err", err)
+		writeJSON(w, http.StatusConflict, errorResponse{Error: "project already exists or could not be created"})
 		return
 	}
 
@@ -131,7 +151,12 @@ func (h *ProjectHandler) handleGetProject(w http.ResponseWriter, r *http.Request
 	if err := h.K8sClient.Get(r.Context(), client.ObjectKey{
 		Namespace: h.Namespace, Name: name,
 	}, project); err != nil {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("project not found: %v", err)})
+		if apierrors.IsNotFound(err) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "project not found"})
+		} else {
+			slog.Error("get project", "name", name, "err", err)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get project"})
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, projectToResponse(project))
@@ -146,7 +171,8 @@ func (h *ProjectHandler) handleUpdateProject(w http.ResponseWriter, r *http.Requ
 		if apierrors.IsNotFound(err) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "project not found"})
 		} else {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("get project: %v", err)})
+			slog.Error("update project: get", "name", name, "err", err)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get project"})
 		}
 		return
 	}
@@ -158,7 +184,7 @@ func (h *ProjectHandler) handleUpdateProject(w http.ResponseWriter, r *http.Requ
 		Devbox      *aotv1alpha1.DevboxConfig    `json:"devbox,omitempty"`
 		Defaults    *aotv1alpha1.ProjectDefaults `json:"defaults,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxProjectBodyBytes)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON"})
 		return
 	}
@@ -180,7 +206,8 @@ func (h *ProjectHandler) handleUpdateProject(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.K8sClient.Update(r.Context(), project); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("update failed: %v", err)})
+		slog.Error("update project", "name", name, "err", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to update project"})
 		return
 	}
 	writeJSON(w, http.StatusOK, projectToResponse(project))
@@ -196,7 +223,8 @@ func (h *ProjectHandler) handleDeleteProject(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := h.K8sClient.Delete(r.Context(), project); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		slog.Error("delete project", "name", name, "err", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to delete project"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": name})
@@ -251,7 +279,7 @@ func (h *ProjectHandler) handleWriteFile(w http.ResponseWriter, r *http.Request)
 		Content   string `json:"content"`
 		CommitMsg string `json:"commitMessage"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxProjectBodyBytes)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON"})
 		return
 	}

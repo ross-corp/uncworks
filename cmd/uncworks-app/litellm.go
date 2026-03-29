@@ -4,9 +4,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -38,6 +41,15 @@ func (a *App) CheckLiteLLM(url string) LiteLLMCheckResult {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		// Distinguish connection-refused (port-forward not running) from timeout
+		// (proxy reachable but slow) so the frontend can show a useful message.
+		var netErr *net.OpError
+		if errors.As(err, &netErr) && netErr.Op == "dial" {
+			return LiteLLMCheckResult{Error: "connection refused — is the port-forward running?"}
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return LiteLLMCheckResult{Error: "timed out — LiteLLM proxy is not responding"}
+		}
 		return LiteLLMCheckResult{Error: fmt.Sprintf("unreachable: %v", err)}
 	}
 	defer resp.Body.Close()

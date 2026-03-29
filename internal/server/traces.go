@@ -81,7 +81,7 @@ func (t *TraceHandler) handleListTraces(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		slog.Error("failed to read spans file", "file", spansPath, "err", err)
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read traces: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read traces"})
 		return
 	}
 
@@ -112,7 +112,7 @@ func (t *TraceHandler) handleSpanDiff(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Error("failed to read spans file", "file", spansPath, "err", err)
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read traces: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read traces"})
 		return
 	}
 

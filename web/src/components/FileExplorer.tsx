@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFiles } from "../hooks/useFiles";
 import FileTree from "./FileTree";
 import FilePreview from "./FilePreview";
@@ -10,6 +10,14 @@ export default function FileExplorer({ runId, phase }: { runId: string; phase?: 
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [loadingFile, setLoadingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+
+  // Reset file selection when navigating to a different run
+  useEffect(() => {
+    setSelectedPath(null);
+    setFileContent(null);
+    setFileError(null);
+    setLoadingFile(false);
+  }, [runId]);
 
   async function handleSelectFile(path: string) {
     setSelectedPath(path);

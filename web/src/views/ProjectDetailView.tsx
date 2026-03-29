@@ -11,6 +11,7 @@ import MarkdownEditor from "../components/MarkdownEditor";
 import RunStatusBadge from "../components/RunStatusBadge";
 import { formatAge } from "../lib/format";
 import type { AgentRun } from "../types/agent-run";
+import { MODEL_OPTIONS } from "../types/agent-run";
 import { useCopilotContext, useCopilotContextValue } from "../hooks/useCopilotContext";
 
 interface ProjectDetail {
@@ -31,9 +32,11 @@ interface ProjectDetail {
   };
   configRepoReady: boolean;
   configRepoURL: string;
+  configRepoMessage?: string;
   runCount: number;
   totalCost: string;
 }
+
 
 export default function ProjectDetailView() {
   const { name } = useParams<{ name: string }>();
@@ -49,11 +52,14 @@ export default function ProjectDetailView() {
   const [tab, setTab] = useState<"specs" | "runs" | "settings">("specs");
 
   // Settings editing state
-  const [editRepos, setEditRepos] = useState<{ url: string; branch: string }[]>([]);
-  const [editDisplayName, setEditDisplayName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // Rename state
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
 
   const { setOpen: setCopilotOpen } = useCopilotContextValue();
 
@@ -114,12 +120,14 @@ export default function ProjectDetailView() {
       if (!name) return;
       try {
         const resp = await apiFetch(`/api/v1/projects/${name}`);
+        if (resp.status === 404) {
+          if (!cancelled) navigate("/projects", { replace: true });
+          return;
+        }
         if (resp.ok) {
           const data = await resp.json();
           if (!cancelled) {
             setProject(data);
-            setEditRepos(data.repos || []);
-            setEditDisplayName(data.displayName || "");
             setEditDescription(data.description || "");
             setEditDevboxPackages(data.devbox?.packages || []);
             setEditDefaults({
@@ -186,6 +194,11 @@ export default function ProjectDetailView() {
 
   async function loadFile(path: string) {
     if (!name) return;
+    // Warn before discarding unsaved edits
+    if (editedContent !== fileContent && selectedFile !== path) {
+      const ok = window.confirm(`You have unsaved changes in "${selectedFile}". Discard them?`);
+      if (!ok) return;
+    }
     setSelectedFile(path);
     try {
       const resp = await apiFetch(`/api/v1/projects/${name}/files/${path}`);
@@ -203,12 +216,18 @@ export default function ProjectDetailView() {
     if (!name || !selectedFile) return;
     setSaving(true);
     try {
-      await apiFetch(`/api/v1/projects/${name}/files/${selectedFile}`, {
+      const resp = await apiFetch(`/api/v1/projects/${name}/files/${selectedFile}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: editedContent, commitMessage: `update ${selectedFile}` }),
       });
-      setFileContent(editedContent);
+      if (resp.ok) {
+        // Only clear the modified badge when the server confirmed the write
+        setFileContent(editedContent);
+      } else {
+        const body = await resp.json().catch(() => ({}));
+        toast.error(`Failed to save: ${(body as { error?: string }).error ?? resp.statusText}`);
+      }
     } catch (e) {
       toast.error(`Failed to save file: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -241,7 +260,7 @@ export default function ProjectDetailView() {
     const path = `openspec/specs/${specSlug}/spec.md`;
     setCreatingSpec(true);
     try {
-      await apiFetch(`/api/v1/projects/${name}/files/${path}`, {
+      const resp = await apiFetch(`/api/v1/projects/${name}/files/${path}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -249,10 +268,15 @@ export default function ProjectDetailView() {
           commitMessage: `create spec: ${specSlug}`,
         }),
       });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? resp.statusText);
+      }
       setShowNewSpec(false);
       setNewSpecName("");
       await fetchFiles();
-      loadFile(path);
+      // Auto-select and open the newly created spec
+      await loadFile(path);
     } catch (e) {
       toast.error(`Failed to create spec: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -267,9 +291,7 @@ export default function ProjectDetailView() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          displayName: editDisplayName,
           description: editDescription,
-          repos: editRepos.filter((r) => r.url.trim()),
           devbox: editDevboxPackages.length > 0 ? { packages: editDevboxPackages } : undefined,
           defaults: {
             modelTier: editDefaults.modelTier || undefined,
@@ -293,17 +315,38 @@ export default function ProjectDetailView() {
     setSavingSettings(false);
   }
 
-  function updateRepo(i: number, field: "url" | "branch", value: string) {
-    setEditRepos(editRepos.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
-    setSettingsDirty(true);
-  }
-  function addRepo() {
-    setEditRepos([...editRepos, { url: "", branch: "main" }]);
-    setSettingsDirty(true);
-  }
-  function removeRepo(i: number) {
-    setEditRepos(editRepos.filter((_, idx) => idx !== i));
-    setSettingsDirty(true);
+  async function handleRename() {
+    if (!name || !newName.trim()) return;
+    const slug = newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    if (slug === name) { setRenaming(false); return; }
+    setRenameSaving(true);
+    try {
+      // Create new project with same settings
+      const createResp = await apiFetch("/api/v1/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: slug }),
+      });
+      if (!createResp.ok) throw new Error(await createResp.text());
+      // Copy current settings to new project
+      if (project) {
+        await apiFetch(`/api/v1/projects/${slug}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description: project.description,
+            devbox: project.devbox,
+            defaults: project.defaults,
+          }),
+        });
+      }
+      // Delete old project
+      await apiFetch(`/api/v1/projects/${name}`, { method: "DELETE" });
+      navigate(`/projects/${slug}`, { replace: true });
+    } catch (e) {
+      toast.error(`Rename failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setRenameSaving(false);
   }
 
   function addPackage() {
@@ -320,7 +363,10 @@ export default function ProjectDetailView() {
   }
 
   const specFiles = files.filter((f) => f.startsWith("openspec/specs/"));
+  const otherFiles = files.filter((f) => !f.startsWith("openspec/specs/"));
   const hasChanges = editedContent !== fileContent;
+  // Non-spec files (config, dotfiles) are read-only in this editor
+  const isReadOnly = selectedFile !== null && !selectedFile.startsWith("openspec/specs/");
 
   if (!project) {
     return (
@@ -338,14 +384,16 @@ export default function ProjectDetailView() {
           <div className="text-xs text-muted-foreground">
             <Link to="/projects" className="hover:text-foreground transition-colors">Projects</Link>
             {" / "}
-            <span>{project.displayName || project.name}</span>
+            <span>{project.name}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="font-semibold">{project.displayName || project.name}</span>
+            <span className="font-semibold">{project.name}</span>
             {project.configRepoReady ? (
               <Badge variant="outline" className="text-xs border-green-500/40 text-green-500">ready</Badge>
             ) : (
-              <Badge variant="secondary" className="text-xs">provisioning</Badge>
+              <Badge variant="secondary" className="text-xs" title={project.configRepoMessage || "Waiting for soft-serve config repo"}>
+                provisioning
+              </Badge>
             )}
             <span className="text-xs text-muted-foreground">{project.runCount} runs</span>
             {project.totalCost && (
@@ -403,7 +451,11 @@ export default function ProjectDetailView() {
             )}
 
             {specFiles.length === 0 && !showNewSpec && (
-              <div className="text-xs text-muted-foreground p-2">No specs yet</div>
+              <div className="text-xs text-muted-foreground p-2">
+                {!project.configRepoReady
+                  ? "Config repo is still provisioning. Specs will appear here once it is ready."
+                  : "No specs yet"}
+              </div>
             )}
             {specFiles.map((f) => {
               const label = f.replace("openspec/specs/", "").replace("/spec.md", "");
@@ -420,18 +472,23 @@ export default function ProjectDetailView() {
               );
             })}
 
-            <div className="text-xs text-muted-foreground uppercase tracking-wider mt-4 mb-2">Other files</div>
-            {files.filter((f) => !f.startsWith("openspec/specs/")).map((f) => (
-              <div
-                key={f}
-                className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors ${
-                  selectedFile === f ? "bg-accent text-accent-foreground" : "hover:bg-muted/50 text-muted-foreground"
-                }`}
-                onClick={() => loadFile(f)}
-              >
-                {f}
-              </div>
-            ))}
+            {otherFiles.length > 0 && (
+              <>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider mt-4 mb-2">Other files</div>
+                {otherFiles.map((f) => (
+                  <div
+                    key={f}
+                    className={`text-xs px-2 py-1 cursor-pointer rounded transition-colors ${
+                      selectedFile === f ? "bg-accent text-accent-foreground" : "hover:bg-muted/50 text-muted-foreground"
+                    }`}
+                    onClick={() => loadFile(f)}
+                    title="Read-only"
+                  >
+                    {f}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
           {/* File editor */}
@@ -441,24 +498,31 @@ export default function ProjectDetailView() {
                 <div className="flex items-center justify-between border-b px-3 py-1">
                   <span className="text-xs text-muted-foreground font-mono">{selectedFile}</span>
                   <div className="flex items-center gap-2">
-                    {hasChanges && (
+                    {isReadOnly && (
+                      <Badge variant="outline" className="text-xs text-muted-foreground">read-only</Badge>
+                    )}
+                    {!isReadOnly && hasChanges && (
                       <Badge variant="secondary" className="text-xs">modified</Badge>
                     )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={!editedContent.trim() || improving}
-                      onClick={improveWithAI}
-                    >
-                      {improving ? "Improving..." : "Improve with AI"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={!hasChanges || saving}
-                      onClick={saveFile}
-                    >
-                      {saving ? "Saving..." : "Save"}
-                    </Button>
+                    {!isReadOnly && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!editedContent.trim() || improving}
+                        onClick={improveWithAI}
+                      >
+                        {improving ? "Improving..." : "Improve with AI"}
+                      </Button>
+                    )}
+                    {!isReadOnly && (
+                      <Button
+                        size="sm"
+                        disabled={!hasChanges || saving}
+                        onClick={saveFile}
+                      >
+                        {saving ? "Saving..." : "Save"}
+                      </Button>
+                    )}
                     {selectedFile.endsWith("spec.md") && (
                       <>
                         <Button
@@ -481,7 +545,7 @@ export default function ProjectDetailView() {
                   </div>
                 </div>
                 <div className="flex-1 min-h-0">
-                  <MarkdownEditor value={editedContent} onChange={setEditedContent} minHeight="100%" />
+                  <MarkdownEditor value={editedContent} onChange={setEditedContent} minHeight="100%" readOnly={isReadOnly} />
                 </div>
               </>
             ) : (
@@ -526,12 +590,29 @@ export default function ProjectDetailView() {
         <TabsContent value="settings" className="flex-1 overflow-y-auto overscroll-none mt-0">
           <div className="p-4 space-y-4 max-w-2xl">
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Display Name</label>
-              <Input
-                className="h-8 text-sm"
-                value={editDisplayName}
-                onChange={(e) => { setEditDisplayName(e.target.value); setSettingsDirty(true); }}
-              />
+              <label className="text-xs text-muted-foreground block mb-1">Name</label>
+              {renaming ? (
+                <div className="flex gap-2">
+                  <Input
+                    className="h-8 text-sm font-mono flex-1"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleRename(); if (e.key === "Escape") setRenaming(false); }}
+                    autoFocus
+                  />
+                  <Button size="sm" onClick={handleRename} disabled={renameSaving || !newName.trim()}>
+                    {renameSaving ? "Renaming..." : "Rename"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setRenaming(false)}>Cancel</Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm">{project.name}</span>
+                  <Button size="sm" variant="ghost" className="text-xs text-muted-foreground h-6 px-2" onClick={() => { setNewName(project.name); setRenaming(true); }}>
+                    Rename
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div>
@@ -545,29 +626,8 @@ export default function ProjectDetailView() {
             </div>
 
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Repositories</label>
-              {editRepos.map((r, i) => (
-                <div key={i} className="flex gap-2 mb-1">
-                  <Input
-                    className="flex-1 h-8 text-sm"
-                    value={r.url}
-                    onChange={(e) => updateRepo(i, "url", e.target.value)}
-                    placeholder="https://github.com/org/repo"
-                  />
-                  <Input
-                    className="w-20 h-8 text-sm"
-                    value={r.branch}
-                    onChange={(e) => updateRepo(i, "branch", e.target.value)}
-                    placeholder="main"
-                  />
-                  <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={() => removeRepo(i)}>
-                    x
-                  </Button>
-                </div>
-              ))}
-              <Button size="sm" variant="ghost" className="text-xs text-muted-foreground" onClick={addRepo}>
-                + add repository
-              </Button>
+              <label className="text-xs text-muted-foreground block mb-1">Workspace</label>
+              <p className="text-xs text-muted-foreground">Workspace configuration coming soon.</p>
             </div>
 
             {/* Devbox Packages */}
@@ -604,22 +664,22 @@ export default function ProjectDetailView() {
               <div className="grid grid-cols-3 gap-2">
                 {(["modelTier", "manageModelTier", "implementModelTier"] as const).map((field) => {
                   const labels: Record<string, string> = {
-                    modelTier: "Model Tier",
-                    manageModelTier: "Manage Model Tier",
-                    implementModelTier: "Implement Model Tier",
+                    modelTier: "Model",
+                    manageModelTier: "Manage model",
+                    implementModelTier: "Implement model",
                   };
                   return (
                     <div key={field}>
                       <label className="text-xs text-muted-foreground block mb-1">{labels[field]}</label>
                       <select
-                        className="w-full h-8 text-sm border border-input bg-background rounded-md px-2"
+                        className="w-full h-8 text-sm border border-input bg-background rounded-md px-2 font-mono"
                         value={editDefaults[field]}
                         onChange={(e) => { setEditDefaults({ ...editDefaults, [field]: e.target.value }); setSettingsDirty(true); }}
                       >
                         <option value="">—</option>
-                        <option value="economy">economy</option>
-                        <option value="standard">standard</option>
-                        <option value="performance">performance</option>
+                        {MODEL_OPTIONS.map((m) => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
                       </select>
                     </div>
                   );
@@ -698,8 +758,6 @@ export default function ProjectDetailView() {
                   {savingSettings ? "Saving..." : "Save Settings"}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => {
-                  setEditRepos(project.repos || []);
-                  setEditDisplayName(project.displayName || "");
                   setEditDescription(project.description || "");
                   setEditDevboxPackages(project.devbox?.packages || []);
                   setEditDefaults({

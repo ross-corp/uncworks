@@ -17,7 +17,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import MarkdownEditor from "../components/MarkdownEditor";
 import {
-  MODEL_TIER_OPTIONS,
+  MODEL_OPTIONS,
   ORCHESTRATION_MODE_OPTIONS,
   type OrchestrationMode,
 } from "../types/agent-run";
@@ -35,14 +35,14 @@ interface ProjectOption {
 export default function NewRunView() {
   const client = useClient();
   const navigate = useNavigate();
-  const { configStatus, loading: settingsLoading } = useSettings();
+  const { settings, configStatus, loading: settingsLoading } = useSettings();
 
   const [searchParams] = useSearchParams();
   const { form, set, reset } = useRunForm();
 
   // Destructure form fields for readability
   const {
-    prompt, repos, mode, specContent,
+    prompt, mode, specContent,
     modelTier, ttlMinutes, orchestrationMode, implementModelTier,
     projectRef, specRef, customLabelMode,
     project, feature, tags,
@@ -60,6 +60,16 @@ export default function NewRunView() {
   const userEditedProject = useRef(false);
   const userEditedFeature = useRef(false);
   const userEditedTags = useRef(false);
+  const modelPrefilled = useRef(false);
+
+  // Pre-fill model defaults from settings (once, when settings load).
+  useEffect(() => {
+    if (settingsLoading || modelPrefilled.current) return;
+    modelPrefilled.current = true;
+    if (settings.defaultManageModel) set.modelTier(settings.defaultManageModel);
+    if (settings.defaultImplementModel) set.implementModelTier(settings.defaultImplementModel);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsLoading]);
 
   // Fetch Project CRDs for the project selector
   useEffect(() => {
@@ -140,7 +150,6 @@ export default function NewRunView() {
         if (!resp.ok || cancelled) return;
         const proj = await resp.json();
         if (cancelled) return;
-        if (proj.repos?.length) set.repos(proj.repos.map((r: { url: string; branch: string }) => ({ url: r.url, branch: r.branch || "main" })));
         if (proj.defaults?.modelTier) set.modelTier(proj.defaults.modelTier);
         if (proj.defaults?.orchestrationMode) set.orchestrationMode(proj.defaults.orchestrationMode);
         if (proj.displayName || proj.name) set.project(proj.displayName || proj.name);
@@ -169,7 +178,7 @@ export default function NewRunView() {
       const resp = await apiFetch("/api/v1/classify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim(), repos: repos.filter((r) => r.url.trim()) }),
+        body: JSON.stringify({ prompt: prompt.trim() }),
       });
       if (!resp.ok) return;
       const data = await resp.json() as { project?: string; feature?: string; tags?: string[] };
@@ -177,7 +186,7 @@ export default function NewRunView() {
       if (data.feature && !userEditedFeature.current) set.feature(data.feature);
       if (data.tags?.length && !userEditedTags.current) set.tags(data.tags.join(", "));
     } catch (err) { console.error("[NewRunView]", err); toast.error("Classification failed"); } finally { setClassifying(false); }
-  }, [prompt, repos]);
+  }, [prompt]);
 
   async function improveText(text: string, kind: "prompt" | "spec", setter: (v: string) => void, setLoading: (v: boolean) => void) {
     if (!text.trim()) return;
@@ -200,7 +209,7 @@ export default function NewRunView() {
     ? specContent.trim()
     : prompt.trim();
 
-  const canRun = effectivePrompt && repos.some((r) => r.url.trim());
+  const canRun = Boolean(effectivePrompt.trim());
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -220,21 +229,43 @@ export default function NewRunView() {
     await classifyPrompt();
     try {
       const parsedTags = tags.split(",").map((t) => t.trim()).filter(Boolean);
-      const validRepos = repos.filter((r) => r.url.trim()).map((r) => ({ url: r.url.trim(), branch: r.branch.trim() || "main" }));
+
+      // Inject the LLM API key from settings as env vars on the run spec so the
+      // agent pod can reach the configured provider (e.g. OpenRouter) directly.
+      // These are overridden by the in-cluster LiteLLM provisioning path when
+      // a proxy is present, so injecting here is safe for both setups.
+      const llmEnvVars: Record<string, string> = {};
+      if (settings.llmApiKey?.trim()) {
+        llmEnvVars["OPENAI_API_KEY"] = settings.llmApiKey.trim();
+        // OpenRouter requires a non-default base URL. Only inject when the key
+        // looks like an OpenRouter key (sk-or-*) or when there is no litellm
+        // proxy configured locally (litellmURL is the default placeholder).
+        if (
+          settings.llmApiKey.trim().startsWith("sk-or-") ||
+          !settings.litellmURL ||
+          settings.litellmURL === "http://litellm:4000"
+        ) {
+          llmEnvVars["OPENAI_BASE_URL"] = "https://openrouter.ai/api/v1";
+        }
+      }
 
       const run = await client.createAgentRun({
         backend: "pod",
-        repos: validRepos,
+        repos: [],
         prompt: effectivePrompt,
         ttlSeconds: ttlMinutes * 60,
         modelTier,
         orchestrationMode,
+        ...(Object.keys(llmEnvVars).length > 0 ? { envVars: llmEnvVars } : {}),
         ...(project.trim() ? { project: project.trim() } : {}),
         ...(feature.trim() ? { feature: feature.trim() } : {}),
         ...(parsedTags.length > 0 ? { tags: parsedTags } : {}),
         ...(mode === "spec" && specContent.trim() ? { specContent: specContent.trim() } : {}),
         ...(projectRef.trim() ? { projectRef: projectRef.trim() } : {}),
         ...(specRef.trim() ? { specRef: specRef.trim() } : {}),
+        ...(orchestrationMode === "spec-driven" && implementModelTier
+          ? { pipelineConfig: { execute: { model: implementModelTier } } }
+          : {}),
       });
       toast.success("Run created");
       reset();
@@ -249,18 +280,11 @@ export default function NewRunView() {
     if (!name) return;
     const proj = availableProjects.find((p) => p.name === name);
     if (!proj) return;
-    if (proj.repos?.length) set.repos(proj.repos.map((r) => ({ url: r.url, branch: r.branch || "main" })));
     if (proj.defaults?.modelTier) set.modelTier(proj.defaults.modelTier);
     if (proj.defaults?.orchestrationMode) set.orchestrationMode(proj.defaults.orchestrationMode as OrchestrationMode);
     if (!userEditedProject.current) {
       set.project(proj.displayName || proj.name);
     }
-  }
-
-  function addRepo() { set.repos([...repos, { url: "", branch: "main" }]); }
-  function removeRepo(i: number) { set.repos(repos.filter((_, idx) => idx !== i)); }
-  function updateRepo(i: number, field: "url" | "branch", value: string) {
-    set.repos(repos.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
   }
 
   return (
@@ -431,35 +455,6 @@ export default function NewRunView() {
                   </section>
                 )}
 
-                {/* Repositories */}
-                <section>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Repositories</label>
-                  {repos.map((r, i) => (
-                    <div key={i} className="flex gap-2 mb-1">
-                      <Input
-                        className="flex-1 h-8 text-sm"
-                        value={r.url}
-                        onChange={(e) => updateRepo(i, "url", e.target.value)}
-                        placeholder="https://github.com/org/repo"
-                      />
-                      <Input
-                        className="min-w-0 flex-1 h-8 text-sm"
-                        value={r.branch}
-                        onChange={(e) => updateRepo(i, "branch", e.target.value)}
-                        placeholder="main"
-                      />
-                      {repos.length > 1 && (
-                        <Button size="sm" variant="ghost" className="px-2 text-muted-foreground" onClick={() => removeRepo(i)}>
-                          x
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                  <Button size="sm" variant="ghost" className="text-xs text-muted-foreground" onClick={addRepo}>
-                    + add repository
-                  </Button>
-                </section>
-
               </div>
             </TabsContent>
 
@@ -469,7 +464,7 @@ export default function NewRunView() {
 
                 {/* Configuration — horizontal row */}
                 <section>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Configuration</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wider">Model</label>
                   <div className="flex gap-2 items-start">
                     <div className="flex-1">
                       <Select value={modelTier} onValueChange={set.modelTier}>
@@ -477,7 +472,7 @@ export default function NewRunView() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {MODEL_TIER_OPTIONS.map((opt) => (
+                          {MODEL_OPTIONS.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                               <span>{opt.label}</span>
                               <span className="text-muted-foreground ml-1 text-xs">{opt.description}</span>
@@ -521,7 +516,7 @@ export default function NewRunView() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__same__">Same as above</SelectItem>
-                          {MODEL_TIER_OPTIONS.map((opt) => (
+                          {MODEL_OPTIONS.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                           ))}
                         </SelectContent>

@@ -368,9 +368,16 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	state.Phase = "Hydrating"
 	state.Message = "Waiting for workspace hydration"
 
+	// WaitForHydration manages its own internal polling loop — disable Temporal
+	// retries to avoid restarting the activity from scratch on transient worker
+	// failures. The HeartbeatTimeout ensures the activity is detected as dead
+	// quickly if the worker crashes, and the activity will be re-dispatched once.
 	hydrationOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Minute,
 		HeartbeatTimeout:    30 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 1,
+		},
 	}
 	hydrationCtx := workflow.WithActivityOptions(ctx, hydrationOpts)
 
@@ -395,10 +402,14 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	workspacePath := "/workspace"
 
 	// --- Step 3b: Hydrate context from past work (knowledge system) ---
-	// This runs with a 5-second timeout and degrades gracefully on failure.
+	// Degrades gracefully on failure. Timeout is generous because it embeds the
+	// prompt via pgvector and writes a file to the pod PVC over the sidecar RPC.
 	{
 		hydrateCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-			StartToCloseTimeout: 5 * time.Second,
+			StartToCloseTimeout: 30 * time.Second,
+			RetryPolicy: &temporal.RetryPolicy{
+				MaximumAttempts: 2,
+			},
 		})
 		repoURL := ""
 		if len(input.Repos) > 0 {
@@ -561,6 +572,9 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			// Enrich tags from git diff before cleanup
 			enrichCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 				StartToCloseTimeout: 30 * time.Second,
+				RetryPolicy: &temporal.RetryPolicy{
+					MaximumAttempts: 2,
+				},
 			})
 			repoPath := workspacePath
 			if len(input.Repos) > 0 {

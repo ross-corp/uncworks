@@ -1,4 +1,4 @@
-import { test, expect } from "playwright/test";
+import { test, expect } from "@playwright/test";
 
 test.describe("Navigation smoke tests", () => {
   test("/ shows Runs heading", async ({ page }) => {
