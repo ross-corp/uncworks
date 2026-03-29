@@ -17,8 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/test/testutil"
 )
 
 // withTestAuth replicates the withAuth function from cmd/apiserver/main.go.
@@ -60,18 +60,19 @@ func withTestAuth(h http.Handler, apiKey string) http.Handler {
 	})
 }
 
+// newRegressionScheme returns the shared k8s scheme for regression tests.
+// It delegates to testutil.NewScheme which registers both clientgoscheme and
+// aotv1alpha1, making it a superset of the old local registration.
 func newRegressionScheme() *runtime.Scheme {
-	s := runtime.NewScheme()
-	_ = aotv1alpha1.AddToScheme(s)
-	return s
+	return testutil.NewScheme()
 }
 
 // TestAuthBoundary_ProjectsEndpoint_NoToken verifies that GET /api/v1/projects
 // returns 401 when no auth token is provided and the auth middleware is active.
 func TestAuthBoundary_ProjectsEndpoint_NoToken(t *testing.T) {
-	k8s := fake.NewClientBuilder().WithScheme(newRegressionScheme()).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testutil.NewScheme()).Build()
 	mux := http.NewServeMux()
-	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: "default"}
+	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	ph.RegisterProjectHandlers(mux)
 
 	protected := withTestAuth(mux, "secret-api-key")
@@ -87,9 +88,9 @@ func TestAuthBoundary_ProjectsEndpoint_NoToken(t *testing.T) {
 // TestAuthBoundary_ProjectsEndpoint_WrongToken verifies that a wrong token
 // also receives 401.
 func TestAuthBoundary_ProjectsEndpoint_WrongToken(t *testing.T) {
-	k8s := fake.NewClientBuilder().WithScheme(newRegressionScheme()).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testutil.NewScheme()).Build()
 	mux := http.NewServeMux()
-	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: "default"}
+	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	ph.RegisterProjectHandlers(mux)
 
 	protected := withTestAuth(mux, "correct-key")
@@ -106,9 +107,9 @@ func TestAuthBoundary_ProjectsEndpoint_WrongToken(t *testing.T) {
 // TestAuthBoundary_ProjectsEndpoint_ValidToken verifies that a correct token
 // passes through to the underlying handler.
 func TestAuthBoundary_ProjectsEndpoint_ValidToken(t *testing.T) {
-	k8s := fake.NewClientBuilder().WithScheme(newRegressionScheme()).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testutil.NewScheme()).Build()
 	mux := http.NewServeMux()
-	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: "default"}
+	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	ph.RegisterProjectHandlers(mux)
 
 	protected := withTestAuth(mux, "correct-key")
@@ -125,9 +126,9 @@ func TestAuthBoundary_ProjectsEndpoint_ValidToken(t *testing.T) {
 // TestAuthBoundary_CountsEndpoint_NoToken verifies that GET /api/v1/counts
 // returns 401 when no token is provided.
 func TestAuthBoundary_CountsEndpoint_NoToken(t *testing.T) {
-	k8s := fake.NewClientBuilder().WithScheme(newRegressionScheme()).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testutil.NewScheme()).Build()
 	mux := http.NewServeMux()
-	ch := &server.CountsHandler{K8sClient: k8s, Namespace: "default"}
+	ch := &server.CountsHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	ch.RegisterCountsHandlers(mux)
 
 	protected := withTestAuth(mux, "secret-api-key")
@@ -190,9 +191,9 @@ func TestAuthBoundary_WebhookEndpoint_IsExempt(t *testing.T) {
 // TestAuthBoundary_QueryParamToken verifies that the ?token= query parameter
 // is accepted for WebSocket-style clients that cannot set headers.
 func TestAuthBoundary_QueryParamToken(t *testing.T) {
-	k8s := fake.NewClientBuilder().WithScheme(newRegressionScheme()).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testutil.NewScheme()).Build()
 	mux := http.NewServeMux()
-	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: "default"}
+	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	ph.RegisterProjectHandlers(mux)
 
 	protected := withTestAuth(mux, "correct-key")
