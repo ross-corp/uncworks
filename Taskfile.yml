@@ -39,7 +39,7 @@ tasks:
       KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
     cmds:
       - go test ./api/... ./internal/... -count=1 -coverprofile=coverage.out -covermode=atomic
-      - go tool cover -func coverage.out | grep total:
+      - "go tool cover -func coverage.out | grep total:"
       - go tool cover -html=coverage.out -o coverage.html
       - open coverage.html
 
