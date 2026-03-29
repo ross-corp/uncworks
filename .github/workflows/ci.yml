@@ -71,6 +71,19 @@ jobs:
           git push origin "$TAG"
           echo "Tagged: $TAG"
 
+  regression:
+    name: Regression Tests
+    needs: ci
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          version: latest
+          module: ./ci
+          call: regression-tests --source .
+
   edge:
     name: Edge Images
     needs: ci

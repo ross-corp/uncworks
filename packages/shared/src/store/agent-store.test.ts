@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { createRoot } from "solid-js";
 import { createAgentStore } from "./agent-store";
