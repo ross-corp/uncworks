@@ -1,4 +1,4 @@
-import { describe, it, before } from "node:test";
+import { describe, it, beforeAll } from "vitest";
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { AOTExtension } from "./extension";
@@ -8,7 +8,7 @@ import { SpawnJuniorTool } from "./tools/spawn-junior";
 describe("AOTExtension", () => {
   let ext: AOTExtension;
 
-  before(() => {
+  beforeAll(() => {
     const stdin = new PassThrough();
     stdin.end();
     ext = new AOTExtension({

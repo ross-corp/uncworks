@@ -94,7 +94,7 @@ func (m *Ci) Lint(ctx context.Context, source *dagger.Directory) (string, error)
 	return "golangci-lint: ok", nil
 }
 
-// Test runs Go unit tests with envtest.
+// Test runs Go unit tests with envtest and emits a coverage summary.
 func (m *Ci) Test(ctx context.Context, source *dagger.Directory) (string, error) {
 	out, err := m.goBase(source).
 		WithExec([]string{"go", "install", "sigs.k8s.io/controller-runtime/tools/setup-envtest@latest"}).
@@ -103,11 +103,93 @@ func (m *Ci) Test(ctx context.Context, source *dagger.Directory) (string, error)
 			if [ -n "$ENVTEST_PATH" ]; then
 				export KUBEBUILDER_ASSETS="$ENVTEST_PATH"
 			fi
-			go test $(go list ./api/... ./internal/... | grep -v /brain | grep -v /embeddings) -count=1
+			go test $(go list ./api/... ./internal/... | grep -v /brain | grep -v /embeddings) \
+				-count=1 -coverprofile=coverage.out -covermode=atomic
+			echo "--- coverage summary ---"
+			go tool cover -func coverage.out | grep total:
 		`}).
 		Stdout(ctx)
 	if err != nil {
 		return "", fmt.Errorf("go test failed: %w", err)
+	}
+	return out, nil
+}
+
+// CoverageReport runs tests and returns an HTML coverage report as a Dagger file artifact.
+func (m *Ci) CoverageReport(ctx context.Context, source *dagger.Directory) *dagger.File {
+	return m.goBase(source).
+		WithExec([]string{"go", "install", "sigs.k8s.io/controller-runtime/tools/setup-envtest@latest"}).
+		WithExec([]string{"bash", "-c", `
+			ENVTEST_PATH=$(setup-envtest use --print path 2>/dev/null || echo "")
+			if [ -n "$ENVTEST_PATH" ]; then
+				export KUBEBUILDER_ASSETS="$ENVTEST_PATH"
+			fi
+			go test $(go list ./api/... ./internal/... | grep -v /brain | grep -v /embeddings) \
+				-count=1 -coverprofile=coverage.out -covermode=atomic 2>&1 || true
+			go tool cover -html=coverage.out -o coverage.html
+		`}).
+		File("/src/coverage.html")
+}
+
+// CheckCoverage runs tests and enforces per-package coverage thresholds.
+// Thresholds start conservatively and should be ratcheted up each sprint.
+func (m *Ci) CheckCoverage(ctx context.Context, source *dagger.Directory) (string, error) {
+	out, err := m.goBase(source).
+		WithExec([]string{"go", "install", "sigs.k8s.io/controller-runtime/tools/setup-envtest@latest"}).
+		WithExec([]string{"bash", "-c", `
+			ENVTEST_PATH=$(setup-envtest use --print path 2>/dev/null || echo "")
+			if [ -n "$ENVTEST_PATH" ]; then
+				export KUBEBUILDER_ASSETS="$ENVTEST_PATH"
+			fi
+			go test $(go list ./api/... ./internal/... | grep -v /brain | grep -v /embeddings) \
+				-count=1 -coverprofile=coverage.out -covermode=atomic >/dev/null 2>&1 || true
+
+			fail=0
+			check_pkg() {
+				local pkg="$1" threshold="$2"
+				# Get average coverage for all functions in the package
+				pct=$(go tool cover -func coverage.out 2>/dev/null \
+					| awk -v pkg="$pkg" 'index($1, pkg) {
+						gsub(/%/, "", $3); sum += $3; n++
+					} END { if (n>0) printf "%.1f", sum/n; else print "0" }')
+				ok=$(awk -v p="$pct" -v t="$threshold" 'BEGIN{print (p+0 >= t+0) ? "1" : "0"}')
+				if [ "$ok" = "0" ]; then
+					echo "FAIL: $pkg coverage ${pct}% < ${threshold}% threshold"
+					fail=1
+				else
+					echo "OK:   $pkg coverage ${pct}% >= ${threshold}%"
+				fi
+			}
+
+			# Conservative initial thresholds — ratchet up as tests are added
+			check_pkg "internal/server"     50
+			check_pkg "internal/controller" 40
+			check_pkg "internal/temporal"   40
+			echo "coverage check complete"
+			exit $fail
+		`}).
+		Stdout(ctx)
+	if err != nil {
+		return "", fmt.Errorf("coverage thresholds not met:\n%w", err)
+	}
+	return out, nil
+}
+
+// PlaywrightTests runs the Playwright e2e suite in a container.
+// All specs use page.route() mocking — no real backend required.
+func (m *Ci) PlaywrightTests(ctx context.Context, source *dagger.Directory) (string, error) {
+	out, err := dag.Container().
+		From("mcr.microsoft.com/playwright:v1.50.0-noble").
+		WithMountedDirectory("/src", source).
+		WithWorkdir("/src/web").
+		WithMountedCache("/root/.npm", dag.CacheVolume("npm-cache-playwright")).
+		WithEnvVariable("CI", "true").
+		WithEnvVariable("PLAYWRIGHT_BROWSERS_PATH", "/ms-playwright").
+		WithExec([]string{"npm", "ci"}).
+		WithExec([]string{"npx", "playwright", "test", "--reporter=list"}).
+		Stdout(ctx)
+	if err != nil {
+		return "", fmt.Errorf("playwright tests failed: %w", err)
 	}
 	return out, nil
 }
@@ -128,6 +210,8 @@ func (m *Ci) Check(ctx context.Context, source *dagger.Directory) (string, error
 			cd /src/packages/shared && npx tsc --noEmit
 			cd /src/packages/pi-aot-extension && npx tsc --noEmit
 			cd /src/web && npx tsc --noEmit
+			# Run web unit tests (Vitest)
+			cd /src/web && npx vitest run
 		`}).
 		Sync(ctx)
 	if err != nil {
@@ -136,21 +220,23 @@ func (m *Ci) Check(ctx context.Context, source *dagger.Directory) (string, error
 	return "tsc: ok", nil
 }
 
-// All runs all checks in parallel: build, lint, test, typescript.
+// All runs all checks in parallel: build, lint, test, typescript, playwright.
 func (m *Ci) All(ctx context.Context, source *dagger.Directory) (string, error) {
 	type result struct {
 		name string
 		err  error
 	}
-	ch := make(chan result, 4)
+	ch := make(chan result, 6)
 
 	go func() { _, err := m.Build(ctx, source); ch <- result{"build", err} }()
 	go func() { _, err := m.Lint(ctx, source); ch <- result{"lint", err} }()
 	go func() { _, err := m.Test(ctx, source); ch <- result{"test", err} }()
 	go func() { _, err := m.Check(ctx, source); ch <- result{"check", err} }()
+	go func() { _, err := m.PlaywrightTests(ctx, source); ch <- result{"playwright", err} }()
+	go func() { _, err := m.Layer2Tests(ctx, source); ch <- result{"layer2", err} }()
 
 	var failures []string
-	for range 4 {
+	for range 6 {
 		r := <-ch
 		if r.err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", r.name, r.err))
@@ -161,6 +247,36 @@ func (m *Ci) All(ctx context.Context, source *dagger.Directory) (string, error) 
 		return "", fmt.Errorf("CI failed:\n%s", joinLines(failures))
 	}
 	return "all checks passed", nil
+}
+
+// Layer2Tests runs the layer2 agent pipeline tests (LiteLLM stubbed, no real cluster).
+func (m *Ci) Layer2Tests(ctx context.Context, source *dagger.Directory) (string, error) {
+	out, err := m.goBase(source).
+		WithExec([]string{"go", "test", "-v", "./test/stubs/...", "./test/layer2/...", "-count=1"}).
+		Stdout(ctx)
+	if err != nil {
+		return "", fmt.Errorf("layer2 tests failed: %w", err)
+	}
+	return out, nil
+}
+
+// RegressionTests runs the regression suite (//go:build regression tagged tests).
+// Intended to gate PRs to main and release tags.
+func (m *Ci) RegressionTests(ctx context.Context, source *dagger.Directory) (string, error) {
+	out, err := m.goBase(source).
+		WithExec([]string{"go", "install", "sigs.k8s.io/controller-runtime/tools/setup-envtest@latest"}).
+		WithExec([]string{"bash", "-c", `
+			ENVTEST_PATH=$(setup-envtest use --print path 2>/dev/null || echo "")
+			if [ -n "$ENVTEST_PATH" ]; then
+				export KUBEBUILDER_ASSETS="$ENVTEST_PATH"
+			fi
+			go test -tags regression -v ./test/regression/... -count=1
+		`}).
+		Stdout(ctx)
+	if err != nil {
+		return "", fmt.Errorf("regression tests failed: %w", err)
+	}
+	return out, nil
 }
 
 // BuildImage builds a single Docker image by name.

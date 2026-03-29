@@ -13,7 +13,7 @@ tasks:
   # --- Testing ---
   test:
     desc: Run all tests (parallel)
-    deps: [test:go, test:web, test:extension]
+    deps: [test:go, test:web, test:extension, test:layer2]
 
   test:all:
     desc: Run full test pipeline sequentially (schema → unit → contract → temporal → integration → e2e)
@@ -27,11 +27,40 @@ tasks:
       - task: test:e2e
 
   test:go:
-    desc: Run Go tests (unit + integration)
+    desc: Run Go tests (unit + integration) with coverage
     env:
       KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
     cmds:
-      - go test ./api/... ./internal/... -count=1
+      - go test ./api/... ./internal/... -count=1 -coverprofile=coverage.out -covermode=atomic
+
+  test:coverage:go:
+    desc: Run Go tests, generate HTML coverage report, and open it
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test ./api/... ./internal/... -count=1 -coverprofile=coverage.out -covermode=atomic
+      - go tool cover -func coverage.out | grep total:
+      - go tool cover -html=coverage.out -o coverage.html
+      - open coverage.html
+
+  test:layer2:
+    desc: Run Layer 2 pipeline tests (LLM stubbed, no real cluster)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -v ./test/layer2/... ./test/stubs/... -count=1
+
+  test:regression:
+    desc: Run regression suite (critical paths — gates releases and PRs to main)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -tags regression -v ./test/regression/... -count=1
+
+  test:playwright:ci:
+    desc: Run Playwright e2e tests via Dagger (same environment as CI)
+    cmds:
+      - dagger call playwright-tests --source .
 
   test:e2e:setup:
     desc: Start Soft-Serve git server and push fixture repos
@@ -115,9 +144,9 @@ tasks:
       - npx tsx --test src/**/*.test.ts
 
   test:contract:
-    desc: Run server contract tests (ConnectRPC + protovalidate)
+    desc: Run server contract tests (ConnectRPC + protovalidate) with coverage
     cmds:
-      - go test ./test/contract/... -count=1 -v
+      - go test ./test/contract/... -count=1 -v -coverprofile=coverage-contract.out -covermode=atomic
 
   test:temporal:
     desc: Run Temporal workflow tests (requires temporal-workflow-engine)
@@ -128,6 +157,13 @@ tasks:
     desc: Run integration tests (requires Docker for testcontainers)
     cmds:
       - go test -tags integration ./... -count=1 -v
+
+  test:regression:
+    desc: Run regression test suite (critical paths, gates releases)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -tags regression -v ./test/regression/... -count=1
 
   test:unit:
     desc: Run unit tests only (fast, no Docker)
