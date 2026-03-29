@@ -25,6 +25,7 @@ export function useHealth(intervalMs = 15_000) {
   const wails = isWails();
   const [report, setReport] = useState<HealthReport>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const check = useCallback(async () => {
     if (!wails) return;
@@ -32,7 +33,9 @@ export function useHealth(intervalMs = 15_000) {
     try {
       const r: HealthReport = await go().HealthCheck();
       setReport(r);
-    } catch {
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error(String(e)));
       setReport({ overall: "down", components: [] });
     } finally {
       setLoading(false);
@@ -45,7 +48,7 @@ export function useHealth(intervalMs = 15_000) {
     return () => clearInterval(t);
   }, [check, intervalMs]);
 
-  return { report, loading, refresh: check };
+  return { report, loading, error, refresh: check };
 }
 
 export function statusColor(s: HealthStatus): string {
