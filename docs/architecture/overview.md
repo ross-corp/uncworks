@@ -4,54 +4,42 @@ UNCWORKS is a Kubernetes-native agentic development platform. It runs AI coding 
 
 ## System Diagram
 
-```
-+-------------------------------------------------------------+
-|                    Kubernetes Cluster                        |
-|                                                             |
-|  +------------------+     +-----------------------------+   |
-|  |   UNCWORKS UI    |     |   UNCWORKS Control Plane    |   |
-|  |                  |     |                             |   |
-|  | Web Dashboard    |---->| API Server (ConnectRPC)     |   |
-|  | React + Tailwind |nginx| :50055                      |   |
-|  | :30300           |proxy|                             |   |
-|  +------------------+     | K8s Controller              |   |
-|                           |  watches AgentRun CRD       |   |
-|                           |  watches Project CRD        |   |
-|                           |                             |   |
-|                           | Temporal Worker             |   |
-|                           |  pipeline activities        |   |
-|                           +--+-------+------------------+   |
-|                              |       |                      |
-|              Signal/Query    |       | creates pods         |
-|                              v       v                      |
-|  +-------------------+   +-----------------------------+   |
-|  |   Dependencies    |   |   Data Plane (per run)      |   |
-|  |                   |   |                             |   |
-|  | Temporal :7233    |   | +-------------------------+ |   |
-|  | LiteLLM  :4000   |   | |      Agent Pod          | |   |
-|  | Ollama   :11434  |   | |                         | |   |
-|  | Soft-Serve :23231|   | | init: hydration         | |   |
-|  +-------------------+   | |   git clone + devbox    | |   |
-|                           | |                         | |   |
-|                           | | container: agent        | |   |
-|                           | |   (sleep infinity)      | |   |
-|                           | |                         | |   |
-|                           | | container: rpc-gateway  | |   |
-|                           | |   sidecar :50052        | |   |
-|                           | |   runs pi-coding-agent  | |   |
-|                           | |                         | |   |
-|                           | | volume: /workspace      | |   |
-|                           | |   (PVC, 2Gi default)    | |   |
-|                           | +-------------------------+ |   |
-|                           +-----------------------------+   |
-+-------------------------------------------------------------+
-         |                          |
-         | LLM calls via LiteLLM   | GitHub API (push/PR)
-         v                          v
-  +--------------+           +--------------+
-  | Cloud LLMs   |           | GitHub       |
-  | (OpenRouter)  |           | Repos + CI   |
-  +--------------+           +--------------+
+```mermaid
+flowchart TD
+    subgraph K8s["Kubernetes Cluster"]
+        subgraph UI["UNCWORKS UI"]
+            Web["Web Dashboard\nReact + Tailwind\n:30300"]
+        end
+
+        subgraph CP["UNCWORKS Control Plane"]
+            API["API Server\nConnectRPC :50055"]
+            Ctrl["K8s Controller\nwatches AgentRun CRD\nwatches Project CRD"]
+            TW["Temporal Worker\npipeline activities"]
+        end
+
+        subgraph Deps["Dependencies"]
+            Temporal["Temporal :7233"]
+            LiteLLM["LiteLLM :4000"]
+            Ollama["Ollama :11434"]
+            SoftServe["Soft-Serve :23231"]
+        end
+
+        subgraph DP["Data Plane (per run)"]
+            subgraph Pod["Agent Pod"]
+                Init["init: hydration\ngit clone + devbox"]
+                Agent["container: agent\nsleep infinity"]
+                Sidecar["container: rpc-gateway\nsidecar :50052\nruns pi-coding-agent"]
+                Vol[("volume: /workspace\nPVC, 2Gi default")]
+            end
+        end
+
+        Web -->|nginx proxy| API
+        CP -->|Signal/Query| Deps
+        CP -->|creates pods| DP
+    end
+
+    K8s -->|LLM calls via LiteLLM| CloudLLMs["Cloud LLMs\nOpenRouter"]
+    K8s -->|GitHub API push/PR| GitHub["GitHub\nRepos + CI"]
 ```
 
 ## Components
@@ -88,76 +76,78 @@ UNCWORKS is a Kubernetes-native agentic development platform. It runs AI coding 
 
 ## Data Flow: Run Creation to Completion
 
-```
-User creates run via UI or webhook
-          |
-          v
-+---[ API Server ]---+
-| Creates AgentRun   |
-| CRD in Kubernetes  |
-+-------|------------+
-        |
-        v
-+---[ Controller ]---+
-| Detects new CRD    |
-| Starts Temporal    |
-| workflow           |
-+-------|------------+
-        |
-        v
-+---[ Temporal Workflow ]--------------------------------------------+
-|                                                                    |
-|  1. ProvisionLLMKey    -- Create virtual key in LiteLLM            |
-|  2. CreateDeployment   -- Pod with init + agent + sidecar          |
-|  3. WaitForHydration   -- Init container clones repos, devbox      |
-|  4. HydrateContext     -- Inject past work context (knowledge DB)  |
-|                                                                    |
-|  === Single Mode ===                                               |
-|  5. StartAgent         -- Sidecar launches pi with prompt          |
-|  6. PollStatus         -- Every 5s until COMPLETED/FAILED          |
-|  7. EnrichRunTags      -- Auto-tag from git diff                   |
-|                                                                    |
-|  === Spec-Driven Mode ===                                          |
-|  5. PLAN stage         -- Manage agent creates OpenSpec change     |
-|  6. EXECUTE stage      -- Implement agent writes code              |
-|  7. VERIFY stage       -- Manage agent checks specs + LLM judge    |
-|  8. If verify fails    -- Retry execute with failure context       |
-|  9. PushChanges        -- Push to aot/<run-id> branch              |
-| 10. CreatePR           -- Open GitHub PR against base branch       |
-|                                                                    |
-|  Cleanup (deferred, runs on every exit path):                      |
-|  - PersistRunData      -- Save to knowledge DB                     |
-|  - EmbedRunData        -- Generate embeddings for search           |
-|  - RevokeLLMKey        -- Delete virtual key from LiteLLM          |
-|  - ScaleDownDeployment -- Scale deployment to 0 replicas           |
-+--------------------------------------------------------------------+
+```mermaid
+flowchart TD
+    User["User creates run via UI or webhook"] --> APIServer
+    APIServer["API Server\nCreates AgentRun CRD in Kubernetes"] --> Controller
+    Controller["Controller\nDetects new CRD\nStarts Temporal workflow"] --> Workflow
+
+    subgraph Workflow["Temporal Workflow"]
+        direction TB
+        Provision["1. ProvisionLLMKey\nCreate virtual key in LiteLLM"]
+        CreateDeploy["2. CreateDeployment\nPod with init + agent + sidecar"]
+        WaitHydration["3. WaitForHydration\nInit container clones repos, devbox"]
+        HydrateCtx["4. HydrateContext\nInject past work context (knowledge DB)"]
+
+        Provision --> CreateDeploy --> WaitHydration --> HydrateCtx
+        HydrateCtx --> ModeChoice{Mode?}
+
+        subgraph Single["Single Mode"]
+            S5["5. StartAgent\nSidecar launches pi with prompt"]
+            S6["6. PollStatus\nEvery 5s until COMPLETED/FAILED"]
+            S7["7. EnrichRunTags\nAuto-tag from git diff"]
+            S5 --> S6 --> S7
+        end
+
+        subgraph Spec["Spec-Driven Mode"]
+            SD5["5. PLAN stage\nManage agent creates OpenSpec change"]
+            SD6["6. EXECUTE stage\nImplement agent writes code"]
+            SD7["7. VERIFY stage\nManage agent checks specs + LLM judge"]
+            SD8{"Verify\npassed?"}
+            SD9["9. PushChanges\nPush to aot/run-id branch"]
+            SD10["10. CreatePR\nOpen GitHub PR against base branch"]
+            SD5 --> SD6 --> SD7 --> SD8
+            SD8 -->|No| SD6
+            SD8 -->|Yes| SD9 --> SD10
+        end
+
+        ModeChoice -->|Single| S5
+        ModeChoice -->|Spec-Driven| SD5
+
+        subgraph Cleanup["Cleanup (deferred, runs on every exit path)"]
+            C1["PersistRunData\nSave to knowledge DB"]
+            C2["EmbedRunData\nGenerate embeddings for search"]
+            C3["RevokeLLMKey\nDelete virtual key from LiteLLM"]
+            C4["ScaleDownDeployment\nScale deployment to 0 replicas"]
+        end
+
+        S7 --> Cleanup
+        SD10 --> Cleanup
+    end
 ```
 
 ## Project System
 
 Projects provide organizational structure and default configuration for runs.
 
-```
-+---[ Project CRD ]----+       +---[ Soft-Serve ]------+
-| spec:                |       |                       |
-|   displayName        | ----> | Creates repo:         |
-|   repos[]            |       |   project-<name>      |
-|   devbox.packages[]  |       |                       |
-|   defaults:          |       | Scaffolds:            |
-|     modelTier        |       |   openspec/           |
-|     autoPush         |       |     specs/            |
-|     autoPR           |       |     changes/          |
-|     prBaseBranch     |       |   .devcontainer/      |
-+------|---------------+       +-----------------------+
-       |
-       | projectRef on AgentRun
-       v
-+---[ Run Inheritance ]---+
-| Empty run fields are    |
-| filled from project     |
-| defaults (repos, model, |
-| TTL, autoPush, autoPR)  |
-+-------------------------+
+```mermaid
+flowchart LR
+    subgraph ProjectCRD["Project CRD spec"]
+        P1["displayName"]
+        P2["repos[]"]
+        P3["devbox.packages[]"]
+        P4["defaults:\nmodelTier, autoPush\nautoPR, prBaseBranch"]
+    end
+
+    subgraph SoftServe["Soft-Serve"]
+        SS1["Creates repo:\nproject-name"]
+        SS2["Scaffolds:\nopenspec/specs/\nopenspec/changes/\n.devcontainer/"]
+    end
+
+    ProjectCRD -->|creates| SoftServe
+    ProjectCRD -->|projectRef on AgentRun| RunInherit
+
+    RunInherit["Run Inheritance\nEmpty run fields are filled\nfrom project defaults\n(repos, model, TTL, autoPush, autoPR)"]
 ```
 
 When a Project is created:
@@ -171,47 +161,18 @@ When a Project is created:
 
 UNCWORKS can automatically fix CI failures on branches it created.
 
-```
-GitHub Actions CI fails on aot/* branch
-          |
-          v
-+---[ GitHub Webhook ]---+
-| POST /api/v1/webhooks/ |
-|        github           |
-| Event: check_run        |
-| Action: completed       |
-| Conclusion: failure     |
-+-------|----------------+
-        |
-        v
-+---[ CI Autofix Handler ]---+
-| 1. Verify branch is aot/* |
-| 2. Check retry count      |
-|    (max 3 attempts)       |
-| 3. Debounce 30s           |
-|    (coalesce failures)    |
-| 4. Fetch CI logs from     |
-|    GitHub Actions API     |
-| 5. Extract error lines    |
-| 6. Create fix AgentRun    |
-|    with CI error context  |
-+------|-------------------+
-       |
-       v
-+---[ Fix Run ]---+
-| Spec-driven run |
-| Skips PLAN stage|
-| Pushes to same  |
-| aot/* branch    |
-+-----------------+
-       |
-       | If max retries exhausted
-       v
-+---[ Circuit Breaker ]---+
-| Posts comment on PR:    |
-| "Manual intervention   |
-|  required"              |
-+-------------------------+
+```mermaid
+flowchart TD
+    CIFail["GitHub Actions CI fails on aot/* branch"] --> Webhook
+    Webhook["GitHub Webhook\nPOST /api/v1/webhooks/github\nEvent: check_run\nAction: completed\nConclusion: failure"] --> Handler
+
+    Handler["CI Autofix Handler\n1. Verify branch is aot/*\n2. Check retry count (max 3)\n3. Debounce 30s (coalesce failures)\n4. Fetch CI logs from GitHub Actions API\n5. Extract error lines\n6. Create fix AgentRun with CI error context"] --> FixRun
+
+    FixRun["Fix Run\nSpec-driven run\nSkips PLAN stage\nPushes to same aot/* branch"] --> RetryCheck
+
+    RetryCheck{"Max retries\nexhausted?"}
+    RetryCheck -->|Yes| CircuitBreaker["Circuit Breaker\nPosts comment on PR:\nManual intervention required"]
+    RetryCheck -->|No| CIFail
 ```
 
 The autofix flow:
@@ -228,18 +189,9 @@ The autofix flow:
 
 Push events to repositories in the allowlist create runs automatically when `.cs.md` (CodeSpeak spec) files are added or modified.
 
-```
-GitHub push event
-       |
-       v
-+---[ Webhook Handler ]---+
-| 1. Validate HMAC-SHA256 |
-| 2. Check repo allowlist |
-| 3. Scan commits for     |
-|    *.cs.md files         |
-| 4. Fetch file content   |
-|    from GitHub API       |
-| 5. Create AgentRun per  |
-|    spec file found       |
-+-------------------------+
+```mermaid
+flowchart TD
+    Push["GitHub push event"] --> Handler
+
+    Handler["Webhook Handler\n1. Validate HMAC-SHA256\n2. Check repo allowlist\n3. Scan commits for *.cs.md files\n4. Fetch file content from GitHub API\n5. Create AgentRun per spec file found"]
 ```
