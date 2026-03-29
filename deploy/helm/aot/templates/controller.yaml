@@ -84,8 +84,10 @@ spec:
             runAsUser: 65532
             capabilities:
               drop: ["ALL"]
-          {{- if .Values.softServe.enabled }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          {{- if .Values.softServe.enabled }}
             - name: soft-serve-key
               mountPath: /etc/soft-serve
               readOnly: true
@@ -94,8 +96,10 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- if .Values.softServe.enabled }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- if .Values.softServe.enabled }}
         - name: soft-serve-key
           secret:
             secretName: soft-serve-admin-key
