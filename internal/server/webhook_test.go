@@ -347,6 +347,36 @@ func TestWebhook_IgnoresNonPushEvent(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "ignored event type")
 }
 
+// TestWebhook_CheckRun_RoutesToCIAutofix verifies that a check_run event with
+// action=completed, conclusion=failure on an aot/* branch is dispatched through
+// the full WebhookHandler.ServeHTTP path and returns a 200 response (not an
+// error). This exercises the routing branch in ServeHTTP that delegates to
+// ciAutofix.HandleCheckRunEvent.
+func TestWebhook_CheckRun_RoutesToCIAutofix(t *testing.T) {
+	scheme := newTestScheme()
+	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	wh := &WebhookHandler{
+		secret:    "test-secret",
+		k8sClient: k8s,
+		namespace: "default",
+		ciAutofix: NewCIAutofix(context.Background(), k8s, "default", nil, 3),
+	}
+
+	body := makeCheckRunPayload("completed", "failure", "aot/ar-some-feature", "org/repo")
+	sig := signPayload(body, "test-secret")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "check_run")
+	req.Header.Set("X-Hub-Signature-256", sig)
+	rec := httptest.NewRecorder()
+	wh.ServeHTTP(rec, req)
+
+	// Handler must return 200 and report ci_autofix_triggered=true.
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"ci_autofix_triggered":true`)
+}
+
 // roundTripFunc is an adapter to use a function as http.RoundTripper.
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
