@@ -657,6 +657,212 @@ func TestSearchPastWork_CodeFilter_NoBrainSearcher(t *testing.T) {
 	}
 }
 
+// --- ListAgentRuns filter tests ---
+
+func TestListAgentRuns_PhaseFilter(t *testing.T) {
+	grpcClient, _, svc, cleanup := startTestServerWithBus(t)
+	defer cleanup()
+
+	// Create one run and manually update its phase to Running via k8s status update.
+	createResp, err := grpcClient.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "pending run",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+
+	// Create a second run and patch its phase to RUNNING so the filter can discriminate.
+	runningResp, err := grpcClient.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "running run",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+
+	// Directly update the second run's status to RUNNING via the k8s client.
+	crd := &aotv1alpha1.AgentRun{}
+	if err := svc.K8sClient.Get(context.Background(), k8sclient.ObjectKey{Namespace: "default", Name: runningResp.Msg.AgentRun.Id}, crd); err != nil {
+		t.Fatalf("Get AgentRun: %v", err)
+	}
+	crd.Status.Phase = aotv1alpha1.AgentRunPhaseRunning
+	if err := svc.K8sClient.Status().Update(context.Background(), crd); err != nil {
+		t.Fatalf("Status().Update: %v", err)
+	}
+
+	// Filter for PENDING only — should return 1 run (the first one).
+	pendingResp, err := grpcClient.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+		PhaseFilter: apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
+	}))
+	if err != nil {
+		t.Fatalf("ListAgentRuns(PENDING): %v", err)
+	}
+	if len(pendingResp.Msg.AgentRuns) != 1 {
+		t.Errorf("expected 1 PENDING run, got %d", len(pendingResp.Msg.AgentRuns))
+	}
+	if pendingResp.Msg.AgentRuns[0].Id != createResp.Msg.AgentRun.Id {
+		t.Errorf("PENDING filter returned wrong run")
+	}
+
+	// Filter for RUNNING only — should return 1 run (the second one).
+	runningListResp, err := grpcClient.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+		PhaseFilter: apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING,
+	}))
+	if err != nil {
+		t.Fatalf("ListAgentRuns(RUNNING): %v", err)
+	}
+	if len(runningListResp.Msg.AgentRuns) != 1 {
+		t.Errorf("expected 1 RUNNING run, got %d", len(runningListResp.Msg.AgentRuns))
+	}
+	if runningListResp.Msg.AgentRuns[0].Id != runningResp.Msg.AgentRun.Id {
+		t.Errorf("RUNNING filter returned wrong run")
+	}
+}
+
+func TestListAgentRuns_TagFilter(t *testing.T) {
+	grpcClient, cleanup := startTestServer(t)
+	defer cleanup()
+
+	// Create a run with tags.
+	_, err := grpcClient.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "tagged run",
+			Tags:    []string{"release", "hotfix"},
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun with tags: %v", err)
+	}
+
+	// Create a run without tags.
+	if _, err := grpcClient.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "untagged run",
+		},
+	})); err != nil {
+		t.Fatalf("CreateAgentRun without tags: %v", err)
+	}
+
+	// Filter for "release" tag — should return 1.
+	resp, err := grpcClient.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+		TagFilter: "release",
+	}))
+	if err != nil {
+		t.Fatalf("ListAgentRuns(tag=release): %v", err)
+	}
+	if len(resp.Msg.AgentRuns) != 1 {
+		t.Errorf("expected 1 run with tag 'release', got %d", len(resp.Msg.AgentRuns))
+	}
+
+	// Filter for absent tag — should return 0.
+	resp2, err := grpcClient.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+		TagFilter: "nonexistent-tag",
+	}))
+	if err != nil {
+		t.Fatalf("ListAgentRuns(tag=nonexistent-tag): %v", err)
+	}
+	if len(resp2.Msg.AgentRuns) != 0 {
+		t.Errorf("expected 0 runs for absent tag, got %d", len(resp2.Msg.AgentRuns))
+	}
+}
+
+func TestListAgentRuns_PageSizeClamping(t *testing.T) {
+	grpcClient, cleanup := startTestServer(t)
+	defer cleanup()
+
+	// Create 3 runs.
+	for i := 0; i < 3; i++ {
+		if _, err := grpcClient.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+			Spec: &apiv1.AgentRunSpec{
+				Backend: apiv1.Backend_BACKEND_POD,
+				Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+				Prompt:  "run",
+			},
+		})); err != nil {
+			t.Fatalf("CreateAgentRun: %v", err)
+		}
+	}
+
+	// limit=0 should use default (50) — returns all 3.
+	resp0, err := grpcClient.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 0}))
+	if err != nil {
+		t.Fatalf("ListAgentRuns(limit=0): %v", err)
+	}
+	if len(resp0.Msg.AgentRuns) != 3 {
+		t.Errorf("limit=0 should default to 50, got %d runs", len(resp0.Msg.AgentRuns))
+	}
+
+	// limit=1 should return exactly 1.
+	resp1, err := grpcClient.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+	if err != nil {
+		t.Fatalf("ListAgentRuns(limit=1): %v", err)
+	}
+	if len(resp1.Msg.AgentRuns) != 1 {
+		t.Errorf("limit=1 should return 1 run, got %d", len(resp1.Msg.AgentRuns))
+	}
+}
+
+func TestListAgentRuns_StageFilter(t *testing.T) {
+	grpcClient, _, svc, cleanup := startTestServerWithBus(t)
+	defer cleanup()
+
+	// Create a run and update its status stage.
+	createResp, err := grpcClient.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "planning run",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+
+	crd := &aotv1alpha1.AgentRun{}
+	if err := svc.K8sClient.Get(context.Background(), k8sclient.ObjectKey{Namespace: "default", Name: createResp.Msg.AgentRun.Id}, crd); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	crd.Status.Stage = "planning"
+	if err := svc.K8sClient.Status().Update(context.Background(), crd); err != nil {
+		t.Fatalf("Status().Update: %v", err)
+	}
+
+	// Create a second run with no stage (empty).
+	if _, err := grpcClient.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "no stage run",
+		},
+	})); err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+
+	resp, err := grpcClient.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+		StageFilter: "planning",
+	}))
+	if err != nil {
+		t.Fatalf("ListAgentRuns(stage=planning): %v", err)
+	}
+	if len(resp.Msg.AgentRuns) != 1 {
+		t.Errorf("expected 1 run with stage=planning, got %d", len(resp.Msg.AgentRuns))
+	}
+	if resp.Msg.AgentRuns[0].Id != createResp.Msg.AgentRun.Id {
+		t.Errorf("stage filter returned wrong run")
+	}
+}
+
 // TestSearchPastWork_TraceFilter_NoBrainSearcher verifies that SOURCE_FILTER_TRACE
 // returns CodeUnavailable when BrainSearcher is not configured.
 func TestSearchPastWork_TraceFilter_NoBrainSearcher(t *testing.T) {
