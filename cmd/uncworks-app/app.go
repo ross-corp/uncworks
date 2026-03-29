@@ -23,6 +23,7 @@ type App struct {
 	ctx            context.Context
 	statusPollStop context.CancelFunc
 	pf             *portForwardManager
+	trayCluster    trayStatusItem // updated by pollStatus
 }
 
 func NewApp() *App {
@@ -224,7 +225,8 @@ func (a *App) StopCluster() {
 	runtime.EventsEmit(a.ctx, "teardown:done")
 }
 
-// pollStatus periodically emits cluster status events to the frontend.
+// pollStatus periodically emits cluster status events to the frontend and
+// updates the menu bar tray item.
 func (a *App) pollStatus(ctx context.Context) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
@@ -235,6 +237,7 @@ func (a *App) pollStatus(ctx context.Context) {
 		case <-ticker.C:
 			status := a.ClusterStatus()
 			runtime.EventsEmit(ctx, "cluster:status", status)
+			a.trayCluster.set(status)
 		}
 	}
 }
@@ -298,6 +301,11 @@ func (a *App) StartPortForward(name string, localPort int) error {
 // StopPortForward stops the port-forward for the named service.
 func (a *App) StopPortForward(name string) error {
 	return a.pf.stop(name)
+}
+
+// OpenURL opens a URL in the system default browser via macOS `open`.
+func (a *App) OpenURL(rawURL string) error {
+	return exec.Command("open", rawURL).Run()
 }
 
 // OpenService opens the port-forwarded URL for a service in the default browser.
