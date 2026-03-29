@@ -207,6 +207,71 @@ func TestClientIP_TrustProxy(t *testing.T) {
 	}
 }
 
+// TestNewRateLimiter_ZeroRPSFallsBackToDefault verifies that RPS=0 is replaced
+// by the built-in default so the limiter does not block every request.
+func TestNewRateLimiter_ZeroRPSFallsBackToDefault(t *testing.T) {
+	cfg := RateLimiterConfig{Enabled: true, RPS: 0, Burst: 5, TTLMinutes: 10}
+	rl := NewRateLimiter(cfg)
+	if rl.cfg.RPS != defaultRPS {
+		t.Errorf("expected RPS=%v after zero input, got %v", defaultRPS, rl.cfg.RPS)
+	}
+	// Burst was valid; must not be overwritten.
+	if rl.cfg.Burst != 5 {
+		t.Errorf("expected Burst=5 (unchanged), got %d", rl.cfg.Burst)
+	}
+	// Limiter must actually allow requests (i.e. not be broken).
+	if !rl.Allow("1.1.1.1") {
+		t.Error("expected Allow to return true after defaulting RPS")
+	}
+}
+
+// TestNewRateLimiter_NegativeRPSFallsBackToDefault verifies that a negative RPS
+// value is replaced by the built-in default.
+func TestNewRateLimiter_NegativeRPSFallsBackToDefault(t *testing.T) {
+	cfg := RateLimiterConfig{Enabled: true, RPS: -5, Burst: 5, TTLMinutes: 10}
+	rl := NewRateLimiter(cfg)
+	if rl.cfg.RPS != defaultRPS {
+		t.Errorf("expected RPS=%v after negative input, got %v", defaultRPS, rl.cfg.RPS)
+	}
+}
+
+// TestNewRateLimiter_ZeroBurstFallsBackToDefault verifies that Burst=0 is replaced
+// by the built-in default.
+func TestNewRateLimiter_ZeroBurstFallsBackToDefault(t *testing.T) {
+	cfg := RateLimiterConfig{Enabled: true, RPS: 10, Burst: 0, TTLMinutes: 10}
+	rl := NewRateLimiter(cfg)
+	if rl.cfg.Burst != defaultBurst {
+		t.Errorf("expected Burst=%d after zero input, got %d", defaultBurst, rl.cfg.Burst)
+	}
+	// RPS was valid; must not be overwritten.
+	if rl.cfg.RPS != 10 {
+		t.Errorf("expected RPS=10 (unchanged), got %v", rl.cfg.RPS)
+	}
+}
+
+// TestNewRateLimiter_NegativeBurstFallsBackToDefault verifies that a negative Burst
+// value is replaced by the built-in default.
+func TestNewRateLimiter_NegativeBurstFallsBackToDefault(t *testing.T) {
+	cfg := RateLimiterConfig{Enabled: true, RPS: 10, Burst: -3, TTLMinutes: 10}
+	rl := NewRateLimiter(cfg)
+	if rl.cfg.Burst != defaultBurst {
+		t.Errorf("expected Burst=%d after negative input, got %d", defaultBurst, rl.cfg.Burst)
+	}
+}
+
+// TestNewRateLimiter_ValidConfigUnchanged verifies that valid RPS and Burst values
+// are not overwritten by the validation logic.
+func TestNewRateLimiter_ValidConfigUnchanged(t *testing.T) {
+	cfg := RateLimiterConfig{Enabled: true, RPS: 42, Burst: 7, TTLMinutes: 10}
+	rl := NewRateLimiter(cfg)
+	if rl.cfg.RPS != 42 {
+		t.Errorf("expected RPS=42 (unchanged), got %v", rl.cfg.RPS)
+	}
+	if rl.cfg.Burst != 7 {
+		t.Errorf("expected Burst=7 (unchanged), got %d", rl.cfg.Burst)
+	}
+}
+
 // TestClientIP_NoTrustProxy verifies RemoteAddr is used when trustProxy is false.
 func TestClientIP_NoTrustProxy(t *testing.T) {
 	cfg := RateLimiterConfig{TrustProxy: false}

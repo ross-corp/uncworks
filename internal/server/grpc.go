@@ -260,6 +260,12 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 		runs = append(runs, run)
 	}
 
+	// Client-side truncation: K8s fake client ignores Limit, so we enforce it
+	// here as a safety net. For a real API server the K8s Limit already applied.
+	if int64(len(runs)) > pageSize {
+		runs = runs[:pageSize]
+	}
+
 	return connect.NewResponse(&apiv1.ListAgentRunsResponse{
 		AgentRuns:  runs,
 		NextCursor: list.Continue,

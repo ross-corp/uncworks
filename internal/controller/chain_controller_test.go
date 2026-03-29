@@ -298,6 +298,132 @@ func TestChainRun_NotFound_Ignored(t *testing.T) {
 	}
 }
 
+// TestChainRun_SharedTemplate_BranchIsolation verifies that two chain steps
+// referencing the same RunTemplate but with different BranchFrom overrides each
+// produce an AgentRun with their own correct branch. This is a regression test
+// for the in-place repos mutation bug where repos[0].Branch = branch would
+// clobber the template's slice, causing the second step to inherit the first
+// step's branch (or vice versa).
+func TestChainRun_SharedTemplate_BranchIsolation(t *testing.T) {
+	rec, k8s, cleanup := setupChainReconciler(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Single shared template with a default branch.
+	tmpl := &aotv1alpha1.RunTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "shared-tmpl", Namespace: "default"},
+		Spec: aotv1alpha1.RunTemplateSpec{
+			Prompt:    "do work",
+			ModelTier: "default",
+			Repos:     []aotv1alpha1.Repository{{URL: "https://github.com/test/repo", Branch: "main"}},
+		},
+	}
+	if err := k8s.Create(ctx, tmpl); err != nil {
+		t.Fatalf("create template: %v", err)
+	}
+
+	// Chain: two source steps (src-a, src-b) each succeeded, then two work steps
+	// (work-a, work-b) that share the same template but branch from different sources.
+	chain := &aotv1alpha1.Chain{
+		ObjectMeta: metav1.ObjectMeta{Name: "chain-branch-isolation", Namespace: "default"},
+		Spec: aotv1alpha1.ChainSpec{
+			Steps: []aotv1alpha1.ChainStep{
+				{Name: "src-a", TemplateRef: "shared-tmpl"},
+				{Name: "src-b", TemplateRef: "shared-tmpl"},
+				{Name: "work-a", TemplateRef: "shared-tmpl", DependsOn: []string{"src-a"}, BranchFrom: "src-a"},
+				{Name: "work-b", TemplateRef: "shared-tmpl", DependsOn: []string{"src-b"}, BranchFrom: "src-b"},
+			},
+		},
+	}
+	if err := k8s.Create(ctx, chain); err != nil {
+		t.Fatalf("create chain: %v", err)
+	}
+
+	cr := &aotv1alpha1.ChainRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "cr-branch-isolation", Namespace: "default"},
+		Spec:       aotv1alpha1.ChainRunSpec{ChainRef: "chain-branch-isolation"},
+	}
+	if err := k8s.Create(ctx, cr); err != nil {
+		t.Fatalf("create chain run: %v", err)
+	}
+
+	// First reconcile: initialize step statuses.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile init: %v", err)
+	}
+	if err := k8s.Get(ctx, client.ObjectKeyFromObject(cr), cr); err != nil {
+		t.Fatalf("get after init: %v", err)
+	}
+
+	// Manually mark src-a and src-b as succeeded with known RunIDs so that the
+	// BranchFrom logic can derive "aot/<runID>" for each.
+	for i := range cr.Status.Steps {
+		switch cr.Status.Steps[i].Name {
+		case "src-a":
+			cr.Status.Steps[i].Phase = aotv1alpha1.ChainRunStepPhaseSucceeded
+			cr.Status.Steps[i].RunID = "run-src-a"
+		case "src-b":
+			cr.Status.Steps[i].Phase = aotv1alpha1.ChainRunStepPhaseSucceeded
+			cr.Status.Steps[i].RunID = "run-src-b"
+		}
+	}
+	if err := k8s.Status().Update(ctx, cr); err != nil {
+		t.Fatalf("status update: %v", err)
+	}
+
+	// Second reconcile: work-a and work-b are both pending with deps satisfied —
+	// the reconciler launches them in the same pass. Without the deep-copy fix,
+	// the second mutation would overwrite the template's repos slice so both runs
+	// end up with the same branch.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile launch: %v", err)
+	}
+	if err := k8s.Get(ctx, client.ObjectKeyFromObject(cr), cr); err != nil {
+		t.Fatalf("get after launch: %v", err)
+	}
+
+	// Collect the RunIDs for work-a and work-b.
+	runIDs := map[string]string{}
+	for _, s := range cr.Status.Steps {
+		if s.Name == "work-a" || s.Name == "work-b" {
+			if s.Phase != aotv1alpha1.ChainRunStepPhaseRunning {
+				t.Errorf("step %q expected running, got %q", s.Name, s.Phase)
+			}
+			if s.RunID == "" {
+				t.Errorf("step %q: expected RunID to be set", s.Name)
+			}
+			runIDs[s.Name] = s.RunID
+		}
+	}
+
+	if len(runIDs) != 2 {
+		t.Fatalf("expected 2 launched steps, got %d", len(runIDs))
+	}
+
+	// Fetch each AgentRun and verify it received the branch derived from its own
+	// source step, not the other step's branch.
+	for _, tc := range []struct {
+		stepName       string
+		expectedBranch string
+	}{
+		{"work-a", "aot/run-src-a"},
+		{"work-b", "aot/run-src-b"},
+	} {
+		var run aotv1alpha1.AgentRun
+		if err := k8s.Get(ctx, client.ObjectKey{Namespace: "default", Name: runIDs[tc.stepName]}, &run); err != nil {
+			t.Fatalf("get AgentRun for %s: %v", tc.stepName, err)
+		}
+		if len(run.Spec.Repos) == 0 {
+			t.Fatalf("%s: AgentRun has no repos", tc.stepName)
+		}
+		gotBranch := run.Spec.Repos[0].Branch
+		if gotBranch != tc.expectedBranch {
+			t.Errorf("%s: expected branch %q, got %q (shared template mutation bug)",
+				tc.stepName, tc.expectedBranch, gotBranch)
+		}
+	}
+}
+
 func TestChainRun_FailurePropagation_SkipsDependents(t *testing.T) {
 	rec, k8s, cleanup := setupChainReconciler(t)
 	defer cleanup()

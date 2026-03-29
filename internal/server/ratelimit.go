@@ -1,11 +1,17 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
+)
+
+const (
+	defaultRPS   = 10.0
+	defaultBurst = 20
 )
 
 // RateLimiterConfig holds configuration for a RateLimiter instance.
@@ -31,7 +37,20 @@ type RateLimiter struct {
 }
 
 // NewRateLimiter creates a RateLimiter and starts the background TTL sweep goroutine.
+// If RPS or Burst are zero or negative, a warning is logged and sensible defaults
+// (RPS=10, Burst=20) are used in their place to prevent the limiter from blocking
+// all traffic or behaving as infinite.
 func NewRateLimiter(cfg RateLimiterConfig) *RateLimiter {
+	if cfg.RPS <= 0 {
+		slog.Warn("rate limiter RPS is invalid, using default",
+			"provided", cfg.RPS, "default", defaultRPS)
+		cfg.RPS = defaultRPS
+	}
+	if cfg.Burst <= 0 {
+		slog.Warn("rate limiter Burst is invalid, using default",
+			"provided", cfg.Burst, "default", defaultBurst)
+		cfg.Burst = defaultBurst
+	}
 	rl := &RateLimiter{
 		entries: make(map[string]*ipEntry),
 		cfg:     cfg,
