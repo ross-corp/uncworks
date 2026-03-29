@@ -594,6 +594,26 @@ func (m *Ci) ReleaseBinaries(ctx context.Context, source *dagger.Directory, vers
 	return m.BuildBinaries(ctx, source, version)
 }
 
+// BuildWailsFrontend builds the React web frontend for the Wails macOS app and
+// returns the compiled dist directory as a Dagger artifact.
+//
+// This is the container-compatible portion of the Wails build. The subsequent
+// steps — running `wails build` to produce the .app bundle and packaging it into
+// a DMG — require CGO, macOS SDKs, and WKWebView frameworks that are only
+// available on a macOS host. Those steps are performed by the `app-release` job
+// in ci.yml which runs on a macos-latest GitHub Actions runner and sources its
+// frontend from this artifact (or reproduces the npm build natively).
+func (m *Ci) BuildWailsFrontend(ctx context.Context, source *dagger.Directory) *dagger.Directory {
+	return m.nodeBase(source).
+		WithExec([]string{"bash", "-c", `
+			set -e
+			cd /src && npm install --no-save @bufbuild/protobuf@^2.0.0
+			cd /src/packages/shared && npm ci
+			cd /src/web && npm ci && npm run build
+		`}).
+		Directory("/src/web/dist")
+}
+
 func joinLines(ss []string) string {
 	out := ""
 	for _, s := range ss {
