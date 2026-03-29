@@ -15,8 +15,11 @@ import (
 type PipelineStage string
 
 const (
-	PipelineStagePlanning  PipelineStage = "planning"
+	// PipelineStagePlanning is the planning stage of a spec-driven run.
+	PipelineStagePlanning PipelineStage = "planning"
+	// PipelineStageExecuting is the implementation stage of a spec-driven run.
 	PipelineStageExecuting PipelineStage = "executing"
+	// PipelineStageVerifying is the verification stage of a spec-driven run.
 	PipelineStageVerifying PipelineStage = "verifying"
 )
 

@@ -43,8 +43,14 @@ func main() {
 }
 
 func run() error {
+	// TEMPORAL_HOST: required in production; defaults to localhost:7233 for local dev only.
 	temporalHost := envOrDefault("TEMPORAL_HOST", "localhost:7233")
+	if os.Getenv("TEMPORAL_HOST") == "" {
+		slog.Warn("TEMPORAL_HOST not set — using localhost:7233; set TEMPORAL_HOST for production")
+	}
+	// TEMPORAL_NAMESPACE: optional; defaults to "default".
 	temporalNamespace := envOrDefault("TEMPORAL_NAMESPACE", "default")
+	// TEMPORAL_TASK_QUEUE: optional; defaults to the compiled-in task queue constant.
 	taskQueue := envOrDefault("TEMPORAL_TASK_QUEUE", aottemporal.TaskQueue)
 
 	slog.Info("connecting to Temporal", "host", temporalHost, "namespace", temporalNamespace, "queue", taskQueue)
@@ -66,23 +72,32 @@ func run() error {
 	}
 	defer c.Close()
 
-	// Create LiteLLM client (optional — if not configured, activities are no-ops)
+	// LITELLM_BASE_URL: optional; base URL of the LiteLLM proxy.
+	// LITELLM_MASTER_KEY: optional; master key for the LiteLLM proxy.
+	// Both must be set for the LiteLLM client to be active; otherwise LiteLLM
+	// activities (model provisioning) are no-ops.
 	var litellmClient *litellm.Client
 	litellmBaseURL := os.Getenv("LITELLM_BASE_URL")
 	litellmMasterKey := os.Getenv("LITELLM_MASTER_KEY")
 	if litellmBaseURL != "" && litellmMasterKey != "" {
 		litellmClient = litellm.NewClient(litellmBaseURL, litellmMasterKey)
 		slog.Info("LiteLLM client configured", "baseURL", litellmBaseURL)
+	} else if litellmBaseURL != "" || litellmMasterKey != "" {
+		slog.Warn("LiteLLM client not configured: both LITELLM_BASE_URL and LITELLM_MASTER_KEY must be set",
+			"baseURLSet", litellmBaseURL != "", "masterKeySet", litellmMasterKey != "")
 	}
 
-	// Log configured images
+	// AOT_AGENT_IMAGE, AOT_SIDECAR_IMAGE, AOT_INIT_IMAGE: optional; container image refs for
+	// agent pods. Defaults to ghcr.io/uncworks/aot-{agent,sidecar,init}:latest.
+	// Note: actual values are read by internal/temporal/activities.go at package init time.
 	slog.Info("agent images",
 		"agent", envOrDefault("AOT_AGENT_IMAGE", "ghcr.io/uncworks/aot-agent:latest"),
 		"sidecar", envOrDefault("AOT_SIDECAR_IMAGE", "ghcr.io/uncworks/aot-sidecar:latest"),
 		"init", envOrDefault("AOT_INIT_IMAGE", "ghcr.io/uncworks/aot-init:latest"),
 	)
 
-	// Create GitHub token provider from environment
+	// GITHUB_TOKEN: optional; PAT for GitHub API calls made inside workflows.
+	// GITHUB_TOKEN_SECRET_NAME: optional; k8s Secret name holding the token for agent pods.
 	ghProvider := aotgithub.NewPATProvider(os.Getenv("GITHUB_TOKEN"))
 	ghTokenSecretName := os.Getenv("GITHUB_TOKEN_SECRET_NAME")
 

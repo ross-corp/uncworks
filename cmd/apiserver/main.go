@@ -397,18 +397,24 @@ func rateLimitConfigs() (global, llm, webhook server.RateLimiterConfig) {
 
 func envIntOrDefault(key string, def int) int {
 	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			slog.Warn("invalid integer env var, using default", "key", key, "value", v, "default", def)
+			return def
 		}
+		return n
 	}
 	return def
 }
 
 func envFloatOrDefault(key string, def float64) float64 {
 	if v := os.Getenv(key); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			slog.Warn("invalid float env var, using default", "key", key, "value", v, "default", def)
+			return def
 		}
+		return f
 	}
 	return def
 }

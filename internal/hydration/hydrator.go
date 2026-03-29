@@ -85,6 +85,7 @@ type CommandRunner interface {
 // ExecRunner runs real OS commands.
 type ExecRunner struct{}
 
+// Run executes a command in the given directory and returns combined stdout/stderr output.
 func (r *ExecRunner) Run(ctx context.Context, dir string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
