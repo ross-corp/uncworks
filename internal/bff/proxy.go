@@ -1,3 +1,7 @@
+// Package bff implements the Backend-for-Frontend HTTP server that proxies
+// API requests to the apiserver and serves the single-page application.
+// It provides session management, CSRF protection, CORS, rate limiting, and
+// a transparent WebSocket proxy.
 package bff
 
 import (

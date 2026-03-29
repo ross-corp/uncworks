@@ -66,7 +66,7 @@ func (h *ChainHandler) RegisterChainHandlers(mux *http.ServeMux) {
 func (h *ChainHandler) handleListTemplates(w http.ResponseWriter, r *http.Request) {
 	var list aotv1alpha1.RunTemplateList
 	if err := h.K8sClient.List(r.Context(), &list, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("list templates", "err", err)
+		slog.Error("listing templates failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list templates"})
 		return
 	}
@@ -98,7 +98,7 @@ func (h *ChainHandler) handleCreateTemplate(w http.ResponseWriter, r *http.Reque
 		tmpl.Spec.DisplayName = body.DisplayName
 	}
 	if err := h.K8sClient.Create(r.Context(), tmpl); err != nil {
-		slog.Error("create template", "name", tmpl.Name, "err", err)
+		slog.Error("creating template failed", "name", tmpl.Name, slog.Any("error", err))
 		writeJSON(w, http.StatusConflict, errorResponse{Error: "template already exists or could not be created"})
 		return
 	}
@@ -137,7 +137,7 @@ func (h *ChainHandler) handleDeleteTemplate(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if err := h.K8sClient.Delete(r.Context(), tmpl); err != nil {
-		slog.Error("delete template", "name", name, "err", err)
+		slog.Error("deleting template failed", "name", name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to delete template"})
 		return
 	}
@@ -174,7 +174,7 @@ func (h *ChainHandler) handleTriggerTemplate(w http.ResponseWriter, r *http.Requ
 		"aot.uncworks.io/template": tmpl.Name,
 	}
 	if err := h.K8sClient.Create(r.Context(), run); err != nil {
-		slog.Error("trigger template: create run", "template", tmpl.Name, "err", err)
+		slog.Error("trigger template: creating run failed", "template", tmpl.Name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to create run"})
 		return
 	}
@@ -186,7 +186,7 @@ func (h *ChainHandler) handleTriggerTemplate(w http.ResponseWriter, r *http.Requ
 func (h *ChainHandler) handleListChains(w http.ResponseWriter, r *http.Request) {
 	var list aotv1alpha1.ChainList
 	if err := h.K8sClient.List(r.Context(), &list, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("list chains", "err", err)
+		slog.Error("listing chains failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list chains"})
 		return
 	}
@@ -215,7 +215,7 @@ func (h *ChainHandler) handleCreateChain(w http.ResponseWriter, r *http.Request)
 	chain.Namespace = h.Namespace
 	chain.Spec = body.ChainSpec
 	if err := h.K8sClient.Create(r.Context(), chain); err != nil {
-		slog.Error("create chain", "name", chain.Name, "err", err)
+		slog.Error("creating chain failed", "name", chain.Name, slog.Any("error", err))
 		writeJSON(w, http.StatusConflict, errorResponse{Error: "chain already exists or could not be created"})
 		return
 	}
@@ -252,7 +252,7 @@ func (h *ChainHandler) handleDeleteChain(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	if err := h.K8sClient.Delete(r.Context(), chain); err != nil {
-		slog.Error("delete chain", "name", name, "err", err)
+		slog.Error("deleting chain failed", "name", name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to delete chain"})
 		return
 	}
@@ -275,7 +275,7 @@ func (h *ChainHandler) handleTriggerChain(w http.ResponseWriter, r *http.Request
 		TriggeredBy: "manual",
 	}
 	if err := h.K8sClient.Create(r.Context(), cr); err != nil {
-		slog.Error("trigger chain: create chain run", "chain", name, "err", err)
+		slog.Error("trigger chain: creating chain run failed", "chain", name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to create chain run"})
 		return
 	}
@@ -287,7 +287,7 @@ func (h *ChainHandler) handleTriggerChain(w http.ResponseWriter, r *http.Request
 func (h *ChainHandler) handleListChainRuns(w http.ResponseWriter, r *http.Request) {
 	var list aotv1alpha1.ChainRunList
 	if err := h.K8sClient.List(r.Context(), &list, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("list chain runs", "err", err)
+		slog.Error("listing chain runs failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list chain runs"})
 		return
 	}
@@ -312,7 +312,7 @@ func (h *ChainHandler) handleGetChainRun(w http.ResponseWriter, r *http.Request)
 func (h *ChainHandler) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 	var list aotv1alpha1.ScheduleList
 	if err := h.K8sClient.List(r.Context(), &list, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("list schedules", "err", err)
+		slog.Error("listing schedules failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list schedules"})
 		return
 	}
@@ -345,7 +345,7 @@ func (h *ChainHandler) handleCreateSchedule(w http.ResponseWriter, r *http.Reque
 	sched.Namespace = h.Namespace
 	sched.Spec = body.ScheduleSpec
 	if err := h.K8sClient.Create(r.Context(), sched); err != nil {
-		slog.Error("create schedule", "name", sched.Name, "err", err)
+		slog.Error("creating schedule failed", "name", sched.Name, slog.Any("error", err))
 		writeJSON(w, http.StatusConflict, errorResponse{Error: "schedule already exists or could not be created"})
 		return
 	}
@@ -370,7 +370,7 @@ func (h *ChainHandler) handleDeleteSchedule(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := h.K8sClient.Delete(r.Context(), sched); err != nil {
-		slog.Error("delete schedule", "name", name, "err", err)
+		slog.Error("deleting schedule failed", "name", name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to delete schedule"})
 		return
 	}
@@ -386,7 +386,7 @@ func (h *ChainHandler) handleSuspendSchedule(w http.ResponseWriter, r *http.Requ
 	}
 	sched.Spec.Suspend = true
 	if err := h.K8sClient.Update(r.Context(), sched); err != nil {
-		slog.Error("suspend schedule", "name", name, "err", err)
+		slog.Error("suspending schedule failed", "name", name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to suspend schedule"})
 		return
 	}
@@ -402,7 +402,7 @@ func (h *ChainHandler) handleResumeSchedule(w http.ResponseWriter, r *http.Reque
 	}
 	sched.Spec.Suspend = false
 	if err := h.K8sClient.Update(r.Context(), sched); err != nil {
-		slog.Error("resume schedule", "name", name, "err", err)
+		slog.Error("resuming schedule failed", "name", name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to resume schedule"})
 		return
 	}

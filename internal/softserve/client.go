@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,21 +62,26 @@ func (c *Client) sshCmd(args ...string) (string, error) {
 
 // ensureKeyOwnership copies the SSH key to a temp file with correct ownership
 // so the ssh binary accepts it. Returns the path to use and a cleanup function.
+// Falls back to the original key path on any failure (best-effort); unexpected
+// failures are logged so that permission issues remain visible.
 func ensureKeyOwnership(keyPath string) (string, func(), error) {
 	data, err := os.ReadFile(keyPath)
 	if err != nil {
-		// If we can't read the original (e.g., already owned correctly), fall through.
+		// Key may already be accessible (correct owner); fall through silently.
 		return keyPath, func() {}, nil
 	}
 	tmp, err := os.CreateTemp("", "ss-key-*")
 	if err != nil {
+		slog.Warn("ensureKeyOwnership: create temp file failed, using original key", "err", err)
 		return keyPath, func() {}, nil
 	}
 	if err := os.Chmod(tmp.Name(), 0600); err != nil {
+		slog.Warn("ensureKeyOwnership: chmod temp file failed, using original key", "err", err)
 		_ = os.Remove(tmp.Name())
 		return keyPath, func() {}, nil
 	}
 	if _, err := tmp.Write(data); err != nil {
+		slog.Warn("ensureKeyOwnership: write temp file failed, using original key", "err", err)
 		_ = tmp.Close()
 		_ = os.Remove(tmp.Name())
 		return keyPath, func() {}, nil
@@ -86,21 +92,25 @@ func ensureKeyOwnership(keyPath string) (string, func(), error) {
 
 // CreateRepo creates a new repository in soft-serve.
 func (c *Client) CreateRepo(name string) error {
-	_, err := c.sshCmd("repo", "create", name)
-	return err
+	if _, err := c.sshCmd("repo", "create", name); err != nil {
+		return fmt.Errorf("create repo %q: %w", name, err)
+	}
+	return nil
 }
 
 // DeleteRepo deletes a repository from soft-serve.
 func (c *Client) DeleteRepo(name string) error {
-	_, err := c.sshCmd("repo", "delete", name)
-	return err
+	if _, err := c.sshCmd("repo", "delete", name); err != nil {
+		return fmt.Errorf("delete repo %q: %w", name, err)
+	}
+	return nil
 }
 
 // ListRepos lists all repositories in soft-serve.
 func (c *Client) ListRepos() ([]string, error) {
 	out, err := c.sshCmd("repo", "list")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list repos: %w", err)
 	}
 	if out == "" {
 		return nil, nil
@@ -112,7 +122,7 @@ func (c *Client) ListRepos() ([]string, error) {
 func (c *Client) RepoExists(name string) (bool, error) {
 	repos, err := c.ListRepos()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("check repo exists %q: %w", name, err)
 	}
 	for _, r := range repos {
 		if r == name {
@@ -146,10 +156,10 @@ func (c *Client) ScaffoldAndPush(scaffold ScaffoldProject) error {
 		return fmt.Errorf("git init: %w", err)
 	}
 	if err := c.gitExec(tmpDir, "config", "user.email", "aot@uncworks.io"); err != nil {
-		return err
+		return fmt.Errorf("git config user.email: %w", err)
 	}
 	if err := c.gitExec(tmpDir, "config", "user.name", "AOT"); err != nil {
-		return err
+		return fmt.Errorf("git config user.name: %w", err)
 	}
 
 	// Write devbox.json
@@ -166,11 +176,11 @@ func (c *Client) ScaffoldAndPush(scaffold ScaffoldProject) error {
 
 	// Write openspec config
 	if err := os.MkdirAll(filepath.Join(tmpDir, "openspec", "specs"), 0755); err != nil {
-		return err
+		return fmt.Errorf("mkdir openspec/specs: %w", err)
 	}
 	openspecYAML := fmt.Sprintf("name: %s\nschema: spec-driven\n", scaffold.Name)
 	if err := os.WriteFile(filepath.Join(tmpDir, "openspec", "openspec.yaml"), []byte(openspecYAML), 0644); err != nil {
-		return err
+		return fmt.Errorf("write openspec.yaml: %w", err)
 	}
 
 	// Write embedded scaffold files (openspec skills, .pi/ directory, etc.)
@@ -180,7 +190,7 @@ func (c *Client) ScaffoldAndPush(scaffold ScaffoldProject) error {
 
 	// Write .devcontainer/devcontainer.json
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".devcontainer"), 0755); err != nil {
-		return err
+		return fmt.Errorf("mkdir .devcontainer: %w", err)
 	}
 	devcontainer := map[string]interface{}{
 		"name":              scaffold.Name,
@@ -188,7 +198,7 @@ func (c *Client) ScaffoldAndPush(scaffold ScaffoldProject) error {
 	}
 	dcBytes, _ := json.MarshalIndent(devcontainer, "", "  ")
 	if err := os.WriteFile(filepath.Join(tmpDir, ".devcontainer", "devcontainer.json"), dcBytes, 0644); err != nil {
-		return err
+		return fmt.Errorf("write devcontainer.json: %w", err)
 	}
 
 	// git add + commit
@@ -215,7 +225,7 @@ func (c *Client) ScaffoldAndPush(scaffold ScaffoldProject) error {
 func (c *Client) ReadFile(repoName, filePath string) (string, error) {
 	tmpDir, err := os.MkdirTemp("", "aot-read-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("create temp dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
@@ -235,7 +245,7 @@ func (c *Client) ReadFile(repoName, filePath string) (string, error) {
 func (c *Client) WriteFile(repoName, filePath, content, commitMsg string) error {
 	tmpDir, err := os.MkdirTemp("", "aot-write-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("create temp dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
@@ -244,25 +254,25 @@ func (c *Client) WriteFile(repoName, filePath, content, commitMsg string) error 
 		return fmt.Errorf("clone: %w", err)
 	}
 	if err := c.gitExec(tmpDir, "config", "user.email", "aot@uncworks.io"); err != nil {
-		return err
+		return fmt.Errorf("git config user.email: %w", err)
 	}
 	if err := c.gitExec(tmpDir, "config", "user.name", "AOT"); err != nil {
-		return err
+		return fmt.Errorf("git config user.name: %w", err)
 	}
 
 	fullPath := filepath.Join(tmpDir, filePath)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-		return err
+		return fmt.Errorf("mkdir parent dir: %w", err)
 	}
 	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
-		return err
+		return fmt.Errorf("write file %s: %w", filePath, err)
 	}
 
 	if err := c.gitExec(tmpDir, "add", filePath); err != nil {
-		return err
+		return fmt.Errorf("git add: %w", err)
 	}
 	if err := c.gitExec(tmpDir, "commit", "-m", commitMsg); err != nil {
-		return err
+		return fmt.Errorf("git commit: %w", err)
 	}
 	if err := c.gitExec(tmpDir, "push"); err != nil {
 		return fmt.Errorf("push: %w", err)
@@ -274,7 +284,7 @@ func (c *Client) WriteFile(repoName, filePath, content, commitMsg string) error 
 func (c *Client) ListFiles(repoName string) ([]string, error) {
 	tmpDir, err := os.MkdirTemp("", "aot-list-*")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
@@ -288,7 +298,7 @@ func (c *Client) ListFiles(repoName string) ([]string, error) {
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("git ls-files: %w", err)
 	}
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
 	if len(lines) == 1 && lines[0] == "" {
@@ -308,7 +318,7 @@ func (c *Client) gitExec(dir string, args ...string) error {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s: %s", err, stderr.String())
+		return fmt.Errorf("%w: %s", err, stderr.String())
 	}
 	return nil
 }

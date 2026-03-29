@@ -26,11 +26,12 @@ const (
 	// TaskQueue is the default Temporal task queue for agent runs.
 	TaskQueue = "aot-agent-runs"
 
-	// Signal names
+	// SignalHumanInput is the Temporal signal name for forwarding HITL user input to the workflow.
 	SignalHumanInput = "human-input"
-	SignalCancel     = "cancel"
+	// SignalCancel is the Temporal signal name for requesting graceful workflow cancellation.
+	SignalCancel = "cancel"
 
-	// Query names
+	// QueryGetState is the Temporal query name that returns the current WorkflowState.
 	QueryGetState = "get-state"
 
 	// Default polling interval for agent status checks.
@@ -57,9 +58,13 @@ type Repository struct {
 type OrchestrationMode string
 
 const (
-	OrchestrationModeSingle     OrchestrationMode = "single"
-	OrchestrationModeAuto       OrchestrationMode = "auto"
-	OrchestrationModeManual     OrchestrationMode = "manual"
+	// OrchestrationModeSingle runs a single agent without decomposition.
+	OrchestrationModeSingle OrchestrationMode = "single"
+	// OrchestrationModeAuto lets a senior agent autonomously decompose the task into junior runs.
+	OrchestrationModeAuto OrchestrationMode = "auto"
+	// OrchestrationModeManual uses an explicit list of orchestration tasks provided in the spec.
+	OrchestrationModeManual OrchestrationMode = "manual"
+	// OrchestrationModeSpecDriven runs the three-stage plan/execute/verify pipeline against an OpenSpec change.
 	OrchestrationModeSpecDriven OrchestrationMode = "spec-driven"
 )
 

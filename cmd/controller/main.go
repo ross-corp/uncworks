@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -37,11 +38,21 @@ func main() {
 }
 
 func run() error {
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	// LOG_LEVEL: optional; set to "debug" to enable verbose zap dev-mode logging.
+	// Defaults to production mode (info level) when unset.
+	devMode := strings.ToLower(os.Getenv("LOG_LEVEL")) == "debug"
+	ctrl.SetLogger(zap.New(zap.UseDevMode(devMode)))
 
+	// TEMPORAL_HOST: required in production; defaults to localhost:7233 for local dev only.
 	temporalHost := envOrDefault("TEMPORAL_HOST", "localhost:7233")
+	if os.Getenv("TEMPORAL_HOST") == "" {
+		slog.Warn("TEMPORAL_HOST not set — using localhost:7233; set TEMPORAL_HOST for production")
+	}
+	// TEMPORAL_NAMESPACE: optional; defaults to "default".
 	temporalNamespace := envOrDefault("TEMPORAL_NAMESPACE", "default")
+	// TEMPORAL_TASK_QUEUE: optional; defaults to the compiled-in task queue constant.
 	taskQueue := envOrDefault("TEMPORAL_TASK_QUEUE", aottemporal.TaskQueue)
+	// LITELLM_BASE_URL: optional; defaults to in-cluster LiteLLM service address.
 	litellmBaseURL := envOrDefault("LITELLM_BASE_URL", "http://litellm:4000")
 
 	// Create Temporal client for workflow management
@@ -72,10 +83,18 @@ func run() error {
 	}
 
 	bus := eventbus.NewChannelBus()
+	// GITHUB_TOKEN_SECRET_NAME: optional; name of the k8s Secret containing the GitHub token.
+	// When unset, GitHub-authenticated operations (clone, PR creation) are unavailable.
 	ghTokenSecretName := os.Getenv("GITHUB_TOKEN_SECRET_NAME")
 	retentionDays := controller.DefaultRetentionDays
+	// AOT_RETENTION_DAYS: optional; number of days to retain completed run resources.
+	// Defaults to controller.DefaultRetentionDays. Must be a positive integer.
 	if v := os.Getenv("AOT_RETENTION_DAYS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			slog.Warn("AOT_RETENTION_DAYS is invalid, using default",
+				"value", v, "default", controller.DefaultRetentionDays)
+		} else {
 			retentionDays = n
 		}
 	}
