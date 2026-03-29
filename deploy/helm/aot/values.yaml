@@ -1,3 +1,7 @@
+# -- NetworkPolicy — set enabled: true only if your CNI enforces policies
+networkPolicy:
+  enabled: false
+
 # -- Temporal configuration (required)
 temporal:
   # -- Temporal Frontend gRPC address (e.g. "temporal:7233")
