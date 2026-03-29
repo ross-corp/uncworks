@@ -128,8 +128,8 @@ tasks:
 
   images:
     desc: Import locally-built Docker images into k0s (requires sudo)
-    deps: [docker:build]
     cmds:
+      - task: :docker:build
       - docker save aot-init:local aot-sidecar:local aot-agent:local aot-controlplane:local aot-web:local -o /tmp/aot-images.tar
       - sudo k0s ctr images import /tmp/aot-images.tar
       - rm /tmp/aot-images.tar
@@ -138,7 +138,7 @@ tasks:
   deploy:all:
     desc: Build all images, import into k0s, restart all deployments
     cmds:
-      - task: build:web
+      - task: :build:web
       - task: images
       - kubectl rollout restart deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n aot
       - kubectl rollout status deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n aot --timeout=60s
