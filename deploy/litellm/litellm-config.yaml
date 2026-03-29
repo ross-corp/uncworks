@@ -146,6 +146,15 @@ model_list:
     litellm_params:
       model: "openrouter/anthropic/claude-sonnet-4"
 
+general_settings:
+  master_key: sk-uncworks-local
+  # Disable spend/error logging to avoid "No connected db." errors when no
+  # database is configured. LiteLLM main-latest attempts DB writes for
+  # telemetry even with master_key auth, causing 400s on every LLM call.
+  disable_spend_logs: true
+  disable_error_logs: true
+  store_model_in_db: false
+
 litellm_settings:
   # Fallback chains: paid → paid → local
   fallbacks:
