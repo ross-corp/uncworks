@@ -93,6 +93,36 @@ func TestHandleCheckRunEvent_PendingIgnored(t *testing.T) {
 	}
 }
 
+func TestHandleCheckRunEvent_EmptySHA_NoPanic(t *testing.T) {
+	// Regression: sha[:8] panicked when head_sha was empty.
+	k8s := fake.NewClientBuilder().WithScheme(ciScheme()).Build()
+	ci := NewCIAutofix(context.Background(), k8s, "default", nil, 3)
+
+	p := checkRunPayload{
+		Action: "completed",
+		CheckRun: checkRun{
+			ID:         1,
+			Name:       "CI",
+			Conclusion: "failure",
+			HeadSHA:    "", // empty — used to panic with sha[:8]
+			CheckSuite: checkSuite{
+				ID:         1,
+				HeadBranch: "aot/ar-empty-sha",
+			},
+		},
+	}
+	p.Repository.FullName = "org/repo"
+	data, _ := json.Marshal(p)
+
+	triggered, err := ci.HandleCheckRunEvent(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !triggered {
+		t.Error("expected fix to be triggered for aot/ branch failure with empty SHA")
+	}
+}
+
 func TestCondenseCIErrors_FilterErrorLines(t *testing.T) {
 	raw := `Step 1: Installing dependencies
 npm install
