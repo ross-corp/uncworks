@@ -55,6 +55,10 @@ func (a *App) startup(ctx context.Context) {
 	}()
 	// Auto-start port-forwards for all cluster services.
 	go a.autoStartApiserverForward()
+	// Start local hot-reload watcher if channel == "local".
+	if s, err := loadAppSettings(); err == nil && s.UpdateChannel == "local" {
+		a.startLocalWatcher()
+	}
 	go a.autoStartLiteLLMForward()
 	go a.autoStartWebForward()
 	a.initTray()
@@ -111,7 +115,13 @@ func (a *App) GetSettings() (AppSettings, error) {
 
 // SaveSettings persists the app settings to disk.
 func (a *App) SaveSettings(s AppSettings) error {
-	return saveAppSettings(s)
+	if err := saveAppSettings(s); err != nil {
+		return err
+	}
+	if s.UpdateChannel == "local" {
+		a.startLocalWatcher()
+	}
+	return nil
 }
 
 // knownEnvVars is the curated list we expose in the Settings UI.

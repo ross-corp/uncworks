@@ -188,10 +188,11 @@ export default function SettingsView() {
     notices.push({ key: "gh", message: "Private repo cloning and PR creation require GitHub authentication.", anchor: "section-github" });
 
   return (
-    // Full-height scroll wrapper — scrollbar stays at viewport edge
-    <div className="flex-1 overflow-y-auto overscroll-none min-h-0">
+    // Outer shell fills the flex-col <main> from Layout; inner div scrolls
+    <div className="flex h-full flex-col">
       {showWizard && <SetupWizardModal onClose={() => { setShowWizard(false); reloadGlobal(); loadGitHubUser(); }} />}
       {showGitHubModal && <GitHubAuthModal onClose={() => { setShowGitHubModal(false); reloadGlobal(); loadGitHubUser(); }} />}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-none">
       <div className="px-8 py-8 max-w-2xl">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-base font-semibold tracking-tight">Settings</h1>
@@ -412,9 +413,9 @@ export default function SettingsView() {
                 <span className="text-sm">Check for updates at launch</span>
               </label>
             </Field>
-            <Field label="Channel">
+            <Field label="Channel" hint={local.updateChannel === "local" ? "Watches the installed app binary and reloads automatically when a new local build is installed." : undefined}>
               <div className="flex gap-2">
-                {["stable", "nightly"].map(ch => (
+                {["stable", "nightly", "local"].map(ch => (
                   <button
                     key={ch}
                     onClick={() => set("updateChannel", ch)}
@@ -626,6 +627,7 @@ export default function SettingsView() {
             </>
           )}
         </section>
+      </div>
       </div>
     </div>
   );

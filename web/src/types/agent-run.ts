@@ -162,7 +162,9 @@ export const MODEL_OPTIONS: { value: ModelTier; label: string; description: stri
   { value: "qwen3-235b",    label: "qwen3-235b",            description: "$0.20/M · 235B" },
   // Others
   { value: "grok-4.1-fast", label: "grok-4.1-fast",         description: "xAI" },
-  { value: "kimi-k2.5",     label: "kimi-k2.5",             description: "Moonshot" },
+  { value: "kimi-k2.5",              label: "kimi-k2.5",              description: "Moonshot" },
+  { value: "moonshotai/kimi-k2.5",   label: "moonshotai/kimi-k2.5",   description: "Moonshot · OpenRouter" },
+  { value: "z-ai/glm-4.7-flash",     label: "z-ai/glm-4.7-flash",     description: "ZhipuAI · OpenRouter" },
   { value: "minimax-m2.5",  label: "minimax-m2.5",          description: "MiniMax" },
   { value: "mistral-medium", label: "mistral-medium",        description: "$0.40/M" },
   // Free

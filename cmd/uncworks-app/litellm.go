@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -24,12 +25,23 @@ type LiteLLMCheckResult struct {
 // CheckLiteLLM tests connectivity to the LiteLLM proxy at url and returns
 // the list of available model IDs. Exposed as a Wails binding.
 func (a *App) CheckLiteLLM(url string) LiteLLMCheckResult {
+	s, _ := loadAppSettings()
 	if url == "" {
-		s, _ := loadAppSettings()
 		url = s.LiteLLMURL
 	}
 	if url == "" {
 		url = "http://litellm:4000"
+	}
+
+	// Normalize: users may paste the full models URL or include a /v1 suffix.
+	// Strip all trailing path suffixes so we always call <base>/v1/models.
+	url = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(
+		strings.TrimRight(url, "/"),
+		"/models"), "/v1/models"), "/v1")
+
+	apiKey := s.LLMAPIKey
+	if apiKey == "" {
+		apiKey = "sk-uncworks-local"
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -37,7 +49,7 @@ func (a *App) CheckLiteLLM(url string) LiteLLMCheckResult {
 	if err != nil {
 		return LiteLLMCheckResult{Error: fmt.Sprintf("build request: %v", err)}
 	}
-	req.Header.Set("Authorization", "Bearer sk-uncworks-local")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	resp, err := client.Do(req)
 	if err != nil {
