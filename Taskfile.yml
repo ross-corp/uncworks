@@ -247,15 +247,17 @@ tasks:
   k0s:setup:
     desc: "[DEPRECATED] Use 'uncworks setup' instead"
     cmds:
-      - echo "ERROR: task k0s:setup is removed. Use 'uncworks setup' instead."
-      - echo "       See docs/getting-started.md for the updated local setup guide."
-      - exit 1
+      - |
+        echo "ERROR: task k0s:setup is removed. Use 'uncworks setup' instead."
+        echo "       See docs/getting-started.md for the updated local setup guide."
+        exit 1
 
   k0s:teardown:
     desc: "[DEPRECATED] Use 'uncworks teardown' instead"
     cmds:
-      - echo "ERROR: task k0s:teardown is removed. Use 'uncworks teardown' instead."
-      - exit 1
+      - |
+        echo "ERROR: task k0s:teardown is removed. Use 'uncworks teardown' instead."
+        exit 1
 
   k0s:crd:
     desc: Apply AgentRun CRD to cluster

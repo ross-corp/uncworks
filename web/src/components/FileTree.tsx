@@ -183,8 +183,12 @@ export default function FileTree({
     };
   }, [loadRoot]);
 
-  // Auto-refresh: poll root directory every 5 seconds to pick up new files
+  // Auto-refresh: poll root directory every 5 seconds to pick up new files.
+  // Skip polling once the run has reached a terminal phase — the workspace
+  // won't change after succeeded/failed/cancelled.
+  const isTerminalPhase = phase ? TERMINAL_PHASES.has(phase) : false;
   useEffect(() => {
+    if (isTerminalPhase) return;
     const interval = setInterval(() => {
       // Only refresh if we have already loaded successfully at least once
       if (rootsRef.current !== null) {
@@ -193,7 +197,7 @@ export default function FileTree({
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [loadRoot]);
+  }, [loadRoot, isTerminalPhase]);
 
   async function toggleDir(node: FileTreeNode, updateFn: (updated: FileTreeNode) => void) {
     if (node.expanded) {

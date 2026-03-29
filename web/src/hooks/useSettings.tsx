@@ -22,6 +22,12 @@ export interface AppSettings {
   defaultImplementModel: string;
   wizardComplete: boolean;
   apiserverURL: string;
+  // LLM API key for external providers (e.g. OpenRouter).
+  llmApiKey?: string;
+  // Computed by the Go backend: true when llmApiKey is non-empty.
+  llmKeyConfigured?: boolean;
+  // Controls traffic-light visibility. Change takes effect on next launch.
+  showTrafficLights?: boolean;
 }
 
 export const SETTINGS_DEFAULTS: AppSettings = {
@@ -53,8 +59,17 @@ export interface ConfigStatus {
   canCreatePRs: boolean;
 }
 
+function isClusterLiteLLM(url: string | undefined): boolean {
+  if (!url) return true;
+  return url === "http://litellm:4000" || url.startsWith("http://localhost:");
+}
+
 export function deriveConfigStatus(s: AppSettings): ConfigStatus {
-  const hasLLMKey = false;
+  // Cluster LiteLLM (port-forwarded to localhost or in-cluster) needs no external key.
+  const hasLLMKey =
+    Boolean(s.llmKeyConfigured) ||
+    Boolean(s.llmApiKey?.trim()) ||
+    isClusterLiteLLM(s.litellmURL);
   const hasGitHubToken = Boolean(s.githubToken?.trim());
   const hasGitHubOAuth = Boolean(s.githubAuthed);
   return {

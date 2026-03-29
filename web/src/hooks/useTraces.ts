@@ -1,16 +1,21 @@
 import { useState, useEffect } from "react";
-import type { TraceSpan } from "../types/agent-run";
+import type { TraceSpan, AgentRunPhase } from "../types/agent-run";
 import { apiFetch } from "./apiFetch";
 import { usePoll } from "./usePoll";
 
-export function useTraces(runId: string) {
+const TERMINAL_PHASES = new Set<AgentRunPhase>(["succeeded", "failed", "cancelled"]);
+
+export function useTraces(runId: string, phase?: AgentRunPhase) {
   const [spans, setSpans] = useState<TraceSpan[]>([]);
   const [loading, setLoading] = useState(false);
+  const isTerminal = phase ? TERMINAL_PHASES.has(phase) : false;
 
   useEffect(() => {
     if (!runId) setSpans([]);
   }, [runId]);
 
+  // Use a longer interval for terminal runs to avoid unnecessary polling.
+  // usePoll fires immediately on mount so we always get an initial fetch.
   usePoll(async () => {
     if (!runId) return;
     setLoading(true);
@@ -26,7 +31,7 @@ export function useTraces(runId: string) {
     } finally {
       setLoading(false);
     }
-  }, 5000, [runId]);
+  }, isTerminal ? 60_000 : 5_000, [runId, isTerminal]);
 
   return { spans, loading };
 }

@@ -27,6 +27,9 @@ bff:
     requests:
       cpu: 50m
       memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 
 apiserver:
   # Mount the local-path-provisioner data directory so the apiserver can read
@@ -66,12 +69,6 @@ controller:
 # soft-serve: disable for local installs (no SSH key setup required).
 # Projects will not have config repos, but basic agent runs work fine.
 softServe:
-  enabled: false
-
-# Ollama is disabled by default — most local users route to OpenRouter or OpenAI.
-# To enable: add --set ollama.enabled=true to your helm command.
-# Note: Ollama requires ~4GB disk and is GPU/CPU intensive.
-ollama:
   enabled: false
 
 # Storage: leave storageClass unset to use the cluster's default provisioner.

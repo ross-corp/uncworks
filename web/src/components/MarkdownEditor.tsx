@@ -9,6 +9,7 @@ interface MarkdownEditorProps {
   placeholder?: string;
   minHeight?: string;
   autoFocus?: boolean;
+  readOnly?: boolean;
 }
 
 export default function MarkdownEditor({
@@ -17,6 +18,7 @@ export default function MarkdownEditor({
   placeholder,
   minHeight = "200px",
   autoFocus = false,
+  readOnly = false,
 }: MarkdownEditorProps) {
   const { resolvedTheme } = useThemeNew();
   const monacoTheme = resolvedTheme === "dark" ? "vs-dark" : "vs";
@@ -53,6 +55,7 @@ export default function MarkdownEditor({
             scrollbar: { vertical: "auto", horizontal: "hidden" },
             automaticLayout: true,
             placeholder,
+            readOnly,
           }}
           onMount={(editor) => {
             if (autoFocus) editor.focus();

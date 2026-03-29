@@ -40,6 +40,15 @@ type AppSettings struct {
 	// APIServerURL is the base URL for the UNCWORKS API server.
 	// Defaults to http://localhost:50055 (local kubectl port-forward).
 	APIServerURL         string            `json:"apiserverURL"         yaml:"apiserverURL,omitempty"`
+	// LLMAPIKey is the API key for the configured LLM provider (e.g. OpenRouter).
+	LLMAPIKey            string            `json:"llmApiKey"            yaml:"llmApiKey,omitempty"`
+	// LLMKeyConfigured is computed at read time: true when LLMAPIKey is non-empty.
+	// Never persisted — derived from LLMAPIKey in GetSettings.
+	LLMKeyConfigured     bool              `json:"llmKeyConfigured"     yaml:"-"`
+	// ShowTrafficLights controls whether the macOS traffic-light buttons are
+	// shown in the title bar. When false (default), the window uses full-bleed
+	// inset mode. Change takes effect on next launch.
+	ShowTrafficLights    bool              `json:"showTrafficLights"    yaml:"showTrafficLights,omitempty"`
 }
 
 // EnvVarInfo describes a single environment variable — its current value
@@ -124,6 +133,16 @@ func loadAppSettings() (AppSettings, error) {
 	}
 	if s.PortRangeEnd == 0 {
 		s.PortRangeEnd = 50120
+	}
+	// Populate defaults for fields added after initial release.
+	if s.LiteLLMURL == "" {
+		s.LiteLLMURL = "http://litellm:4000"
+	}
+	if s.APIServerURL == "" {
+		s.APIServerURL = "http://localhost:50055"
+	}
+	if s.UpdateChannel == "" {
+		s.UpdateChannel = "stable"
 	}
 	return s, nil
 }

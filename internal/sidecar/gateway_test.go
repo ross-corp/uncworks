@@ -93,12 +93,17 @@ func TestStageSystemPrompt(t *testing.T) {
 			wantContains: []string{"evaluation", "Evaluation", "verify", "Verify", "verification", "Verification"},
 		},
 		{
+			// Empty/unset stage uses the default single-agent prompt so the
+			// agent is oriented to its working directory even without a pipeline stage.
 			stage:        "",
-			wantNonEmpty: false,
+			wantNonEmpty: true,
+			wantContains: []string{"coding agent", "working directory"},
 		},
 		{
+			// Unrecognised stage also falls through to the default prompt.
 			stage:        "unknown",
-			wantNonEmpty: false,
+			wantNonEmpty: true,
+			wantContains: []string{"coding agent", "working directory"},
 		},
 	}
 

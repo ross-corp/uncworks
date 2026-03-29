@@ -34,13 +34,13 @@ type DeviceFlowStart struct {
 }
 
 // StartGitHubDeviceFlow initiates the device flow and returns the user-facing code and URL.
-func (a *App) StartGitHubDeviceFlow() (*DeviceFlowStart, error) {
+func (a *App) StartGitHubDeviceFlow() (DeviceFlowStart, error) {
 	resp, err := http.PostForm("https://github.com/login/device/code", url.Values{
 		"client_id": {ghClientID},
 		"scope":     {ghScope},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("device code request: %w", err)
+		return DeviceFlowStart{}, fmt.Errorf("device code request: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
@@ -55,12 +55,12 @@ func (a *App) StartGitHubDeviceFlow() (*DeviceFlowStart, error) {
 		result.VerificationURI = vals.Get("verification_uri")
 	}
 	if result.DeviceCode == "" {
-		return nil, fmt.Errorf("empty device_code from GitHub")
+		return DeviceFlowStart{}, fmt.Errorf("empty device_code from GitHub")
 	}
 	if result.Interval == 0 {
 		result.Interval = 5
 	}
-	return &result, nil
+	return result, nil
 }
 
 // DeviceFlowPollResult is returned by PollGitHubDeviceFlow.
@@ -71,14 +71,14 @@ type DeviceFlowPollResult struct {
 
 // PollGitHubDeviceFlow polls for the OAuth token once.
 // Returns {done:true, token:...} when authorised, {done:false} when still pending.
-func (a *App) PollGitHubDeviceFlow(deviceCode string) (*DeviceFlowPollResult, error) {
+func (a *App) PollGitHubDeviceFlow(deviceCode string) (DeviceFlowPollResult, error) {
 	resp, err := http.PostForm("https://github.com/login/oauth/access_token", url.Values{
 		"client_id":   {ghClientID},
 		"device_code": {deviceCode},
 		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
 	})
 	if err != nil {
-		return nil, err
+		return DeviceFlowPollResult{}, err
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
@@ -96,24 +96,24 @@ func (a *App) PollGitHubDeviceFlow(deviceCode string) (*DeviceFlowPollResult, er
 
 	switch raw.Error {
 	case "authorization_pending", "slow_down":
-		return &DeviceFlowPollResult{Done: false}, nil
+		return DeviceFlowPollResult{Done: false}, nil
 	case "expired_token":
-		return nil, fmt.Errorf("device code expired — please restart authorization")
+		return DeviceFlowPollResult{}, fmt.Errorf("device code expired — please restart authorization")
 	case "access_denied":
-		return nil, fmt.Errorf("access denied by user")
+		return DeviceFlowPollResult{}, fmt.Errorf("access denied by user")
 	case "":
 		// ok — fall through
 	default:
-		return nil, fmt.Errorf("github error: %s", raw.Error)
+		return DeviceFlowPollResult{}, fmt.Errorf("github error: %s", raw.Error)
 	}
 
 	if raw.AccessToken == "" {
-		return &DeviceFlowPollResult{Done: false}, nil
+		return DeviceFlowPollResult{Done: false}, nil
 	}
 
 	// Store token in Keychain immediately so GetSettings reflects authed state.
 	_ = keyring.Set(keychainSvc, keychainAcct, raw.AccessToken)
-	return &DeviceFlowPollResult{Done: true, Token: raw.AccessToken}, nil
+	return DeviceFlowPollResult{Done: true, Token: raw.AccessToken}, nil
 }
 
 // SaveGitHubToken stores the OAuth token in the macOS Keychain.
@@ -149,8 +149,13 @@ func (a *App) GetGitHubUser() (string, error) {
 }
 
 // DisconnectGitHub removes the GitHub token from Keychain.
+// Returns nil if the token was not present — the desired state (not authed) is achieved either way.
 func (a *App) DisconnectGitHub() error {
-	return keyring.Delete(keychainSvc, keychainAcct)
+	err := keyring.Delete(keychainSvc, keychainAcct)
+	if err == keyring.ErrNotFound {
+		return nil
+	}
+	return err
 }
 
 // isGitHubAuthed returns true if a GitHub token exists in the Keychain.

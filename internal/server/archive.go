@@ -3,12 +3,17 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 )
+
+// maxArchiveBodyBytes caps request bodies for archive mutations at 64 KB.
+const maxArchiveBodyBytes = 64 << 10
 
 // ArchiveHandler handles archive/unarchive REST endpoints.
 type ArchiveHandler struct {
@@ -32,7 +37,7 @@ func (h *ArchiveHandler) handleArchive(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Archived bool `json:"archived"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxArchiveBodyBytes)).Decode(&body); err != nil {
 		body.Archived = true // default to archive
 	}
 
@@ -41,7 +46,11 @@ func (h *ArchiveHandler) handleArchive(w http.ResponseWriter, r *http.Request) {
 		Namespace: h.Namespace,
 		Name:      runID,
 	}, crd); err != nil {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("run not found: %v", err)})
+		if apierrors.IsNotFound(err) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("run not found: %s", runID)})
+		} else {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: fmt.Sprintf("get run: %v", err)})
+		}
 		return
 	}
 
@@ -57,14 +66,15 @@ func (h *ArchiveHandler) handleArchive(w http.ResponseWriter, r *http.Request) {
 func (h *ArchiveHandler) handleBulkArchive(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		RunIDs   []string `json:"runIds"`
-		Archived bool     `json:"archived"`
+		Archived *bool    `json:"archived"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxArchiveBodyBytes)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid request body"})
 		return
 	}
-	if !body.Archived {
-		body.Archived = true // default
+	archived := true // default to archive when omitted
+	if body.Archived != nil {
+		archived = *body.Archived
 	}
 
 	var errors []string
@@ -74,10 +84,14 @@ func (h *ArchiveHandler) handleBulkArchive(w http.ResponseWriter, r *http.Reques
 			Namespace: h.Namespace,
 			Name:      runID,
 		}, crd); err != nil {
-			errors = append(errors, fmt.Sprintf("%s: not found", runID))
+			if apierrors.IsNotFound(err) {
+				errors = append(errors, fmt.Sprintf("%s: not found", runID))
+			} else {
+				errors = append(errors, fmt.Sprintf("%s: get failed", runID))
+			}
 			continue
 		}
-		crd.Status.Archived = body.Archived
+		crd.Status.Archived = archived
 		if err := h.K8sClient.Status().Update(r.Context(), crd); err != nil {
 			errors = append(errors, fmt.Sprintf("%s: update failed", runID))
 		}

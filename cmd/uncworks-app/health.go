@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -78,7 +79,9 @@ func (a *App) HealthCheck() HealthReport {
 
 // checkKubernetes verifies the cluster is reachable and has Ready nodes.
 func checkKubernetes(namespace string) HealthComponent {
-	out, err := exec.Command("kubectl", "get", "nodes", "--no-headers").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "kubectl", "get", "nodes", "--no-headers").Output()
 	if err != nil {
 		return HealthComponent{
 			Name:    "kubernetes",
@@ -113,7 +116,9 @@ func checkKubernetes(namespace string) HealthComponent {
 // checkDeploy checks that a named deployment has at least one Ready replica.
 func checkDeploy(namespace, name, label string) HealthComponent {
 	deployName := fmt.Sprintf("uncworks-aot-%s", name)
-	out, err := exec.Command("kubectl", "get", "deploy", deployName,
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "kubectl", "get", "deploy", deployName,
 		"-n", namespace, "-o", "json").Output()
 	if err != nil {
 		return HealthComponent{

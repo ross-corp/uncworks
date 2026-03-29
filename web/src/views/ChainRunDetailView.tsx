@@ -73,11 +73,19 @@ export default function ChainRunDetailView() {
 
   useEffect(() => {
     let cancelled = false;
+    let stopped = false;
 
-    const fetch = async () => {
+    const fetchOnce = async () => {
       if (!name) return;
-      const crResp = await apiFetch(`/api/v1/chainruns/${name}`);
-      if (crResp.ok) {
+      try {
+        const crResp = await apiFetch(`/api/v1/chainruns/${name}`);
+        if (crResp.status === 404) {
+          // Run doesn't exist — redirect to list view
+          stopped = true;
+          navigate("/chainruns", { replace: true });
+          return;
+        }
+        if (!crResp.ok) return;
         const cr = await crResp.json();
         if (!cancelled) setChainRun(cr);
         if (cr.spec?.chainRef) {
@@ -87,12 +95,18 @@ export default function ChainRunDetailView() {
             if (!cancelled) setChainDef(chainData);
           }
         }
+        // Stop polling once run reaches a terminal phase
+        if (cr.status?.phase === "succeeded" || cr.status?.phase === "failed") {
+          stopped = true;
+        }
+      } catch {
+        // Network error — keep interval alive to retry
       }
     };
 
-    fetch();
+    fetchOnce();
     const i = setInterval(() => {
-      if (!cancelled) fetch();
+      if (!cancelled && !stopped) fetchOnce();
     }, 5000);
 
     return () => {

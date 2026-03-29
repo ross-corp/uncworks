@@ -18,6 +18,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
+	// keys is used by Preferences… Cmd+, and Quit Cmd+Q above
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -28,6 +29,12 @@ var assets embed.FS
 
 func main() {
 	app := NewApp()
+
+	// Resolve title bar style from persisted settings before the window opens.
+	titleBar := mac.TitleBarHiddenInset()
+	if s, err := loadAppSettings(); err == nil && s.ShowTrafficLights {
+		titleBar = mac.TitleBarHidden()
+	}
 
 	appMenu := menu.NewMenu()
 
@@ -49,17 +56,53 @@ func main() {
 		runtime.Quit(app.ctx)
 	})
 
-	// Edit menu — accelerators are intentionally omitted (nil) so WKWebView handles
-	// Cmd+C/V/X/Z natively. Adding accelerators with nil callbacks causes Wails to
-	// intercept and swallow the key events, breaking clipboard operations entirely.
+	// Edit menu — Wails v2 / WKWebView does not participate in the macOS
+	// responder chain for clipboard operations, so we intercept the standard
+	// shortcuts in Go and dispatch them via JavaScript + pbpaste/pbcopy.
 	editMenu := appMenu.AddSubmenu("Edit")
 	editMenu.AddText("Undo", nil, nil)
 	editMenu.AddText("Redo", nil, nil)
 	editMenu.AddSeparator()
-	editMenu.AddText("Cut", nil, nil)
-	editMenu.AddText("Copy", nil, nil)
-	editMenu.AddText("Paste", nil, nil)
-	editMenu.AddText("Select All", nil, nil)
+	editMenu.AddText("Cut", keys.CmdOrCtrl("x"), func(_ *menu.CallbackData) {
+		runtime.WindowExecJS(app.ctx, `(function(){
+			const el = document.activeElement;
+			if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
+			const s = el.selectionStart, e = el.selectionEnd;
+			if (s === e) return;
+			const text = el.value.slice(s, e);
+			navigator.clipboard.writeText(text).catch(()=>{});
+			const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+			setter.call(el, el.value.slice(0, s) + el.value.slice(e));
+			el.dispatchEvent(new Event('input', {bubbles: true}));
+			el.selectionStart = el.selectionEnd = s;
+		})()`)
+	})
+	editMenu.AddText("Copy", keys.CmdOrCtrl("c"), func(_ *menu.CallbackData) {
+		runtime.WindowExecJS(app.ctx, `(function(){
+			const el = document.activeElement;
+			let text = '';
+			if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+				text = el.value.slice(el.selectionStart, el.selectionEnd);
+			} else {
+				const sel = window.getSelection();
+				if (sel) text = sel.toString();
+			}
+			if (text) navigator.clipboard.writeText(text).catch(()=>{});
+		})()`)
+	})
+	editMenu.AddText("Paste", keys.CmdOrCtrl("v"), func(_ *menu.CallbackData) {
+		app.pasteFromClipboard()
+	})
+	editMenu.AddText("Select All", keys.CmdOrCtrl("a"), func(_ *menu.CallbackData) {
+		runtime.WindowExecJS(app.ctx, `(function(){
+			const el = document.activeElement;
+			if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+				el.select();
+			} else {
+				document.execCommand('selectAll');
+			}
+		})()`)
+	})
 
 	err := wails.Run(&options.App{
 		Title:     "UNCWORKS",
@@ -84,7 +127,7 @@ func main() {
 			app,
 		},
 		Mac: &mac.Options{
-			TitleBar:             mac.TitleBarHiddenInset(),
+			TitleBar:             titleBar,
 			Appearance:           mac.NSAppearanceNameDarkAqua,
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,

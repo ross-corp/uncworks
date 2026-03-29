@@ -45,7 +45,9 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		active, changed, err := r.pruneActiveList(ctx, &sched)
 		if err != nil {
 			logger.Error(err, "Failed to prune active list")
-		} else if changed {
+			return ctrl.Result{}, err
+		}
+		if changed {
 			sched.Status.Active = active
 			if updateErr := r.Status().Update(ctx, &sched); updateErr != nil {
 				return ctrl.Result{}, updateErr

@@ -107,6 +107,7 @@
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 1 },
         "authMode": { "type": "string", "enum": ["open", "oidc"] },
         "resources": { "$ref": "#/definitions/resourceRequirements" },
         "service": {

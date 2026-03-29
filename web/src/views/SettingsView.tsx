@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { isWails } from "../lib/wails-env";
 import { useThemeNew, type ColorMode } from "../hooks/useThemeNew";
 import { useSettings, type AppSettings } from "../hooks/useSettings";
-import SetupWizardModal from "../components/SetupWizard";
+import SetupWizardModal, { GitHubAuthModal } from "../components/SetupWizard";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const go = () => (window as any).go?.main?.App;
@@ -45,10 +45,10 @@ export default function SettingsView() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [restarting, setRestarting] = useState<Record<string, boolean>>({});
-  const [forwarding, setForwarding] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  const [showGitHubModal, setShowGitHubModal] = useState(false);
 
   // LiteLLM check state
   const [litellmChecking, setLitellmChecking] = useState(false);
@@ -57,6 +57,7 @@ export default function SettingsView() {
   // GitHub auth state
   const [ghUser, setGhUser] = useState<string | null>(null);
   const [ghLoading, setGhLoading] = useState(false);
+  const [ghTestResult, setGhTestResult] = useState<{ ok: boolean; login?: string } | null>(null);
 
   // Auto-update state
   const [updateInfo, setUpdateInfo] = useState<{ localBuild?: boolean; upToDate?: boolean; currentVersion?: string; latestVersion?: string; releaseURL?: string } | null>(null);
@@ -111,6 +112,18 @@ export default function SettingsView() {
     }
   }
 
+  async function testGitHub() {
+    if (!wails) return;
+    setGhLoading(true);
+    setGhTestResult(null);
+    try {
+      const login = await go().GetGitHubUser();
+      setGhTestResult({ ok: !!login, login: login || undefined });
+      if (login) setGhUser(login);
+    } catch { setGhTestResult({ ok: false }); }
+    finally { setGhLoading(false); }
+  }
+
   async function disconnectGitHub() {
     if (!wails) return;
     setGhLoading(true);
@@ -162,19 +175,6 @@ export default function SettingsView() {
     finally { setRestarting(r => ({ ...r, [name]: false })); }
   }
 
-  async function toggleForward(svc: ServiceInfo) {
-    setForwarding(f => ({ ...f, [svc.name]: true }));
-    try {
-      if (svc.forwarding) {
-        await go().StopPortForward(svc.name);
-      } else {
-        await go().StartPortForward(svc.name, 0);
-      }
-      await loadOperational();
-    } catch (e: any) { setError(String(e)); }
-    finally { setForwarding(f => ({ ...f, [svc.name]: false })); }
-  }
-
   function changeFont(px: number) {
     const clamped = Math.max(10, Math.min(24, px));
     setFontSizeState(clamped);
@@ -191,6 +191,7 @@ export default function SettingsView() {
     // Full-height scroll wrapper — scrollbar stays at viewport edge
     <div className="flex-1 overflow-y-auto overscroll-none min-h-0">
       {showWizard && <SetupWizardModal onClose={() => { setShowWizard(false); reloadGlobal(); loadGitHubUser(); }} />}
+      {showGitHubModal && <GitHubAuthModal onClose={() => { setShowGitHubModal(false); reloadGlobal(); loadGitHubUser(); }} />}
       <div className="px-8 py-8 max-w-2xl">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-base font-semibold tracking-tight">Settings</h1>
@@ -292,7 +293,7 @@ export default function SettingsView() {
             >
               {wails ? (
                 <button
-                  onClick={() => setShowWizard(true)}
+                  onClick={() => setShowGitHubModal(true)}
                   className="px-3 py-1.5 rounded-md border text-sm hover:bg-accent transition-colors"
                 >
                   Connect GitHub
@@ -309,23 +310,39 @@ export default function SettingsView() {
             status={configStatus.hasGitHubToken ? "ok" : "optional"}
             statusLabel={configStatus.hasGitHubToken ? "configured" : "optional"}
           >
-            <SecretInput
-              value={local.githubToken}
-              onChange={e => set("githubToken", e.target.value)}
-              placeholder="ghp_…"
-              disabled={!wails}
-            />
+            <div className="flex gap-2">
+              <SecretInput
+                value={local.githubToken}
+                onChange={e => set("githubToken", e.target.value)}
+                placeholder="ghp_…"
+                disabled={!wails}
+              />
+              {wails && configStatus.hasGitHubToken && (
+                <button
+                  onClick={testGitHub}
+                  disabled={ghLoading}
+                  className="px-3 py-1.5 rounded-md border text-xs hover:bg-accent transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  {ghLoading ? "Testing…" : "Test"}
+                </button>
+              )}
+            </div>
+            {ghTestResult && (
+              <p className={`text-xs mt-1 ${ghTestResult.ok ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+                {ghTestResult.ok ? `Connected as @${ghTestResult.login}` : "Connection failed — check token"}
+              </p>
+            )}
           </Field>
         </Section>
 
-        {/* LiteLLM */}
-        <Section title="LiteLLM">
-          <Field label="Proxy URL" hint="OpenAI-compatible endpoint for LLM requests">
+        {/* Model serving */}
+        <Section title="Model Serving Endpoint">
+          <Field label="Endpoint URL" hint="OpenAI-compatible base URL — e.g. https://openrouter.ai/api/v1 or https://api.openai.com/v1. Leave blank to use the built-in cluster LiteLLM.">
             <div className="flex gap-2">
               <TextInput
-                value={local.litellmURL || ""}
-                onChange={e => set("litellmURL", e.target.value)}
-                placeholder="http://litellm:4000"
+                value={local.litellmURL === "http://litellm:4000" ? "" : (local.litellmURL || "")}
+                onChange={e => set("litellmURL", e.target.value || "http://litellm:4000")}
+                placeholder="https://…/api/v1"
                 disabled={!wails}
               />
               {wails && (
@@ -345,6 +362,19 @@ export default function SettingsView() {
                   : litellmResult.error || "Connection failed"}
               </div>
             )}
+          </Field>
+          <Field
+            label="API key"
+            hint="API key forwarded to the LLM provider (e.g. OpenRouter sk-or-…, OpenAI sk-…)"
+            status={configStatus.hasLLMKey ? "ok" : "optional"}
+            statusLabel={configStatus.hasLLMKey ? "configured" : "optional"}
+          >
+            <SecretInput
+              value={local.llmApiKey ?? ""}
+              onChange={e => set("llmApiKey", e.target.value)}
+              placeholder="sk-…"
+              disabled={!wails}
+            />
           </Field>
         </Section>
 
@@ -474,7 +504,7 @@ export default function SettingsView() {
         {wails && (
           <Section title="Services">
             <p className="text-xs text-muted-foreground mb-3">
-              Forward in-cluster services to your local machine or restart deployments.
+              Services are automatically port-forwarded at startup. Restart or open as needed.
             </p>
             {services.length === 0 ? (
               <p className="text-xs text-muted-foreground">
@@ -482,13 +512,19 @@ export default function SettingsView() {
               </p>
             ) : (
               <div className="flex flex-col divide-y divide-border rounded-md border overflow-hidden mb-3">
-                {services.map(svc => (
+                {services.filter(svc => {
+                  // Hide litellm when using an external model serving endpoint
+                  if (svc.name === "litellm") {
+                    const url = local.litellmURL;
+                    const isCluster = !url || url === "http://litellm:4000" || url.startsWith("http://localhost:");
+                    return isCluster;
+                  }
+                  return true;
+                }).map(svc => (
                   <ServiceRow
                     key={svc.name}
                     svc={svc}
                     restarting={restarting[svc.name]}
-                    forwarding={forwarding[svc.name]}
-                    onToggleForward={() => toggleForward(svc)}
                     onRestart={() => restart(svc.name)}
                     onOpen={() => go().OpenService(svc.name)}
                   />
@@ -652,15 +688,11 @@ function Field({
 function ServiceRow({
   svc,
   restarting,
-  forwarding,
-  onToggleForward,
   onRestart,
   onOpen,
 }: {
   svc: ServiceInfo;
   restarting?: boolean;
-  forwarding?: boolean;
-  onToggleForward: () => void;
   onRestart: () => void;
   onOpen: () => void;
 }) {
@@ -676,13 +708,8 @@ function ServiceRow({
           : svc.clusterPort ? `:${svc.clusterPort}` : "—"}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        {svc.clusterPort > 0 && (
-          <>
-            <Btn onClick={onToggleForward} loading={forwarding}>
-              {svc.forwarding ? "Stop" : "Forward"}
-            </Btn>
-            {svc.forwarding && <Btn onClick={onOpen}>Open</Btn>}
-          </>
+        {svc.clusterPort > 0 && svc.forwarding && (
+          <Btn onClick={onOpen}>Open</Btn>
         )}
         <Btn onClick={onRestart} loading={restarting}>Restart</Btn>
       </div>

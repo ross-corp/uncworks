@@ -4,6 +4,10 @@ import { create } from "@bufbuild/protobuf";
 import {
   AOTService,
   AgentRunSpecSchema,
+  OrchestrationSchema,
+  OrchestrationTaskSchema,
+  PipelineConfigSchema,
+  StageConfigSchema,
   RepositorySchema,
   type AgentRun as PbAgentRun,
   type AgentRunEvent as PbAgentRunEvent,
@@ -66,6 +70,7 @@ export class AOTClient {
         })
       ),
       prompt: spec.prompt,
+      workspaceName: spec.workspaceName ?? "",
       devboxConfig: spec.devboxConfig ?? "",
       ttlSeconds: spec.ttlSeconds ?? 0,
       envVars: spec.envVars ?? {},
@@ -73,11 +78,55 @@ export class AOTClient {
       specContent: spec.specContent ?? "",
       specSource: spec.specSource ?? "",
       orchestrationMode: spec.orchestrationMode ? orchModeToProto(spec.orchestrationMode) : undefined,
+      orchestration: spec.orchestration
+        ? create(OrchestrationSchema, {
+            tasks: (spec.orchestration.tasks ?? []).map((t) =>
+              create(OrchestrationTaskSchema, {
+                name: t.name,
+                prompt: t.prompt,
+                repoUrls: t.repoUrls ?? [],
+              })
+            ),
+          })
+        : undefined,
+      pipelineConfig: spec.pipelineConfig
+        ? create(PipelineConfigSchema, {
+            plan: spec.pipelineConfig.plan
+              ? create(StageConfigSchema, {
+                  model: spec.pipelineConfig.plan.model ?? "",
+                  timeoutSeconds: spec.pipelineConfig.plan.timeoutSeconds ?? 0,
+                  maxRetries: spec.pipelineConfig.plan.maxRetries ?? 0,
+                  onFailure: spec.pipelineConfig.plan.onFailure ?? "",
+                })
+              : undefined,
+            execute: spec.pipelineConfig.execute
+              ? create(StageConfigSchema, {
+                  model: spec.pipelineConfig.execute.model ?? "",
+                  timeoutSeconds: spec.pipelineConfig.execute.timeoutSeconds ?? 0,
+                  maxRetries: spec.pipelineConfig.execute.maxRetries ?? 0,
+                  onFailure: spec.pipelineConfig.execute.onFailure ?? "",
+                })
+              : undefined,
+            verify: spec.pipelineConfig.verify
+              ? create(StageConfigSchema, {
+                  model: spec.pipelineConfig.verify.model ?? "",
+                  timeoutSeconds: spec.pipelineConfig.verify.timeoutSeconds ?? 0,
+                  maxRetries: spec.pipelineConfig.verify.maxRetries ?? 0,
+                  onFailure: spec.pipelineConfig.verify.onFailure ?? "",
+                })
+              : undefined,
+          })
+        : undefined,
+      parentRunId: spec.parentRunId ?? "",
       project: spec.project ?? "",
       feature: spec.feature ?? "",
       tags: spec.tags ?? [],
       projectRef: spec.projectRef ?? "",
       specRef: spec.specRef ?? "",
+      maxBudget: spec.maxBudget ?? 0,
+      autoPush: spec.autoPush ?? false,
+      autoPr: spec.autoPR ?? false,
+      prBaseBranch: spec.prBaseBranch ?? "",
     });
     const resp = await this.client.createAgentRun({ spec: pbSpec });
     return toAgentRun(resp.agentRun!);
@@ -167,6 +216,17 @@ function orchModeToProto(m: string): PbOrchestrationMode {
   return orchModeToProtoMap[m] ?? PbOrchestrationMode.UNSPECIFIED;
 }
 
+const orchModeFromProtoMap: Record<number, AgentRunSpec["orchestrationMode"]> = {
+  [PbOrchestrationMode.SINGLE]: "single",
+  [PbOrchestrationMode.AUTO]: "auto",
+  [PbOrchestrationMode.MANUAL]: "manual",
+  [PbOrchestrationMode.SPEC_DRIVEN]: "spec-driven",
+};
+
+function orchModeFromProto(m: PbOrchestrationMode): AgentRunSpec["orchestrationMode"] {
+  return orchModeFromProtoMap[m] ?? undefined;
+}
+
 const phaseFromProtoMap: Record<number, AgentRunPhase> = {
   [PbAgentRunPhase.PENDING]: "Pending",
   [PbAgentRunPhase.RUNNING]: "Running",
@@ -224,13 +284,54 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       modelTier: pb.spec?.modelTier || undefined,
       specContent: pb.spec?.specContent || undefined,
       specSource: pb.spec?.specSource || undefined,
-      parentRunId: (pb.spec as Record<string, unknown>)?.parentRunId as string | undefined,
-      orchestrationMode: (pb.spec as Record<string, unknown>)?.orchestrationMode as string | undefined as AgentRunSpec["orchestrationMode"],
-      specRunId: (pb.spec as Record<string, unknown>)?.specRunId as string | undefined,
+      parentRunId: pb.spec?.parentRunId || undefined,
+      orchestrationMode: pb.spec?.orchestrationMode
+        ? orchModeFromProto(pb.spec.orchestrationMode)
+        : undefined,
+      orchestration: pb.spec?.orchestration
+        ? {
+            tasks: (pb.spec.orchestration.tasks ?? []).map((t) => ({
+              name: t.name,
+              prompt: t.prompt,
+              repoUrls: t.repoUrls.length > 0 ? t.repoUrls : undefined,
+            })),
+          }
+        : undefined,
+      specRunId: pb.spec?.specRunId || undefined,
       displayName: pb.spec?.displayName || undefined,
-      project: (pb.spec as Record<string, unknown>)?.project as string | undefined,
-      feature: (pb.spec as Record<string, unknown>)?.feature as string | undefined,
-      tags: ((pb.spec as Record<string, unknown>)?.tags as string[] | undefined) || undefined,
+      pipelineConfig: pb.spec?.pipelineConfig
+        ? {
+            plan: pb.spec.pipelineConfig.plan
+              ? {
+                  model: pb.spec.pipelineConfig.plan.model || undefined,
+                  timeoutSeconds: pb.spec.pipelineConfig.plan.timeoutSeconds || undefined,
+                  maxRetries: pb.spec.pipelineConfig.plan.maxRetries || undefined,
+                  onFailure: pb.spec.pipelineConfig.plan.onFailure || undefined,
+                }
+              : undefined,
+            execute: pb.spec.pipelineConfig.execute
+              ? {
+                  model: pb.spec.pipelineConfig.execute.model || undefined,
+                  timeoutSeconds: pb.spec.pipelineConfig.execute.timeoutSeconds || undefined,
+                  maxRetries: pb.spec.pipelineConfig.execute.maxRetries || undefined,
+                  onFailure: pb.spec.pipelineConfig.execute.onFailure || undefined,
+                }
+              : undefined,
+            verify: pb.spec.pipelineConfig.verify
+              ? {
+                  model: pb.spec.pipelineConfig.verify.model || undefined,
+                  timeoutSeconds: pb.spec.pipelineConfig.verify.timeoutSeconds || undefined,
+                  maxRetries: pb.spec.pipelineConfig.verify.maxRetries || undefined,
+                  onFailure: pb.spec.pipelineConfig.verify.onFailure || undefined,
+                }
+              : undefined,
+          }
+        : undefined,
+      project: pb.spec?.project || undefined,
+      feature: pb.spec?.feature || undefined,
+      tags: pb.spec?.tags.length ? pb.spec.tags : undefined,
+      projectRef: pb.spec?.projectRef || undefined,
+      specRef: pb.spec?.specRef || undefined,
       maxBudget: pb.spec?.maxBudget || undefined,
       autoPush: pb.spec?.autoPush || undefined,
       autoPR: pb.spec?.autoPr || undefined,
@@ -246,12 +347,15 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       logOutput: pb.status?.logOutput || undefined,
       retainUntil: pb.status?.retainUntil ? timestampToISO(pb.status.retainUntil) : undefined,
       deploymentName: pb.status?.deploymentName || undefined,
+      stage: pb.status?.stage || undefined,
       debugActive: pb.status?.debugActive || false,
-      prUrl: (pb.status as Record<string, unknown>)?.prUrl as string | undefined,
+      retryCount: pb.status?.retryCount || undefined,
+      verificationResult: pb.status?.verificationResult || undefined,
+      prUrl: pb.status?.prUrl || undefined,
     },
     createdAt: timestampToISO(pb.createdAt),
     updatedAt: timestampToISO(pb.updatedAt),
-    children: ((pb as Record<string, unknown>).children as string[]) || undefined,
+    children: pb.children.length ? pb.children : undefined,
   };
 }
 

@@ -127,8 +127,10 @@ export default function RunDetailView() {
   const [hitlModalOpen, setHitlModalOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [pendingArchive, setPendingArchive] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const prevPhaseRef = useRef<string | undefined>(undefined);
-  const { spans } = useTraces(id || "");
+  const retriesRef = useRef(0);
+  const { spans, loading: tracesLoading } = useTraces(id || "", run?.status.phase);
 
   // Register run context for the global CopilotPanel.
   useCopilotContext(
@@ -189,10 +191,20 @@ export default function RunDetailView() {
     }
   }, [id, client]);
 
-  const [loadError, setLoadError] = useState(false);
+  // Reset volatile state when navigating to a different run
+  useEffect(() => {
+    setRun(null);
+    setLoadError(false);
+    setSelectedSpan(null);
+    setHitlInput("");
+    setHitlModalOpen(false);
+    setElapsed(0);
+    setPendingArchive(false);
+    prevPhaseRef.current = undefined;
+    retriesRef.current = 0;
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch run and poll
-  const retriesRef = useRef(0);
   usePoll(async () => {
     if (!id) return;
     try {
@@ -284,8 +296,8 @@ export default function RunDetailView() {
           {isSpecDriven && (
             <PhaseStepRow stage={run.status.stage} phase={run.status.phase} />
           )}
-          {/* Live elapsed counter — task 6.2 */}
-          {elapsedStr && ACTIVE_PHASES.has(run.status.phase) && (
+          {/* Live elapsed counter — task 6.2; also shown for completed runs */}
+          {elapsedStr && (
             <span className="text-xs text-muted-foreground font-mono">{elapsedStr}</span>
           )}
           {run.status.message && !isWaiting && (
@@ -417,6 +429,7 @@ export default function RunDetailView() {
           {tab === "traces" && (
             <TraceTimeline
               spans={spans}
+              loading={tracesLoading}
               runId={run.id}
               selectedSpanId={selectedSpan?.id}
               onSelectSpan={(span) => setSelectedSpan(span)}

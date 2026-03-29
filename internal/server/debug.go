@@ -92,7 +92,7 @@ func (d *DebugHandler) handleStartDebug(w http.ResponseWriter, r *http.Request) 
 
 	if err := d.k8sClient.Update(r.Context(), deploy); err != nil {
 		slog.Error("failed to update deployment for debug", "deployment", deployName, "err", err)
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to start debug: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to start debug"})
 		return
 	}
 
@@ -144,7 +144,7 @@ func (d *DebugHandler) handleStopDebug(w http.ResponseWriter, r *http.Request) {
 
 	if err := d.k8sClient.Update(r.Context(), deploy); err != nil {
 		slog.Error("failed to update deployment to stop debug", "deployment", deployName, "err", err)
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to stop debug: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to stop debug"})
 		return
 	}
 

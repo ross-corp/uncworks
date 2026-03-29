@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "sonner";
 import cronstrue from "cronstrue";
 import { apiFetch } from "../hooks/apiFetch";
@@ -33,6 +33,7 @@ interface ScheduleSummary {
 
 export default function ScheduleListView() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [schedules, setSchedules] = useState<ScheduleSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -57,9 +58,30 @@ export default function ScheduleListView() {
     };
   }, [fetchData]);
 
+  // Keyboard shortcut: n → navigate to new schedule form
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (location.pathname !== "/schedules") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "n") navigate("/schedules/new");
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [location.pathname, navigate]);
+
   async function toggleSuspend(name: string, suspended: boolean) {
-    await apiFetch(`/api/v1/schedules/${name}/${suspended ? "resume" : "suspend"}`, { method: "POST" });
-    fetchData();
+    try {
+      const resp = await apiFetch(`/api/v1/schedules/${name}/${suspended ? "resume" : "suspend"}`, { method: "POST" });
+      if (resp.ok) {
+        fetchData();
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to update schedule");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update schedule");
+    }
   }
 
   async function deleteSchedule(name: string) {
@@ -82,7 +104,6 @@ export default function ScheduleListView() {
       <div className="h-12 border-b flex items-center px-4 gap-2">
         <span className="font-semibold flex-1">Schedules</span>
         <Badge variant="secondary" className="text-xs">{schedules.length}</Badge>
-        <Button size="sm" onClick={() => navigate("/schedules/new")}>+ new schedule</Button>
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-none">
@@ -98,7 +119,7 @@ export default function ScheduleListView() {
               <EmptyDescription>Schedules run chains or templates automatically on a cron expression.</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button size="sm" onClick={() => navigate("/schedules/new")}>+ new schedule</Button>
+              <span className="text-xs text-muted-foreground">Press <kbd className="font-mono">n</kbd> to create</span>
             </EmptyContent>
           </Empty>
         )}
@@ -150,6 +171,9 @@ export default function ScheduleListView() {
             </div>
           </div>
         ))}
+      </div>
+      <div className="border-t px-4 py-1.5 text-xs text-muted-foreground">
+        n new
       </div>
     </div>
   );

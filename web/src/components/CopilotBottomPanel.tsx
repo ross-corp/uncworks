@@ -168,14 +168,14 @@ export default function CopilotBottomPanel() {
     if (!text || isStreaming) return;
     setInput("");
 
-    // Ensure a session exists
-    let sessionId = activeSessionId;
-    if (!sessionId) {
-      sessionId = createSession();
-    }
+    // Ensure a session exists. createSession() sets state asynchronously so we
+    // must capture the returned id and pass it explicitly to updateActiveMessages
+    // — the context closure may still see the old (null) activeSessionId when
+    // the first onUpdate callback fires.
+    const sessionId = activeSessionId ?? createSession();
 
     await send(text, context, activeMessages, (msgs) => {
-      updateActiveMessages(msgs);
+      updateActiveMessages(msgs, sessionId);
     });
 
     // After stream ends, execute guidance actions on final assistant message

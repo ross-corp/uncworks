@@ -8,6 +8,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -68,7 +69,7 @@ type AgentRunReconciler struct {
 	EventBus              eventbus.EventBus
 	RetentionDays         int
 	SoftServe             softserve.RepoManager
-	eventBusWarned        bool
+	eventBusWarned        atomic.Bool
 }
 
 // +kubebuilder:rbac:groups=aot.uncworks.io,resources=agentruns,verbs=get;list;watch;create;update;patch;delete
@@ -424,8 +425,7 @@ func isTerminal(phase aotv1alpha1.AgentRunPhase) bool {
 // emitPhaseEvent publishes a phase-change event to the event bus.
 func (r *AgentRunReconciler) emitPhaseEvent(agentRun *aotv1alpha1.AgentRun, eventType apiv1.AgentRunEventType) {
 	if r.EventBus == nil {
-		if !r.eventBusWarned {
-			r.eventBusWarned = true
+		if r.eventBusWarned.CompareAndSwap(false, true) {
 			ctrl.Log.Info("WARNING: EventBus is nil, phase events will not be emitted to WatchAgentRun subscribers")
 		}
 		return

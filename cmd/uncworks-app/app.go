@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -24,6 +25,8 @@ type App struct {
 	statusPollStop context.CancelFunc
 	pf             *portForwardManager
 	trayCluster    trayStatusItem // updated by pollStatus
+	trayConfig     trayStatusItem // updated by pollStatus
+	trayJobs       trayStatusItem // updated by pollStatus
 }
 
 func NewApp() *App {
@@ -37,9 +40,23 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	bootstrapPATH()
 	_ = bootstrapConfig()
+	// Wire Wails context into the port-forward manager so it can emit events.
+	a.pf.setWailsCtx(ctx)
 	pollCtx, cancel := context.WithCancel(ctx)
 	a.statusPollStop = cancel
 	go a.pollStatus(pollCtx)
+	// Emit an initial cluster status shortly after startup so the UI doesn't
+	// have to wait for the first 15s tick.
+	go func() {
+		time.Sleep(2 * time.Second)
+		status := a.ClusterStatus()
+		runtime.EventsEmit(a.ctx, "cluster:status", status)
+		a.trayCluster.set(status)
+	}()
+	// Auto-start port-forwards for all cluster services.
+	go a.autoStartApiserverForward()
+	go a.autoStartLiteLLMForward()
+	go a.autoStartWebForward()
 	a.initTray()
 }
 
@@ -88,6 +105,7 @@ func (a *App) GetSettings() (AppSettings, error) {
 		return s, err
 	}
 	s.GitHubAuthed = isGitHubAuthed()
+	s.LLMKeyConfigured = s.LLMAPIKey != ""
 	return s, nil
 }
 
@@ -140,7 +158,9 @@ func (a *App) GetEnvVars() ([]EnvVarInfo, error) {
 
 // GetKubeContexts returns all kubeconfig context names.
 func (a *App) GetKubeContexts() ([]string, error) {
-	out, err := exec.Command("kubectl", "config", "get-contexts", "-o", "name").Output()
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "kubectl", "config", "get-contexts", "-o", "name").Output()
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +176,9 @@ func (a *App) GetKubeContexts() ([]string, error) {
 // AutodetectNamespace tries to find the uncworks namespace in the given kubecontext.
 // Returns the detected namespace name, or empty string if not found.
 func (a *App) AutodetectNamespace(kubeContext string) string {
-	out, err := exec.Command("kubectl", "--context="+kubeContext, "get", "ns", "-o", "jsonpath={.items[*].metadata.name}").Output()
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "kubectl", "--context="+kubeContext, "get", "ns", "-o", "jsonpath={.items[*].metadata.name}").Output()
 	if err != nil {
 		return ""
 	}
@@ -177,7 +199,9 @@ func (a *App) ClusterStatus() string {
 	if ns == "" {
 		ns = "uncworks"
 	}
-	out, err := exec.CommandContext(a.ctx, "kubectl", "get", "pods",
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "kubectl", "get", "pods",
 		"-n", ns, "--no-headers").Output()
 	if err != nil || strings.TrimSpace(string(out)) == "" {
 		return "stopped"
@@ -226,7 +250,7 @@ func (a *App) StopCluster() {
 }
 
 // pollStatus periodically emits cluster status events to the frontend and
-// updates the menu bar tray item.
+// updates all menu bar tray items.
 func (a *App) pollStatus(ctx context.Context) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
@@ -238,6 +262,140 @@ func (a *App) pollStatus(ctx context.Context) {
 			status := a.ClusterStatus()
 			runtime.EventsEmit(ctx, "cluster:status", status)
 			a.trayCluster.set(status)
+			a.trayConfig.setConfig()
+			go func() { a.trayJobs.setJobs(a.countRunningJobs()) }()
+		}
+	}
+}
+
+// countRunningJobs queries the API server for active (running + waiting) jobs.
+// Returns -1 if the API is unreachable.
+func (a *App) countRunningJobs() int {
+	s, _ := loadAppSettings()
+	apiURL := s.APIServerURL
+	if apiURL == "" {
+		apiURL = "http://localhost:50055"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL+"/api/v1/runs", nil)
+	if err != nil {
+		return -1
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return -1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return -1
+	}
+	var runs []struct {
+		Status struct {
+			Phase string `json:"phase"`
+		} `json:"status"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&runs); err != nil {
+		return -1
+	}
+	count := 0
+	for _, r := range runs {
+		if r.Status.Phase == "running" || r.Status.Phase == "waiting_for_input" {
+			count++
+		}
+	}
+	return count
+}
+
+// autoStartApiserverForward starts a port-forward for the apiserver if the
+// configured API server URL is the default localhost target and no forward is
+// already running. It retries with exponential backoff (1s→2s→4s…max 30s) so
+// that a cluster not yet ready at startup is picked up automatically.
+func (a *App) autoStartApiserverForward() {
+	// Wait a moment for the cluster to be reachable.
+	time.Sleep(3 * time.Second)
+	s, _ := loadAppSettings()
+	// Only auto-start when using the default localhost URL (not a custom URL).
+	if s.APIServerURL != "" && s.APIServerURL != "http://localhost:50055" {
+		return
+	}
+	ns := s.Namespace
+	if ns == "" {
+		ns = "uncworks"
+	}
+	for attempt := 0; ; attempt++ {
+		if fwd, _ := a.pf.isForwarding("apiserver"); fwd {
+			return
+		}
+		if err := a.pf.start("apiserver", ns, 50055, 50055); err == nil {
+			return
+		}
+		// Cluster not ready yet; wait with backoff before retrying.
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-time.After(pfBackoff(attempt)):
+		}
+	}
+}
+
+// autoStartLiteLLMForward starts a port-forward for the in-cluster LiteLLM
+// proxy, using a port from the configured port range, and updates the saved
+// LiteLLMURL so the settings page shows the correct localhost address.
+// Retries with exponential backoff if the cluster is not yet reachable.
+func (a *App) autoStartLiteLLMForward() {
+	time.Sleep(4 * time.Second) // stagger after apiserver forward
+	s, _ := loadAppSettings()
+	// Only auto-start when still pointing at the in-cluster DNS name (default).
+	// If the user set a custom URL (OpenRouter, OpenAI, etc.) leave it alone.
+	if s.LiteLLMURL != "" && s.LiteLLMURL != "http://litellm:4000" {
+		return
+	}
+	ns := s.Namespace
+	if ns == "" {
+		ns = "uncworks"
+	}
+	// Pick a local port once; reuse across retries so the persisted URL stays stable.
+	localPort := a.nextFreePort(s)
+	for attempt := 0; ; attempt++ {
+		if fwd, _ := a.pf.isForwarding("litellm"); fwd {
+			return
+		}
+		if err := a.pf.start("litellm", ns, localPort, 4000); err == nil {
+			// Persist the localhost URL so future loads hit the port-forward.
+			s.LiteLLMURL = fmt.Sprintf("http://localhost:%d", localPort)
+			_ = saveAppSettings(s)
+			return
+		}
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-time.After(pfBackoff(attempt)):
+		}
+	}
+}
+
+// autoStartWebForward starts a port-forward for the in-cluster web UI service.
+// Retries with exponential backoff until the cluster is reachable.
+func (a *App) autoStartWebForward() {
+	time.Sleep(5 * time.Second) // stagger after apiserver and litellm forwards
+	s, _ := loadAppSettings()
+	ns := s.Namespace
+	if ns == "" {
+		ns = "uncworks"
+	}
+	localPort := a.nextFreePort(s)
+	for attempt := 0; ; attempt++ {
+		if fwd, _ := a.pf.isForwarding("web"); fwd {
+			return
+		}
+		if err := a.pf.start("web", ns, localPort, 3000); err == nil {
+			return
+		}
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-time.After(pfBackoff(attempt)):
 		}
 	}
 }
@@ -340,6 +498,30 @@ func (a *App) nextFreePort(s AppSettings) int {
 		}
 	}
 	return start // fallback
+}
+
+// pasteFromClipboard reads the macOS clipboard via pbpaste and injects the
+// text into the currently focused INPUT or TEXTAREA element via JavaScript.
+// This works around Wails v2 WKWebView not participating in the macOS
+// clipboard responder chain.
+func (a *App) pasteFromClipboard() {
+	out, err := exec.Command("pbpaste").Output()
+	if err != nil {
+		return
+	}
+	jsonText, _ := json.Marshal(string(out))
+	runtime.WindowExecJS(a.ctx, fmt.Sprintf(`(function(){
+		const text = %s;
+		const el = document.activeElement;
+		if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
+		const s = el.selectionStart ?? el.value.length;
+		const e = el.selectionEnd ?? el.value.length;
+		const newVal = el.value.slice(0, s) + text + el.value.slice(e);
+		const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+		setter.call(el, newVal);
+		el.dispatchEvent(new Event('input', {bubbles: true}));
+		el.selectionStart = el.selectionEnd = s + text.length;
+	})()`, string(jsonText)))
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

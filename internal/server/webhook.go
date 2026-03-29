@@ -166,12 +166,10 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		created++
 	}
 
-	w.WriteHeader(http.StatusOK)
-	resp := map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":      true,
 		"created": created,
-	}
-	_ = json.NewEncoder(w).Encode(resp)
+	})
 }
 
 // validateSignature checks the HMAC-SHA256 signature from the X-Hub-Signature-256 header.

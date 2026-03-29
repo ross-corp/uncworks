@@ -47,9 +47,11 @@ export default function TemplateNewView() {
         toast.success("Template created");
         navigate("/templates");
       } else {
-        const data = await resp.json();
-        toast.error(data.error || "Failed to create template");
+        const data = await resp.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to create template");
       }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create template");
     } finally {
       setSubmitting(false);
     }

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import cronstrue from "cronstrue";
 import { apiFetch } from "../hooks/apiFetch";
@@ -28,6 +28,7 @@ interface ScheduleDetail {
 
 export default function ScheduleDetailView() {
   const { name } = useParams<{ name: string }>();
+  const navigate = useNavigate();
   const [schedule, setSchedule] = useState<ScheduleDetail | null>(null);
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,10 +36,19 @@ export default function ScheduleDetailView() {
   const [savingCron, setSavingCron] = useState(false);
   const [toggling, setToggling] = useState(false);
 
-  const fetchSchedule = useCallback(async () => {
+  // Stable ref so action handlers (toggleSuspend, saveCron) can trigger a
+  // full refresh (schedule + runs) without needing fetchAll in their closure.
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
+
+  const fetchAll = useCallback(async () => {
     if (!name) return;
+
     try {
       const resp = await apiFetch(`/api/v1/schedules/${name}`);
+      if (resp.status === 404) {
+        navigate("/schedules", { replace: true });
+        return;
+      }
       if (resp.ok) {
         const data: ScheduleDetail = await resp.json();
         setSchedule(data);
@@ -49,49 +59,33 @@ export default function ScheduleDetailView() {
     } finally {
       setLoading(false);
     }
+
+    try {
+      const resp = await apiFetch("/api/v1/runs");
+      if (resp.ok) {
+        const data: AgentRun[] = await resp.json();
+        const filtered = data.filter(
+          (r) =>
+            (r.spec.tags && r.spec.tags.includes(`schedule:${name}`)) ||
+            r.spec.feature === name
+        );
+        setRuns(filtered.slice(0, 10));
+      }
+    } catch (e) {
+      toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }, [name]);
+
+  // Keep the ref current so action handlers always call the latest version.
+  refreshRef.current = fetchAll;
 
   useEffect(() => {
     let cancelled = false;
 
-    const fetchAll = async () => {
-      if (!name) return;
+    const tick = () => { if (!cancelled) refreshRef.current(); };
 
-      try {
-        const resp = await apiFetch(`/api/v1/schedules/${name}`);
-        if (resp.ok) {
-          const data: ScheduleDetail = await resp.json();
-          if (!cancelled) {
-            setSchedule(data);
-            setEditCron(data.spec.cron);
-          }
-        }
-      } catch (e) {
-        if (!cancelled) toast.error(`Failed to load schedule: ${e instanceof Error ? e.message : String(e)}`);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-
-      try {
-        const resp = await apiFetch("/api/v1/runs");
-        if (resp.ok) {
-          const data: AgentRun[] = await resp.json();
-          const filtered = data.filter(
-            (r) =>
-              (r.spec.tags && r.spec.tags.includes(`schedule:${name}`)) ||
-              r.spec.feature === name
-          );
-          if (!cancelled) setRuns(filtered.slice(0, 10));
-        }
-      } catch (e) {
-        if (!cancelled) toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    };
-
-    fetchAll();
-    const i = setInterval(() => {
-      if (!cancelled) fetchAll();
-    }, 10000);
+    tick();
+    const i = setInterval(tick, 10000);
 
     return () => {
       cancelled = true;
@@ -106,8 +100,10 @@ export default function ScheduleDetailView() {
       const action = schedule.spec.suspend ? "resume" : "suspend";
       const resp = await apiFetch(`/api/v1/schedules/${name}/${action}`, { method: "POST" });
       if (resp.ok) {
-        await fetchSchedule();
+        await refreshRef.current();
         toast.success(schedule.spec.suspend ? "Schedule resumed" : "Schedule suspended");
+      } else {
+        toast.error("Failed to toggle schedule");
       }
     } catch (e) {
       toast.error(`Failed to toggle schedule: ${e instanceof Error ? e.message : String(e)}`);
@@ -125,7 +121,7 @@ export default function ScheduleDetailView() {
         body: JSON.stringify({ cron: editCron.trim() }),
       });
       if (resp.ok) {
-        await fetchSchedule();
+        await refreshRef.current();
         toast.success("Cron expression updated");
       } else {
         toast.error("Failed to update cron expression");

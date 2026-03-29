@@ -17,6 +17,7 @@ import {
   XIcon,
   SearchIcon,
 } from "lucide-react";
+import { apiFetch } from "../hooks/apiFetch";
 
 // ============================================================
 // Trace Timeline — Waterfall View with Right Split Detail Panel
@@ -318,7 +319,7 @@ export function SpanDetail({
     if (!span.hasDiff || !runId) return;
     setDiffData(null);
     setDiffLoading(true);
-    fetch(`/api/v1/runs/${runId}/traces/${span.id}/diff`)
+    apiFetch(`/api/v1/runs/${runId}/traces/${span.id}/diff`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -747,12 +748,14 @@ const MIN_BAR_WIDTH_PX = 4;
 
 export default function TraceTimeline({
   spans,
+  loading,
   selectedSpanId: controlledSelectedSpanId,
   onSelectSpan,
   runId,
   agentType,
 }: {
   spans: TraceSpan[];
+  loading?: boolean;
   selectedSpanId?: string;
   onSelectSpan: (span: TraceSpan) => void;
   runId?: string;
@@ -1014,7 +1017,7 @@ export default function TraceTimeline({
       });
     }
     return ticks;
-  }, [traceDurationMs]);
+  }, [traceDurationMs, traceStartMs]);
 
   if (spans.length === 0) {
     return (
@@ -1022,7 +1025,7 @@ export default function TraceTimeline({
         data-testid="trace-timeline"
         className="flex items-center justify-center py-12 text-muted-foreground text-sm"
       >
-        No trace spans recorded
+        {loading ? "Loading traces..." : "No trace spans recorded"}
       </div>
     );
   }

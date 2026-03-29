@@ -635,7 +635,9 @@ func (a *Activities) CreateAgentDeployment(ctx context.Context, input CreateAgen
 	}
 
 	if err := a.K8sClient.Create(ctx, deployment); err != nil {
-		return nil, fmt.Errorf("create deployment: %w", err)
+		if !errors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("create deployment: %w", err)
+		}
 	}
 
 	return &CreateAgentDeploymentOutput{

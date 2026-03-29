@@ -20,8 +20,8 @@ export default function FeatureDetailView() {
     try {
       const result = await client.listAgentRuns();
       setAllRuns(result.map(mapRun));
-    } catch {
-      // silent
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load runs");
     } finally {
       setLoading(false);
     }
@@ -53,6 +53,8 @@ export default function FeatureDetailView() {
   // Keyboard navigation
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       switch (e.key) {
         case "Escape":
           navigate("/");

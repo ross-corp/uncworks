@@ -32,13 +32,13 @@ export default function AppNew() {
           <Route path="/projects" element={<ProjectListView />} />
           <Route path="/projects/:name" element={<ProjectDetailView />} />
           <Route path="/schedules" element={<ScheduleListView />} />
+          <Route path="/schedules/new" element={<ScheduleNewView />} />
           <Route path="/schedules/:name" element={<ScheduleDetailView />} />
           <Route path="/templates" element={<TemplateListView />} />
           <Route path="/templates/new" element={<TemplateNewView />} />
           <Route path="/chains" element={<ChainListView />} />
           <Route path="/chains/new" element={<ChainNewView />} />
           <Route path="/chainruns" element={<ChainRunListView />} />
-          <Route path="/schedules/new" element={<ScheduleNewView />} />
           <Route path="/chainrun/:name" element={<ChainRunDetailView />} />
           <Route path="/settings" element={<SettingsView />} />
         </Route>

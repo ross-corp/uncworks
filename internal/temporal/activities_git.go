@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 
+	temporalsdk "go.temporal.io/sdk/temporal"
+
 	"connectrpc.com/connect"
 	"go.temporal.io/sdk/activity"
 
@@ -194,7 +196,13 @@ func (a *Activities) CreatePR(ctx context.Context, input CreatePRInput) (*Create
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("GitHub API returned %d: %s", resp.StatusCode, string(respBody))
+		msg := fmt.Sprintf("GitHub API returned %d: %s", resp.StatusCode, string(respBody))
+		// 4xx errors (except 429 Too Many Requests) will not succeed on retry.
+		// Return a non-retryable ApplicationError to avoid burning the retry budget.
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+			return nil, temporalsdk.NewNonRetryableApplicationError(msg, "GitHubAPIError", nil)
+		}
+		return nil, temporalsdk.NewApplicationError(msg, "GitHubAPIError")
 	}
 
 	var prResp struct {

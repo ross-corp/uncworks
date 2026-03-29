@@ -22,6 +22,7 @@ interface ProjectSummary {
   description: string;
   repos: { url: string; branch: string }[];
   configRepoReady: boolean;
+  configRepoMessage?: string;
   runCount: number;
   lastRunId: string;
   totalCost: string;
@@ -34,8 +35,6 @@ export default function ProjectListView() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newDisplayName, setNewDisplayName] = useState("");
-  const [newRepo, setNewRepo] = useState("");
   const [creating, setCreating] = useState(false);
 
   const fetchProjects = useCallback(async () => {
@@ -61,17 +60,11 @@ export default function ProjectListView() {
       const resp = await apiFetch("/api/v1/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-          displayName: newDisplayName.trim() || newName.trim(),
-          repos: newRepo.trim() ? [{ url: newRepo.trim(), branch: "main" }] : [],
-        }),
+        body: JSON.stringify({ name: newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-") }),
       });
       if (resp.ok) {
         setShowCreate(false);
         setNewName("");
-        setNewDisplayName("");
-        setNewRepo("");
         fetchProjects();
       }
     } catch {
@@ -107,22 +100,10 @@ export default function ProjectListView() {
               className="flex-1 h-8 text-sm"
               placeholder="project-name (kebab-case)"
               value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              onChange={(e) =>
+                setNewName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))
+              }
               autoFocus
-            />
-            <Input
-              className="flex-1 h-8 text-sm"
-              placeholder="Display Name"
-              value={newDisplayName}
-              onChange={(e) => setNewDisplayName(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2">
-            <Input
-              className="flex-1 h-8 text-sm"
-              placeholder="https://github.com/org/repo (optional)"
-              value={newRepo}
-              onChange={(e) => setNewRepo(e.target.value)}
             />
             <Button size="sm" className="h-8" onClick={handleCreate} disabled={creating || !newName.trim()}>
               {creating ? "Creating..." : "Create"}
@@ -159,11 +140,13 @@ export default function ProjectListView() {
             {/* Name and description */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-medium">{p.displayName || p.name}</span>
+                <span className="font-medium">{p.name}</span>
                 {p.configRepoReady ? (
                   <Badge variant="outline" className="text-xs border-green-500/40 text-green-500">ready</Badge>
                 ) : (
-                  <Badge variant="secondary" className="text-xs">provisioning</Badge>
+                  <Badge variant="secondary" className="text-xs" title={p.configRepoMessage || "Waiting for soft-serve config repo"}>
+                    provisioning
+                  </Badge>
                 )}
               </div>
               {p.description && (
@@ -173,11 +156,6 @@ export default function ProjectListView() {
 
             {/* Metadata */}
             <div className="flex items-center gap-3 shrink-0">
-              {p.repos?.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {p.repos.length} repo{p.repos.length !== 1 ? "s" : ""}
-                </span>
-              )}
               <span className="text-xs text-muted-foreground">
                 {p.runCount} run{p.runCount !== 1 ? "s" : ""}
               </span>
@@ -197,4 +175,3 @@ export default function ProjectListView() {
     </div>
   );
 }
-

@@ -169,6 +169,14 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
   const [showJumpButton, setShowJumpButton] = useState(false);
   const prevEntryCountRef = useRef(0);
 
+  // Clear stale state when switching to a different run
+  useEffect(() => {
+    setEntries([]);
+    setLoading(true);
+    setThinking(null);
+    prevEntryCountRef.current = 0;
+  }, [runId]);
+
   // Poll structured logs
   usePoll(async () => {
     try {

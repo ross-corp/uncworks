@@ -40,6 +40,11 @@ type Gateway struct {
 	mu      sync.RWMutex
 	process *AgentProcess
 	server  *http.Server
+
+	// stopCh is closed by Stop() to signal background goroutines (e.g.
+	// rate-limit retry sleeps) to abandon their work promptly.
+	stopCh chan struct{}
+	stopOnce sync.Once
 }
 
 // agentLogDir is the directory for agent log files on the PVC.
@@ -139,7 +144,7 @@ func NewGateway(port int) *Gateway {
 		slog.Info("debug mode — waiting for connections")
 	}
 
-	return &Gateway{port: port, debugMode: debugMode}
+	return &Gateway{port: port, debugMode: debugMode, stopCh: make(chan struct{})}
 }
 
 // Start begins listening for ConnectRPC connections from the Control Plane.
@@ -163,6 +168,8 @@ func (g *Gateway) Start() error {
 
 // Stop gracefully stops the gateway.
 func (g *Gateway) Stop() {
+	// Signal all background goroutines (e.g. rate-limit retry loops) to stop.
+	g.stopOnce.Do(func() { close(g.stopCh) })
 	if g.server != nil {
 		_ = g.server.Close()
 	}
@@ -205,19 +212,26 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 	// If a previous agent is still running, stop it before starting a new one.
 	// This handles pipeline stage transitions and retry attempts where the
 	// previous agent may not have fully exited yet.
+	//
+	// IMPORTANT: do NOT call cmd.Wait() here. waitForProcess (started by the
+	// previous StartAgent call) is the sole canonical Wait() caller for that
+	// process. Calling Wait() from a second goroutine is a data race. We only
+	// signal the process; the existing waitForProcess goroutine will observe
+	// the exit and clean up.
 	if g.process != nil && g.process.State() == agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING {
 		slog.Info("stopping previous agent before starting new one", "run", req.Msg.AgentRunId)
 		if g.process.cmd.Process != nil {
 			_ = g.process.cmd.Process.Signal(os.Interrupt)
-			// Give it a moment to clean up, but don't block long.
-			done := make(chan struct{})
-			go func() {
-				_ = g.process.cmd.Wait()
-				close(done)
-			}()
-			select {
-			case <-done:
-			case <-time.After(3 * time.Second):
+			// Give it up to 3 s to exit gracefully, then force-kill.
+			// We poll the process state rather than calling Wait() to avoid a race.
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				if g.process.State() != agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			if g.process.State() == agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING {
 				_ = g.process.cmd.Process.Kill()
 			}
 		}
@@ -683,7 +697,16 @@ func (g *Gateway) waitForProcess(agentRunID string) {
 				"delay", delay,
 			)
 
-			time.Sleep(delay)
+			// Respect gateway shutdown: if Stop() was called while we are
+			// sleeping between retries, abandon the retry loop immediately.
+			retryTimer := time.NewTimer(delay)
+			select {
+			case <-retryTimer.C:
+			case <-g.stopCh:
+				retryTimer.Stop()
+				slog.Info("gateway stopping — aborting rate-limit retry", "attempt", attempt)
+				return
+			}
 
 			// Re-read the original request args from the process to rebuild the command.
 			newProc, startErr := restartAgentProcess(proc.cmd)
@@ -760,10 +783,15 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 		done <- proc.cmd.Wait()
 	}()
 
+	// Use an explicit timer so we can Stop() it when the process exits normally,
+	// preventing the 24-hour timer from leaking until it fires.
+	timeout := time.NewTimer(24 * time.Hour)
+	defer timeout.Stop()
+
 	var err error
 	select {
 	case err = <-done:
-	case <-time.After(24 * time.Hour):
+	case <-timeout.C:
 		slog.Warn("agent process timed out after 24h, killing")
 		_ = proc.cmd.Process.Kill()
 		err = <-done
@@ -941,7 +969,7 @@ func restartAgentProcessWithModel(origCmd *exec.Cmd, model string) (*AgentProces
 	}, nil
 }
 
-func (g *Gateway) StreamOutput(_ context.Context, _ *connect.Request[agentv1.StreamOutputRequest], stream *connect.ServerStream[agentv1.AgentOutput]) error {
+func (g *Gateway) StreamOutput(ctx context.Context, _ *connect.Request[agentv1.StreamOutputRequest], stream *connect.ServerStream[agentv1.AgentOutput]) error {
 	g.mu.RLock()
 	proc := g.process
 	g.mu.RUnlock()
@@ -955,12 +983,34 @@ func (g *Gateway) StreamOutput(_ context.Context, _ *connect.Request[agentv1.Str
 	proc.outputs = append(proc.outputs, ch)
 	proc.mu.Unlock()
 
-	for output := range ch {
-		if err := stream.Send(output); err != nil {
-			return err
+	// Always remove the channel from proc.outputs when we return so that the
+	// pipe reader goroutine stops sending to a dead subscriber.
+	defer func() {
+		proc.mu.Lock()
+		for i, c := range proc.outputs {
+			if c == ch {
+				proc.outputs = append(proc.outputs[:i], proc.outputs[i+1:]...)
+				break
+			}
+		}
+		proc.mu.Unlock()
+	}()
+
+	for {
+		select {
+		case output, ok := <-ch:
+			if !ok {
+				// Channel closed — process has finished.
+				return nil
+			}
+			if err := stream.Send(output); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Client disconnected or RPC deadline exceeded.
+			return ctx.Err()
 		}
 	}
-	return nil
 }
 
 func (g *Gateway) SendInput(_ context.Context, req *connect.Request[agentv1.SendInputRequest]) (*connect.Response[agentv1.SendInputResponse], error) {
@@ -1139,9 +1189,28 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 	if workDir == "" {
 		workDir = "/workspace"
 	}
-	// Fall back to current directory if the specified directory doesn't exist.
+
+	// Path traversal guard: resolve the requested working directory and reject any
+	// path that escapes /workspace. This prevents a compromised control-plane from
+	// running commands in e.g. /etc or /root via "../../..".
+	cleanDir := filepath.Clean(workDir)
+	if cleanDir != "/workspace" && !strings.HasPrefix(cleanDir, "/workspace/") {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("working directory %q is outside /workspace", workDir))
+	}
+	workDir = cleanDir
+
+	// Fall back gracefully if the specified directory doesn't exist, with a log
+	// so operators can investigate misconfigured callers.
 	if _, err := os.Stat(workDir); err != nil {
-		workDir = "."
+		fallback := "/workspace"
+		if _, ferr := os.Stat(fallback); ferr != nil {
+			// /workspace itself doesn't exist (e.g. local dev / test environment).
+			fallback = "."
+		}
+		slog.Warn("ExecCommand: working directory not found, falling back",
+			"workDir", workDir, "fallback", fallback, "err", err)
+		workDir = fallback
 	}
 
 	timeout := time.Duration(req.Msg.TimeoutSeconds) * time.Second

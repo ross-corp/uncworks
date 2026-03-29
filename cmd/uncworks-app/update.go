@@ -29,6 +29,8 @@ type UpdateInfo struct {
 	LatestVersion string `json:"latestVersion,omitempty"`
 	// ReleaseURL is the HTML URL of the latest GitHub Release.
 	ReleaseURL string `json:"releaseURL,omitempty"`
+	// Error is non-empty when the check failed (e.g. network error).
+	Error string `json:"error,omitempty"`
 }
 
 var updateCache struct {
@@ -37,7 +39,9 @@ var updateCache struct {
 }
 
 // CheckForUpdate queries the GitHub Releases API for the latest version.
-// Results are cached for the lifetime of the process.
+// Successful results are cached for the lifetime of the process; errors are
+// not cached so that a transient network failure does not permanently suppress
+// the update check.
 // Exposed as a Wails binding.
 func (a *App) CheckForUpdate() UpdateInfo {
 	updateCache.mu.Lock()
@@ -48,7 +52,10 @@ func (a *App) CheckForUpdate() UpdateInfo {
 	}
 
 	result := checkForUpdate()
-	updateCache.info = &result
+	if result.Error == "" {
+		// Only cache successful checks.
+		updateCache.info = &result
+	}
 	return result
 }
 
@@ -65,7 +72,7 @@ func checkForUpdate() UpdateInfo {
 
 	release, err := latestGitHubRelease("ross-corp", "uncworks", channel == "nightly")
 	if err != nil {
-		return UpdateInfo{LocalBuild: false, CurrentVersion: Version}
+		return UpdateInfo{LocalBuild: false, CurrentVersion: Version, Error: err.Error()}
 	}
 
 	latest := strings.TrimPrefix(release.TagName, "v")
@@ -99,10 +106,16 @@ func latestGitHubRelease(owner, repo string, includePrerelease bool) (*ghRelease
 			return nil, err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("GitHub API returned HTTP %d", resp.StatusCode)
+		}
 		body, _ := io.ReadAll(resp.Body)
 		var rel ghRelease
 		if err := json.Unmarshal(body, &rel); err != nil {
 			return nil, fmt.Errorf("parse response: %w", err)
+		}
+		if rel.TagName == "" {
+			return nil, fmt.Errorf("release has no tag_name")
 		}
 		return &rel, nil
 	}
@@ -117,6 +130,9 @@ func latestGitHubRelease(owner, repo string, includePrerelease bool) (*ghRelease
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned HTTP %d", resp.StatusCode)
+	}
 	body, _ := io.ReadAll(resp.Body)
 	var releases []ghRelease
 	if err := json.Unmarshal(body, &releases); err != nil {

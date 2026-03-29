@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,11 @@ interface HitlModalProps {
 
 export default function HitlModal({ open, promptText, onSubmit, onClose }: HitlModalProps) {
   const [value, setValue] = useState("");
+
+  // Clear input each time the modal opens (new HITL prompt)
+  useEffect(() => {
+    if (open) setValue("");
+  }, [open]);
 
   function handleSubmit() {
     if (!value.trim()) return;

@@ -161,12 +161,16 @@ export default function GlobalNav() {
       return (
         location.pathname === "/" ||
         location.pathname.startsWith("/run/") ||
-        location.pathname === "/new" ||
-        location.pathname.startsWith("/chainrun/")
+        location.pathname === "/new"
       );
     }
     if (item.path === "/chains") {
-      return location.pathname === "/chains" || location.pathname.startsWith("/chains/");
+      return (
+        location.pathname === "/chains" ||
+        location.pathname.startsWith("/chains/") ||
+        location.pathname === "/chainruns" ||
+        location.pathname.startsWith("/chainrun/")
+      );
     }
     return location.pathname === item.path || location.pathname.startsWith(item.path + "/");
   }
