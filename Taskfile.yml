@@ -200,18 +200,31 @@ tasks:
       - GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-arm64 ./cmd/uncworks
 
   dev:images:
-    desc: Build local images and load them into the colima-uncworks cluster
+    desc: Build local images and load them into the colima-uncworks cluster (k8s.io namespace)
     vars:
       COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
     cmds:
       - npm install --no-save @bufbuild/protobuf@^2.0.0
       - cd web && npm run build
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-controlplane:local --file docker/Dockerfile.controlplane .
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-web:local --file docker/Dockerfile.web web/
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-sidecar:local --file docker/Dockerfile.sidecar .
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-init:local --file docker/Dockerfile.hydration .
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- build --tag aot-agent:local --file docker/Dockerfile.agent-base .
-      - echo "All images loaded into colima-{{.COLIMA_PROFILE}}"
+      # Build directly into the k8s.io containerd namespace so k3s can use the
+      # images immediately without a separate save|load step.
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-controlplane:local --file docker/Dockerfile.controlplane .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-web:local --file docker/Dockerfile.web web/
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-sidecar:local --file docker/Dockerfile.sidecar .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-init:local --file docker/Dockerfile.hydration .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-agent:local --file docker/Dockerfile.agent-base .
+      - echo "All images built into k8s.io namespace on colima-{{.COLIMA_PROFILE}}"
+
+  dev:deploy:
+    desc: Build images, load into k3s, and rollout all deployments
+    vars:
+      COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
+      NAMESPACE: '{{.NAMESPACE | default "aot"}}'
+    cmds:
+      - task: dev:images
+      - kubectl rollout restart deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n {{.NAMESPACE}}
+      - kubectl rollout status  deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n {{.NAMESPACE}} --timeout=120s
+      - echo "Rollout complete."
 
   app:build:
     desc: Build the native macOS app (requires Wails v2 and macOS)

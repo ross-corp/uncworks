@@ -9,9 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Version is set via -ldflags at build time. Empty string means local/dev build.
@@ -91,6 +95,76 @@ type ghRelease struct {
 	TagName    string `json:"tag_name"`
 	Prerelease bool   `json:"prerelease"`
 	HTMLURL    string `json:"html_url"`
+}
+
+// startLocalWatcher polls the running executable's mtime every 3 seconds.
+// When it detects a change (a new local build was installed), it emits a
+// "app:local-reload" event so the frontend can prompt the user, then
+// re-launches the app and quits.
+func (a *App) startLocalWatcher() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	info, err := os.Stat(exe)
+	if err != nil {
+		return
+	}
+	baseline := info.ModTime()
+
+	go func() {
+		for {
+			time.Sleep(3 * time.Second)
+
+			s, _ := loadAppSettings()
+			if s.UpdateChannel != "local" {
+				return // channel changed, stop watching
+			}
+
+			fi, err := os.Stat(exe)
+			if err != nil {
+				continue
+			}
+			if fi.ModTime().After(baseline) {
+				runtime.EventsEmit(a.ctx, "app:local-reload")
+				time.Sleep(500 * time.Millisecond)
+				// Re-launch the (now updated) binary and quit this instance.
+				_ = relaunchApp()
+				runtime.Quit(a.ctx)
+				return
+			}
+		}
+	}()
+}
+
+// relaunchApp opens the UNCWORKS.app bundle via `open` so the updated binary
+// starts in a fresh process after this instance quits.
+func relaunchApp() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	// Walk up from Contents/MacOS/<binary> to find the .app bundle root.
+	app := appBundlePath(exe)
+	cmd := fmt.Sprintf("sleep 1 && open -a %q", app)
+	return exec.Command("sh", "-c", cmd).Start()
+}
+
+// appBundlePath finds the .app bundle root from the executable path.
+// Falls back to re-opening the executable directly if no bundle is found.
+func appBundlePath(exe string) string {
+	p := exe
+	for i := 0; i < 5; i++ {
+		if strings.HasSuffix(p, ".app") {
+			return p
+		}
+		parent := p[:strings.LastIndex(p, "/")]
+		if parent == p {
+			break
+		}
+		p = parent
+	}
+	return exe
 }
 
 func latestGitHubRelease(owner, repo string, includePrerelease bool) (*ghRelease, error) {

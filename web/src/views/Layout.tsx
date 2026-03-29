@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import GlobalNav from "../components/GlobalNav";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { CopilotContextProvider } from "../hooks/useCopilotContext";
@@ -21,6 +22,13 @@ function LayoutInner() {
   const wails = isWails();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardChecked, setWizardChecked] = useState(false);
+
+  // Listen for local-channel hot-reload signal from the Go backend.
+  useEffect(() => {
+    const handler = () => toast.info("New local build detected — reloading…");
+    window.addEventListener("uncworks:local-reload", handler);
+    return () => window.removeEventListener("uncworks:local-reload", handler);
+  }, []);
 
   // Auto-show wizard on first launch if not yet complete.
   // Wait for settings to finish loading so we don't open wizard
