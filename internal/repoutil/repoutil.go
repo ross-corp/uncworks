@@ -9,10 +9,16 @@ import (
 
 // NameFromURL extracts the repository name from a URL.
 // Handles HTTPS ("https://github.com/org/repo.git") and bare names ("repo-name").
+// Returns empty string for empty input.
 func NameFromURL(repoURL string) string {
-	if u, err := url.Parse(repoURL); err == nil && u.Path != "" {
+	if repoURL == "" {
+		return ""
+	}
+	if u, err := url.Parse(repoURL); err == nil && u.Path != "" && u.Path != "/" {
 		base := filepath.Base(u.Path)
-		return strings.TrimSuffix(base, ".git")
+		if base != "." && base != "/" {
+			return strings.TrimSuffix(base, ".git")
+		}
 	}
 	base := filepath.Base(repoURL)
 	return strings.TrimSuffix(base, ".git")

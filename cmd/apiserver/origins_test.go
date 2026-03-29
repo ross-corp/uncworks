@@ -1,6 +1,9 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -83,5 +86,150 @@ func TestIsOriginAllowed_CaseInsensitive(t *testing.T) {
 	allowed := []string{"https://App.Example.COM"}
 	if !isOriginAllowed("https://app.example.com", allowed) {
 		t.Error("origin matching should be case-insensitive")
+	}
+}
+
+// --- withAuth tests ---
+
+func okHandler(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }
+
+func TestWithAuth_NoKey_PassesThrough(t *testing.T) {
+	h := withAuth(http.HandlerFunc(okHandler), "")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("empty apiKey should pass all requests through; got %d", rec.Code)
+	}
+}
+
+func TestWithAuth_NoToken_Returns401(t *testing.T) {
+	h := withAuth(http.HandlerFunc(okHandler), "secret")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("missing token should return 401; got %d", rec.Code)
+	}
+}
+
+func TestWithAuth_WrongToken_Returns401(t *testing.T) {
+	h := withAuth(http.HandlerFunc(okHandler), "correct")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req.Header.Set("Authorization", "Bearer wrong")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("wrong token should return 401; got %d", rec.Code)
+	}
+}
+
+func TestWithAuth_ValidBearerToken_Passes(t *testing.T) {
+	h := withAuth(http.HandlerFunc(okHandler), "correct")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req.Header.Set("Authorization", "Bearer correct")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("valid Bearer token should pass; got %d", rec.Code)
+	}
+}
+
+func TestWithAuth_QueryParamToken_Passes(t *testing.T) {
+	h := withAuth(http.HandlerFunc(okHandler), "mykey")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ws?token=mykey", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("query-param token should pass; got %d", rec.Code)
+	}
+}
+
+func TestWithAuth_HealthzExempt(t *testing.T) {
+	h := withAuth(http.HandlerFunc(okHandler), "secret")
+	for _, path := range []string{"/healthz", "/readyz"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("path %s should bypass auth; got %d", path, rec.Code)
+		}
+	}
+}
+
+func TestWithAuth_GRPCPathsExempt(t *testing.T) {
+	h := withAuth(http.HandlerFunc(okHandler), "secret")
+	for _, path := range []string{
+		"/grpc.health.v1.Health/Check",
+		"/grpc.reflection.v1.ServerReflection/Info",
+		"/grpc.reflection.v1alpha.ServerReflection/Info",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("gRPC path %s should bypass auth; got %d", path, rec.Code)
+		}
+	}
+}
+
+func TestWithAuth_WebhookExempt(t *testing.T) {
+	h := withAuth(http.HandlerFunc(okHandler), "secret")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("webhook path should bypass Bearer auth; got %d", rec.Code)
+	}
+}
+
+// --- env helper tests ---
+
+func TestEnvIntOrDefault_UsesDefault(t *testing.T) {
+	os.Unsetenv("TEST_INT_KEY_UNUSED")
+	if got := envIntOrDefault("TEST_INT_KEY_UNUSED", 42); got != 42 {
+		t.Errorf("envIntOrDefault with unset key = %d, want 42", got)
+	}
+}
+
+func TestEnvIntOrDefault_ReadsEnv(t *testing.T) {
+	t.Setenv("TEST_INT_KEY", "7")
+	if got := envIntOrDefault("TEST_INT_KEY", 42); got != 7 {
+		t.Errorf("envIntOrDefault with set key = %d, want 7", got)
+	}
+}
+
+func TestEnvIntOrDefault_InvalidFallsBack(t *testing.T) {
+	t.Setenv("TEST_INT_INVALID", "notanumber")
+	if got := envIntOrDefault("TEST_INT_INVALID", 99); got != 99 {
+		t.Errorf("envIntOrDefault with invalid value = %d, want 99", got)
+	}
+}
+
+func TestEnvFloatOrDefault_UsesDefault(t *testing.T) {
+	os.Unsetenv("TEST_FLOAT_UNUSED")
+	if got := envFloatOrDefault("TEST_FLOAT_UNUSED", 3.14); got != 3.14 {
+		t.Errorf("envFloatOrDefault with unset key = %f, want 3.14", got)
+	}
+}
+
+func TestEnvFloatOrDefault_ReadsEnv(t *testing.T) {
+	t.Setenv("TEST_FLOAT_KEY", "2.71")
+	if got := envFloatOrDefault("TEST_FLOAT_KEY", 0); got != 2.71 {
+		t.Errorf("envFloatOrDefault with set key = %f, want 2.71", got)
+	}
+}
+
+func TestEnvOrDefault_UsesDefault(t *testing.T) {
+	os.Unsetenv("TEST_STR_UNUSED")
+	if got := envOrDefault("TEST_STR_UNUSED", "fallback"); got != "fallback" {
+		t.Errorf("envOrDefault with unset key = %q, want %q", got, "fallback")
+	}
+}
+
+func TestEnvOrDefault_ReadsEnv(t *testing.T) {
+	t.Setenv("TEST_STR_KEY", "hello")
+	if got := envOrDefault("TEST_STR_KEY", "fallback"); got != "hello" {
+		t.Errorf("envOrDefault with set key = %q, want %q", got, "hello")
 	}
 }

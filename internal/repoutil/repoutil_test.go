@@ -12,7 +12,7 @@ func TestNameFromURL(t *testing.T) {
 		{"git@github.com:org/repo.git", "repo"},
 		{"repo-name", "repo-name"},
 		{"https://github.com/example/repo/", "repo"},
-		{"", "."},
+		{"", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
