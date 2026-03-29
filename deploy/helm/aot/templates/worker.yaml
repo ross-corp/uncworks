@@ -94,10 +94,16 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           {{- with .Values.worker.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 # PodDisruptionBudget: ensures at least one Temporal worker stays up during node drains.
 # With replicas=1 (default) this prevents eviction — increase worker.replicas to >=2 in

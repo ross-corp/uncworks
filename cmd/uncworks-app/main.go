@@ -53,7 +53,17 @@ func main() {
 	})
 	appMenuItem.AddSeparator()
 	appMenuItem.AddText("Quit UNCWORKS", keys.CmdOrCtrl("q"), func(_ *menu.CallbackData) {
-		runtime.Quit(app.ctx)
+		btn, _ := runtime.MessageDialog(app.ctx, runtime.MessageDialogOptions{
+			Type:          runtime.QuestionDialog,
+			Title:         "Quit UNCWORKS?",
+			Message:       "Are you sure you want to quit UNCWORKS?",
+			Buttons:       []string{"Quit", "Cancel"},
+			DefaultButton: "Cancel",
+			CancelButton:  "Cancel",
+		})
+		if btn == "Quit" {
+			runtime.Quit(app.ctx)
+		}
 	})
 
 	// Edit menu — Wails v2 / WKWebView does not participate in the macOS
@@ -102,6 +112,12 @@ func main() {
 				document.execCommand('selectAll');
 			}
 		})()`)
+	})
+
+	// Window menu — standard macOS window management
+	windowMenu := appMenu.AddSubmenu("Window")
+	windowMenu.AddText("Close Window", keys.CmdOrCtrl("w"), func(_ *menu.CallbackData) {
+		runtime.WindowHide(app.ctx)
 	})
 
 	err := wails.Run(&options.App{
