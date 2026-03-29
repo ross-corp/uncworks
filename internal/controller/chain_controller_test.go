@@ -58,8 +58,12 @@ func TestChainRun_MissingChain_Fails(t *testing.T) {
 		t.Fatalf("create chain run: %v", err)
 	}
 
-	_, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)})
-	if err != nil {
+	// First reconcile: adds finalizer and returns.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile finalizer: %v", err)
+	}
+	// Second reconcile: loads chain — not found, should set phase=failed.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
 		t.Fatalf("reconcile error: %v", err)
 	}
 
@@ -102,9 +106,13 @@ func TestChainRun_Initializes_StepStatuses(t *testing.T) {
 		t.Fatalf("create chain run: %v", err)
 	}
 
-	_, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)})
-	if err != nil {
-		t.Fatalf("reconcile: %v", err)
+	// First reconcile: adds finalizer and returns.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile finalizer: %v", err)
+	}
+	// Second reconcile: initializes step statuses.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile init: %v", err)
 	}
 
 	if err := k8s.Get(ctx, client.ObjectKeyFromObject(cr), cr); err != nil {
@@ -166,12 +174,17 @@ func TestChainRun_LaunchesRootStep(t *testing.T) {
 		t.Fatalf("create chain run: %v", err)
 	}
 
-	// First reconcile: initialize steps
+	// First reconcile: adds finalizer and returns.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile finalizer: %v", err)
+	}
+
+	// Second reconcile: initialize steps
 	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
 		t.Fatalf("reconcile init: %v", err)
 	}
 
-	// Second reconcile: should launch root step "lint" (no deps)
+	// Third reconcile: should launch root step "lint" (no deps)
 	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
 		t.Fatalf("reconcile launch: %v", err)
 	}
@@ -262,11 +275,15 @@ func TestChainRun_MissingTemplate_FailsStep(t *testing.T) {
 		t.Fatalf("create chain run: %v", err)
 	}
 
-	// First reconcile: init steps
+	// First reconcile: adds finalizer and returns.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile finalizer: %v", err)
+	}
+	// Second reconcile: init steps
 	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
 		t.Fatalf("reconcile init: %v", err)
 	}
-	// Second reconcile: try to launch — template missing
+	// Third reconcile: try to launch — template missing
 	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
 		t.Fatalf("reconcile launch: %v", err)
 	}
@@ -406,6 +423,9 @@ func TestChainRun_FailurePropagation_SkipsDependents(t *testing.T) {
 	// Manually set step A to failed
 	if err := k8s.Get(ctx, client.ObjectKeyFromObject(cr), cr); err != nil {
 		t.Fatalf("get after init: %v", err)
+	}
+	if len(cr.Status.Steps) == 0 {
+		t.Fatalf("expected steps to be initialized after second reconcile, got empty slice (phase=%q)", cr.Status.Phase)
 	}
 	cr.Status.Steps[0].Phase = "failed"
 	cr.Status.Steps[0].Message = "simulated failure"
