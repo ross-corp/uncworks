@@ -279,6 +279,18 @@ func (m *Ci) RegressionTests(ctx context.Context, source *dagger.Directory) (str
 	return out, nil
 }
 
+// BDDTests runs the Ginkgo BDD scenario specs (./test/bdd/...).
+// These are fast in-process tests that use a fake k8s client — no cluster required.
+func (m *Ci) BDDTests(ctx context.Context, source *dagger.Directory) (string, error) {
+	out, err := m.goBase(source).
+		WithExec([]string{"go", "test", "-v", "./test/bdd/...", "-count=1"}).
+		Stdout(ctx)
+	if err != nil {
+		return "", fmt.Errorf("bdd tests failed: %w", err)
+	}
+	return out, nil
+}
+
 // BuildImage builds a single Docker image by name.
 func (m *Ci) BuildImage(source *dagger.Directory, name string) *dagger.Container {
 	for _, img := range images {
