@@ -84,6 +84,71 @@ jobs:
           module: ./ci
           call: regression-tests --source .
 
+  app-release:
+    name: macOS App Build + DMG
+    needs: ci
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build web frontend
+        run: |
+          npm install --no-save @bufbuild/protobuf@^2.0.0
+          cd packages/shared && npm ci
+          cd ../../web && npm ci && npm run build
+          rsync -a --delete web/dist/ cmd/uncworks-app/frontend/dist/
+
+      - name: Build Wails .app
+        run: |
+          cd cmd/uncworks-app
+          wails build -clean -o UNCWORKS -platform darwin/universal
+        env:
+          CGO_ENABLED: '1'
+
+      - name: Package DMG
+        run: |
+          APP="cmd/uncworks-app/build/bin/UNCWORKS.app"
+          VERSION="${{ github.ref_name }}"
+          DMG_NAME="UNCWORKS-${VERSION}-darwin-universal.dmg"
+          # Create a staging directory for the DMG contents
+          STAGING=$(mktemp -d)
+          cp -r "$APP" "$STAGING/UNCWORKS.app"
+          # Symlink /Applications for drag-install UX
+          ln -s /Applications "$STAGING/Applications"
+          hdiutil create \
+            -volname "UNCWORKS ${VERSION}" \
+            -srcfolder "$STAGING" \
+            -ov \
+            -format UDZO \
+            "$DMG_NAME"
+          echo "DMG_PATH=$DMG_NAME" >> "$GITHUB_ENV"
+
+      - name: Upload DMG to GitHub Release
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        with:
+          files: ${{ env.DMG_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   edge:
     name: Edge Images
     needs: ci

@@ -161,5 +161,5 @@ tasks:
       AOT_SIDECAR_IMAGE: aot-sidecar:local
       AOT_INIT_IMAGE: aot-init:local
     cmds:
-      - task: k8s:k0s:images
+      - task: k8s:images
       - go test -tags e2e ./e2e/... -run TestE2E_LLM -v -count=1 -timeout 30m
