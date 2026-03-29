@@ -36,7 +36,7 @@ func (h *CountsHandler) handleCounts(w http.ResponseWriter, r *http.Request) {
 
 	var runs aotv1alpha1.AgentRunList
 	if err := h.K8sClient.List(ctx, &runs, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("counts: list runs", "err", err)
+		slog.Error("listing runs for counts failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to fetch counts"})
 		return
 	}

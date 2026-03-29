@@ -393,7 +393,12 @@ func TestChainRun_FailurePropagation_SkipsDependents(t *testing.T) {
 		t.Fatalf("create chain run: %v", err)
 	}
 
-	// First reconcile: initialize steps
+	// First reconcile: adds finalizer and returns.
+	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
+		t.Fatalf("reconcile finalizer: %v", err)
+	}
+
+	// Second reconcile: initialize steps
 	if _, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cr)}); err != nil {
 		t.Fatalf("reconcile init: %v", err)
 	}

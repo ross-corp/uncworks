@@ -12,19 +12,29 @@ All commands use [Task](https://taskfile.dev/) (see `Taskfile.yml`). Enter the d
 
 ### Build
 ```bash
-task build          # all 5 Go binaries to ./bin/
+task build          # all Go binaries to ./bin/
 task build:web      # web dashboard (Vite)
-task proto:gen      # regenerate Go code from .proto files
+task build:app      # native macOS app (Wails v2, macOS only)
+task build:uncworks # cross-compile uncworks CLI (linux/darwin amd64+arm64)
+task proto:gen      # regenerate Go + TypeScript code from .proto files
+task proto:lint     # lint protobuf definitions
+task proto:breaking # check for breaking proto changes vs main
 ```
 
 ### Test
 ```bash
-task test           # all tests (Go + web + extension)
-task test:go        # Go unit + integration tests
-task test:e2e       # E2E tests (requires running k0s cluster)
-task test:web       # Playwright tests (web dashboard)
-task test:extension # pi-aot-extension tests
-task test:shared    # @aot/shared package tests
+task test              # all tests in parallel (Go + web + extension + layer2)
+task test:go           # Go unit + integration tests (api/... internal/...)
+task test:unit         # Go unit only — fast, no Docker
+task test:contract     # ConnectRPC + protovalidate contract tests
+task test:temporal     # Temporal workflow tests
+task test:layer2       # Layer 2 pipeline tests (LLM stubbed, no cluster)
+task test:regression   # Regression suite — gates releases and PRs to main
+task test:web          # Playwright tests for web dashboard
+task test:extension    # pi-aot-extension TypeScript tests
+task test:shared       # @aot/shared TypeScript tests
+task test:e2e          # Go E2E tests (requires running cluster)
+task test:e2e:full     # setup soft-serve → E2E → Playwright → teardown
 ```
 
 Single Go test: `go test ./internal/server/... -run TestCreateAgentRun -count=1`
@@ -33,17 +43,31 @@ Controller tests require envtest (auto-resolved via `internal/testutil.EnsureEnv
 
 ### Lint
 ```bash
-task lint           # golangci-lint + TypeScript type checks
+task lint           # golangci-lint + TypeScript type checks (all packages)
 ```
 
 Linting uses [golangci-lint](https://golangci-lint.run/) v2 (config: `.golangci.yml`). Enabled linters: govet, errcheck, staticcheck, unused, ineffassign, gocritic, misspell. Formatter: gofmt. Generated code in `gen/go/` is excluded.
 
-### Infrastructure
+### Local Dev Cluster (colima-uncworks)
 ```bash
-task k0s:setup      # initialize local k0s cluster (requires sudo)
-task k0s:teardown   # tear down cluster
-task k0s:crd        # apply AgentRun CRD to cluster
-task dev:web        # start Vite dev server for web dashboard
+task dev:web          # start Vite HMR dev server for web dashboard
+task dev:images       # build all images into colima-uncworks k8s.io namespace
+task dev:deploy       # build images + kubectl rollout restart + status
+task dev:install      # install all Go + npm workspace dependencies
+task dev:hooks:install # install git hooks via lefthook
+```
+
+### Kubernetes / Cluster Operations
+```bash
+task k8s:crd          # apply AgentRun CRD to cluster
+task k8s:deps         # deploy all infra deps (CRDs, storage, Ollama, LiteLLM, soft-serve)
+task k8s:images       # build images via docker + import into k0s (sudo required)
+task k8s:deploy:all   # build web + import images + rollout all deployments
+task cluster:setup    # install systemd units + build/import images + start all services
+task cluster:status   # show health of all UNCWORKS services and ports
+task cluster:teardown # stop all UNCWORKS services and remove systemd units
+task cluster:logs     # combined logs from all UNCWORKS services
+task cluster:temporal:dev  # start Temporal dev server (SQLite, no external deps)
 ```
 
 ## Architecture
@@ -53,7 +77,7 @@ Two gRPC APIs define all communication:
 - **`proto/api.proto`** — Client API (`AOTService` on `:50055`): CreateAgentRun, GetAgentRun, ListAgentRuns, WatchAgentRun (server-streaming), CancelAgentRun, SendHumanInput
 - **`proto/agent.proto`** — Sidecar API (`AgentSidecarService` on `:50052`): StartAgent, StreamOutput, SendInput, GetStatus, StopAgent. Plus `AgentNotificationService` for sidecar→control-plane async events.
 
-Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `hack/proto-gen.sh`).
+Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `buf generate`).
 
 ### Go binaries (`cmd/`)
 
@@ -87,6 +111,7 @@ Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `hac
 
 - **`@aot/shared`** — gRPC client wrapper + reactive agent state store
 - **`@aot/pi-extension`** — Agent harness extension: `ask_human` tool (HITL), `spawn_junior` tool (multi-agent), OTel tracing
+
 ### Workspace Layout
 
 Each agent run gets a persistent workspace on a PVC mounted at `/workspace`:
@@ -126,13 +151,13 @@ SolidJS + Vite. Connects to API server via WebSocket for real-time updates.
 
 ## Git Hooks & Releases
 
-Git hooks are managed by [Lefthook](https://lefthook.dev/) (config: `lefthook.yml`). Hooks install automatically on `devbox shell` entry, or manually via `task hooks:install`.
+Git hooks are managed by [Lefthook](https://lefthook.dev/) (config: `lefthook.yml`). Hooks install automatically on `devbox shell` entry, or manually via `task dev:hooks:install`.
 
 - **pre-commit**: gofmt, golangci-lint (new changes only), buf lint, TypeScript type checks
 - **commit-msg**: Enforces [Conventional Commits](https://www.conventionalcommits.org/) via commitlint
 - **pre-push**: Go tests, buf breaking change detection
 
-Releases use [Release Please](https://github.com/googleapis/release-please). Conventional commit messages on `main` automatically generate changelogs and version bumps via `.github/workflows/release-please.yml`. The workflow uses the default `GITHUB_TOKEN` — no additional secrets required.
+Releases use [Release Please](https://github.com/googleapis/release-please). Conventional commit messages on `main` automatically generate changelogs and version bumps. The CI workflow (`ci.yml`) runs Release Please after each merge to `main`. Every passing push to `main` also auto-tags a pre-release: `vX.Y.Z-pre.YYYYMMDD.sha7`.
 
 ## Conventions
 
@@ -146,4 +171,76 @@ Releases use [Release Please](https://github.com/googleapis/release-please). Con
 
 ## OpenSpec
 
-The project uses OpenSpec for change management. Active changes live in `openspec/changes/<name>/` with artifacts: proposal.md, design.md, specs/, tasks.md. Use `/opsx:explore` to investigate, `/opsx:propose` to create changes, `/opsx:apply` to implement.
+OpenSpec is the change management system for this repo. It enforces a spec-driven workflow: propose → design → spec → implement → archive.
+
+### Directory layout
+
+```
+openspec/
+├── config.yaml          # schema and project context config
+├── specs/               # global specs (source of truth, ~70+ domains)
+└── changes/
+    ├── <name>/          # active change
+    │   ├── proposal.md
+    │   ├── design.md
+    │   ├── specs/
+    │   └── tasks.md
+    └── archive/         # completed changes
+```
+
+### Common commands
+
+```bash
+openspec list                    # list active changes
+openspec new change <name>       # scaffold a new change
+openspec status <name>           # show task completion for a change
+openspec show <name>             # display full change details
+openspec validate <name>         # validate artifacts
+openspec archive <name>          # merge specs into openspec/specs/, move to archive
+openspec view                    # interactive dashboard
+```
+
+### Workflow
+
+1. **Propose** — `openspec new change <name>`, fill in `proposal.md`
+2. **Design** — fill in `design.md` with technical decisions
+3. **Spec** — add behavioral specs under `specs/`
+4. **Apply** — implement via `tasks.md`; use `/opsx:apply` skill or work tasks manually
+5. **Archive** — `openspec archive <name>` when all tasks are done
+
+### Active changes (as of last update)
+
+`add-rate-limiting`, `deployment-modes`, `frontend-quality`, `go-concurrency-fixes`, `keybindings`, `settings-wizard`, `ui-polish`
+
+## Multi-Agent Claude Code Workflow
+
+UNCWORKS uses Claude Code subagents for parallel exploration and implementation. Key principles:
+
+### How subagents are used
+
+- **Parallel exploration**: Spin up subagents to investigate different parts of the codebase simultaneously, then merge findings before writing code.
+- **Thin vertical slices**: Each subagent works on a scoped, independently verifiable unit. Avoid big-bang changes.
+- **Stop on invalidation**: If new information discovered by one subagent invalidates the plan, stop all others and re-plan.
+
+### Agent roles in the platform
+
+UNCWORKS itself runs two agent roles via `PI_ROLE` env var:
+
+| Role | Responsibility |
+|---|---|
+| `manage` | PLAN stage: reads repo, runs `openspec` CLI, writes specs and tasks. VERIFY stage: checks task completion, validates implementation. |
+| `implement` | EXECUTE stage: reads specs from workspace, writes code, runs tests. |
+
+### Skills available for this repo
+
+Invoke via `/skill-name` in Claude Code:
+
+| Skill | When to use |
+|---|---|
+| `/uncworks-deploy` | Build images + rollout to colima-uncworks dev cluster |
+| `/uncworks-image-push` | Build images into k8s.io namespace (no rollout) |
+| `/uncworks-run-tests` | Choose and run the right test suite for what changed |
+| `/uncworks-release` | Understand the release process (Release Please) |
+| `/uncworks-new-change` | Create a new OpenSpec change |
+| `/uncworks-audit-openspec` | List and categorize active OpenSpec changes |
+| `/uncworks-rebuild-app` | Rebuild and reinstall the macOS desktop app |
