@@ -1,0 +1,168 @@
+{{/*
+NetworkPolicy resources.
+
+GAP: No NetworkPolicy was present in this chart prior to this addition. Without a
+NetworkPolicy-capable CNI (Calico, Cilium, etc.) these objects are silently ignored.
+Enable via networkPolicy.enabled: true in values and confirm your CNI enforces them.
+
+Design:
+  - Default deny-all ingress for each component.
+  - Allow ingress only from within the same release namespace (podSelector: {}) on
+    the relevant port. This permits same-namespace service-to-service communication
+    while blocking traffic from other namespaces by default.
+  - Egress is intentionally unrestricted here; tighten per-component if required.
+  TODO(operator): restrict ingress to specific source namespaces/pods and add egress
+  rules once topology is stable (e.g. limit worker egress to Temporal + LLM endpoints).
+*/}}
+{{- if .Values.networkPolicy.enabled }}
+---
+# NetworkPolicy: apiserver — allow ingress on the gRPC port from within the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aot.fullname" . }}-apiserver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: apiserver
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # Allow any pod in the same namespace (web, bff, controller, worker, etc.).
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.apiserver.port }}
+---
+# NetworkPolicy: controller — allow ingress on the metrics port from within the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aot.fullname" . }}-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.controller.metricsPort }}
+---
+# NetworkPolicy: web — allow ingress on the HTTP port from within the namespace.
+{{- if .Values.web.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aot.fullname" . }}-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.web.port }}
+{{- end }}
+---
+# NetworkPolicy: bff — allow ingress on port 3000 from within the namespace.
+{{- if .Values.bff.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aot.fullname" . }}-bff
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bff
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: bff
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3000
+{{- end }}
+---
+# NetworkPolicy: cudgel — allow ingress on port 8080 from within the namespace.
+{{- if .Values.cudgel.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aot.fullname" . }}-cudgel
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cudgel
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cudgel
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end }}
+---
+# NetworkPolicy: soft-serve — allow ingress on SSH/HTTP/git ports from within the namespace.
+{{- if .Values.softServe.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: soft-serve
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: soft-serve
+    app.kubernetes.io/part-of: aot
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: soft-serve
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 23231
+        - protocol: TCP
+          port: 23232
+        - protocol: TCP
+          port: 9418
+{{- end }}
+{{- end }}

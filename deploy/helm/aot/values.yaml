@@ -5,6 +5,13 @@ temporal:
   # -- Temporal namespace
   namespace: default
 
+# -- Log level for all control-plane components (apiserver, controller).
+# Valid values: debug, info, warn, error. Defaults to "info" when unset.
+logLevel: ""
+# -- Log format for all control-plane components (apiserver).
+# Set to "json" for structured log ingestion; defaults to auto-detect (text for TTY, JSON otherwise).
+logFormat: ""
+
 # -- LLM endpoint configuration (optional)
 llm:
   # -- LiteLLM/Ollama/OpenAI base URL (e.g. "http://ollama:11434")
@@ -73,6 +80,15 @@ worker:
     limits:
       cpu: 1000m
       memory: 512Mi
+  # -- PostgreSQL DSN for the brain (long-term memory) store.
+  # When set, knowledge activities (persist, embed, hydrate) are enabled.
+  # Format: "postgres://user:pass@host:5432/dbname"
+  brainDatabaseURL: ""
+  # -- Base URL of the embedder service (e.g. "http://ollama:11434").
+  # Requires brainDatabaseURL to also be set. When unset, embedding is skipped.
+  embedderBaseURL: ""
+  # -- Model name for the embedder. Defaults to the embedder's built-in default when empty.
+  embedderModel: ""
 
 # -- API Server configuration
 apiserver:
@@ -134,15 +150,6 @@ apiserver:
     # -- When true, reads client IP from X-Forwarded-For header (for ingress deployments).
     # Only enable when behind a trusted proxy/ingress controller.
     trustProxy: false
-
-# -- Spec-driven pipeline configuration
-pipeline:
-  # -- Max retry attempts for execute→verify loop
-  maxRetries: 3
-  # -- Planning stage timeout in seconds
-  planTimeout: 120
-  # -- Model to use for the verification LLM judge (defaults to same as execution model)
-  verifyModel: ""
 
 # -- BFF (Backend for Frontend) configuration
 # When enabled, replaces the nginx web deployment with a Go BFF that

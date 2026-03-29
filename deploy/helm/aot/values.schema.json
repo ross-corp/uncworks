@@ -58,7 +58,10 @@
       "type": "object",
       "properties": {
         "replicas": { "type": "integer", "minimum": 1 },
-        "resources": { "$ref": "#/definitions/resourceRequirements" }
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
+        "brainDatabaseURL": { "type": "string", "description": "PostgreSQL DSN for the brain (long-term memory) store." },
+        "embedderBaseURL": { "type": "string", "description": "Base URL of the embedder service. Requires brainDatabaseURL." },
+        "embedderModel": { "type": "string", "description": "Embedder model name. Defaults to the embedder built-in default." }
       }
     },
     "apiserver": {
@@ -95,13 +98,15 @@
         }
       }
     },
-    "pipeline": {
-      "type": "object",
-      "properties": {
-        "maxRetries": { "type": "integer", "minimum": 0 },
-        "planTimeout": { "type": "integer", "minimum": 1 },
-        "verifyModel": { "type": "string" }
-      }
+    "logLevel": {
+      "type": "string",
+      "description": "Log level for control-plane components. Valid values: debug, info, warn, error.",
+      "enum": ["", "debug", "info", "warn", "error"]
+    },
+    "logFormat": {
+      "type": "string",
+      "description": "Log format. Set to json for structured log ingestion.",
+      "enum": ["", "json", "text"]
     },
     "bff": {
       "type": "object",

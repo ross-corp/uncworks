@@ -16,8 +16,45 @@ linters:
     - ineffassign
     - gocritic
     - misspell
+    # HTTP / network hygiene
+    - bodyclose
+    - noctx
+    # SQL hygiene
+    - sqlclosecheck
+    - rowserrcheck
+    # Error handling quality
+    - err113
+    - wrapcheck
 
-issues:
-  exclude-dirs:
-    - gen/go
-  exclude-generated: strict
+  settings:
+    wrapcheck:
+      # Suppress wrapcheck for stdlib packages — wrapping os/io errors at every
+      # return site inside helpers is not idiomatic Go.
+      extra-ignore-sigs:
+        - .Error()
+      ignore-package-globs:
+        - os
+        - io
+        - io/fs
+        - path/filepath
+        - embed
+        - encoding/json
+        - strings
+        - bytes
+        - fmt
+
+  exclusions:
+    generated: strict
+    paths:
+      - gen/go
+    rules:
+      # softserve helpers wrap exec.Command for SSH/git over the network.
+      # Adding context requires an interface-breaking change tracked separately.
+      - path: internal/softserve/
+        linters:
+          - noctx
+      # scaffold.go: errors from fs.WalkDir callbacks are already surfaced by
+      # the caller; wrapping at every internal return adds no diagnostic value.
+      - path: internal/softserve/scaffold\.go
+        linters:
+          - wrapcheck
