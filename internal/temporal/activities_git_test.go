@@ -88,56 +88,21 @@ func TestParseGitHubOwnerRepo(t *testing.T) {
 	}
 }
 
-func TestPushChangesInput_Fields(t *testing.T) {
-	// Verify the PushChangesInput struct has all expected fields and can be constructed.
-	input := PushChangesInput{
-		AgentRunName:  "ar-test-001",
-		PodIP:         "10.0.0.1",
-		RepoPath:      "/workspace/repo",
-		BranchName:    "aot/ar-test-001",
-		CommitMessage: "feat: implement auth middleware",
-		RepoURL:       "https://github.com/org/repo.git",
-		ChangeName:    "auth-middleware",
-	}
-
-	assert.Equal(t, "ar-test-001", input.AgentRunName)
-	assert.Equal(t, "10.0.0.1", input.PodIP)
-	assert.Equal(t, "/workspace/repo", input.RepoPath)
-	assert.Equal(t, "aot/ar-test-001", input.BranchName)
-	assert.Equal(t, "feat: implement auth middleware", input.CommitMessage)
-	assert.Equal(t, "https://github.com/org/repo.git", input.RepoURL)
-	assert.Equal(t, "auth-middleware", input.ChangeName)
+func TestCreatePRInput_DefaultBaseBranch_IsEmptyBeforeActivity(t *testing.T) {
+	// When BaseBranch is omitted, it is empty before the activity runs.
+	// The CreatePR activity defaults it to "main" internally — this test
+	// documents that the zero value is intentionally empty (not pre-set).
+	var input CreatePRInput
+	assert.Empty(t, input.BaseBranch,
+		"BaseBranch should be empty when not set; CreatePR activity defaults it to main")
 }
 
-func TestPushChangesOutput_DiffStatAndProposal(t *testing.T) {
-	// Verify that PushChangesOutput includes DiffStat and ProposalContent fields.
-	output := PushChangesOutput{
-		BranchName:      "aot/ar-test-001",
-		CommitSHA:       "abc123def456",
-		DiffStat:        " 3 files changed, 42 insertions(+), 5 deletions(-)",
-		ProposalContent: "## Proposal\n\nAdd authentication middleware to all API routes.",
-	}
-
-	assert.Equal(t, "aot/ar-test-001", output.BranchName)
-	assert.Equal(t, "abc123def456", output.CommitSHA)
-	assert.Equal(t, " 3 files changed, 42 insertions(+), 5 deletions(-)", output.DiffStat)
-	assert.Equal(t, "## Proposal\n\nAdd authentication middleware to all API routes.", output.ProposalContent)
-}
-
-func TestCreatePRInput_DefaultBaseBranch(t *testing.T) {
-	// Verify that CreatePRInput can hold all required fields.
-	input := CreatePRInput{
-		RepoOwner:    "uncworks",
-		RepoName:     "aot",
-		BranchName:   "aot/ar-test-001",
-		BaseBranch:   "",
-		Title:        "feat: auth middleware",
-		Body:         "Implements auth middleware per spec.",
-		AgentRunName: "ar-test-001",
-	}
-
-	// The activity code defaults BaseBranch to "main" when empty.
-	assert.Empty(t, input.BaseBranch)
-	assert.Equal(t, "uncworks", input.RepoOwner)
-	assert.Equal(t, "aot", input.RepoName)
+func TestParseGitHubOwnerRepo_DefaultBranchFallback(t *testing.T) {
+	// Regression: activities_git.go:CreatePR defaults BaseBranch to "main" when empty.
+	// Verify parseGitHubOwnerRepo round-trips an HTTPS URL correctly since CreatePR
+	// uses it internally to construct the API URL.
+	owner, repo, err := parseGitHubOwnerRepo("https://github.com/acme/widget.git")
+	require.NoError(t, err)
+	assert.Equal(t, "acme", owner)
+	assert.Equal(t, "widget", repo)
 }

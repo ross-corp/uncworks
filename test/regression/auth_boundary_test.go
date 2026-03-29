@@ -29,9 +29,13 @@ func withTestAuth(h http.Handler, apiKey string) http.Handler {
 		return h
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip auth for health checks and webhooks (which use HMAC auth).
+		// Skip auth for health checks, gRPC health/reflection, and webhooks (which use HMAC auth).
+		// This must match the exempt paths in cmd/apiserver/main.go:withAuth exactly.
 		p := r.URL.Path
-		if p == "/healthz" || p == "/readyz" || p == "/api/v1/webhooks/github" {
+		if p == "/healthz" || p == "/readyz" ||
+			strings.HasPrefix(p, "/grpc.health.") ||
+			strings.HasPrefix(p, "/grpc.reflection.") ||
+			p == "/api/v1/webhooks/github" {
 			h.ServeHTTP(w, r)
 			return
 		}
@@ -199,4 +203,38 @@ func TestAuthBoundary_QueryParamToken(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code,
 		"query-param token should be accepted as a valid auth method")
+}
+
+// TestAuthBoundary_GRPCHealthPaths_AreExempt verifies that gRPC health and
+// reflection paths are not gated by the Bearer auth middleware. These are exempt
+// in cmd/apiserver/main.go:withAuth — this test ensures withTestAuth matches.
+func TestAuthBoundary_GRPCHealthPaths_AreExempt(t *testing.T) {
+	mux := http.NewServeMux()
+	for _, path := range []string{
+		"/grpc.health.v1.Health/Check",
+		"/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
+		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+	} {
+		p := path // capture
+		mux.HandleFunc(p, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+	}
+
+	protected := withTestAuth(mux, "secret-api-key")
+
+	for _, path := range []string{
+		"/grpc.health.v1.Health/Check",
+		"/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
+		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		// Deliberately send no token.
+		rec := httptest.NewRecorder()
+		protected.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code,
+			"gRPC path %s should bypass Bearer auth", path)
+		require.NotContains(t, rec.Body.String(), "invalid or missing API key",
+			"gRPC path %s must not be rejected by Bearer auth middleware", path)
+	}
 }
