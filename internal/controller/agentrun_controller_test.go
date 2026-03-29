@@ -1,14 +1,23 @@
 package controller
 
 import (
+	"context"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	temporalmocks "go.temporal.io/sdk/mocks"
+
+	"github.com/stretchr/testify/mock"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
@@ -326,3 +335,122 @@ func TestEventBus_NilBusDoesNotPanic(t *testing.T) {
 
 // Verify the interface is satisfied at compile time.
 var _ eventbus.EventBus = (*recordingBus)(nil)
+
+// ---------------------------------------------------------------------------
+// 4. Reconcile lifecycle tests using fake client + temporal mocks
+// ---------------------------------------------------------------------------
+
+// newFakeReconciler creates an AgentRunReconciler backed by a fake k8s client
+// and a testify-mock Temporal client. It pre-seeds the given objects.
+func newFakeReconciler(t *testing.T, tc *temporalmocks.Client, objs ...client.Object) (*AgentRunReconciler, client.Client) {
+	t.Helper()
+	s := newScheme()
+	k8s := fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(objs...).
+		WithStatusSubresource(&aotv1alpha1.AgentRun{}).
+		Build()
+	r := &AgentRunReconciler{
+		Client:         k8s,
+		Scheme:         s,
+		TemporalClient: tc,
+		TaskQueue:      "test-queue",
+	}
+	return r, k8s
+}
+
+// TestReconcile_NewAgentRunTransitionsToPending verifies that a brand-new
+// AgentRun does not get stuck: the first reconcile adds the finalizer (and
+// returns), the second reconcile starts the Temporal workflow and sets the
+// phase to Running.
+func TestReconcile_NewAgentRunTransitionsToPending(t *testing.T) {
+	ar := newAgentRun("new-run")
+
+	tc := &temporalmocks.Client{}
+	mockRun := &temporalmocks.WorkflowRun{}
+	mockRun.On("GetID").Return("agentrun-new-run")
+	mockRun.On("GetRunID").Return("run-id-1")
+	// ExecuteWorkflow will be called on the second reconcile.
+	// Use mock.Anything for the workflow func and input args since testify
+	// cannot match function values directly.
+	tc.On("ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRun, nil)
+
+	r, k8s := newFakeReconciler(t, tc, ar)
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "new-run", Namespace: "default"}}
+
+	// First reconcile: must add finalizer and return without starting workflow.
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile (finalizer): %v", err)
+	}
+	var after1 aotv1alpha1.AgentRun
+	if err := k8s.Get(context.Background(), req.NamespacedName, &after1); err != nil {
+		t.Fatalf("get after reconcile 1: %v", err)
+	}
+	if !hasFinalizer(after1.Finalizers, finalizerName) {
+		t.Error("expected finalizer to be added after first reconcile")
+	}
+	// Workflow must NOT have started yet.
+	if after1.Annotations[annotationWorkflowID] != "" {
+		t.Error("workflow should not start in the same reconcile as finalizer add")
+	}
+
+	// Second reconcile: must start the workflow and set the annotation.
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile (start workflow): %v", err)
+	}
+
+	var after2 aotv1alpha1.AgentRun
+	if err := k8s.Get(context.Background(), req.NamespacedName, &after2); err != nil {
+		t.Fatalf("get after reconcile 2: %v", err)
+	}
+	if after2.Annotations[annotationWorkflowID] == "" {
+		t.Error("expected workflow-id annotation to be set after second reconcile")
+	}
+	if after2.Status.Phase != aotv1alpha1.AgentRunPhaseRunning {
+		t.Errorf("expected phase Running, got %s", after2.Status.Phase)
+	}
+}
+
+// TestReconcile_DeletedAgentRunWithFinalizer verifies that a deleted AgentRun
+// that has a finalizer completes deletion: the finalizer is removed and no
+// error is returned.
+func TestReconcile_DeletedAgentRunWithFinalizer(t *testing.T) {
+	now := metav1.NewTime(time.Now())
+	ar := newAgentRun("del-run", func(a *aotv1alpha1.AgentRun) {
+		a.Finalizers = []string{finalizerName}
+		a.Annotations = map[string]string{annotationWorkflowID: "agentrun-del-run"}
+		a.DeletionTimestamp = &now
+	})
+
+	tc := &temporalmocks.Client{}
+	// CancelWorkflow should be called once; simulate success.
+	tc.On("CancelWorkflow", context.Background(), "agentrun-del-run", "").Return(nil)
+
+	r, k8s := newFakeReconciler(t, tc, ar)
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "del-run", Namespace: "default"}}
+
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile (deletion): %v", err)
+	}
+
+	// After removing the last finalizer, the fake client deletes the object.
+	// NotFound is the expected outcome — it proves the finalizer was removed.
+	var afterDel aotv1alpha1.AgentRun
+	if err := k8s.Get(context.Background(), req.NamespacedName, &afterDel); err == nil {
+		if hasFinalizer(afterDel.Finalizers, finalizerName) {
+			t.Error("expected finalizer to be removed after deletion reconcile")
+		}
+	}
+
+	tc.AssertCalled(t, "CancelWorkflow", context.Background(), "agentrun-del-run", "")
+}
+
+// hasFinalizer is a local helper so tests don't import controllerutil.
+func hasFinalizer(finalizers []string, name string) bool {
+	for _, f := range finalizers {
+		if f == name {
+			return true
+		}
+	}
+	return false
+}
