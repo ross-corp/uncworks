@@ -106,11 +106,14 @@ func TestProjectReconciler_CreateProject(t *testing.T) {
 	mock := newMockRepoManager()
 
 	r := &ProjectReconciler{Client: k8s, SoftServe: mock}
-	_, err := r.Reconcile(context.Background(), ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: "test-proj", Namespace: "aot"},
-	})
-	if err != nil {
-		t.Fatalf("reconcile: %v", err)
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-proj", Namespace: "aot"}}
+	// First reconcile: adds finalizer and returns early.
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile (finalizer): %v", err)
+	}
+	// Second reconcile: creates repo and updates status.
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile (create): %v", err)
 	}
 
 	// Verify repo was created
@@ -161,11 +164,14 @@ func TestProjectReconciler_SkipExistingRepo(t *testing.T) {
 	mock.existsMap["existing-proj"] = true // repo already exists
 
 	r := &ProjectReconciler{Client: k8s, SoftServe: mock}
-	_, err := r.Reconcile(context.Background(), ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: "existing-proj", Namespace: "aot"},
-	})
-	if err != nil {
-		t.Fatalf("reconcile: %v", err)
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "existing-proj", Namespace: "aot"}}
+	// First reconcile: adds finalizer and returns early.
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile (finalizer): %v", err)
+	}
+	// Second reconcile: checks repo existence (already exists, so no create).
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile (check): %v", err)
 	}
 
 	// Should NOT have created the repo again
@@ -222,10 +228,13 @@ func TestProjectReconciler_CreateFails(t *testing.T) {
 	mock.failCreate = true
 
 	r := &ProjectReconciler{Client: k8s, SoftServe: mock}
-	_, err := r.Reconcile(context.Background(), ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: "fail-proj", Namespace: "aot"},
-	})
-	if err == nil {
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "fail-proj", Namespace: "aot"}}
+	// First reconcile: adds finalizer and returns early (no error yet).
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile (finalizer): %v", err)
+	}
+	// Second reconcile: attempts to create repo — should fail.
+	if _, err := r.Reconcile(context.Background(), req); err == nil {
 		t.Fatal("expected error on create failure")
 	}
 }
