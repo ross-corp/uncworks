@@ -19,10 +19,8 @@ import (
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 )
 
-// ======================================================================
-// PlanRun — Fix 1 (real validation), Fix 2 (openspec init), Fix 3 (partial)
-// ======================================================================
-
+// PlanRun runs the planning stage of a spec-driven pipeline: initializes OpenSpec,
+// scaffolds the change, and runs the planning agent against the spec content.
 func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOutput, error) {
 	activity.RecordHeartbeat(ctx, "starting plan stage")
 
@@ -193,10 +191,8 @@ func (a *Activities) PlanRun(ctx context.Context, input PlanRunInput) (PlanRunOu
 	return output, nil
 }
 
-// ======================================================================
-// VerifyRun — Fix 4-9
-// ======================================================================
-
+// VerifyRun runs the verification stage of a spec-driven pipeline: executes automated
+// checks and optionally invokes an LLM judge to evaluate semantic acceptance criteria.
 func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (VerifyRunOutput, error) {
 	startTime := time.Now()
 	activity.RecordHeartbeat(ctx, "starting verification")
@@ -503,10 +499,7 @@ func parseLLMVerdict(jsonlContent string) *LLMVerdict {
 	return nil
 }
 
-// ======================================================================
-// detectTestCommands — Fix 6: actually extract commands (was stub)
-// ======================================================================
-
+// TestCommand represents a shell command extracted from an OpenSpec verification criterion.
 type TestCommand struct {
 	Name    string
 	Command string
@@ -582,10 +575,7 @@ func detectTestCommands(repoPath, changeName string) []TestCommand {
 	return commands
 }
 
-// ======================================================================
-// File existence checks — uses spec parsing
-// ======================================================================
-
+// FileCheck represents a file existence check extracted from an OpenSpec verification criterion.
 type FileCheck struct {
 	Path     string
 	Scenario string

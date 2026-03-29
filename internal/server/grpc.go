@@ -535,7 +535,7 @@ func (s *AOTServiceHandler) searchSourceCode(ctx context.Context, query string, 
 	client := cudgelclient.NewHTTPClient(endpoint)
 	symbols, err := client.SemanticSearch(ctx, query, limit)
 	if err != nil {
-		slog.Warn("cudgel searchSourceCode failed, returning empty results", "err", err)
+		slog.Warn("cudgel searchSourceCode failed, returning empty results", slog.Any("error", err))
 		return connect.NewResponse(&apiv1.SearchPastWorkResponse{}), nil
 	}
 
@@ -652,7 +652,7 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		slog.Warn("failed to marshal display name request", "err", err)
+		slog.Warn("failed to marshal display name request", slog.Any("error", err))
 		return deriveNameFromPrompt(prompt)
 	}
 
@@ -662,14 +662,14 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 	url := strings.TrimRight(s.LiteLLMBaseURL, "/") + "/v1/chat/completions"
 	httpReq, err := http.NewRequestWithContext(llmCtx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
-		slog.Warn("failed to create display name request", "err", err)
+		slog.Warn("failed to create display name request", slog.Any("error", err))
 		return deriveNameFromPrompt(prompt)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		slog.Warn("display name LLM call failed, using prompt fallback", "err", err)
+		slog.Warn("display name LLM call failed, using prompt fallback", slog.Any("error", err))
 		return deriveNameFromPrompt(prompt)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -681,7 +681,7 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 
 	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
-		slog.Warn("failed to read display name response", "err", err)
+		slog.Warn("failed to read display name response", slog.Any("error", err))
 		return deriveNameFromPrompt(prompt)
 	}
 
@@ -693,7 +693,7 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(respBytes, &result); err != nil {
-		slog.Warn("failed to parse display name response", "err", err)
+		slog.Warn("failed to parse display name response", slog.Any("error", err))
 		return deriveNameFromPrompt(prompt)
 	}
 

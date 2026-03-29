@@ -149,7 +149,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 	// Upgrade to WebSocket.
 	wsConn, err := e.wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("websocket upgrade failed", "err", err, "path", r.URL.Path)
+		slog.Error("websocket upgrade failed", "path", r.URL.Path, slog.Any("error", err))
 		return
 	}
 	defer func() { _ = wsConn.Close() }()
@@ -157,7 +157,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 	// Create SPDY exec session.
 	clientset, err := kubernetes.NewForConfig(e.restConfig)
 	if err != nil {
-		slog.Error("create clientset failed", "err", err)
+		slog.Error("creating k8s clientset failed", slog.Any("error", err))
 		_ = wsConn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "k8s client error"))
 		return
@@ -179,7 +179,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 
 	spdyExec, err := remotecommand.NewSPDYExecutor(e.restConfig, "POST", req.URL())
 	if err != nil {
-		slog.Error("create SPDY executor failed", "err", err)
+		slog.Error("creating SPDY executor failed", slog.Any("error", err))
 		_ = wsConn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "exec error"))
 		return
@@ -208,7 +208,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 			TerminalSizeQueue: sizeQueue,
 		})
 		if err != nil {
-			slog.Debug("SPDY stream ended", "err", err)
+			slog.Debug("SPDY stream ended", slog.Any("error", err))
 		}
 		cancel()
 	}()
@@ -222,14 +222,14 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 			n, err := stdoutReader.Read(buf)
 			if n > 0 {
 				if writeErr := wsConn.WriteMessage(websocket.BinaryMessage, buf[:n]); writeErr != nil {
-					slog.Warn("websocket write error", "err", writeErr)
+					slog.Warn("websocket write error", slog.Any("error", writeErr))
 					cancel()
 					return
 				}
 			}
 			if err != nil {
 				if err != io.EOF {
-					slog.Warn("stdout read error", "err", err)
+					slog.Warn("stdout read error", slog.Any("error", err))
 				}
 				cancel()
 				return
@@ -249,7 +249,7 @@ func (e *ExecHandler) handleExec(w http.ResponseWriter, r *http.Request) {
 			msgType, msg, err := wsConn.ReadMessage()
 			if err != nil {
 				if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-					slog.Warn("websocket read error", "err", err)
+					slog.Warn("websocket read error", slog.Any("error", err))
 				}
 				return
 			}

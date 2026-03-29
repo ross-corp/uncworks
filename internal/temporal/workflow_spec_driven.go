@@ -100,7 +100,9 @@ type VerifyRunOutput struct {
 }
 
 const (
-	ActivityPlanRun   = "PlanRun"
+	// ActivityPlanRun is the Temporal activity name for the planning stage.
+	ActivityPlanRun = "PlanRun"
+	// ActivityVerifyRun is the Temporal activity name for the verification stage.
 	ActivityVerifyRun = "VerifyRun"
 )
 

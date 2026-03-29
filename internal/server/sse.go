@@ -187,7 +187,7 @@ func (s *SSEHandler) handleWatchGraph(w http.ResponseWriter, r *http.Request) {
 			sseEvent := agentRunEventToGraphSSE(event)
 			data, err := json.Marshal(sseEvent)
 			if err != nil {
-				slog.Error("SSE: failed to marshal graph event", "err", err)
+				slog.Error("SSE: failed to marshal graph event", slog.Any("error", err))
 				continue
 			}
 
@@ -243,7 +243,7 @@ func (s *SSEHandler) handleWatchTraces(w http.ResponseWriter, r *http.Request) {
 
 			data, err := json.Marshal(spanEvent)
 			if err != nil {
-				slog.Error("SSE: failed to marshal trace event", "err", err)
+				slog.Error("SSE: failed to marshal trace event", slog.Any("error", err))
 				continue
 			}
 

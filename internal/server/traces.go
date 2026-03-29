@@ -80,7 +80,7 @@ func (t *TraceHandler) handleListTraces(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusOK, []TraceSpan{})
 			return
 		}
-		slog.Error("failed to read spans file", "file", spansPath, "err", err)
+		slog.Error("failed to read spans file", "file", spansPath, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read traces"})
 		return
 	}
@@ -111,7 +111,7 @@ func (t *TraceHandler) handleSpanDiff(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "no traces found for this run"})
 			return
 		}
-		slog.Error("failed to read spans file", "file", spansPath, "err", err)
+		slog.Error("failed to read spans file", "file", spansPath, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read traces"})
 		return
 	}
@@ -166,7 +166,7 @@ func readSpansFile(path string) ([]TraceSpan, error) {
 		}
 		var span TraceSpan
 		if err := json.Unmarshal(line, &span); err != nil {
-			slog.Debug("skipping malformed span line", "err", err)
+			slog.Debug("skipping malformed span line", slog.Any("error", err))
 			continue
 		}
 		if idx, exists := byID[span.ID]; exists {

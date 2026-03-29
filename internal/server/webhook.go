@@ -117,7 +117,7 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if eventType == "check_run" && wh.ciAutofix != nil {
 		triggered, err := wh.ciAutofix.HandleCheckRunEvent(r.Context(), body)
 		if err != nil {
-			slog.Error("CI autofix handler error", "err", err)
+			slog.Error("handling CI autofix event failed", slog.Any("error", err))
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "ci_autofix_triggered": triggered})
 		return
@@ -155,12 +155,12 @@ func (wh *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, path := range specFiles {
 		content, err := wh.fetchFileContent(r.Context(), repo, path, payload.After)
 		if err != nil {
-			slog.Error("webhook: failed to fetch file", "repo", repo, "path", path, "sha", payload.After, "err", err)
+			slog.Error("webhook: failed to fetch file", "repo", repo, "path", path, "sha", payload.After, slog.Any("error", err))
 			continue
 		}
 
 		if err := wh.createAgentRun(r.Context(), repo, path, branch, content); err != nil {
-			slog.Error("webhook: failed to create AgentRun", "repo", repo, "path", path, "err", err)
+			slog.Error("webhook: failed to create AgentRun", "repo", repo, "path", path, slog.Any("error", err))
 			continue
 		}
 		created++

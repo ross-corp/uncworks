@@ -165,7 +165,7 @@ func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 
 		stdout, stderr, err := f.execInPod(r.Context(), podName, []string{"ls", "-la", "--time-style=long-iso", dirPath})
 		if err != nil {
-			slog.Error("exec ls in pod failed", "pod", podName, "err", err, "stderr", stderr)
+			slog.Error("exec ls in pod failed", "pod", podName, "stderr", stderr, slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list files"})
 			return
 		}
@@ -206,7 +206,7 @@ func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "path not found: " + dirPath})
 			return
 		}
-		slog.Error("failed to read directory", "path", diskPath, "err", err)
+		slog.Error("failed to read directory", "path", diskPath, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list files"})
 		return
 	}
@@ -280,7 +280,7 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 				writeJSON(w, http.StatusForbidden, errorResponse{Error: "permission denied: " + filePath})
 				return
 			}
-			slog.Error("exec cat in pod failed", "pod", podName, "err", err, "stderr", stderr)
+			slog.Error("exec cat in pod failed", "pod", podName, "stderr", stderr, slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read file"})
 			return
 		}
@@ -319,7 +319,7 @@ func (f *FileHandler) handleFileContent(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusForbidden, errorResponse{Error: "permission denied: " + filePath})
 			return
 		}
-		slog.Error("failed to read file", "path", diskPath, "err", err)
+		slog.Error("failed to read file", "path", diskPath, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read file"})
 		return
 	}
@@ -498,7 +498,7 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 		stream, err := logReq.Stream(r.Context())
 		if err != nil {
-			slog.Error("failed to stream logs for pod", "pod", podName, "err", err)
+			slog.Error("failed to stream logs for pod", "pod", podName, slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get logs"})
 			return
 		}
@@ -507,7 +507,7 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		var buf bytes.Buffer
 		if _, err := buf.ReadFrom(stream); err != nil {
-			slog.Error("failed to read logs for pod", "pod", podName, "err", err)
+			slog.Error("failed to read logs for pod", "pod", podName, slog.Any("error", err))
 		}
 		_, _ = w.Write(buf.Bytes())
 		return
@@ -529,7 +529,7 @@ func (f *FileHandler) handleLogs(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		slog.Error("failed to read log file", "path", logPath, "err", err)
+		slog.Error("failed to read log file", "path", logPath, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to read logs"})
 		return
 	}
