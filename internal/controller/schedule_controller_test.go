@@ -295,6 +295,62 @@ func TestSchedule_ForbidConcurrency(t *testing.T) {
 	}
 }
 
+func TestSchedule_ReplaceConcurrency(t *testing.T) {
+	rec, k8s, cleanup := setupScheduleReconciler(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Create an active ChainRun that will be replaced.
+	existing := &aotv1alpha1.ChainRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "cr-to-replace", Namespace: "default"},
+		Spec:       aotv1alpha1.ChainRunSpec{ChainRef: "my-chain"},
+	}
+	if err := k8s.Create(ctx, existing); err != nil {
+		t.Fatalf("create existing chain run: %v", err)
+	}
+
+	sched := &aotv1alpha1.Schedule{
+		ObjectMeta: metav1.ObjectMeta{Name: "sched-replace", Namespace: "default"},
+		Spec: aotv1alpha1.ScheduleSpec{
+			Cron:              "* * * * *",
+			ConcurrencyPolicy: "Replace",
+			ChainRef:          "my-chain",
+		},
+	}
+	if err := k8s.Create(ctx, sched); err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+
+	twoMinAgo := metav1.NewTime(time.Now().Add(-2 * time.Minute))
+	sched.Status.LastScheduledTime = &twoMinAgo
+	sched.Status.Active = []string{"cr-to-replace"}
+	if err := k8s.Status().Update(ctx, sched); err != nil {
+		t.Fatalf("status update: %v", err)
+	}
+
+	_, err := rec.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(sched)})
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	// The old ChainRun should have been deleted.
+	var old aotv1alpha1.ChainRun
+	if err := k8s.Get(ctx, client.ObjectKeyFromObject(existing), &old); err == nil {
+		// envtest may leave the object with a DeletionTimestamp rather than fully removing it.
+		if old.DeletionTimestamp.IsZero() {
+			t.Error("Replace policy: old ChainRun should have been deleted")
+		}
+	}
+
+	// A new run should have been created (active list updated).
+	if err := k8s.Get(ctx, client.ObjectKeyFromObject(sched), sched); err != nil {
+		t.Fatalf("get sched: %v", err)
+	}
+	if sched.Status.LastRunID == "cr-to-replace" || sched.Status.LastRunID == "" {
+		t.Errorf("Replace policy: expected new run to be created, got lastRunID=%q", sched.Status.LastRunID)
+	}
+}
+
 func TestSchedule_NotFound_Ignored(t *testing.T) {
 	rec, _, cleanup := setupScheduleReconciler(t)
 	defer cleanup()

@@ -22,6 +22,8 @@ type ScheduleReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// Reconcile handles changes to Schedule resources, firing AgentRun or ChainRun
+// resources when a scheduled cron window is reached.
 func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -243,6 +245,7 @@ func (r *ScheduleReconciler) pruneActiveList(ctx context.Context, sched *aotv1al
 	return remaining, changed, nil
 }
 
+// SetupWithManager registers ScheduleReconciler with the controller manager.
 func (r *ScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.Schedule{}).
