@@ -4,55 +4,25 @@ package layer2
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
-	"github.com/uncworks/aot/internal/eventbus"
-	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/test/testutil"
 )
-
-var layer2Scheme = runtime.NewScheme()
-
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(layer2Scheme))
-	utilruntime.Must(aotv1alpha1.AddToScheme(layer2Scheme))
-}
 
 // newTestServer starts an httptest server backed by a fake k8s client.
 // Returns the ConnectRPC client, the fake k8s client (for direct status mutations),
 // and a cleanup function.
 func newTestServer(t *testing.T) (apiv1connect.AOTServiceClient, client.Client, func()) {
 	t.Helper()
-
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(layer2Scheme).
-		WithStatusSubresource(&aotv1alpha1.AgentRun{}).
-		Build()
-
-	svc := server.NewAOTServiceHandler(k8sClient, &eventbus.NoOpEventBus{}, "default")
-	mux := http.NewServeMux()
-	path, handler := apiv1connect.NewAOTServiceHandler(svc)
-	mux.Handle(path, handler)
-
-	srv := httptest.NewUnstartedServer(mux)
-	srv.EnableHTTP2 = true
-	srv.StartTLS()
-
-	c := apiv1connect.NewAOTServiceClient(srv.Client(), srv.URL)
-	return c, k8sClient, srv.Close
+	return testutil.NewAOTServer(t)
 }
 
 // TestAgentRunLifecycle_CreateReturnsInitialPhase verifies that a newly
@@ -62,11 +32,7 @@ func TestAgentRunLifecycle_CreateReturnsInitialPhase(t *testing.T) {
 	defer cleanup()
 
 	resp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Add unit tests",
-		},
+		Spec: testutil.MinimalSpec("Add unit tests"),
 	}))
 	require.NoError(t, err)
 
@@ -85,11 +51,7 @@ func TestAgentRunLifecycle_GetAfterCreate(t *testing.T) {
 	const prompt = "Refactor auth module"
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  prompt,
-		},
+		Spec: testutil.MinimalSpec(prompt),
 	}))
 	require.NoError(t, err)
 
@@ -113,11 +75,7 @@ func TestAgentRunLifecycle_StatusReflectsUpdate(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Implement feature X",
-		},
+		Spec: testutil.MinimalSpec("Implement feature X"),
 	}))
 	require.NoError(t, err)
 
@@ -126,7 +84,7 @@ func TestAgentRunLifecycle_StatusReflectsUpdate(t *testing.T) {
 	// Simulate the controller moving the run to Running.
 	crd := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      runID,
 	}, crd))
 
@@ -147,11 +105,7 @@ func TestAgentRunLifecycle_FailedPhase(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Task that will fail",
-		},
+		Spec: testutil.MinimalSpec("Task that will fail"),
 	}))
 	require.NoError(t, err)
 
@@ -160,7 +114,7 @@ func TestAgentRunLifecycle_FailedPhase(t *testing.T) {
 	// Simulate controller marking as failed.
 	crd := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      runID,
 	}, crd))
 	crd.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
@@ -196,11 +150,7 @@ func TestAgentRunLifecycle_ListRuns(t *testing.T) {
 	prompts := []string{"task one", "task two", "task three"}
 	for _, p := range prompts {
 		_, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-			Spec: &apiv1.AgentRunSpec{
-				Backend: apiv1.Backend_BACKEND_POD,
-				Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-				Prompt:  p,
-			},
+			Spec: testutil.MinimalSpec(p),
 		}))
 		require.NoError(t, err)
 	}

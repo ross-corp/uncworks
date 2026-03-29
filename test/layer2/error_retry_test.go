@@ -18,6 +18,7 @@ import (
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	internallitellm "github.com/uncworks/aot/internal/litellm"
 	"github.com/uncworks/aot/test/stubs"
+	"github.com/uncworks/aot/test/testutil"
 )
 
 // TestLiteLLMClient_Returns503Error verifies that the litellm admin client
@@ -61,23 +62,12 @@ func TestLiteLLMClient_PermanentUnavailable_MultipleAttempts(t *testing.T) {
 
 // TestAgentRunLifecycle_FailsWhenLLMUnavailable verifies that a run can
 // be transitioned to Failed when the LLM stub simulates a permanent outage.
-// This tests the pipeline boundary: after create, a controller-simulated
-// failure (e.g. because LiteLLM returns 503) marks the run failed.
 func TestAgentRunLifecycle_FailsWhenLLMUnavailable(t *testing.T) {
-	// The LiteLLM stub is not used by the ConnectRPC handler itself — it would
-	// be used by the Temporal activity worker. Here we test the observable
-	// outcome: the run's status phase is Failed and the message references the
-	// outage reason.
 	c, k8sClient, cleanup := newTestServer(t)
 	defer cleanup()
 
-	// Create the run.
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Task needing LLM",
-		},
+		Spec: testutil.MinimalSpec("Task needing LLM"),
 	}))
 	require.NoError(t, err)
 
@@ -87,7 +77,7 @@ func TestAgentRunLifecycle_FailsWhenLLMUnavailable(t *testing.T) {
 	// Simulate the Temporal activity failing because LiteLLM returned 503.
 	crd := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      runID,
 	}, crd))
 	crd.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
@@ -103,10 +93,8 @@ func TestAgentRunLifecycle_FailsWhenLLMUnavailable(t *testing.T) {
 }
 
 // TestLiteLLMStub_Returns503_ExplicitHandler verifies that a custom stub
-// server can be configured to return 503, which exercises the error path
-// that a real activity worker would encounter.
+// server can be configured to return 503.
 func TestLiteLLMStub_Returns503_ExplicitHandler(t *testing.T) {
-	// Build a stub that always responds 503.
 	unavailableSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(`{"error":"model overloaded"}`))
@@ -122,7 +110,6 @@ func TestLiteLLMStub_Returns503_ExplicitHandler(t *testing.T) {
 
 // TestLiteLLMStub_Sequence_503ThenSuccess verifies the pattern of a stub
 // that simulates transient failure followed by recovery.
-// This models: first call fails (503-like body), second call succeeds.
 func TestLiteLLMStub_Sequence_503ThenSuccess(t *testing.T) {
 	callN := 0
 	transitionalSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -131,7 +118,6 @@ func TestLiteLLMStub_Sequence_503ThenSuccess(t *testing.T) {
 			http.Error(w, `{"error":"temporarily unavailable"}`, http.StatusServiceUnavailable)
 			return
 		}
-		// Second call: success
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"key":"sk-ok-key","key_name":"test"}`))
 	}))
@@ -139,15 +125,12 @@ func TestLiteLLMStub_Sequence_503ThenSuccess(t *testing.T) {
 
 	c := internallitellm.NewClient(transitionalSrv.URL, "sk-master")
 
-	// First attempt: expect failure.
 	_, err := c.GenerateKey(context.Background(), internallitellm.GenerateKeyRequest{KeyAlias: "a"})
 	require.Error(t, err, "first call should fail with 503")
 
-	// Second attempt: expect success.
 	resp, err := c.GenerateKey(context.Background(), internallitellm.GenerateKeyRequest{KeyAlias: "a"})
 	require.NoError(t, err, "second call should succeed")
 	assert.Equal(t, "sk-ok-key", resp.Key)
 
-	// Smoke-test the stubs package DefaultCompletion shape is reusable here.
 	_ = stubs.DefaultCompletion("test response content")
 }

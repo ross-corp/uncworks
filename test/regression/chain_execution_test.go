@@ -7,7 +7,6 @@
 package regression
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -21,6 +20,7 @@ import (
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/test/testutil"
 )
 
 // startChainServer starts an in-process HTTP test server wired to a
@@ -30,26 +30,16 @@ func startChainServer(t *testing.T) (string, client.Client, func()) {
 	t.Helper()
 
 	k8s := fake.NewClientBuilder().
-		WithScheme(newRegressionScheme()).
+		WithScheme(testutil.NewScheme()).
 		WithStatusSubresource(&aotv1alpha1.ChainRun{}).
 		Build()
 
 	mux := http.NewServeMux()
-	ch := &server.ChainHandler{K8sClient: k8s, Namespace: "default"}
+	ch := &server.ChainHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	ch.RegisterChainHandlers(mux)
 
 	srv := httptest.NewServer(mux)
 	return srv.URL, k8s, srv.Close
-}
-
-// postChainJSON sends a JSON POST and returns the response.
-func postChainJSON(t *testing.T, url string, body interface{}) *http.Response {
-	t.Helper()
-	b, err := json.Marshal(body)
-	require.NoError(t, err)
-	resp, err := http.Post(url, "application/json", bytes.NewReader(b)) //nolint:noctx
-	require.NoError(t, err)
-	return resp
 }
 
 // TestChainExecution_CreateChainReturns201 verifies that creating a valid chain
@@ -58,7 +48,7 @@ func TestChainExecution_CreateChainReturns201(t *testing.T) {
 	baseURL, _, cleanup := startChainServer(t)
 	defer cleanup()
 
-	resp := postChainJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
+	resp := testutil.PostJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
 		"name":        "my-chain",
 		"displayName": "My Chain",
 		"steps": []map[string]interface{}{
@@ -83,7 +73,7 @@ func TestChainExecution_TriggerCreatesChainRun(t *testing.T) {
 	defer cleanup()
 
 	// Create a chain first.
-	cr := postChainJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
+	cr := testutil.PostJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
 		"name": "trigger-chain",
 		"steps": []map[string]interface{}{
 			{"name": "step-a", "templateRef": "tmpl-a"},
@@ -125,7 +115,7 @@ func TestChainExecution_StepOrderReflectedInStatus(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a two-step chain: step-b depends on step-a.
-	cr := postChainJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
+	cr := testutil.PostJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
 		"name":        "ordered-chain",
 		"displayName": "Ordered Chain",
 		"steps": []map[string]interface{}{
@@ -149,7 +139,7 @@ func TestChainExecution_StepOrderReflectedInStatus(t *testing.T) {
 	// Simulate controller: step-a running, step-b still pending.
 	run := &aotv1alpha1.ChainRun{}
 	require.NoError(t, k8s.Get(ctx, client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      chainRunID,
 	}, run))
 
@@ -190,7 +180,7 @@ func TestChainExecution_StepOrderReflectedInStatus(t *testing.T) {
 
 	// Simulate controller: step-a succeeded, step-b now running.
 	require.NoError(t, k8s.Get(ctx, client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      chainRunID,
 	}, run))
 
@@ -231,7 +221,7 @@ func TestChainExecution_InvalidDAG_MissingDependency(t *testing.T) {
 	baseURL, _, cleanup := startChainServer(t)
 	defer cleanup()
 
-	resp := postChainJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
+	resp := testutil.PostJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
 		"name": "bad-chain",
 		"steps": []map[string]interface{}{
 			{"name": "step-a", "templateRef": "tmpl-a", "dependsOn": []string{"nonexistent"}},
@@ -278,7 +268,7 @@ func TestChainExecution_ListChainRunsReflectsAll(t *testing.T) {
 	defer cleanup()
 
 	// Create a chain.
-	cr := postChainJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
+	cr := testutil.PostJSON(t, baseURL+"/api/v1/chains", map[string]interface{}{
 		"name": "multi-run-chain",
 		"steps": []map[string]interface{}{
 			{"name": "step-a", "templateRef": "tmpl-a"},
