@@ -183,6 +183,9 @@ tasks:
           exit 1
         fi
       - cd cmd/uncworks-app && wails build -clean -o UNCWORKS
+      - rm -rf /Applications/UNCWORKS.app
+      - cp -r cmd/uncworks-app/build/bin/UNCWORKS.app /Applications/UNCWORKS.app
+      - echo "Installed to /Applications/UNCWORKS.app"
 
   docker:build:
     desc: Build all Docker images locally
