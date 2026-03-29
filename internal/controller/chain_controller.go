@@ -212,7 +212,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		// Deep-copy the repos slice so we don't mutate the template object that
-		// may be shared across multiple chain steps referencing the same template.
+		// may be shared via the informer cache across reconcile cycles.
 		repos := make([]aotv1alpha1.Repository, len(tmpl.Spec.Repos))
 		copy(repos, tmpl.Spec.Repos)
 		if branch != "" && len(repos) > 0 {
