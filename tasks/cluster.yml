@@ -1,55 +1,81 @@
-# tasks/cluster.yml — persistent dev cluster lifecycle and Temporal dev server
+# tasks/cluster.yml — Colima/k3s cluster lifecycle and Temporal dev server (macOS)
 version: "3"
+
+vars:
+  COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
+  NAMESPACE: '{{.NAMESPACE | default "aot"}}'
 
 tasks:
   setup:
-    desc: Install systemd units, build/import images, deploy Ollama, start all services
+    desc: Create Colima k3s VM and deploy all UNCWORKS infrastructure and services
     cmds:
-      - loginctl enable-linger $(whoami)
-      - mkdir -p ~/.config/systemd/user
-      - cp deploy/systemd/aot-*.service deploy/systemd/aot-cluster.target ~/.config/systemd/user/
-      - systemctl --user daemon-reload
-      - task: :build:go
-      - task: :k8s:images
+      - |
+        if ! colima status --profile {{.COLIMA_PROFILE}} 2>/dev/null | grep -q "is running"; then
+          echo "Starting Colima VM '{{.COLIMA_PROFILE}}'..."
+          colima start --profile {{.COLIMA_PROFILE}} --runtime containerd --kubernetes --cpu 4 --memory 8
+        else
+          echo "Colima VM '{{.COLIMA_PROFILE}}' already running."
+        fi
+      - kubectl config use-context colima-{{.COLIMA_PROFILE}}
+      - kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
       - task: :k8s:crd
-      - task: :k8s:ollama
-      - systemctl --user enable aot-temporal aot-controller aot-worker aot-apiserver aot-web aot-cluster.target
-      - systemctl --user start aot-cluster.target
+      - task: :k8s:storage
+      - task: :k8s:litellm
+      - task: :k8s:soft-serve
+      - task: :dev:images
+      - >-
+        helm upgrade --install uncworks ./deploy/helm/aot
+        --namespace {{.NAMESPACE}}
+        --set images.controlplane.tag=local
+        --set images.controlplane.pullPolicy=Never
+        --set images.web.tag=local
+        --set images.web.pullPolicy=Never
+        --set images.sidecar.tag=local
+        --set images.sidecar.pullPolicy=Never
+        --set images.init.tag=local
+        --set images.init.pullPolicy=Never
+        --wait --timeout=5m
+      - task: status
       - echo ""
-      - echo "Cluster started! Services:"
-      - systemctl --user list-units 'aot-*' --no-pager --all
+      - echo "Start Temporal dev server in a separate terminal:"
+      - echo "  task cluster:temporal:dev"
       - echo ""
-      - echo "Web UI → http://localhost:3000"
-      - echo "API    → http://localhost:50055"
-      - echo ""
-      - echo "Pull Ollama model (if not already done):"
-      - echo "  kubectl exec deploy/ollama -- ollama pull qwen2.5:0.5b"
+      - echo "Port-forward the API server:"
+      - echo "  kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.NAMESPACE}}"
 
   status:
-    desc: Show health of all UNCWORKS services and ports
+    desc: Show pod and service health in the UNCWORKS namespace
     cmds:
-      - echo "=== Systemd Units ==="
-      - systemctl --user list-units 'aot-*' --no-pager
+      - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
+      - echo "=== Pods ==="
+      - kubectl get pods -n {{.NAMESPACE}} 2>/dev/null || echo "(namespace not found)"
       - echo ""
-      - echo "=== Listening Ports ==="
-      - ss -tlnp 2>/dev/null | grep -E '7233|50055|8095|3000' || echo "(none)"
+      - echo "=== Services ==="
+      - kubectl get svc -n {{.NAMESPACE}} 2>/dev/null || echo "(none)"
       - echo ""
-      - echo "=== k0s Pods ==="
-      - sudo k0s kubectl get pods -A 2>/dev/null || echo "(k0s not running)"
+      - echo "=== Colima status ==="
+      - colima status --profile {{.COLIMA_PROFILE}} 2>/dev/null || echo "(colima not running)"
 
   teardown:
-    desc: Stop all UNCWORKS services and remove systemd units
+    desc: Delete all UNCWORKS resources and stop the Colima VM
     cmds:
-      - systemctl --user stop aot-cluster.target 2>/dev/null || true
-      - systemctl --user disable aot-cluster.target 2>/dev/null || true
-      - rm -f ~/.config/systemd/user/aot-*.service ~/.config/systemd/user/aot-cluster.target
-      - systemctl --user daemon-reload
-      - echo "All UNCWORKS services stopped and units removed."
+      - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
+      - helm uninstall uncworks -n {{.NAMESPACE}} 2>/dev/null || true
+      - kubectl delete namespace {{.NAMESPACE}} --ignore-not-found
+      - colima stop --profile {{.COLIMA_PROFILE}} 2>/dev/null || true
+      - echo "UNCWORKS cluster torn down."
 
   logs:
-    desc: Show combined logs from all UNCWORKS services
+    desc: Tail logs from all UNCWORKS pods
     cmds:
-      - journalctl --user -u 'aot-*' --no-pager -n 100 {{.CLI_ARGS}}
+      - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
+      - kubectl logs -n {{.NAMESPACE}} -l app.kubernetes.io/instance=uncworks --prefix --follow {{.CLI_ARGS}}
+
+  forward:
+    desc: Port-forward the apiserver to localhost:50055
+    cmds:
+      - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
+      - kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.NAMESPACE}}
 
   temporal:dev:
     desc: Start Temporal dev server (SQLite, no external deps)
