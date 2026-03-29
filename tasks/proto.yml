@@ -1,0 +1,19 @@
+# tasks/proto.yml — protobuf code generation and schema checks
+version: "3"
+
+tasks:
+  gen:
+    desc: Generate Go and TypeScript code from protobuf definitions
+    cmds:
+      - buf generate --template buf.gen.go.yaml
+      - buf generate --template buf.gen.ts.yaml --include-imports
+
+  lint:
+    desc: Lint protobuf files
+    cmds:
+      - buf lint
+
+  breaking:
+    desc: Check for breaking proto changes against main branch
+    cmds:
+      - buf breaking --against '.git#branch=main'

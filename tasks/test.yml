@@ -1,0 +1,165 @@
+# tasks/test.yml — all test targets: unit, integration, contract, temporal, e2e, regression
+version: "3"
+
+vars:
+  KUBEBUILDER_ASSETS:
+    sh: "setup-envtest use --print path 2>/dev/null || echo ''"
+
+tasks:
+  all:
+    desc: Run full test pipeline sequentially (schema → unit → contract → temporal → integration → e2e)
+    cmds:
+      - task: proto:lint
+      - task: proto:breaking
+      - task: unit
+      - task: contract
+      - task: temporal
+      - task: integration
+      - task: e2e
+
+  go:
+    desc: Run Go tests (unit + integration) with coverage
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test ./api/... ./internal/... -count=1 -coverprofile=coverage.out -covermode=atomic
+
+  coverage:go:
+    desc: Run Go tests, generate HTML coverage report, and open it
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test ./api/... ./internal/... -count=1 -coverprofile=coverage.out -covermode=atomic
+      - "go tool cover -func coverage.out | grep total:"
+      - go tool cover -html=coverage.out -o coverage.html
+      - open coverage.html
+
+  unit:
+    desc: Run unit tests only (fast, no Docker)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -short ./api/... ./internal/... -count=1
+
+  contract:
+    desc: Run server contract tests (ConnectRPC + protovalidate) with coverage
+    cmds:
+      - go test ./test/contract/... -count=1 -v -coverprofile=coverage-contract.out -covermode=atomic
+
+  temporal:
+    desc: Run Temporal workflow tests (requires temporal-workflow-engine)
+    cmds:
+      - go test ./test/temporal/... -count=1 -v
+
+  integration:
+    desc: Run integration tests (requires Docker for testcontainers)
+    cmds:
+      - go test -tags integration ./... -count=1 -v
+
+  layer2:
+    desc: Run Layer 2 pipeline tests (LLM stubbed, no real cluster)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -v ./test/layer2/... ./test/stubs/... -count=1
+
+  regression:
+    desc: Run regression suite (critical paths — gates releases and PRs to main)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -tags regression -v ./test/regression/... -count=1
+
+  bdd:
+    desc: Run BDD scenario specs (Ginkgo/Gomega)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -v ./test/bdd/... -count=1
+
+  web:
+    desc: Run Playwright E2E tests for web dashboard
+    dir: web
+    cmds:
+      - npx playwright test
+
+  extension:
+    desc: Run pi-aot-extension tests
+    dir: packages/pi-aot-extension
+    cmds:
+      - npx tsx --test src/**/*.test.ts
+
+  shared:
+    desc: Run @aot/shared tests
+    dir: packages/shared
+    cmds:
+      - npx tsx --test src/**/*.test.ts
+
+  playwright:ci:
+    desc: Run Playwright e2e tests via Dagger (same environment as CI)
+    cmds:
+      - dagger call playwright-tests --source .
+
+  e2e:
+    desc: Run Go E2E tests against cluster (set KUBECONFIG env to override)
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
+    cmds:
+      - go test -tags e2e ./e2e/... -v -count=1 -timeout 30m
+
+  e2e:go:
+    desc: Run Go E2E tests
+    cmds:
+      - go test ./e2e/... -tags e2e -v -timeout 15m
+
+  e2e:playwright:
+    desc: Run Playwright E2E tests
+    dir: web
+    cmds:
+      - npx playwright test
+
+  e2e:setup:
+    desc: Start Soft-Serve git server and push fixture repos
+    cmds:
+      - mkdir -p /tmp/aot-e2e-soft-serve
+      - |
+        SOFT_SERVE_DATA_PATH=/tmp/aot-e2e-soft-serve \
+        SOFT_SERVE_GIT_LISTEN_ADDR=0.0.0.0:9418 \
+        soft serve &
+        echo $! > /tmp/aot-e2e-soft-serve.pid
+      - sleep 2
+      - SOFT_SERVE_ADDR=localhost:9418 ./test/fixtures/push-fixtures.sh
+
+  e2e:teardown:
+    desc: Stop Soft-Serve git server
+    cmds:
+      - kill $(cat /tmp/aot-e2e-soft-serve.pid) 2>/dev/null || true
+      - rm -rf /tmp/aot-e2e-soft-serve /tmp/aot-e2e-soft-serve.pid
+
+  e2e:full:
+    desc: Run full E2E suite (setup → Go → Playwright → teardown)
+    cmds:
+      - task: e2e:setup
+      - defer: { task: e2e:teardown }
+      - task: e2e:go
+      - task: e2e:playwright
+
+  e2e:api:
+    desc: Run E2E tests against in-cluster API server
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
+      AOT_API_URL: '{{.AOT_API_URL | default "http://localhost:50055"}}'
+      AOT_NAMESPACE: '{{.AOT_NAMESPACE | default "aot"}}'
+    cmds:
+      - go test ./e2e/... -run TestE2E_API -v -count=1 -timeout 10m
+
+  e2e:infra:
+    desc: Build images, import into k0s, and run LLM E2E tests
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
+      AOT_AGENT_IMAGE: aot-agent:local
+      AOT_SIDECAR_IMAGE: aot-sidecar:local
+      AOT_INIT_IMAGE: aot-init:local
+    cmds:
+      - task: k8s:k0s:images
+      - go test -tags e2e ./e2e/... -run TestE2E_LLM -v -count=1 -timeout 30m

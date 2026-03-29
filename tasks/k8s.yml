@@ -1,0 +1,160 @@
+# tasks/k8s.yml — Kubernetes/k0s cluster operations, Helm deployments, CRDs
+version: "3"
+
+tasks:
+  crd:
+    desc: Apply AgentRun CRD to cluster
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
+    cmds:
+      - kubectl apply -f deploy/crds/agentrun-crd.yaml
+
+  storage:
+    desc: Install local-path-provisioner for PVC support
+    cmds:
+      - kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+      - kubectl patch storageclass local-path -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+
+  litellm:
+    desc: Deploy LiteLLM proxy to k0s cluster
+    cmds:
+      - helm repo add litellm https://litellm-helm.github.io/litellm-helm 2>/dev/null || true
+      - helm repo update
+      - >-
+        kubectl create secret generic litellm-master-key
+        --from-literal=LITELLM_MASTER_KEY="sk-aot-$(openssl rand -hex 16)"
+        --dry-run=client -o yaml | kubectl apply -f -
+      - >-
+        helm upgrade --install litellm litellm/litellm-helm
+        --set masterKeySecretName=litellm-master-key
+        --set masterKeySecretKey=LITELLM_MASTER_KEY
+        --set-file configFile=deploy/litellm/litellm-config.yaml
+
+  ollama:
+    desc: Deploy Ollama to k0s cluster
+    cmds:
+      - helm repo add ollama-helm https://otwld.github.io/ollama-helm 2>/dev/null || true
+      - helm repo update
+      - >-
+        helm upgrade --install ollama ollama-helm/ollama
+        --set ollama.gpu.enabled=false
+        --set resources.requests.memory=8Gi
+
+  ollama:pull:
+    desc: Pull models into running Ollama instance
+    cmds:
+      - kubectl exec -it deploy/ollama -- ollama pull qwen2.5:0.5b
+      - kubectl exec -it deploy/ollama -- ollama pull llama3.1:8b
+
+  soft-serve:
+    desc: Deploy soft-serve Git server to k0s cluster
+    cmds:
+      - kubectl apply -f deploy/crds/project-crd.yaml
+      - >-
+        kubectl apply -f - <<'YAML'
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: soft-serve-data
+          namespace: aot
+        spec:
+          accessModes: [ReadWriteOnce]
+          storageClassName: local-path
+          resources:
+            requests:
+              storage: 2Gi
+        YAML
+      - >-
+        kubectl apply -f - <<'YAML'
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: soft-serve
+          namespace: aot
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: soft-serve
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: soft-serve
+            spec:
+              containers:
+              - name: soft-serve
+                image: charmcli/soft-serve:latest
+                ports:
+                - {name: ssh, containerPort: 23231}
+                - {name: http, containerPort: 23232}
+                env:
+                - {name: SOFT_SERVE_DATA_PATH, value: /data}
+                volumeMounts:
+                - {name: data, mountPath: /data}
+                resources:
+                  requests: {cpu: 100m, memory: 128Mi}
+                  limits: {cpu: 500m, memory: 256Mi}
+              volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: soft-serve-data
+        YAML
+      - >-
+        kubectl apply -f - <<'YAML'
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: soft-serve
+          namespace: aot
+        spec:
+          selector:
+            app.kubernetes.io/name: soft-serve
+          ports:
+          - {name: ssh, port: 23231, targetPort: ssh}
+          - {name: http, port: 23232, targetPort: http}
+        YAML
+      - kubectl rollout status deploy/soft-serve -n aot --timeout=60s
+      - echo "soft-serve deployed. SSH available at soft-serve.aot.svc:23231"
+
+  deps:
+    desc: Deploy all infrastructure dependencies to k0s (CRDs, storage, Ollama, LiteLLM, soft-serve)
+    cmds:
+      - task: crd
+      - task: storage
+      - task: ollama
+      - task: litellm
+      - task: soft-serve
+      - echo "All dependencies deployed. Run 'task k8s:ollama:pull' to pull models."
+
+  images:
+    desc: Import locally-built Docker images into k0s (requires sudo)
+    deps: [docker:build]
+    cmds:
+      - docker save aot-init:local aot-sidecar:local aot-agent:local aot-controlplane:local aot-web:local -o /tmp/aot-images.tar
+      - sudo k0s ctr images import /tmp/aot-images.tar
+      - rm /tmp/aot-images.tar
+      - echo "Images imported into k0s. Set AOT_*_IMAGE env vars to use local images."
+
+  deploy:all:
+    desc: Build all images, import into k0s, restart all deployments
+    cmds:
+      - task: build:web
+      - task: images
+      - kubectl rollout restart deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n aot
+      - kubectl rollout status deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n aot --timeout=60s
+      - echo "All deployments restarted and ready."
+
+  setup:
+    desc: "[DEPRECATED] Use 'uncworks setup' instead"
+    cmds:
+      - |
+        echo "ERROR: task k0s:setup is removed. Use 'uncworks setup' instead."
+        echo "       See docs/getting-started.md for the updated local setup guide."
+        exit 1
+
+  teardown:
+    desc: "[DEPRECATED] Use 'uncworks teardown' instead"
+    cmds:
+      - |
+        echo "ERROR: task k0s:teardown is removed. Use 'uncworks teardown' instead."
+        exit 1

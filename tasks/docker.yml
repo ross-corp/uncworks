@@ -1,0 +1,21 @@
+# tasks/docker.yml — Docker image builds and k0s import
+version: "3"
+
+tasks:
+  build:
+    desc: Build all Docker images locally
+    cmds:
+      - docker build -f docker/Dockerfile.hydration -t aot-init:local .
+      - docker build -f docker/Dockerfile.sidecar -t aot-sidecar:local .
+      - docker build -f docker/Dockerfile.agent-base -t aot-agent:local .
+      - docker build -f docker/Dockerfile.controlplane -t aot-controlplane:local .
+      - docker build -f docker/Dockerfile.web -t aot-web:local web/
+
+  k0s:import:
+    desc: Import locally-built Docker images into k0s (requires sudo)
+    deps: [build]
+    cmds:
+      - docker save aot-init:local aot-sidecar:local aot-agent:local aot-controlplane:local aot-web:local -o /tmp/aot-images.tar
+      - sudo k0s ctr images import /tmp/aot-images.tar
+      - rm /tmp/aot-images.tar
+      - echo "Images imported into k0s. Set AOT_*_IMAGE env vars to use local images."

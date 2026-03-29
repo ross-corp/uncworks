@@ -1,0 +1,54 @@
+# tasks/dev.yml — local development workflow: web server, image builds, lint, install
+version: "3"
+
+tasks:
+  web:
+    desc: Start web dashboard dev server (Vite HMR)
+    dir: web
+    cmds:
+      - npx vite
+
+  images:
+    desc: Build local images and load into the colima-uncworks cluster (k8s.io namespace)
+    vars:
+      COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
+    cmds:
+      - npm install --no-save @bufbuild/protobuf@^2.0.0
+      - cd web && npm run build
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-controlplane:local --file docker/Dockerfile.controlplane .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-web:local --file docker/Dockerfile.web web/
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-sidecar:local --file docker/Dockerfile.sidecar .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-init:local --file docker/Dockerfile.hydration .
+      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-agent:local --file docker/Dockerfile.agent-base .
+      - echo "All images built into k8s.io namespace on colima-{{.COLIMA_PROFILE}}"
+
+  deploy:
+    desc: Build images, load into k3s, and rollout all deployments
+    vars:
+      NAMESPACE: '{{.NAMESPACE | default "aot"}}'
+    cmds:
+      - task: images
+      - kubectl rollout restart deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n {{.NAMESPACE}}
+      - kubectl rollout status  deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n {{.NAMESPACE}} --timeout=120s
+      - echo "Rollout complete."
+
+  install:
+    desc: Install all project dependencies (Go + npm workspaces)
+    cmds:
+      - go mod tidy
+      - cd web && npm install
+      - cd packages/shared && npm install
+      - cd packages/pi-aot-extension && npm install
+
+  lint:
+    desc: Run all linters (golangci-lint + TypeScript tsc --noEmit)
+    cmds:
+      - golangci-lint run ./...
+      - cd web && npx tsc --noEmit
+      - cd packages/shared && npx tsc --noEmit
+      - cd packages/pi-aot-extension && npx tsc --noEmit
+
+  hooks:install:
+    desc: Install git hooks via lefthook
+    cmds:
+      - lefthook install
