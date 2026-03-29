@@ -101,12 +101,12 @@ func (ci *CIAutofix) HandleCheckRunEvent(ctx context.Context, body []byte) (bool
 	sha := payload.CheckRun.HeadSHA
 	checkSuiteID := payload.CheckRun.CheckSuite.ID
 
-	slog.Info("CI failure detected", "check", payload.CheckRun.Name, "repo", repo, "branch", branch, "sha", sha[:min(8, len(sha))])
+	slog.Info("detected CI failure", "check", payload.CheckRun.Name, "repo", repo, "branch", branch, "sha", sha[:min(8, len(sha))])
 
 	// Check retry count
 	attempts, err := ci.getFixAttemptCount(ctx, branch)
 	if err != nil {
-		slog.Error("failed to count fix attempts", "branch", branch, "err", err)
+		slog.Error("failed to count fix attempts", "branch", branch, slog.Any("error", err))
 	}
 	if attempts >= ci.MaxRetries {
 		slog.Warn("CI autofix: max retries reached", "maxRetries", ci.MaxRetries, "branch", branch)
@@ -128,7 +128,7 @@ func (ci *CIAutofix) HandleCheckRunEvent(ctx context.Context, body []byte) (bool
 		ci.mu.Unlock()
 
 		if err := ci.createFixRun(ci.ctx, repo, branch, sha, checkSuiteID, attempts+1); err != nil {
-			slog.Error("failed to create fix run", "branch", branch, "err", err)
+			slog.Error("failed to create fix run", "branch", branch, slog.Any("error", err))
 		}
 	})
 	ci.mu.Unlock()
@@ -147,7 +147,7 @@ func (ci *CIAutofix) createFixRun(ctx context.Context, repoFullName, branch, sha
 	// Fetch CI logs
 	ciLogs, err := ci.fetchAndCondenseCILogs(ctx, owner, repo, checkSuiteID)
 	if err != nil {
-		slog.Warn("failed to fetch CI logs, proceeding without", "branch", branch, "err", err)
+		slog.Warn("failed to fetch CI logs, proceeding without", "branch", branch, slog.Any("error", err))
 		ciLogs = "(CI logs unavailable)"
 	}
 
@@ -384,7 +384,7 @@ func (ci *CIAutofix) updateCIStatus(ctx context.Context, branch string, status s
 		if run.Annotations != nil && run.Annotations["aot.uncworks.io/pr-branch"] == branch {
 			run.Status.LastCIStatus = status
 			if err := ci.K8sClient.Status().Update(ctx, run); err != nil {
-				slog.Warn("failed to update CI status", "run", run.Name, "err", err)
+				slog.Warn("failed to update CI status", "run", run.Name, slog.Any("error", err))
 			}
 			return
 		}
@@ -410,7 +410,7 @@ func (ci *CIAutofix) postCircuitBreakerComment(ctx context.Context, repoFullName
 	// Find PR number for this branch
 	prNumber, err := ci.resolvePRNumber(ctx, owner, repo, branch, token)
 	if err != nil {
-		slog.Warn("failed to resolve PR number", "branch", branch, "err", err)
+		slog.Warn("failed to resolve PR number", "branch", branch, slog.Any("error", err))
 		return
 	}
 
@@ -434,7 +434,7 @@ func (ci *CIAutofix) postCircuitBreakerComment(ctx context.Context, repoFullName
 
 	resp, err := ci.HTTPClient.Do(req)
 	if err != nil {
-		slog.Warn("failed to post circuit breaker comment", "err", err)
+		slog.Warn("failed to post circuit breaker comment", slog.Any("error", err))
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()

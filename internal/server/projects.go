@@ -87,7 +87,7 @@ func projectToResponse(p *aotv1alpha1.Project) projectResponse {
 func (h *ProjectHandler) handleListProjects(w http.ResponseWriter, r *http.Request) {
 	var list aotv1alpha1.ProjectList
 	if err := h.K8sClient.List(r.Context(), &list, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("list projects", "err", err)
+		slog.Error("listing projects failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list projects"})
 		return
 	}
@@ -152,7 +152,7 @@ func (h *ProjectHandler) handleCreateProject(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.K8sClient.Create(r.Context(), project); err != nil {
-		slog.Error("create project", "name", project.Name, "err", err)
+		slog.Error("creating project failed", "name", project.Name, slog.Any("error", err))
 		writeJSON(w, http.StatusConflict, errorResponse{Error: "project already exists or could not be created"})
 		return
 	}
@@ -169,7 +169,7 @@ func (h *ProjectHandler) handleGetProject(w http.ResponseWriter, r *http.Request
 		if apierrors.IsNotFound(err) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "project not found"})
 		} else {
-			slog.Error("get project", "name", name, "err", err)
+			slog.Error("getting project failed", "name", name, slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get project"})
 		}
 		return
@@ -186,7 +186,7 @@ func (h *ProjectHandler) handleUpdateProject(w http.ResponseWriter, r *http.Requ
 		if apierrors.IsNotFound(err) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "project not found"})
 		} else {
-			slog.Error("update project: get", "name", name, "err", err)
+			slog.Error("getting project for update failed", "name", name, slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get project"})
 		}
 		return
@@ -221,7 +221,7 @@ func (h *ProjectHandler) handleUpdateProject(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.K8sClient.Update(r.Context(), project); err != nil {
-		slog.Error("update project", "name", name, "err", err)
+		slog.Error("updating project failed", "name", name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to update project"})
 		return
 	}
@@ -238,7 +238,7 @@ func (h *ProjectHandler) handleDeleteProject(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := h.K8sClient.Delete(r.Context(), project); err != nil {
-		slog.Error("delete project", "name", name, "err", err)
+		slog.Error("deleting project failed", "name", name, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to delete project"})
 		return
 	}

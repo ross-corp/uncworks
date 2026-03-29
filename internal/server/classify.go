@@ -76,7 +76,7 @@ func (h *ClassifyRunHandler) handleClassify(w http.ResponseWriter, r *http.Reque
 	// List all AgentRun CRDs to extract distinct project and feature labels.
 	projects, features, err := h.extractExistingLabels(r.Context())
 	if err != nil {
-		slog.Warn("failed to list agent runs for classification", "err", err)
+		slog.Warn("failed to list agent runs for classification", slog.Any("error", err))
 		// Continue with empty lists — the LLM can still suggest new values.
 	}
 
@@ -86,14 +86,14 @@ func (h *ClassifyRunHandler) handleClassify(w http.ResponseWriter, r *http.Reque
 	// Call LiteLLM for classification.
 	resp, err := h.callLiteLLM(r.Context(), llmPrompt)
 	if err != nil {
-		slog.Error("classify LLM call failed", "err", err)
+		slog.Error("classify LLM call failed", slog.Any("error", err))
 		writeJSON(w, http.StatusBadGateway, errorResponse{Error: fmt.Sprintf("LLM classification failed: %s", err.Error())})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.Error("failed to encode classify response", "err", err)
+		slog.Error("failed to encode classify response", slog.Any("error", err))
 	}
 }
 

@@ -91,7 +91,7 @@ func (d *DebugHandler) handleStartDebug(w http.ResponseWriter, r *http.Request) 
 	d.ensureDebugEnvVar(deploy, true)
 
 	if err := d.k8sClient.Update(r.Context(), deploy); err != nil {
-		slog.Error("failed to update deployment for debug", "deployment", deployName, "err", err)
+		slog.Error("failed to update deployment for debug", "deployment", deployName, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to start debug"})
 		return
 	}
@@ -99,7 +99,7 @@ func (d *DebugHandler) handleStartDebug(w http.ResponseWriter, r *http.Request) 
 	// Update CRD status debugActive=true via status subresource.
 	crd.Status.DebugActive = true
 	if err := d.k8sClient.Status().Update(r.Context(), crd); err != nil {
-		slog.Error("failed to update AgentRun status for debug", "run", runID, "err", err)
+		slog.Error("failed to update AgentRun status for debug", "run", runID, slog.Any("error", err))
 		// Non-fatal: deployment was already patched.
 	}
 
@@ -143,7 +143,7 @@ func (d *DebugHandler) handleStopDebug(w http.ResponseWriter, r *http.Request) {
 	d.ensureDebugEnvVar(deploy, false)
 
 	if err := d.k8sClient.Update(r.Context(), deploy); err != nil {
-		slog.Error("failed to update deployment to stop debug", "deployment", deployName, "err", err)
+		slog.Error("failed to update deployment to stop debug", "deployment", deployName, slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to stop debug"})
 		return
 	}
@@ -151,7 +151,7 @@ func (d *DebugHandler) handleStopDebug(w http.ResponseWriter, r *http.Request) {
 	// Update CRD status debugActive=false via status subresource.
 	crd.Status.DebugActive = false
 	if err := d.k8sClient.Status().Update(r.Context(), crd); err != nil {
-		slog.Error("failed to update AgentRun status after debug stop", "run", runID, "err", err)
+		slog.Error("failed to update AgentRun status after debug stop", "run", runID, slog.Any("error", err))
 		// Non-fatal: deployment was already patched.
 	}
 

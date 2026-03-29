@@ -88,7 +88,7 @@ func (g *GitHubClient) RegisterHandlers(mux *http.ServeMux) {
 func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
 	token, err := g.getToken(r.Context())
 	if err != nil {
-		slog.Error("github token unavailable", "err", err)
+		slog.Error("github token unavailable", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "GitHub integration not configured"})
 		return
 	}
@@ -176,7 +176,7 @@ func (g *GitHubClient) handlePush(w http.ResponseWriter, r *http.Request) {
 func (g *GitHubClient) handlePull(w http.ResponseWriter, r *http.Request) {
 	token, err := g.getToken(r.Context())
 	if err != nil {
-		slog.Error("github token unavailable", "err", err)
+		slog.Error("github token unavailable", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "GitHub integration not configured"})
 		return
 	}

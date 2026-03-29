@@ -25,6 +25,7 @@ import (
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
+	"github.com/uncworks/aot/test/testutil"
 )
 
 // TestTraceGeneration_TraceIDSurfacedViaAPI verifies that the TraceID set on
@@ -35,11 +36,7 @@ func TestTraceGeneration_TraceIDSurfacedViaAPI(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Generate trace for this run",
-		},
+		Spec: testutil.MinimalSpec("Generate trace for this run"),
 	}))
 	require.NoError(t, err)
 	runID := createResp.Msg.AgentRun.Id
@@ -49,7 +46,7 @@ func TestTraceGeneration_TraceIDSurfacedViaAPI(t *testing.T) {
 
 	crd := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      runID,
 	}, crd))
 	crd.Status.Phase = aotv1alpha1.AgentRunPhaseRunning
@@ -72,11 +69,7 @@ func TestTraceGeneration_StageSurfacedViaAPI(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "spec-driven run with stages",
-		},
+		Spec: testutil.MinimalSpec("spec-driven run with stages"),
 	}))
 	require.NoError(t, err)
 	runID := createResp.Msg.AgentRun.Id
@@ -86,7 +79,7 @@ func TestTraceGeneration_StageSurfacedViaAPI(t *testing.T) {
 	for _, stage := range stages {
 		crd := &aotv1alpha1.AgentRun{}
 		require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-			Namespace: "default",
+			Namespace: testutil.DefaultNamespace,
 			Name:      runID,
 		}, crd))
 		crd.Status.Phase = aotv1alpha1.AgentRunPhaseRunning
@@ -109,11 +102,7 @@ func TestTraceGeneration_RootSpan_SingleNode(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Standalone run",
-		},
+		Spec: testutil.MinimalSpec("Standalone run"),
 	}))
 	require.NoError(t, err)
 	runID := createResp.Msg.AgentRun.Id
@@ -143,9 +132,9 @@ func TestTraceGeneration_ParentChildRelationship(t *testing.T) {
 	// Create the parent (senior) run.
 	parentResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Orchestrate sub-tasks",
+			Backend:   apiv1.Backend_BACKEND_POD,
+			Repos:     testutil.DefaultRepo(),
+			Prompt:    "Orchestrate sub-tasks",
 			SpecRunId: specRunID,
 		},
 	}))
@@ -155,7 +144,7 @@ func TestTraceGeneration_ParentChildRelationship(t *testing.T) {
 	// Tag the parent with the spec-run-id label so GetRunGraph can find it.
 	parentCRD := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      parentID,
 	}, parentCRD))
 	if parentCRD.Labels == nil {
@@ -169,7 +158,7 @@ func TestTraceGeneration_ParentChildRelationship(t *testing.T) {
 	childResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
 			Backend:     apiv1.Backend_BACKEND_POD,
-			Repos:       []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Repos:       testutil.DefaultRepo(),
 			Prompt:      "Execute sub-task",
 			ParentRunId: parentID,
 			SpecRunId:   specRunID,
@@ -181,7 +170,7 @@ func TestTraceGeneration_ParentChildRelationship(t *testing.T) {
 	// Tag the child with the spec-run-id label.
 	childCRD := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      childID,
 	}, childCRD))
 	if childCRD.Labels == nil {
@@ -213,11 +202,7 @@ func TestTraceGeneration_StartedAt_SurfacedViaAPI(t *testing.T) {
 	defer cleanup()
 
 	createResp, err := c.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
-		Spec: &apiv1.AgentRunSpec{
-			Backend: apiv1.Backend_BACKEND_POD,
-			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:  "Timed run",
-		},
+		Spec: testutil.MinimalSpec("Timed run"),
 	}))
 	require.NoError(t, err)
 	runID := createResp.Msg.AgentRun.Id
@@ -226,7 +211,7 @@ func TestTraceGeneration_StartedAt_SurfacedViaAPI(t *testing.T) {
 
 	crd := &aotv1alpha1.AgentRun{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      runID,
 	}, crd))
 	crd.Status.Phase = aotv1alpha1.AgentRunPhaseRunning

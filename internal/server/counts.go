@@ -53,35 +53,35 @@ func (h *CountsHandler) handleCounts(w http.ResponseWriter, r *http.Request) {
 
 	var projects aotv1alpha1.ProjectList
 	if err := h.K8sClient.List(ctx, &projects, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("counts: list projects", "err", err)
+		slog.Error("listing projects for counts failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to fetch counts"})
 		return
 	}
 
 	var templates aotv1alpha1.RunTemplateList
 	if err := h.K8sClient.List(ctx, &templates, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("counts: list templates", "err", err)
+		slog.Error("listing templates for counts failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to fetch counts"})
 		return
 	}
 
 	var chains aotv1alpha1.ChainList
 	if err := h.K8sClient.List(ctx, &chains, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("counts: list chains", "err", err)
+		slog.Error("listing chains for counts failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to fetch counts"})
 		return
 	}
 
 	var chainRuns aotv1alpha1.ChainRunList
 	if err := h.K8sClient.List(ctx, &chainRuns, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("counts: list chainruns", "err", err)
+		slog.Error("listing chain runs for counts failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to fetch counts"})
 		return
 	}
 
 	var schedules aotv1alpha1.ScheduleList
 	if err := h.K8sClient.List(ctx, &schedules, client.InNamespace(h.Namespace)); err != nil {
-		slog.Error("counts: list schedules", "err", err)
+		slog.Error("listing schedules for counts failed", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to fetch counts"})
 		return
 	}
