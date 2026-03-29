@@ -9,10 +9,10 @@ tasks:
       - mkdir -p ~/.config/systemd/user
       - cp deploy/systemd/aot-*.service deploy/systemd/aot-cluster.target ~/.config/systemd/user/
       - systemctl --user daemon-reload
-      - task: build:go
-      - task: k8s:images
-      - task: k8s:crd
-      - task: k8s:ollama
+      - task: :build:go
+      - task: :k8s:images
+      - task: :k8s:crd
+      - task: :k8s:ollama
       - systemctl --user enable aot-temporal aot-controller aot-worker aot-apiserver aot-web aot-cluster.target
       - systemctl --user start aot-cluster.target
       - echo ""
