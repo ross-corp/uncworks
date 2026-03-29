@@ -50,13 +50,17 @@ spec:
             - name: LITELLM_MASTER_KEY
               value: {{ .Values.llm.apiKey | quote }}
             {{- end }}
-            - name: AOT_PIPELINE_MAX_RETRIES
-              value: {{ .Values.pipeline.maxRetries | quote }}
-            - name: AOT_PIPELINE_PLAN_TIMEOUT
-              value: {{ .Values.pipeline.planTimeout | quote }}
-            {{- if .Values.pipeline.verifyModel }}
-            - name: AOT_PIPELINE_VERIFY_MODEL
-              value: {{ .Values.pipeline.verifyModel | quote }}
+            {{- if .Values.worker.brainDatabaseURL }}
+            - name: BRAIN_DATABASE_URL
+              value: {{ .Values.worker.brainDatabaseURL | quote }}
+            {{- end }}
+            {{- if .Values.worker.embedderBaseURL }}
+            - name: EMBEDDER_BASE_URL
+              value: {{ .Values.worker.embedderBaseURL | quote }}
+            {{- end }}
+            {{- if .Values.worker.embedderModel }}
+            - name: EMBEDDER_MODEL
+              value: {{ .Values.worker.embedderModel | quote }}
             {{- end }}
             {{- if .Values.github.tokenSecretName }}
             - name: GITHUB_TOKEN
