@@ -11,10 +11,6 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
-
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
@@ -22,20 +18,17 @@ import (
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
 	"github.com/uncworks/aot/internal/eventbus"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/test/testutil"
 )
-
-var testScheme = runtime.NewScheme()
-
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(testScheme))
-	utilruntime.Must(aotv1alpha1.AddToScheme(testScheme))
-}
 
 func startAOTServer(t *testing.T, withValidation bool) (apiv1connect.AOTServiceClient, func()) {
 	t.Helper()
 
-	k8sClient := fake.NewClientBuilder().WithScheme(testScheme).WithStatusSubresource(&aotv1alpha1.AgentRun{}).Build()
-	svc := server.NewAOTServiceHandler(k8sClient, &eventbus.NoOpEventBus{}, "default")
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testutil.NewScheme()).
+		WithStatusSubresource(&aotv1alpha1.AgentRun{}).
+		Build()
+	svc := server.NewAOTServiceHandler(k8sClient, &eventbus.NoOpEventBus{}, testutil.DefaultNamespace)
 	mux := http.NewServeMux()
 
 	var opts []connect.HandlerOption

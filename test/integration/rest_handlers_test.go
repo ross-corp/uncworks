@@ -13,43 +13,29 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/test/testutil"
 )
-
-func newRestScheme() *runtime.Scheme {
-	s := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(s))
-	utilruntime.Must(aotv1alpha1.AddToScheme(s))
-	return s
-}
 
 // buildMux registers all REST handlers onto a single mux backed by a shared
 // fake k8s client so handlers see the same state.
 func buildMux(t *testing.T) *http.ServeMux {
 	t.Helper()
-	k8s := fake.NewClientBuilder().
-		WithScheme(newRestScheme()).
-		WithStatusSubresource(&aotv1alpha1.AgentRun{}).
-		Build()
+	k8s := testutil.NewFakeK8sClient(t, &aotv1alpha1.AgentRun{})
 
 	mux := http.NewServeMux()
 
-	countsH := &server.CountsHandler{K8sClient: k8s, Namespace: "default"}
+	countsH := &server.CountsHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	countsH.RegisterCountsHandlers(mux)
 
-	archiveH := &server.ArchiveHandler{K8sClient: k8s, Namespace: "default"}
+	archiveH := &server.ArchiveHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	archiveH.RegisterArchiveHandlers(mux)
 
-	projectH := &server.ProjectHandler{K8sClient: k8s, Namespace: "default"}
+	projectH := &server.ProjectHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	projectH.RegisterProjectHandlers(mux)
 
-	chainH := &server.ChainHandler{K8sClient: k8s, Namespace: "default"}
+	chainH := &server.ChainHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	chainH.RegisterChainHandlers(mux)
 
 	return mux

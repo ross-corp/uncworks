@@ -28,13 +28,25 @@ import (
 // registered.
 func NewAOTServer(t *testing.T) (apiv1connect.AOTServiceClient, client.Client, func()) {
 	t.Helper()
+	c, k8s, cleanup := newAOTServer()
+	return c, k8s, cleanup
+}
 
+// NewAOTServerNoT is identical to NewAOTServer but does not require a
+// *testing.T.  Use this in Ginkgo BeforeEach blocks where no T is available.
+func NewAOTServerNoT() (apiv1connect.AOTServiceClient, client.Client, func()) {
+	return newAOTServer()
+}
+
+// newAOTServer is the shared implementation used by both NewAOTServer and
+// NewAOTServerNoT.
+func newAOTServer() (apiv1connect.AOTServiceClient, client.Client, func()) {
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(NewScheme()).
 		WithStatusSubresource(&aotv1alpha1.AgentRun{}).
 		Build()
 
-	svc := server.NewAOTServiceHandler(k8sClient, &eventbus.NoOpEventBus{}, "default")
+	svc := server.NewAOTServiceHandler(k8sClient, &eventbus.NoOpEventBus{}, DefaultNamespace)
 	mux := http.NewServeMux()
 	path, handler := apiv1connect.NewAOTServiceHandler(svc)
 	mux.Handle(path, handler)
