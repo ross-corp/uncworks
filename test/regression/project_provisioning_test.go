@@ -7,7 +7,6 @@
 package regression
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -21,6 +20,7 @@ import (
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/test/testutil"
 )
 
 // startProjectServer starts an in-process HTTP test server wired to a
@@ -30,26 +30,16 @@ func startProjectServer(t *testing.T) (string, client.Client, func()) {
 	t.Helper()
 
 	k8s := fake.NewClientBuilder().
-		WithScheme(newRegressionScheme()).
+		WithScheme(testutil.NewScheme()).
 		WithStatusSubresource(&aotv1alpha1.Project{}).
 		Build()
 
 	mux := http.NewServeMux()
-	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: "default"}
+	ph := &server.ProjectHandler{K8sClient: k8s, Namespace: testutil.DefaultNamespace}
 	ph.RegisterProjectHandlers(mux)
 
 	srv := httptest.NewServer(mux)
 	return srv.URL, k8s, srv.Close
-}
-
-// postJSON sends a JSON POST to url and returns the response.
-func postJSON(t *testing.T, url string, body interface{}) *http.Response {
-	t.Helper()
-	b, err := json.Marshal(body)
-	require.NoError(t, err)
-	resp, err := http.Post(url, "application/json", bytes.NewReader(b)) //nolint:noctx
-	require.NoError(t, err)
-	return resp
 }
 
 // TestProjectProvisioning_CreateReturns201 verifies that creating a project
@@ -58,7 +48,7 @@ func TestProjectProvisioning_CreateReturns201(t *testing.T) {
 	baseURL, _, cleanup := startProjectServer(t)
 	defer cleanup()
 
-	resp := postJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
+	resp := testutil.PostJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
 		"name":        "my-project",
 		"displayName": "My Project",
 	})
@@ -85,7 +75,7 @@ func TestProjectProvisioning_ConfigRepoReadyTransition(t *testing.T) {
 	ctx := context.Background()
 
 	// Create the project via the API.
-	resp := postJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
+	resp := testutil.PostJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
 		"name":        "provisioned-project",
 		"displayName": "Provisioned Project",
 	})
@@ -95,7 +85,7 @@ func TestProjectProvisioning_ConfigRepoReadyTransition(t *testing.T) {
 	// Simulate the controller setting configRepoReady and the repo URL.
 	project := &aotv1alpha1.Project{}
 	require.NoError(t, k8s.Get(ctx, client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      "provisioned-project",
 	}, project), "should be able to fetch the created Project from the fake client")
 
@@ -130,7 +120,7 @@ func TestProjectProvisioning_ConfigRepoMessageSurfaced(t *testing.T) {
 
 	ctx := context.Background()
 
-	resp := postJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
+	resp := testutil.PostJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
 		"name": "stuck-project",
 	})
 	resp.Body.Close()
@@ -139,7 +129,7 @@ func TestProjectProvisioning_ConfigRepoMessageSurfaced(t *testing.T) {
 	// Simulate the controller recording a failure condition.
 	project := &aotv1alpha1.Project{}
 	require.NoError(t, k8s.Get(ctx, client.ObjectKey{
-		Namespace: "default",
+		Namespace: testutil.DefaultNamespace,
 		Name:      "stuck-project",
 	}, project))
 
@@ -188,13 +178,13 @@ func TestProjectProvisioning_DuplicateCreateReturns409(t *testing.T) {
 	baseURL, _, cleanup := startProjectServer(t)
 	defer cleanup()
 
-	first := postJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
+	first := testutil.PostJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
 		"name": "duplicate-project",
 	})
 	first.Body.Close()
 	require.Equal(t, http.StatusCreated, first.StatusCode)
 
-	second := postJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
+	second := testutil.PostJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{
 		"name": "duplicate-project",
 	})
 	second.Body.Close()
@@ -209,7 +199,7 @@ func TestProjectProvisioning_ListReflectsCreatedProjects(t *testing.T) {
 	defer cleanup()
 
 	for _, name := range []string{"proj-a", "proj-b"} {
-		r := postJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{"name": name})
+		r := testutil.PostJSON(t, baseURL+"/api/v1/projects", map[string]interface{}{"name": name})
 		r.Body.Close()
 		require.Equal(t, http.StatusCreated, r.StatusCode)
 	}

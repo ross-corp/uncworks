@@ -15,10 +15,6 @@ package regression
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,24 +24,16 @@ import (
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/test/testutil"
 )
-
-// signWebhookPayload computes the GitHub-style HMAC-SHA256 signature for a
-// webhook payload.
-func signWebhookPayload(body []byte, secret string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(body)
-	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
-}
 
 // makeWebhookHandler creates a WebhookHandler via the public constructor,
 // setting the GITHUB_WEBHOOK_SECRET env var to the given secret.
 func makeWebhookHandler(t *testing.T, secret string) *server.WebhookHandler {
 	t.Helper()
 	t.Setenv("GITHUB_WEBHOOK_SECRET", secret)
-	scheme := newRegressionScheme()
-	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
-	return server.NewWebhookHandler(context.Background(), k8s, "default", nil)
+	k8s := fake.NewClientBuilder().WithScheme(testutil.NewScheme()).Build()
+	return server.NewWebhookHandler(context.Background(), k8s, testutil.DefaultNamespace, nil)
 }
 
 // makeWebhookHandlerWithClient returns both the handler and the underlying
@@ -53,36 +41,10 @@ func makeWebhookHandler(t *testing.T, secret string) *server.WebhookHandler {
 func makeWebhookHandlerWithClient(t *testing.T, secret string) (*server.WebhookHandler, *fake.ClientBuilder) {
 	t.Helper()
 	t.Setenv("GITHUB_WEBHOOK_SECRET", secret)
-	scheme := newRegressionScheme()
-	builder := fake.NewClientBuilder().WithScheme(scheme)
+	builder := fake.NewClientBuilder().WithScheme(testutil.NewScheme())
 	k8s := builder.Build()
-	wh := server.NewWebhookHandler(context.Background(), k8s, "default", nil)
+	wh := server.NewWebhookHandler(context.Background(), k8s, testutil.DefaultNamespace, nil)
 	return wh, builder
-}
-
-// buildWebhookPushPayload builds a minimal GitHub push payload JSON.
-func buildWebhookPushPayload(repo string, addedFiles []string) []byte {
-	type commit struct {
-		Added    []string `json:"added"`
-		Modified []string `json:"modified"`
-	}
-	type repoInfo struct {
-		FullName string `json:"full_name"`
-	}
-	type payload struct {
-		Ref        string   `json:"ref"`
-		After      string   `json:"after"`
-		Repository repoInfo `json:"repository"`
-		Commits    []commit `json:"commits"`
-	}
-	p := payload{
-		Ref:        "refs/heads/main",
-		After:      "abc123",
-		Repository: repoInfo{FullName: repo},
-		Commits:    []commit{{Added: addedFiles, Modified: []string{}}},
-	}
-	data, _ := json.Marshal(p)
-	return data
 }
 
 // TestWebhookDelivery_MissingSignature_Returns401 verifies that push events
@@ -91,7 +53,7 @@ func TestWebhookDelivery_MissingSignature_Returns401(t *testing.T) {
 	const secret = "webhook-regression-secret"
 	wh := makeWebhookHandler(t, secret)
 
-	body := buildWebhookPushPayload("org/repo", []string{"README.md"})
+	body := testutil.BuildWebhookPushPayload("org/repo", []string{"README.md"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
 	// No X-Hub-Signature-256 header.
@@ -108,8 +70,8 @@ func TestWebhookDelivery_WrongSignature_Returns401(t *testing.T) {
 	const secret = "webhook-regression-secret"
 	wh := makeWebhookHandler(t, secret)
 
-	body := buildWebhookPushPayload("org/repo", []string{"README.md"})
-	sig := signWebhookPayload(body, "wrong-secret")
+	body := testutil.BuildWebhookPushPayload("org/repo", []string{"README.md"})
+	sig := testutil.SignWebhookPayload(body, "wrong-secret")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
@@ -130,8 +92,8 @@ func TestWebhookDelivery_CorrectSignature_Returns200(t *testing.T) {
 
 	// No .cs.md files: handler returns 200 with {"ok":true,"created":0}
 	// without calling fetchFileContent.
-	body := buildWebhookPushPayload("org/repo", []string{"main.go", "go.mod"})
-	sig := signWebhookPayload(body, secret)
+	body := testutil.BuildWebhookPushPayload("org/repo", []string{"main.go", "go.mod"})
+	sig := testutil.SignWebhookPayload(body, secret)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
@@ -169,7 +131,7 @@ func TestWebhookDelivery_NonPushEvent_IsIgnored(t *testing.T) {
 	wh := makeWebhookHandler(t, secret)
 
 	body := []byte(`{"action":"opened"}`)
-	sig := signWebhookPayload(body, secret)
+	sig := testutil.SignWebhookPayload(body, secret)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "pull_request")
@@ -187,11 +149,10 @@ func TestWebhookDelivery_NonPushEvent_IsIgnored(t *testing.T) {
 func TestWebhookDelivery_NoSecretConfigured_Returns401(t *testing.T) {
 	// Override the secret to empty — fail-closed behavior.
 	t.Setenv("GITHUB_WEBHOOK_SECRET", "")
-	scheme := newRegressionScheme()
-	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
-	wh := server.NewWebhookHandler(context.Background(), k8s, "default", nil)
+	k8s := fake.NewClientBuilder().WithScheme(testutil.NewScheme()).Build()
+	wh := server.NewWebhookHandler(context.Background(), k8s, testutil.DefaultNamespace, nil)
 
-	body := buildWebhookPushPayload("org/repo", []string{"README.md"})
+	body := testutil.BuildWebhookPushPayload("org/repo", []string{"README.md"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
 	rec := httptest.NewRecorder()
@@ -209,13 +170,12 @@ func TestWebhookDelivery_RepoAllowlist_BlockedRepo(t *testing.T) {
 	t.Setenv("GITHUB_WEBHOOK_SECRET", secret)
 	t.Setenv("GITHUB_WEBHOOK_REPOS", "org/allowed-repo")
 
-	scheme := newRegressionScheme()
-	k8s := fake.NewClientBuilder().WithScheme(scheme).Build()
-	wh := server.NewWebhookHandler(context.Background(), k8s, "default", nil)
+	k8s := fake.NewClientBuilder().WithScheme(testutil.NewScheme()).Build()
+	wh := server.NewWebhookHandler(context.Background(), k8s, testutil.DefaultNamespace, nil)
 
 	// Push from a repo that is NOT in the allowlist.
-	body := buildWebhookPushPayload("org/blocked-repo", []string{"spec.cs.md"})
-	sig := signWebhookPayload(body, secret)
+	body := testutil.BuildWebhookPushPayload("org/blocked-repo", []string{"spec.cs.md"})
+	sig := testutil.SignWebhookPayload(body, secret)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
