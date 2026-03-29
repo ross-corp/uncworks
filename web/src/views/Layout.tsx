@@ -17,19 +17,21 @@ const TITLEBAR_H = 36;
 
 function LayoutInner() {
   const { open, panelHeight } = useCopilotContextValue();
-  const { settings, configStatus, reload } = useSettings();
+  const { configStatus, reload, loading } = useSettings();
   const wails = isWails();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardChecked, setWizardChecked] = useState(false);
 
-  // Auto-show wizard on first launch if not yet complete
+  // Auto-show wizard on first launch if not yet complete.
+  // Wait for settings to finish loading so we don't open wizard
+  // immediately with SETTINGS_DEFAULTS (wizardComplete=false).
   useEffect(() => {
-    if (!wails || wizardChecked || !settings) return;
+    if (!wails || wizardChecked || loading) return;
     setWizardChecked(true);
     if (!configStatus.wizardComplete) {
       setWizardOpen(true);
     }
-  }, [wails, settings, configStatus, wizardChecked]);
+  }, [wails, configStatus, wizardChecked, loading]);
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground font-mono text-sm flex flex-col">

@@ -63,48 +63,57 @@ func (a *App) StartGitHubDeviceFlow() (*DeviceFlowStart, error) {
 	return &result, nil
 }
 
-// PollGitHubDeviceFlow polls for the OAuth token. Returns (token, true, nil) when done,
-// ("", false, nil) when still pending, or ("", false, err) on terminal error.
-func (a *App) PollGitHubDeviceFlow(deviceCode string) (string, bool, error) {
+// DeviceFlowPollResult is returned by PollGitHubDeviceFlow.
+type DeviceFlowPollResult struct {
+	Done  bool   `json:"done"`
+	Token string `json:"token,omitempty"`
+}
+
+// PollGitHubDeviceFlow polls for the OAuth token once.
+// Returns {done:true, token:...} when authorised, {done:false} when still pending.
+func (a *App) PollGitHubDeviceFlow(deviceCode string) (*DeviceFlowPollResult, error) {
 	resp, err := http.PostForm("https://github.com/login/oauth/access_token", url.Values{
 		"client_id":   {ghClientID},
 		"device_code": {deviceCode},
 		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
 	})
 	if err != nil {
-		return "", false, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
 	// Try JSON first, then form-encoded.
-	var result struct {
+	var raw struct {
 		AccessToken string `json:"access_token"`
 		Error       string `json:"error"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
+	if err := json.Unmarshal(body, &raw); err != nil {
 		vals, _ := url.ParseQuery(string(body))
-		result.AccessToken = vals.Get("access_token")
-		result.Error = vals.Get("error")
+		raw.AccessToken = vals.Get("access_token")
+		raw.Error = vals.Get("error")
 	}
 
-	switch result.Error {
+	switch raw.Error {
 	case "authorization_pending", "slow_down":
-		return "", false, nil
+		return &DeviceFlowPollResult{Done: false}, nil
 	case "expired_token":
-		return "", false, fmt.Errorf("device code expired — please restart authorization")
+		return nil, fmt.Errorf("device code expired — please restart authorization")
 	case "access_denied":
-		return "", false, fmt.Errorf("access denied by user")
+		return nil, fmt.Errorf("access denied by user")
 	case "":
 		// ok — fall through
 	default:
-		return "", false, fmt.Errorf("github error: %s", result.Error)
+		return nil, fmt.Errorf("github error: %s", raw.Error)
 	}
 
-	if result.AccessToken == "" {
-		return "", false, nil
+	if raw.AccessToken == "" {
+		return &DeviceFlowPollResult{Done: false}, nil
 	}
-	return result.AccessToken, true, nil
+
+	// Store token in Keychain immediately so GetSettings reflects authed state.
+	_ = keyring.Set(keychainSvc, keychainAcct, raw.AccessToken)
+	return &DeviceFlowPollResult{Done: true, Token: raw.AccessToken}, nil
 }
 
 // SaveGitHubToken stores the OAuth token in the macOS Keychain.

@@ -176,7 +176,7 @@ function ClusterStep({ onNext }: { onNext: () => void }) {
 
 interface DeviceFlow {
   userCode: string;
-  verificationURL: string;
+  verificationURI: string;  // Go field: VerificationURI (json: verification_uri)
   deviceCode: string;
 }
 
@@ -213,6 +213,7 @@ function GitHubStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void
             await reload();
             return;
           }
+          // result.done === false means still pending — keep polling
         } catch { /* keep polling */ }
       }
     }
@@ -248,15 +249,13 @@ function GitHubStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void
           Open the URL below and enter the code to authenticate:
         </p>
         <div className="rounded-md border bg-muted/30 p-4 mb-4 text-center">
-          <p className="text-2xl font-mono font-bold tracking-widest mb-2">{flow.userCode}</p>
-          <a
-            href={flow.verificationURL}
-            target="_blank"
-            rel="noreferrer"
+          <p className="text-2xl font-mono font-bold tracking-widest mb-3">{flow.userCode}</p>
+          <button
+            onClick={() => go().OpenURL(flow.verificationURI)}
             className="text-sm text-accent-foreground hover:underline"
           >
-            {flow.verificationURL}
-          </a>
+            {flow.verificationURI}
+          </button>
         </div>
         {polling && (
           <p className="text-xs text-muted-foreground text-center animate-pulse mb-4">
