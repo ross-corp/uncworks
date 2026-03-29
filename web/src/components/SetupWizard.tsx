@@ -1,17 +1,17 @@
 // SetupWizard.tsx — Multi-step first-run setup wizard.
-// Steps: 1) Cluster  2) GitHub OAuth  3) LiteLLM
+// Steps: 1) Cluster  2) GitHub OAuth  3) Models
 import { useState, useEffect, useCallback } from "react";
 import { useSettings } from "../hooks/useSettings";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const go = () => (window as any).go?.main?.App;
 
-type Step = "cluster" | "github" | "litellm";
-const STEPS: Step[] = ["cluster", "github", "litellm"];
+type Step = "cluster" | "github" | "models";
+const STEPS: Step[] = ["cluster", "github", "models"];
 const STEP_LABELS: Record<Step, string> = {
   cluster: "Cluster",
   github: "GitHub",
-  litellm: "LiteLLM",
+  models: "Models",
 };
 
 interface Props {
@@ -68,8 +68,8 @@ export default function SetupWizardModal({ onClose }: Props) {
         {/* Body */}
         <div className="px-6 py-5 min-h-[220px]">
           {step === "cluster" && <ClusterStep onNext={() => setStep("github")} />}
-          {step === "github" && <GitHubStep onNext={() => setStep("litellm")} onSkip={() => setStep("litellm")} />}
-          {step === "litellm" && <LiteLLMStep onFinish={onClose} />}
+          {step === "github" && <GitHubStep onNext={() => setStep("models")} onSkip={() => setStep("models")} />}
+          {step === "models" && <ModelsStep onFinish={onClose} />}
         </div>
       </div>
     </div>
@@ -308,13 +308,42 @@ function GitHubStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void
   );
 }
 
-// ── Step 3: LiteLLM ────────────────────────────────────────────────────────────
+// ── Step 3: Models ─────────────────────────────────────────────────────────────
 
-function LiteLLMStep({ onFinish }: { onFinish: () => void }) {
+interface ProviderPreset {
+  label: string;
+  url: string;
+  hint: string;
+}
+
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  { label: "Cluster (built-in)",   url: "http://litellm:4000",         hint: "Uses the LiteLLM proxy deployed in your cluster." },
+  { label: "OpenRouter",           url: "https://openrouter.ai/api/v1", hint: "Route to any model via openrouter.ai. Set your API key in the cluster." },
+  { label: "OpenAI",               url: "https://api.openai.com/v1",    hint: "Connect directly to OpenAI. Set your API key in the cluster." },
+  { label: "Custom",               url: "",                             hint: "Any OpenAI-compatible endpoint." },
+];
+
+function ModelsStep({ onFinish }: { onFinish: () => void }) {
   const { settings, save } = useSettings();
+
+  // Pick the initial preset based on current saved URL.
+  function initialPreset() {
+    const saved = settings.litellmURL || "";
+    const match = PROVIDER_PRESETS.find(p => p.url && p.url === saved);
+    return match?.label ?? (saved ? "Custom" : "Cluster (built-in)");
+  }
+
+  const [preset, setPreset] = useState(initialPreset);
   const [url, setUrl] = useState(settings.litellmURL || "http://litellm:4000");
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; models: string[]; error?: string } | null>(null);
+
+  function onPresetChange(label: string) {
+    setPreset(label);
+    setResult(null);
+    const p = PROVIDER_PRESETS.find(p => p.label === label);
+    if (p && p.url) setUrl(p.url);
+  }
 
   async function check() {
     setChecking(true);
@@ -334,36 +363,60 @@ function LiteLLMStep({ onFinish }: { onFinish: () => void }) {
     onFinish();
   }
 
+  const currentPreset = PROVIDER_PRESETS.find(p => p.label === preset);
+  const isCluster = preset === "Cluster (built-in)";
+
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-5">
-        Configure the LiteLLM proxy. This is the OpenAI-compatible endpoint used for all LLM requests.
+        Choose how agents connect to AI models. All providers use an OpenAI-compatible endpoint.
       </p>
 
       <div className="mb-4">
-        <label className="text-xs font-medium mb-1 block">Proxy URL</label>
+        <label className="text-xs font-medium mb-1 block">Provider</label>
+        <select
+          value={preset}
+          onChange={e => onPresetChange(e.target.value)}
+          className="w-full px-2.5 py-1.5 rounded-md border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          {PROVIDER_PRESETS.map(p => (
+            <option key={p.label} value={p.label}>{p.label}</option>
+          ))}
+        </select>
+        {currentPreset && (
+          <p className="mt-1 text-xs text-muted-foreground">{currentPreset.hint}</p>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <label className="text-xs font-medium mb-1 block">Endpoint URL</label>
         <div className="flex gap-2">
           <input
             type="text"
             value={url}
-            onChange={e => setUrl(e.target.value)}
-            placeholder="http://litellm:4000"
+            onChange={e => { setUrl(e.target.value); setResult(null); }}
+            placeholder="https://..."
             className="flex-1 px-2.5 py-1.5 rounded-md border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <button
             onClick={check}
-            disabled={checking}
+            disabled={checking || !url}
             className="px-3 py-1.5 rounded-md border text-xs hover:bg-accent transition-colors disabled:opacity-50 whitespace-nowrap"
           >
-            {checking ? "Checking…" : "Test"}
+            {checking ? "Testing…" : "Test"}
           </button>
         </div>
         {result && (
           <div className={`mt-2 text-xs ${result.ok ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
             {result.ok
-              ? `${result.models.length} model(s): ${result.models.join(", ")}`
+              ? `Connected — ${result.models.length} model(s) available`
               : result.error || "Connection failed"}
           </div>
+        )}
+        {result && !result.ok && isCluster && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Make sure your cluster is running and the port-forward is active.
+          </p>
         )}
       </div>
 
