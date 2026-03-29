@@ -177,8 +177,8 @@ func TestHandlePull(t *testing.T) {
 
 		var body errorResponse
 		_ = json.NewDecoder(w.Body).Decode(&body)
-		if !strings.Contains(body.Error, "GITHUB_TOKEN") {
-			t.Errorf("error = %q, want to mention GITHUB_TOKEN", body.Error)
+		if !strings.Contains(body.Error, "GitHub integration") {
+			t.Errorf("error = %q, want to mention GitHub integration", body.Error)
 		}
 	})
 }
