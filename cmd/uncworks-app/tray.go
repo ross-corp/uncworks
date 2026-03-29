@@ -79,6 +79,11 @@ func (a *App) onTrayReady() {
 		runtime.Quit(a.ctx)
 	})
 
+	// Attach the NSMenu to the status item so it appears on click.
+	// energye/systray on macOS does not do this automatically — without
+	// CreateMenu() the items exist but are never shown.
+	systray.CreateMenu()
+
 	// Seed with current status immediately.
 	go func() {
 		status := a.ClusterStatus()

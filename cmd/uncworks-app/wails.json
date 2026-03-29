@@ -4,6 +4,7 @@
   "outputfilename": "UNCWORKS",
   "reloaddirs": "frontend/dist",
   "build:tags": "darwin",
+  "frontend:build": "../build-frontend.sh",
   "info": {
     "companyName": "UNCWORKS",
     "productName": "UNCWORKS",
