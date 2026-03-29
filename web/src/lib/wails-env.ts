@@ -12,6 +12,10 @@ export function isWails(): boolean {
   return typeof window.go !== "undefined" || typeof window.runtime !== "undefined";
 }
 
+export function isMac(): boolean {
+  return navigator.platform.startsWith("Mac") || navigator.userAgent.includes("Mac");
+}
+
 // suppressContextMenu installs a contextmenu handler that allows the native
 // text-editing menu on inputs/textareas/selections, and blocks everything else.
 function suppressContextMenu() {

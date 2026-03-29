@@ -6,6 +6,7 @@ import { useHealth, type HealthReport, type HealthStatus } from "./useHealth";
 interface HealthContextValue {
   report: HealthReport;
   loading: boolean;
+  error: Error | null;
   refresh: () => void;
   // Convenience gates
   clusterOk: boolean;   // kubernetes component is ok/degraded (cluster reachable)
@@ -16,6 +17,7 @@ interface HealthContextValue {
 const HealthContext = createContext<HealthContextValue>({
   report: { overall: "unknown", components: [] },
   loading: false,
+  error: null,
   refresh: () => {},
   clusterOk: true,
   apiserverOk: true,
@@ -27,7 +29,7 @@ function componentStatus(report: HealthReport, name: string): HealthStatus {
 }
 
 export function HealthProvider({ children }: { children: ReactNode }) {
-  const { report, loading, refresh } = useHealth(15_000);
+  const { report, loading, error, refresh } = useHealth(15_000);
 
   const clusterStatus = componentStatus(report, "kubernetes");
   const apiserverStatus = componentStatus(report, "apiserver");
@@ -37,7 +39,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   const canSubmitRun = clusterOk && apiserverOk;
 
   return (
-    <HealthContext.Provider value={{ report, loading, refresh, clusterOk, apiserverOk, canSubmitRun }}>
+    <HealthContext.Provider value={{ report, loading, error, refresh, clusterOk, apiserverOk, canSubmitRun }}>
       {children}
     </HealthContext.Provider>
   );

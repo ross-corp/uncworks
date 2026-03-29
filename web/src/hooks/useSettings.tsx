@@ -2,6 +2,7 @@
 // localStorage (web). Derives ConfigStatus so any view can gate features on config.
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { isWails } from "../lib/wails-env";
+import type { KeybindingsConfig } from "../lib/keybindings/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const go = () => (window as any).go?.main?.App;
@@ -30,6 +31,8 @@ export interface AppSettings {
   showTrafficLights?: boolean;
   // Model used by the copilot panel. Empty string means LiteLLM's default model.
   copilotModel?: string;
+  // Persisted keybinding overrides. Merged with KEYBINDINGS_DEFAULTS at runtime.
+  keybindings?: Partial<KeybindingsConfig>;
 }
 
 export const SETTINGS_DEFAULTS: AppSettings = {

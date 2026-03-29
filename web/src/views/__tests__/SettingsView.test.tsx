@@ -50,6 +50,7 @@ function mockSettings(overrides = {}) {
       canCreatePRs: Boolean(settings.githubToken),
     },
     loading: false,
+    error: null,
     reload: vi.fn().mockResolvedValue(undefined),
     save: vi.fn().mockResolvedValue(undefined),
   })
@@ -94,6 +95,7 @@ describe('SettingsView', () => {
         wizardComplete: false, canUseAI: true, canAccessPrivateRepos: false, canCreatePRs: false,
       },
       loading: false,
+      error: null,
       reload,
       save,
     })
