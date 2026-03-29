@@ -165,6 +165,13 @@ tasks:
     cmds:
       - go test -tags regression -v ./test/regression/... -count=1
 
+  test:bdd:
+    desc: Run BDD scenario specs (Ginkgo/Gomega)
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+    cmds:
+      - go test -v ./test/bdd/... -count=1
+
   test:unit:
     desc: Run unit tests only (fast, no Docker)
     env:
