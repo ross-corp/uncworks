@@ -119,6 +119,13 @@ func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			// Health-check paths bypass rate limiting so that liveness and readiness
+			// probes are never rejected by an exhausted token bucket.
+			p := r.URL.Path
+			if p == "/healthz" || p == "/readyz" {
+				next.ServeHTTP(w, r)
+				return
+			}
 			ip := clientIP(r, rl.cfg)
 			if !rl.Allow(ip) {
 				w.Header().Set("Retry-After", "1")

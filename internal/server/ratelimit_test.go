@@ -151,6 +151,44 @@ func TestRateLimitMiddleware_429WhenDenied(t *testing.T) {
 	}
 }
 
+// TestRateLimitMiddleware_HealthCheckBypass verifies that /healthz and /readyz always
+// return 200 even after the token bucket for the client IP has been exhausted.
+func TestRateLimitMiddleware_HealthCheckBypass(t *testing.T) {
+	// Burst=1, very low RPS so the second request from the same IP is denied.
+	cfg := testConfig(0.001, 1)
+	rl := NewRateLimiter(cfg)
+	mid := RateLimitMiddleware(rl)
+
+	okHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := mid(okHandler)
+
+	makeReq := func(path string) int {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "7.7.7.7:1234"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// Exhaust the bucket with a regular path.
+	if got := makeReq("/test"); got != http.StatusOK {
+		t.Fatalf("first request to /test: expected 200, got %d", got)
+	}
+	// Second regular request must be rate-limited.
+	if got := makeReq("/test"); got != http.StatusTooManyRequests {
+		t.Fatalf("second request to /test: expected 429, got %d", got)
+	}
+
+	// Health-check paths must still pass through despite exhausted bucket.
+	for _, path := range []string{"/healthz", "/readyz"} {
+		if got := makeReq(path); got != http.StatusOK {
+			t.Errorf("request to %s after bucket exhausted: expected 200, got %d", path, got)
+		}
+	}
+}
+
 // TestRateLimitMiddleware_Disabled verifies that a disabled limiter passes all requests.
 func TestRateLimitMiddleware_Disabled(t *testing.T) {
 	cfg := RateLimiterConfig{

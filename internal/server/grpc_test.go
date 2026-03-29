@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
@@ -189,10 +190,13 @@ func TestCancelAgentRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CancelAgentRun: %v", err)
 	}
-	// Without Temporal, the CRD phase won't change — it's still Pending
-	// The cancel signal is sent to Temporal which updates the CRD via the controller
+	// Without Temporal, the CRD phase won't change — it's still Pending.
+	// The cancel signal is sent to Temporal which updates the CRD via the controller.
 	if cancelResp.Msg.AgentRun.Id != resp.Msg.AgentRun.Id {
 		t.Errorf("expected same ID, got %s", cancelResp.Msg.AgentRun.Id)
+	}
+	if cancelResp.Msg.AgentRun.Status.Phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING {
+		t.Errorf("expected phase PENDING without Temporal, got %v", cancelResp.Msg.AgentRun.Status.Phase)
 	}
 }
 
@@ -401,6 +405,124 @@ func TestWatchAgentRun_NotFound(t *testing.T) {
 	}
 }
 
+// --- GetRunGraph tests ---
+
+func TestGetRunGraph_NotFound(t *testing.T) {
+	client, _, _, cleanup := startTestServerWithBus(t)
+	defer cleanup()
+
+	_, err := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{Id: "nonexistent"}))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		t.Errorf("expected NotFound, got %v", connect.CodeOf(err))
+	}
+}
+
+func TestGetRunGraph_SingleNode(t *testing.T) {
+	client, _, svc, cleanup := startTestServerWithBus(t)
+	defer cleanup()
+
+	// Create a run via RPC
+	resp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "single node graph",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+	runID := resp.Msg.AgentRun.Id
+
+	// GetRunGraph with no sibling runs — should return 1 node, 0 edges
+	graph, err := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{Id: runID}))
+	if err != nil {
+		t.Fatalf("GetRunGraph: %v", err)
+	}
+	// Suppress unused variable warning for svc
+	_ = svc
+	if len(graph.Msg.Nodes) != 1 {
+		t.Errorf("expected 1 node, got %d", len(graph.Msg.Nodes))
+	}
+	if len(graph.Msg.Edges) != 0 {
+		t.Errorf("expected 0 edges, got %d", len(graph.Msg.Edges))
+	}
+	if graph.Msg.Nodes[0].Name != runID {
+		t.Errorf("expected node name %q, got %q", runID, graph.Msg.Nodes[0].Name)
+	}
+}
+
+func TestGetRunGraph_ParentChild(t *testing.T) {
+	client, _, svc, cleanup := startTestServerWithBus(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create parent run
+	parentResp, err := client.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "parent run",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun (parent): %v", err)
+	}
+	parentID := parentResp.Msg.AgentRun.Id
+
+	// Create child run
+	childResp, err := client.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend:      apiv1.Backend_BACKEND_POD,
+			Repos:        []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:       "child run",
+			ParentRunId:  parentID,
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun (child): %v", err)
+	}
+	childID := childResp.Msg.AgentRun.Id
+
+	// Add spec-run-id label to both runs so the List query finds them together
+	for _, id := range []string{parentID, childID} {
+		crd := &aotv1alpha1.AgentRun{}
+		if err := svc.K8sClient.Get(ctx, k8sclient.ObjectKey{Namespace: "default", Name: id}, crd); err != nil {
+			t.Fatalf("Get CRD %s: %v", id, err)
+		}
+		if crd.Labels == nil {
+			crd.Labels = make(map[string]string)
+		}
+		crd.Labels["aot.uncworks.io/spec-run-id"] = parentID
+		if err := svc.K8sClient.Update(ctx, crd); err != nil {
+			t.Fatalf("Update CRD %s: %v", id, err)
+		}
+	}
+
+	graph, err := client.GetRunGraph(ctx, connect.NewRequest(&apiv1.GetRunGraphRequest{Id: parentID}))
+	if err != nil {
+		t.Fatalf("GetRunGraph: %v", err)
+	}
+
+	if len(graph.Msg.Nodes) != 2 {
+		t.Errorf("expected 2 nodes, got %d", len(graph.Msg.Nodes))
+	}
+	if len(graph.Msg.Edges) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(graph.Msg.Edges))
+	}
+	edge := graph.Msg.Edges[0]
+	if edge.Parent != parentID {
+		t.Errorf("expected edge parent=%q, got %q", parentID, edge.Parent)
+	}
+	if edge.Child != childID {
+		t.Errorf("expected edge child=%q, got %q", childID, edge.Child)
+	}
+}
+
 // --- SearchPastWork SOURCE_CODE tests ---
 
 func TestSearchPastWork_SourceCode_NoEndpoint(t *testing.T) {
@@ -476,5 +598,80 @@ func TestSearchPastWork_SourceCode_CudgelUnavailable(t *testing.T) {
 	}
 	if len(resp.Msg.Results) != 0 {
 		t.Errorf("expected empty results on cudgel failure, got %d", len(resp.Msg.Results))
+	}
+}
+
+// --- SearchPastWork non-SOURCE_CODE filter tests ---
+
+func TestSearchPastWork_EmptyQuery(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+
+	_, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query: "",
+	}))
+	if err == nil {
+		t.Fatal("expected error for empty query")
+	}
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", connect.CodeOf(err))
+	}
+}
+
+// TestSearchPastWork_AllFilter_NoBrainSearcher verifies that SOURCE_FILTER_ALL
+// returns CodeUnavailable when BrainSearcher is not configured (the default in
+// startTestServer).
+func TestSearchPastWork_AllFilter_NoBrainSearcher(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+
+	_, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query:        "find authentication code",
+		SourceFilter: apiv1.SourceFilter_SOURCE_FILTER_ALL,
+		Limit:        5,
+	}))
+	if err == nil {
+		t.Fatal("expected error when BrainSearcher not configured")
+	}
+	if connect.CodeOf(err) != connect.CodeUnavailable {
+		t.Errorf("expected Unavailable, got %v", connect.CodeOf(err))
+	}
+}
+
+// TestSearchPastWork_CodeFilter_NoBrainSearcher verifies that SOURCE_FILTER_CODE
+// returns CodeUnavailable when BrainSearcher is not configured.
+func TestSearchPastWork_CodeFilter_NoBrainSearcher(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+
+	_, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query:        "find authentication code",
+		SourceFilter: apiv1.SourceFilter_SOURCE_FILTER_CODE,
+		Limit:        5,
+	}))
+	if err == nil {
+		t.Fatal("expected error when BrainSearcher not configured")
+	}
+	if connect.CodeOf(err) != connect.CodeUnavailable {
+		t.Errorf("expected Unavailable, got %v", connect.CodeOf(err))
+	}
+}
+
+// TestSearchPastWork_TraceFilter_NoBrainSearcher verifies that SOURCE_FILTER_TRACE
+// returns CodeUnavailable when BrainSearcher is not configured.
+func TestSearchPastWork_TraceFilter_NoBrainSearcher(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+
+	_, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query:        "trace error logs",
+		SourceFilter: apiv1.SourceFilter_SOURCE_FILTER_TRACE,
+		Limit:        5,
+	}))
+	if err == nil {
+		t.Fatal("expected error when BrainSearcher not configured")
+	}
+	if connect.CodeOf(err) != connect.CodeUnavailable {
+		t.Errorf("expected Unavailable, got %v", connect.CodeOf(err))
 	}
 }
