@@ -18,8 +18,11 @@ const maxChainBodyBytes = 256 << 10
 
 const maxListItems = 500
 
-// capList returns items truncated to at most max elements.
+// capList returns items truncated to at most max elements, always non-nil.
 func capList[T any](items []T, max int) []T {
+	if items == nil {
+		return []T{}
+	}
 	if len(items) > max {
 		return items[:max]
 	}

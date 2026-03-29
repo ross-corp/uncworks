@@ -218,6 +218,13 @@ func (a *App) ClusterStatus() string {
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		// Completed/Succeeded pods are not failures.
+		if strings.Contains(line, "Completed") || strings.Contains(line, "Succeeded") {
+			continue
+		}
 		if !strings.Contains(line, "Running") {
 			return "degraded"
 		}
