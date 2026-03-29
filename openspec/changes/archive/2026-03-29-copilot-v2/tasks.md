@@ -28,7 +28,7 @@
 
 ## 5. System Prompt Update
 
-- [ ] 5.1 Update `buildChatSystemMessage` in `chat.go` to include guidance on `[NAV:/path]` and `[HIGHLIGHT:selector]` tokens in extended system prompt
+- [x] 5.1 Update `buildChatSystemMessage` in `chat.go` to include guidance on `[NAV:/path]` and `[HIGHLIGHT:selector]` tokens in extended system prompt
 - [x] 5.2 Update `chat_test.go` to cover extended system prompt content
 
 ## 6. Cleanup

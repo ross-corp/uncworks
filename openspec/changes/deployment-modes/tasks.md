@@ -48,14 +48,14 @@
 ## 7. macOS App (Wails)
 
 - [x] 7.1 Add Wails v2 to `go.mod`; create `cmd/uncworks-app/` with Wails app entrypoint
-- [ ] 7.2 Configure Wails to embed `web/dist` as the frontend; verify React app renders in WKWebView
+- [x] 7.2 Configure Wails to embed `web/dist` as the frontend; verify React app renders in WKWebView
 - [x] 7.3 Implement menu bar status icon with Running/Stopped states; poll `uncworks status` or gRPC health check
 - [x] 7.4 Implement "Start" menu item: invoke `uncworks setup` subprocess, stream output to app window
 - [x] 7.5 Implement "Stop" menu item: invoke `uncworks teardown` subprocess
 - [x] 7.6 Set minimum macOS deployment target to 13.0 in Wails config
 - [x] 7.7 Add `wails build` target to `Taskfile.yml` (`task app:build`)
-- [ ] 7.8 Add Wails build step to `ci/main.go` on darwin runner; produce `.app` artifact
-- [ ] 7.9 Add DMG packaging step to CI release target; upload as GitHub release asset
+- [x] 7.8 Add Wails build step to `ci/main.go` on darwin runner; produce `.app` artifact
+- [x] 7.9 Add DMG packaging step to CI release target; upload as GitHub release asset
 - [ ] 7.10 Create Homebrew cask formula in `uncworks/homebrew-tap` repository (or document as follow-on if tap repo doesn't exist yet)
 
 ## 8. Deprecation Cleanup

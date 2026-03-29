@@ -58,9 +58,9 @@
 - [x] 6.1 Create `test/stubs/litellm.go` — `httptest.Server` that returns configurable OpenAI-compatible completion responses and records requests
 - [x] 6.2 Create `test/stubs/litellm_test.go` — unit test the stub itself (returns configured response, records request body)
 - [x] 6.3 Create `test/layer2/agentrun_lifecycle_test.go` — test pending→running→complete state transitions with LiteLLM stub
-- [ ] 6.4 Create `test/layer2/hitl_flow_test.go` — test waiting_for_input pause and resume via API
+- [x] 6.4 Create `test/layer2/hitl_flow_test.go` — test waiting_for_input pause and resume via API
 - [x] 6.5 Create `test/layer2/sse_ordering_test.go` — test activity feed SSE event ordering (tool_start before tool_result, completion last)
-- [ ] 6.6 Create `test/layer2/trace_generation_test.go` — test root span creation and stage child spans with correct parent-child relationships
+- [x] 6.6 Create `test/layer2/trace_generation_test.go` — test root span creation and stage child spans with correct parent-child relationships
 - [x] 6.7 Create `test/layer2/error_retry_test.go` — test 503 triggers retry, permanent 500 transitions to failed
 - [x] 6.8 Add `test:layer2` task to `Taskfile.yml`: `go test -v ./test/layer2/... -count=1`
 - [x] 6.9 Add `test:layer2` to the `test` aggregate task in `Taskfile.yml`
@@ -71,10 +71,10 @@
 - [x] 7.1 Create `test/regression/` directory with `doc.go` declaring `//go:build regression` package docs
 - [x] 7.2 Create `test/regression/run_lifecycle_test.go` — full lifecycle regression scenario (tags: regression)
 - [x] 7.3 Create `test/regression/webhook_delivery_test.go` — run completion triggers webhook POST (tags: regression)
-- [ ] 7.4 Create `test/regression/project_provisioning_test.go` — project created → configRepoReady transitions (tags: regression)
+- [x] 7.4 Create `test/regression/project_provisioning_test.go` — project created → configRepoReady transitions (tags: regression)
 - [x] 7.5 Create `test/regression/auth_boundary_test.go` — unauthenticated requests return 401 (tags: regression)
 - [x] 7.6 Create `test/regression/rate_limiting_test.go` — exceeding rate limit returns 429 (tags: regression)
-- [ ] 7.7 Create `test/regression/chain_execution_test.go` — chain with dependencies executes in correct order (tags: regression)
+- [x] 7.7 Create `test/regression/chain_execution_test.go` — chain with dependencies executes in correct order (tags: regression)
 - [x] 7.8 Add `test:regression` task to `Taskfile.yml`
 - [x] 7.9 Add `RegressionTests()` Dagger function to `ci/main.go`
 - [x] 7.10 Add `regression` CI job to `.github/workflows/ci.yml` triggered on PRs to main and `v*` tags
