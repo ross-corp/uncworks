@@ -1,0 +1,19 @@
+# CODEOWNERS — reviewers are automatically requested for PRs touching these paths.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: all changes require review from repo owner
+* @roshbhatia
+
+# Proto definitions and generated code — changes affect all clients
+/proto/          @roshbhatia
+/gen/            @roshbhatia
+
+# CI and release pipeline
+/.github/        @roshbhatia
+/ci/             @roshbhatia
+
+# Helm chart — deployment changes need careful review
+/deploy/         @roshbhatia
+
+# OpenSpec specs — the source of truth for system requirements
+/openspec/specs/ @roshbhatia

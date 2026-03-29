@@ -1,78 +1,109 @@
 # Local Development
 
-UNCWORKS uses a k0s-based local cluster managed through the `aot-local/` directory (located at `../aot-local` relative to the uncworks repo).
+UNCWORKS runs on a local k3s cluster managed by [Colima](https://github.com/abiosoft/colima).
+
+## Prerequisites
+
+- [devbox](https://www.jetify.com/devbox) — installs all tooling in an isolated shell
+- [Colima](https://github.com/abiosoft/colima) — macOS container runtime with k3s support
+- [Wails](https://wails.io) (optional) — required for the macOS desktop app only
+
+## First-time Setup
+
+```bash
+# Install devbox, then enter the dev shell
+devbox shell
+
+# Install dependencies + git hooks
+task install
+
+# Create the Colima k3s VM and deploy everything
+task cluster:setup
+
+# Verify the cluster is healthy
+task cluster:status
+```
+
+`task cluster:setup` creates a Colima VM named `uncworks` with k3s, deploys all infrastructure dependencies (Temporal, LiteLLM, soft-serve), and deploys the UNCWORKS Helm chart.
 
 ## Architecture
 
-The local dev environment runs on a single k0s node with:
-- **Temporal** -- Workflow engine (SQLite-backed dev server)
-- **Ollama** -- Local LLM inference
-- **UNCWORKS Control Plane** -- API server, controller, temporal worker (single image)
-- **UNCWORKS Web** -- Dashboard (Vite + React, served via nginx)
-- **Agent Pods** -- Ephemeral pods with init, sidecar, and agent containers
+The local dev environment runs a k3s cluster inside a Colima VM:
 
-## Taskfile Commands (aot-local/)
-
-Run these from the `aot-local/` directory:
-
-| Command | Description |
-|---------|-------------|
-| `task up` | Build, import, and deploy everything |
-| `task build` | Build all Docker images |
-| `task build:agents` | Build init, sidecar, agent images |
-| `task build:controlplane` | Build control plane image |
-| `task build:web` | Build web dashboard image |
-| `task import` | Import images into k0s runtime |
-| `task deploy` | Apply CRDs, manifests, and Helm chart |
-| `task status` | Show pod status and access URLs |
-| `task logs` | Tail logs from all UNCWORKS pods |
-| `task down` | Remove all UNCWORKS resources |
-| `task pull-model` | Pull `qwen2.5:0.5b` into Ollama |
-
-## Taskfile Commands (uncworks/)
-
-Run these from the uncworks repo root:
-
-| Command | Description |
-|---------|-------------|
-| `task build` | Build all Go binaries to `./bin/` |
-| `task docker:build` | Build all Docker images |
-| `task k0s:images` | Build and import images into k0s |
-| `task deploy:all` | Build, import, restart all deployments |
-| `task dev:web` | Start Vite dev server for web dashboard |
-| `task install` | Install Go and npm dependencies |
-| `task lint` | Run golangci-lint and TypeScript checks |
-| `task proto:gen` | Generate Go + TS code from proto files |
-| `task proto:lint` | Lint proto files with buf |
-| `task temporal:dev` | Start local Temporal dev server |
-
-## Go Binaries
-
-The control plane builds six binaries:
-
-| Binary | Description |
-|--------|-------------|
-| `apiserver` | ConnectRPC API server |
+| Component | Description |
+|-----------|-------------|
+| `apiserver` | ConnectRPC + HTTP API server |
 | `controller` | Kubernetes controller for AgentRun CRD |
-| `temporal-worker` | Temporal workflow/activity worker |
-| `hydration` | Init container for workspace setup |
-| `sidecar` | RPC gateway running in agent pods |
-| `aot` | CLI tool |
+| `worker` | Temporal workflow + activity worker |
+| `web` | React dashboard (nginx) |
+| Temporal | Workflow engine |
+| LiteLLM | LLM proxy (routes to Ollama or cloud) |
+| soft-serve | Per-project git server (config + specs) |
 
-## Persistent Dev Cluster
+## Common Tasks
 
-For a systemd-managed persistent cluster (survives reboots):
-
+```bash
+task dev:deploy       # Build images into k8s.io namespace + rollout all deployments
+task dev:web          # Start Vite dev server (hot-reload web dashboard)
+task build            # Build all Go binaries to ./bin/
+task proto:gen        # Regenerate Go + TypeScript from .proto files
+task test:go          # Run Go tests
+task lint             # Run golangci-lint + TypeScript checks
+task cluster:logs     # Tail logs from all UNCWORKS pods
+task cluster:teardown # Tear down the Colima cluster
 ```
-task cluster:setup    # Install units, build, deploy, start
-task cluster:status   # Check service health
-task cluster:teardown # Stop and remove
-task cluster:logs     # View combined logs
-```
+
+Run `task --list` for the full list.
 
 ## Image Development Cycle
 
-1. Edit source code
-2. `task docker:build` (or specific target like `task build:agents`)
-3. `task k0s:images` to import into k0s
-4. `kubectl rollout restart deploy/<name> -n aot` to pick up new images
+Images are built directly into the k3s containerd namespace (`k8s.io`) — no `docker save | load` step needed:
+
+```bash
+# Build and rollout everything
+task dev:deploy
+
+# Or just rebuild images (without rollout)
+task dev:images
+
+# Manual rollout after image rebuild
+kubectl rollout restart deploy/aot-apiserver deploy/aot-controller -n aot
+kubectl rollout status  deploy/aot-apiserver deploy/aot-controller -n aot
+```
+
+## Desktop App
+
+The macOS desktop app lives in `cmd/uncworks-app/` (gitignored — build output is not committed).
+
+```bash
+task app:build        # Build and install to /Applications/UNCWORKS.app
+```
+
+The app embeds the compiled web frontend from `web/dist/` via `//go:embed`.
+
+## Proto Changes
+
+After editing any `.proto` file:
+
+```bash
+task proto:gen    # runs buf generate — updates gen/go/ and gen/ts/
+task proto:lint   # check for breaking changes and style issues
+```
+
+Commit the generated files alongside the proto changes.
+
+## Environment Variables
+
+Key env vars consumed by the control plane binaries (see `deploy/helm/aot/values.yaml` for defaults):
+
+| Variable | Binary | Description |
+|----------|--------|-------------|
+| `LISTEN_ADDR` | apiserver | gRPC listen address (default `:50055`) |
+| `TEMPORAL_HOST` | all | Temporal frontend address |
+| `LITELLM_BASE_URL` | apiserver, worker | LiteLLM proxy base URL |
+| `LITELLM_MASTER_KEY` | apiserver, worker | LiteLLM authentication key |
+| `GITHUB_TOKEN` | controller | GitHub API token for PR creation |
+| `SOFT_SERVE_ADDR` | controller, worker | soft-serve SSH address |
+| `AOT_API_KEY` | apiserver | API authentication key |
+| `LOG_FORMAT` | all | `text` (default) or `json` |
+| `LOG_LEVEL` | all | `debug`, `info` (default), `warn`, `error` |
