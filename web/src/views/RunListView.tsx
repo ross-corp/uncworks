@@ -176,7 +176,7 @@ export default function RunListView() {
       if (chainResp.status === "fulfilled") {
         if (chainResp.value.ok) {
           const data = await chainResp.value.json();
-          setChainRuns(data);
+          setChainRuns(Array.isArray(data) ? data : []);
         } else {
           console.error("Failed to fetch chain runs:", chainResp.value.status, chainResp.value.statusText);
         }
