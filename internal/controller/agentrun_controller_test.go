@@ -445,6 +445,49 @@ func TestReconcile_DeletedAgentRunWithFinalizer(t *testing.T) {
 	tc.AssertCalled(t, "CancelWorkflow", context.Background(), "agentrun-del-run", "")
 }
 
+// TestReconcile_ArchivedRunSetsAnnotation verifies that when status.Archived=true the
+// reconciler marks the object with the annotationArchived annotation exactly once and
+// does not attempt to delete resources on subsequent reconcile passes.
+func TestReconcile_ArchivedRunSetsAnnotation(t *testing.T) {
+	ar := newAgentRun("archived-run", func(a *aotv1alpha1.AgentRun) {
+		a.Finalizers = []string{finalizerName}
+		a.Annotations = map[string]string{annotationWorkflowID: "agentrun-archived-run"}
+		a.Status.Archived = true
+		a.Status.Phase = aotv1alpha1.AgentRunPhaseSucceeded
+	})
+
+	tc := &temporalmocks.Client{}
+	r, k8s := newFakeReconciler(t, tc, ar)
+
+	// Seed the archived status (fake client requires separate status update).
+	ar.Status.Archived = true
+	if err := k8s.Status().Update(context.Background(), ar); err != nil {
+		t.Fatalf("seed status: %v", err)
+	}
+
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "archived-run", Namespace: "default"}}
+
+	// First reconcile: should set annotationArchived and return.
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile 1: %v", err)
+	}
+
+	var after1 aotv1alpha1.AgentRun
+	if err := k8s.Get(context.Background(), req.NamespacedName, &after1); err != nil {
+		t.Fatalf("get after reconcile 1: %v", err)
+	}
+	if after1.Annotations[annotationArchived] != "true" {
+		t.Errorf("expected annotationArchived=true after first reconcile, got %v", after1.Annotations)
+	}
+
+	// Second reconcile: alreadyCleaned==true, so no further work (no panics, no extra calls).
+	if _, err := r.Reconcile(context.Background(), req); err != nil {
+		t.Fatalf("reconcile 2: %v", err)
+	}
+	// TemporalClient methods must not have been called.
+	tc.AssertNotCalled(t, "CancelWorkflow")
+}
+
 // hasFinalizer is a local helper so tests don't import controllerutil.
 func hasFinalizer(finalizers []string, name string) bool {
 	for _, f := range finalizers {
