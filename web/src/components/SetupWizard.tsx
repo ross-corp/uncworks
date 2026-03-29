@@ -30,6 +30,7 @@ export default function SetupWizardModal({ onClose }: Props) {
             <h2 className="text-base font-semibold">Setup UNCWORKS</h2>
             <button
               onClick={onClose}
+              aria-label="Close setup wizard"
               className="text-muted-foreground hover:text-foreground transition-colors text-sm"
             >
               ✕
@@ -193,7 +194,7 @@ function GitHubStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void
       const result = await go().StartGitHubDeviceFlow();
       setFlow(result);
       setPolling(true);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(String(e));
     }
   }
@@ -351,7 +352,7 @@ function ModelsStep({ onFinish }: { onFinish: () => void }) {
     try {
       const r = await go().CheckLiteLLM(url);
       setResult(r);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setResult({ ok: false, models: [], error: String(e) });
     } finally {
       setChecking(false);
@@ -470,6 +471,7 @@ export function GitHubAuthModal({ onClose }: { onClose: () => void }) {
           <h2 className="text-base font-semibold">Connect GitHub</h2>
           <button
             onClick={onClose}
+            aria-label="Close GitHub auth dialog"
             className="text-muted-foreground hover:text-foreground transition-colors text-sm"
           >
             ✕

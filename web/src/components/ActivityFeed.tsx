@@ -254,8 +254,8 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
   return (
     <div className="relative h-full">
       <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto overscroll-none p-4 space-y-1">
-        {displayEntries.map((de, i) => (
-          <EntryRow key={i} display={de} />
+        {displayEntries.map((de) => (
+          <EntryRow key={`${de.entry.timestamp}-${de.entry.type}-${de.label}`} display={de} />
         ))}
         {thinking?.thinking && (thinking.text || thinking.toolName) && (
           <ThinkingEntry text={thinking.text} toolName={thinking.toolName} />
@@ -265,6 +265,7 @@ export default function ActivityFeed({ runId, phase }: { runId: string; phase?: 
       {showJumpButton && (
         <button
           onClick={scrollToBottom}
+          aria-label="Jump to latest activity"
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:bg-primary/90 transition-colors"
         >
           ↓ Jump to latest
@@ -395,6 +396,7 @@ function SpanBadge({ spanId }: { spanId: string }) {
   return (
     <button
       title={`Trace span: ${spanId}`}
+      aria-label={`Navigate to trace span ${spanId}`}
       onClick={() => {
         // Dispatch a custom event that a parent (e.g. layout with tabs) can listen for
         // to switch to the traces tab and highlight this span.
@@ -422,6 +424,7 @@ function ExpandableContent({ content, className }: { content: string; className?
         <span className="whitespace-pre-wrap">{truncate(content, 100)}</span>
         <button
           onClick={() => setExpanded(true)}
+          aria-label="Show full content"
           className="ml-1 text-xs text-blue-400 hover:text-blue-300"
         >
           [show more]
@@ -434,6 +437,7 @@ function ExpandableContent({ content, className }: { content: string; className?
     <div className={`text-sm min-w-0 ${className ?? ""}`}>
       <button
         onClick={() => setExpanded(false)}
+        aria-label="Collapse content"
         className="text-xs text-blue-400 hover:text-blue-300 mb-1"
       >
         [show less]
@@ -537,9 +541,11 @@ function EntryRow({ display }: { display: DisplayEntry }) {
             <div className="min-w-0">
               <button
                 onClick={() => setExpanded(!expanded)}
+                aria-expanded={expanded}
+                aria-label={`${expanded ? "Collapse" : "Expand"} tool call: ${entry.toolName}`}
                 className={`text-sm ${ROLE_STYLES.implement.text} hover:opacity-80`}
               >
-                {expanded ? "v" : ">"} {entry.toolName}
+                {expanded ? "▾" : "▸"} {entry.toolName}
               </button>
               {/* Inline result summary (always visible, muted) */}
               {pairedResult && !expanded && (
@@ -597,8 +603,13 @@ function ToolResult({ content, failed }: { content: string; failed: boolean }) {
 
   return (
     <div className="min-w-0">
-      <button onClick={() => setExpanded(!expanded)} className={`text-xs ${colorClass} hover:text-foreground`}>
-        {expanded ? "v collapse" : "> expand"} ({content.length} chars){isJSON ? " [JSON]" : ""}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-label={`${expanded ? "Collapse" : "Expand"} tool result (${content.length} chars)`}
+        className={`text-xs ${colorClass} hover:text-foreground`}
+      >
+        {expanded ? "▾ collapse" : "▸ expand"} ({content.length} chars){isJSON ? " [JSON]" : ""}
       </button>
       {expanded ? (
         isJSON ? (
