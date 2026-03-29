@@ -1,0 +1,57 @@
+# tasks/cluster.yml — persistent dev cluster lifecycle and Temporal dev server
+version: "3"
+
+tasks:
+  setup:
+    desc: Install systemd units, build/import images, deploy Ollama, start all services
+    cmds:
+      - loginctl enable-linger $(whoami)
+      - mkdir -p ~/.config/systemd/user
+      - cp deploy/systemd/aot-*.service deploy/systemd/aot-cluster.target ~/.config/systemd/user/
+      - systemctl --user daemon-reload
+      - task: build:go
+      - task: k8s:images
+      - task: k8s:crd
+      - task: k8s:ollama
+      - systemctl --user enable aot-temporal aot-controller aot-worker aot-apiserver aot-web aot-cluster.target
+      - systemctl --user start aot-cluster.target
+      - echo ""
+      - echo "Cluster started! Services:"
+      - systemctl --user list-units 'aot-*' --no-pager --all
+      - echo ""
+      - echo "Web UI → http://localhost:3000"
+      - echo "API    → http://localhost:50055"
+      - echo ""
+      - echo "Pull Ollama model (if not already done):"
+      - echo "  kubectl exec deploy/ollama -- ollama pull qwen2.5:0.5b"
+
+  status:
+    desc: Show health of all UNCWORKS services and ports
+    cmds:
+      - echo "=== Systemd Units ==="
+      - systemctl --user list-units 'aot-*' --no-pager
+      - echo ""
+      - echo "=== Listening Ports ==="
+      - ss -tlnp 2>/dev/null | grep -E '7233|50055|8095|3000' || echo "(none)"
+      - echo ""
+      - echo "=== k0s Pods ==="
+      - sudo k0s kubectl get pods -A 2>/dev/null || echo "(k0s not running)"
+
+  teardown:
+    desc: Stop all UNCWORKS services and remove systemd units
+    cmds:
+      - systemctl --user stop aot-cluster.target 2>/dev/null || true
+      - systemctl --user disable aot-cluster.target 2>/dev/null || true
+      - rm -f ~/.config/systemd/user/aot-*.service ~/.config/systemd/user/aot-cluster.target
+      - systemctl --user daemon-reload
+      - echo "All UNCWORKS services stopped and units removed."
+
+  logs:
+    desc: Show combined logs from all UNCWORKS services
+    cmds:
+      - journalctl --user -u 'aot-*' --no-pager -n 100 {{.CLI_ARGS}}
+
+  temporal:dev:
+    desc: Start Temporal dev server (SQLite, no external deps)
+    cmds:
+      - temporal server start-dev --db-filename .temporal.db

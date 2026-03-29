@@ -1,8 +1,29 @@
+# Taskfile.yml — root entrypoint; delegates to scoped taskfiles in tasks/
+# Run `task --list` to see all available tasks.
 version: "3"
 
-vars:
-  KUBEBUILDER_ASSETS:
-    sh: "setup-envtest use --print path 2>/dev/null || echo ''"
+includes:
+  build:
+    taskfile: tasks/build.yml
+    dir: "{{.ROOT_DIR}}"
+  test:
+    taskfile: tasks/test.yml
+    dir: "{{.ROOT_DIR}}"
+  proto:
+    taskfile: tasks/proto.yml
+    dir: "{{.ROOT_DIR}}"
+  docker:
+    taskfile: tasks/docker.yml
+    dir: "{{.ROOT_DIR}}"
+  dev:
+    taskfile: tasks/dev.yml
+    dir: "{{.ROOT_DIR}}"
+  k8s:
+    taskfile: tasks/k8s.yml
+    dir: "{{.ROOT_DIR}}"
+  cluster:
+    taskfile: tasks/cluster.yml
+    dir: "{{.ROOT_DIR}}"
 
 tasks:
   default:
@@ -10,509 +31,104 @@ tasks:
     cmds:
       - task --list
 
-  # --- Testing ---
+  # ---------------------------------------------------------------------------
+  # Top-level shortcuts for the most common workflows
+  # ---------------------------------------------------------------------------
+
+  build:
+    desc: Build all Go binaries (shortcut for build:go)
+    cmds:
+      - task: build:go
+
   test:
-    desc: Run all tests (parallel)
+    desc: Run all tests in parallel (Go + web + extension + layer2)
     deps: [test:go, test:web, test:extension, test:layer2]
 
-  test:all:
-    desc: Run full test pipeline sequentially (schema → unit → contract → temporal → integration → e2e)
-    cmds:
-      - task: proto:lint
-      - task: proto:breaking
-      - task: test:unit
-      - task: test:contract
-      - task: test:temporal
-      - task: test:integration
-      - task: test:e2e
-
-  test:go:
-    desc: Run Go tests (unit + integration) with coverage
-    env:
-      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
-    cmds:
-      - go test ./api/... ./internal/... -count=1 -coverprofile=coverage.out -covermode=atomic
-
-  test:coverage:go:
-    desc: Run Go tests, generate HTML coverage report, and open it
-    env:
-      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
-    cmds:
-      - go test ./api/... ./internal/... -count=1 -coverprofile=coverage.out -covermode=atomic
-      - "go tool cover -func coverage.out | grep total:"
-      - go tool cover -html=coverage.out -o coverage.html
-      - open coverage.html
-
-  test:layer2:
-    desc: Run Layer 2 pipeline tests (LLM stubbed, no real cluster)
-    env:
-      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
-    cmds:
-      - go test -v ./test/layer2/... ./test/stubs/... -count=1
-
-  test:regression:
-    desc: Run regression suite (critical paths — gates releases and PRs to main)
-    env:
-      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
-    cmds:
-      - go test -tags regression -v ./test/regression/... -count=1
-
-  test:playwright:ci:
-    desc: Run Playwright e2e tests via Dagger (same environment as CI)
-    cmds:
-      - dagger call playwright-tests --source .
-
-  test:e2e:setup:
-    desc: Start Soft-Serve git server and push fixture repos
-    cmds:
-      - mkdir -p /tmp/aot-e2e-soft-serve
-      - |
-        SOFT_SERVE_DATA_PATH=/tmp/aot-e2e-soft-serve \
-        SOFT_SERVE_GIT_LISTEN_ADDR=0.0.0.0:9418 \
-        soft serve &
-        echo $! > /tmp/aot-e2e-soft-serve.pid
-      - sleep 2
-      - SOFT_SERVE_ADDR=localhost:9418 ./test/fixtures/push-fixtures.sh
-
-  test:e2e:teardown:
-    desc: Stop Soft-Serve git server
-    cmds:
-      - kill $(cat /tmp/aot-e2e-soft-serve.pid) 2>/dev/null || true
-      - rm -rf /tmp/aot-e2e-soft-serve /tmp/aot-e2e-soft-serve.pid
-
-  test:e2e:go:
-    desc: Run Go E2E tests
-    cmds:
-      - go test ./e2e/... -tags e2e -v -timeout 15m
-
-  test:e2e:playwright:
-    desc: Run Playwright E2E tests
-    dir: web
-    cmds:
-      - npx playwright test
-
-  test:e2e:full:
-    desc: Run full E2E test suite (setup → Go → Playwright → teardown)
-    cmds:
-      - task: test:e2e:setup
-      - defer: { task: test:e2e:teardown }
-      - task: test:e2e:go
-      - task: test:e2e:playwright
-
-  test:e2e:
-    env:
-      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
-    cmds:
-      - go test -tags e2e ./e2e/... -v -count=1 -timeout 30m
-
-  test:e2e:api:
-    desc: Run E2E tests against in-cluster API server
-    env:
-      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
-      AOT_API_URL: '{{.AOT_API_URL | default "http://localhost:50055"}}'
-      AOT_NAMESPACE: '{{.AOT_NAMESPACE | default "aot"}}'
-    cmds:
-      - go test ./e2e/... -run TestE2E_API -v -count=1 -timeout 10m
-
-  test:e2e:infra:
-    desc: Build images, import into k0s, and run LLM E2E tests
-    env:
-      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
-      AOT_AGENT_IMAGE: aot-agent:local
-      AOT_SIDECAR_IMAGE: aot-sidecar:local
-      AOT_INIT_IMAGE: aot-init:local
-    cmds:
-      - task: k0s:images
-      - go test -tags e2e ./e2e/... -run TestE2E_LLM -v -count=1 -timeout 30m
-
-  test:web:
-    desc: Run Playwright E2E tests for web dashboard
-    dir: web
-    cmds:
-      - npx playwright test
-
-  test:extension:
-    desc: Run pi-aot-extension tests
-    dir: packages/pi-aot-extension
-    cmds:
-      - npx tsx --test src/**/*.test.ts
-
-  test:shared:
-    desc: Run @aot/shared tests
-    dir: packages/shared
-    cmds:
-      - npx tsx --test src/**/*.test.ts
-
-  test:contract:
-    desc: Run server contract tests (ConnectRPC + protovalidate) with coverage
-    cmds:
-      - go test ./test/contract/... -count=1 -v -coverprofile=coverage-contract.out -covermode=atomic
-
-  test:temporal:
-    desc: Run Temporal workflow tests (requires temporal-workflow-engine)
-    cmds:
-      - go test ./test/temporal/... -count=1 -v
-
-  test:integration:
-    desc: Run integration tests (requires Docker for testcontainers)
-    cmds:
-      - go test -tags integration ./... -count=1 -v
-
-  test:regression:
-    desc: Run regression test suite (critical paths, gates releases)
-    env:
-      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
-    cmds:
-      - go test -tags regression -v ./test/regression/... -count=1
-
-  test:bdd:
-    desc: Run BDD scenario specs (Ginkgo/Gomega)
-    env:
-      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
-    cmds:
-      - go test -v ./test/bdd/... -count=1
-
-  test:unit:
-    desc: Run unit tests only (fast, no Docker)
-    env:
-      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
-    cmds:
-      - go test -short ./api/... ./internal/... -count=1
-
-  # --- Build ---
-  build:
-    desc: Build all Go binaries
-    cmds:
-      - go build -o ./bin/apiserver ./cmd/apiserver
-      - go build -o ./bin/controller ./cmd/controller
-      - go build -o ./bin/hydration ./cmd/hydration
-      - go build -o ./bin/sidecar ./cmd/sidecar
-      - go build -o ./bin/aot ./cmd/aot
-      - go build -o ./bin/temporal-worker ./cmd/temporal-worker
-      - CGO_ENABLED=0 go build -o ./bin/uncworks ./cmd/uncworks
-
-  build:uncworks:
-    desc: Build the uncworks CLI for all platforms
-    cmds:
-      - GOOS=linux  GOARCH=amd64 CGO_ENABLED=0 go build -o ./bin/uncworks-linux-amd64  ./cmd/uncworks
-      - GOOS=linux  GOARCH=arm64 CGO_ENABLED=0 go build -o ./bin/uncworks-linux-arm64  ./cmd/uncworks
-      - GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-amd64 ./cmd/uncworks
-      - GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-arm64 ./cmd/uncworks
-
-  dev:images:
-    desc: Build local images and load them into the colima-uncworks cluster (k8s.io namespace)
-    vars:
-      COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
-    cmds:
-      - npm install --no-save @bufbuild/protobuf@^2.0.0
-      - cd web && npm run build
-      # Build directly into the k8s.io containerd namespace so k3s can use the
-      # images immediately without a separate save|load step.
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-controlplane:local --file docker/Dockerfile.controlplane .
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-web:local --file docker/Dockerfile.web web/
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-sidecar:local --file docker/Dockerfile.sidecar .
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-init:local --file docker/Dockerfile.hydration .
-      - colima nerdctl --profile {{.COLIMA_PROFILE}} -- -n k8s.io build --tag aot-agent:local --file docker/Dockerfile.agent-base .
-      - echo "All images built into k8s.io namespace on colima-{{.COLIMA_PROFILE}}"
-
-  dev:deploy:
-    desc: Build images, load into k3s, and rollout all deployments
-    vars:
-      COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
-      NAMESPACE: '{{.NAMESPACE | default "aot"}}'
-    cmds:
-      - task: dev:images
-      - kubectl rollout restart deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n {{.NAMESPACE}}
-      - kubectl rollout status  deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n {{.NAMESPACE}} --timeout=120s
-      - echo "Rollout complete."
-
-  app:build:
-    desc: Build the native macOS app (requires Wails v2 and macOS)
-    cmds:
-      - |
-        if [ "$(uname)" != "Darwin" ]; then
-          echo "ERROR: macOS app can only be built on macOS"; exit 1
-        fi
-      - |
-        if ! command -v wails &>/dev/null; then
-          echo "ERROR: wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
-          exit 1
-        fi
-      - cd cmd/uncworks-app && wails build -clean -o UNCWORKS
-      - rm -rf /Applications/UNCWORKS.app
-      - cp -r cmd/uncworks-app/build/bin/UNCWORKS.app /Applications/UNCWORKS.app
-      - echo "Installed to /Applications/UNCWORKS.app"
-
-  docker:build:
-    desc: Build all Docker images locally
-    cmds:
-      - docker build -f docker/Dockerfile.hydration -t aot-init:local .
-      - docker build -f docker/Dockerfile.sidecar -t aot-sidecar:local .
-      - docker build -f docker/Dockerfile.agent-base -t aot-agent:local .
-      - docker build -f docker/Dockerfile.controlplane -t aot-controlplane:local .
-      - docker build -f docker/Dockerfile.web -t aot-web:local web/
-
-  k0s:images:
-    desc: Import locally-built Docker images into k0s (requires sudo)
-    deps: [docker:build]
-    cmds:
-      - docker save aot-init:local aot-sidecar:local aot-agent:local aot-controlplane:local aot-web:local -o /tmp/aot-images.tar
-      - sudo k0s ctr images import /tmp/aot-images.tar
-      - rm /tmp/aot-images.tar
-      - echo "Images imported into k0s. Set AOT_*_IMAGE env vars to use local images."
-
-  deploy:all:
-    desc: Build all images, import into k0s, restart all deployments
-    cmds:
-      - task: build:web
-      - task: k0s:images
-      - kubectl rollout restart deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n aot
-      - kubectl rollout status deploy/aot-apiserver deploy/aot-controller deploy/aot-worker deploy/aot-web -n aot --timeout=60s
-      - echo "All deployments restarted and ready."
-
-  build:web:
-    desc: Build web dashboard
-    dir: web
-    cmds:
-      - npx vite build
-
-  # --- Code Generation ---
-  proto:gen:
-    desc: Generate Go and TypeScript code from protobuf definitions
-    cmds:
-      - buf generate --template buf.gen.go.yaml
-      - buf generate --template buf.gen.ts.yaml --include-imports
-
-  proto:lint:
-    desc: Lint protobuf files
-    cmds:
-      - buf lint
-
-  proto:breaking:
-    desc: Check for breaking proto changes against main
-    cmds:
-      - buf breaking --against '.git#branch=main'
-
-  # --- Infrastructure ---
-  temporal:dev:
-    desc: Start Temporal dev server (SQLite, no external deps)
-    cmds:
-      - temporal server start-dev --db-filename .temporal.db
-
-
-  k0s:setup:
-    desc: "[DEPRECATED] Use 'uncworks setup' instead"
-    cmds:
-      - |
-        echo "ERROR: task k0s:setup is removed. Use 'uncworks setup' instead."
-        echo "       See docs/getting-started.md for the updated local setup guide."
-        exit 1
-
-  k0s:teardown:
-    desc: "[DEPRECATED] Use 'uncworks teardown' instead"
-    cmds:
-      - |
-        echo "ERROR: task k0s:teardown is removed. Use 'uncworks teardown' instead."
-        exit 1
-
-  k0s:crd:
-    desc: Apply AgentRun CRD to cluster
-    env:
-      KUBECONFIG: '{{.KUBECONFIG | default "kubeconfig"}}'
-    cmds:
-      - kubectl apply -f deploy/crds/agentrun-crd.yaml
-
-  k0s:litellm:
-    desc: Deploy LiteLLM proxy to k0s cluster
-    cmds:
-      - helm repo add litellm https://litellm-helm.github.io/litellm-helm 2>/dev/null || true
-      - helm repo update
-      - >-
-        kubectl create secret generic litellm-master-key
-        --from-literal=LITELLM_MASTER_KEY="sk-aot-$(openssl rand -hex 16)"
-        --dry-run=client -o yaml | kubectl apply -f -
-      - >-
-        helm upgrade --install litellm litellm/litellm-helm
-        --set masterKeySecretName=litellm-master-key
-        --set masterKeySecretKey=LITELLM_MASTER_KEY
-        --set-file configFile=deploy/litellm/litellm-config.yaml
-
-  k0s:ollama:
-    desc: Deploy Ollama to k0s cluster
-    cmds:
-      - helm repo add ollama-helm https://otwld.github.io/ollama-helm 2>/dev/null || true
-      - helm repo update
-      - >-
-        helm upgrade --install ollama ollama-helm/ollama
-        --set ollama.gpu.enabled=false
-        --set resources.requests.memory=8Gi
-
-  k0s:ollama:pull:
-    desc: Pull models into running Ollama instance
-    cmds:
-      - kubectl exec -it deploy/ollama -- ollama pull qwen2.5:0.5b
-      - kubectl exec -it deploy/ollama -- ollama pull llama3.1:8b
-
-  k0s:storage:
-    desc: Install local-path-provisioner for PVC support
-    cmds:
-      - kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
-      - kubectl patch storageclass local-path -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
-
-  k0s:soft-serve:
-    desc: Deploy soft-serve Git server to k0s cluster
-    cmds:
-      - kubectl apply -f deploy/crds/project-crd.yaml
-      - >-
-        kubectl apply -f - <<'YAML'
-        apiVersion: v1
-        kind: PersistentVolumeClaim
-        metadata:
-          name: soft-serve-data
-          namespace: aot
-        spec:
-          accessModes: [ReadWriteOnce]
-          storageClassName: local-path
-          resources:
-            requests:
-              storage: 2Gi
-        YAML
-      - >-
-        kubectl apply -f - <<'YAML'
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: soft-serve
-          namespace: aot
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app.kubernetes.io/name: soft-serve
-          template:
-            metadata:
-              labels:
-                app.kubernetes.io/name: soft-serve
-            spec:
-              containers:
-              - name: soft-serve
-                image: charmcli/soft-serve:latest
-                ports:
-                - {name: ssh, containerPort: 23231}
-                - {name: http, containerPort: 23232}
-                env:
-                - {name: SOFT_SERVE_DATA_PATH, value: /data}
-                volumeMounts:
-                - {name: data, mountPath: /data}
-                resources:
-                  requests: {cpu: 100m, memory: 128Mi}
-                  limits: {cpu: 500m, memory: 256Mi}
-              volumes:
-              - name: data
-                persistentVolumeClaim:
-                  claimName: soft-serve-data
-        YAML
-      - >-
-        kubectl apply -f - <<'YAML'
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: soft-serve
-          namespace: aot
-        spec:
-          selector:
-            app.kubernetes.io/name: soft-serve
-          ports:
-          - {name: ssh, port: 23231, targetPort: ssh}
-          - {name: http, port: 23232, targetPort: http}
-        YAML
-      - kubectl rollout status deploy/soft-serve -n aot --timeout=60s
-      - echo "soft-serve deployed. SSH available at soft-serve.aot.svc:23231"
-
-  k0s:deps:
-    desc: Deploy all infrastructure dependencies to k0s
-    cmds:
-      - task: k0s:crd
-      - task: k0s:storage
-      - task: k0s:ollama
-      - task: k0s:litellm
-      - task: k0s:soft-serve
-      - echo "All dependencies deployed. Run 'task k0s:ollama:pull' to pull models."
-
-  # --- Development ---
-  dev:web:
-    desc: Start web dashboard dev server
-    dir: web
-    cmds:
-      - npx vite
-
   install:
-    desc: Install all dependencies
+    desc: Install all project dependencies (shortcut for dev:install)
     cmds:
-      - go mod tidy
-      - cd web && npm install
-      - cd packages/shared && npm install
-      - cd packages/pi-aot-extension && npm install
+      - task: dev:install
 
   lint:
-    desc: Run linters
+    desc: Run all linters (shortcut for dev:lint)
     cmds:
-      - golangci-lint run ./...
-      - cd web && npx tsc --noEmit
-      - cd packages/shared && npx tsc --noEmit
-      - cd packages/pi-aot-extension && npx tsc --noEmit
+      - task: dev:lint
 
+  # ---------------------------------------------------------------------------
+  # Backward-compat aliases for tasks that were renamed or re-namespaced
+  # ---------------------------------------------------------------------------
+
+  # build:web and build:uncworks already exist via the build: include.
+  # app:build was the old name; build:app is the new canonical name.
+  app:build:
+    desc: "Compat alias: build native macOS app (use build:app)"
+    cmds:
+      - task: build:app
+
+  # hooks:install was top-level; now lives under dev:
   hooks:install:
-    desc: Install git hooks via lefthook
+    desc: "Compat alias: install git hooks (use dev:hooks:install)"
     cmds:
-      - lefthook install
+      - task: dev:hooks:install
 
-  # --- Persistent Dev Cluster ---
-  cluster:setup:
-    desc: Install systemd units, build/import images, deploy Ollama, start all services
+  # temporal:dev was top-level; now lives under cluster:
+  temporal:dev:
+    desc: "Compat alias: start Temporal dev server (use cluster:temporal:dev)"
     cmds:
-      - loginctl enable-linger $(whoami)
-      - mkdir -p ~/.config/systemd/user
-      - cp deploy/systemd/aot-*.service deploy/systemd/aot-cluster.target ~/.config/systemd/user/
-      - systemctl --user daemon-reload
-      - task: build
-      - task: k0s:images
-      - task: k0s:crd
-      - task: k0s:ollama
-      - systemctl --user enable aot-temporal aot-controller aot-worker aot-apiserver aot-web aot-cluster.target
-      - systemctl --user start aot-cluster.target
-      - echo ""
-      - echo "Cluster started! Services:"
-      - systemctl --user list-units 'aot-*' --no-pager --all
-      - echo ""
-      - echo "Web UI → http://localhost:3000"
-      - echo "API    → http://localhost:50055"
-      - echo ""
-      - echo "Pull Ollama model (if not already done):"
-      - echo "  kubectl exec deploy/ollama -- ollama pull qwen2.5:0.5b"
+      - task: cluster:temporal:dev
 
-  cluster:status:
-    desc: Show health of all UNCWORKS services and ports
+  # k0s:* tasks are now under k8s:; keep old names working
+  k0s:images:
+    desc: "Compat alias: import Docker images into k0s (use k8s:images)"
     cmds:
-      - echo "=== Systemd Units ==="
-      - systemctl --user list-units 'aot-*' --no-pager
-      - echo ""
-      - echo "=== Listening Ports ==="
-      - ss -tlnp 2>/dev/null | grep -E '7233|50055|8095|3000' || echo "(none)"
-      - echo ""
-      - echo "=== k0s Pods ==="
-      - sudo k0s kubectl get pods -A 2>/dev/null || echo "(k0s not running)"
+      - task: k8s:images
 
-  cluster:teardown:
-    desc: Stop all UNCWORKS services and remove systemd units
+  k0s:crd:
+    desc: "Compat alias: apply AgentRun CRD (use k8s:crd)"
     cmds:
-      - systemctl --user stop aot-cluster.target 2>/dev/null || true
-      - systemctl --user disable aot-cluster.target 2>/dev/null || true
-      - rm -f ~/.config/systemd/user/aot-*.service ~/.config/systemd/user/aot-cluster.target
-      - systemctl --user daemon-reload
-      - echo "All UNCWORKS services stopped and units removed."
+      - task: k8s:crd
 
-  cluster:logs:
-    desc: Show combined logs from all UNCWORKS services
+  k0s:storage:
+    desc: "Compat alias: install local-path-provisioner (use k8s:storage)"
     cmds:
-      - journalctl --user -u 'aot-*' --no-pager -n 100 {{.CLI_ARGS}}
+      - task: k8s:storage
+
+  k0s:litellm:
+    desc: "Compat alias: deploy LiteLLM to k0s (use k8s:litellm)"
+    cmds:
+      - task: k8s:litellm
+
+  k0s:ollama:
+    desc: "Compat alias: deploy Ollama to k0s (use k8s:ollama)"
+    cmds:
+      - task: k8s:ollama
+
+  k0s:ollama:pull:
+    desc: "Compat alias: pull Ollama models (use k8s:ollama:pull)"
+    cmds:
+      - task: k8s:ollama:pull
+
+  k0s:soft-serve:
+    desc: "Compat alias: deploy soft-serve Git server (use k8s:soft-serve)"
+    cmds:
+      - task: k8s:soft-serve
+
+  k0s:deps:
+    desc: "Compat alias: deploy all k0s infra dependencies (use k8s:deps)"
+    cmds:
+      - task: k8s:deps
+
+  k0s:setup:
+    desc: "Compat alias: [DEPRECATED] see k8s:setup"
+    cmds:
+      - task: k8s:setup
+
+  k0s:teardown:
+    desc: "Compat alias: [DEPRECATED] see k8s:teardown"
+    cmds:
+      - task: k8s:teardown
+
+  deploy:all:
+    desc: "Compat alias: build + import + rollout all (use k8s:deploy:all)"
+    cmds:
+      - task: k8s:deploy:all

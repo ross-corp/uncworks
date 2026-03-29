@@ -1,0 +1,45 @@
+# tasks/build.yml — Go binary builds, web build, cross-platform CLI, native app
+version: "3"
+
+tasks:
+  go:
+    desc: Build all Go binaries into ./bin/
+    cmds:
+      - go build -o ./bin/apiserver ./cmd/apiserver
+      - go build -o ./bin/controller ./cmd/controller
+      - go build -o ./bin/hydration ./cmd/hydration
+      - go build -o ./bin/sidecar ./cmd/sidecar
+      - go build -o ./bin/aot ./cmd/aot
+      - go build -o ./bin/temporal-worker ./cmd/temporal-worker
+      - CGO_ENABLED=0 go build -o ./bin/uncworks ./cmd/uncworks
+
+  web:
+    desc: Build web dashboard (Vite production bundle)
+    dir: web
+    cmds:
+      - npx vite build
+
+  uncworks:
+    desc: Cross-compile uncworks CLI for Linux and macOS (amd64 + arm64)
+    cmds:
+      - GOOS=linux  GOARCH=amd64 CGO_ENABLED=0 go build -o ./bin/uncworks-linux-amd64  ./cmd/uncworks
+      - GOOS=linux  GOARCH=arm64 CGO_ENABLED=0 go build -o ./bin/uncworks-linux-arm64  ./cmd/uncworks
+      - GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-amd64 ./cmd/uncworks
+      - GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o ./bin/uncworks-darwin-arm64 ./cmd/uncworks
+
+  app:
+    desc: Build the native macOS app via Wails (macOS only)
+    cmds:
+      - |
+        if [ "$(uname)" != "Darwin" ]; then
+          echo "ERROR: macOS app can only be built on macOS"; exit 1
+        fi
+      - |
+        if ! command -v wails &>/dev/null; then
+          echo "ERROR: wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
+          exit 1
+        fi
+      - cd cmd/uncworks-app && wails build -clean -o UNCWORKS
+      - rm -rf /Applications/UNCWORKS.app
+      - cp -r cmd/uncworks-app/build/bin/UNCWORKS.app /Applications/UNCWORKS.app
+      - echo "Installed to /Applications/UNCWORKS.app"
