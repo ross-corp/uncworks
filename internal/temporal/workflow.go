@@ -592,6 +592,75 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			}).Get(ctx, nil); err != nil {
 				workflow.GetLogger(ctx).Warn("Tag enrichment failed", "error", err)
 			}
+
+			// Push changes and optionally create a PR
+			if input.AutoPush || input.AutoPR {
+				gitOpts := workflow.ActivityOptions{
+					StartToCloseTimeout: 2 * time.Minute,
+					HeartbeatTimeout:    30 * time.Second,
+					RetryPolicy: &temporal.RetryPolicy{
+						InitialInterval:    5 * time.Second,
+						BackoffCoefficient: 2.0,
+						MaximumInterval:    30 * time.Second,
+						MaximumAttempts:    3,
+					},
+				}
+				gitCtx := workflow.WithActivityOptions(ctx, gitOpts)
+
+				branchName := fmt.Sprintf("aot/%s", input.AgentRunName)
+				commitMsg := fmt.Sprintf("feat: %s\n\nAgentRun: %s", truncateForTitle(input.Prompt, 72), input.AgentRunName)
+				repoURL := ""
+				if len(input.Repos) > 0 {
+					repoURL = input.Repos[0].URL
+				}
+
+				var pushOutput PushChangesOutput
+				if err := workflow.ExecuteActivity(gitCtx, ActivityPushChanges, PushChangesInput{
+					AgentRunName:  input.AgentRunName,
+					PodIP:         podIP,
+					RepoPath:      repoPath,
+					BranchName:    branchName,
+					CommitMessage: commitMsg,
+					RepoURL:       repoURL,
+				}).Get(ctx, &pushOutput); err != nil {
+					workflow.GetLogger(ctx).Warn("Push changes failed", "error", err)
+				} else if input.AutoPR && len(input.Repos) > 0 {
+					owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
+					if err != nil {
+						workflow.GetLogger(ctx).Warn("Failed to parse repo URL for PR", "error", err)
+					} else {
+						baseBranch := input.PRBaseBranch
+						if baseBranch == "" {
+							baseBranch = "main"
+						}
+						prCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+							StartToCloseTimeout: 30 * time.Second,
+							RetryPolicy: &temporal.RetryPolicy{
+								MaximumAttempts: 2,
+							},
+						})
+						prBody := fmt.Sprintf("## Summary\n\n%s\n\n## Pipeline\n\n- **Run:** %s\n- **Model:** %s\n\n---\n*This PR was automatically created by UNCWORKS.*",
+							pushOutput.DiffStat,
+							input.AgentRunName,
+							input.ModelTier,
+						)
+						var prOutput CreatePROutput
+						if err := workflow.ExecuteActivity(prCtx, ActivityCreatePR, CreatePRInput{
+							RepoOwner:    owner,
+							RepoName:     repo,
+							BranchName:   branchName,
+							BaseBranch:   baseBranch,
+							Title:        fmt.Sprintf("feat: %s", truncateForTitle(input.Prompt, 60)),
+							Body:         prBody,
+							AgentRunName: input.AgentRunName,
+						}).Get(ctx, &prOutput); err != nil {
+							workflow.GetLogger(ctx).Warn("Create PR failed", "error", err)
+						} else {
+							state.PRUrl = prOutput.PRUrl
+						}
+					}
+				}
+			}
 			return nil
 		case "Failed", "Cancelled":
 			// Pod cleanup happens via defer

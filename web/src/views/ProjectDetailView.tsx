@@ -102,6 +102,7 @@ export default function ProjectDetailView() {
 
   // Runs tab
   const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [runsLoaded, setRunsLoaded] = useState(false);
 
   const fetchFiles = useCallback(async () => {
     if (!name) return;
@@ -175,7 +176,10 @@ export default function ProjectDetailView() {
         // Use the ConnectRPC client so the response goes through mapRun and all
         // extended status fields (totalCost, lastCIStatus, etc.) are populated.
         const raw = await client.listAgentRuns();
-        if (!cancelled) setRuns(raw.map(mapRun).filter((r) => r.spec.project === name));
+        if (!cancelled) {
+          setRuns(raw.map(mapRun).filter((r) => r.spec.projectRef === name || r.spec.project === name));
+          setRunsLoaded(true);
+        }
       } catch (e) {
         if (!cancelled) toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -390,12 +394,14 @@ export default function ProjectDetailView() {
             <span className="font-semibold">{project.name}</span>
             {project.configRepoReady ? (
               <Badge variant="outline" className="text-xs border-green-500/40 text-green-500">ready</Badge>
-            ) : (
-              <Badge variant="secondary" className="text-xs" title={project.configRepoMessage || "Waiting for soft-serve config repo"}>
+            ) : project.configRepoMessage ? (
+              <Badge variant="secondary" className="text-xs" title={project.configRepoMessage}>
                 provisioning
               </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs border-green-500/40 text-green-500">active</Badge>
             )}
-            <span className="text-xs text-muted-foreground">{project.runCount} runs</span>
+            <span className="text-xs text-muted-foreground">{runsLoaded ? runs.length : project.runCount} runs</span>
             {project.totalCost && (
               <span className="text-xs text-muted-foreground">{project.totalCost}</span>
             )}
@@ -407,7 +413,7 @@ export default function ProjectDetailView() {
               + new spec
             </Button>
           )}
-          <Button size="sm" onClick={() => navigate(`/new?project=${name}`)}>
+          <Button size="sm" variant="ghost" onClick={() => navigate(`/new?project=${name}`)}>
             + new run
           </Button>
         </div>
@@ -452,7 +458,7 @@ export default function ProjectDetailView() {
 
             {specFiles.length === 0 && !showNewSpec && (
               <div className="text-xs text-muted-foreground p-2">
-                {!project.configRepoReady
+                {!project.configRepoReady && project.configRepoMessage
                   ? "Config repo is still provisioning. Specs will appear here once it is ready."
                   : "No specs yet"}
               </div>
@@ -561,7 +567,7 @@ export default function ProjectDetailView() {
           {runs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
               <span className="text-sm">No runs yet</span>
-              <Button size="sm" asChild>
+              <Button size="sm" variant="ghost" asChild>
                 <Link to={`/new?project=${name}`}>+ New Run</Link>
               </Button>
             </div>

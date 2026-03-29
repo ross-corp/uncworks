@@ -92,6 +92,17 @@ func (h *ProjectHandler) handleListProjects(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Count runs per project dynamically (status.RunCount is not updated by controller).
+	var runList aotv1alpha1.AgentRunList
+	runCounts := map[string]int32{}
+	if err := h.K8sClient.List(r.Context(), &runList, client.InNamespace(h.Namespace)); err == nil {
+		for _, run := range runList.Items {
+			if run.Spec.ProjectRef != "" {
+				runCounts[run.Spec.ProjectRef]++
+			}
+		}
+	}
+
 	sort.Slice(list.Items, func(i, j int) bool {
 		return list.Items[j].CreationTimestamp.Before(&list.Items[i].CreationTimestamp)
 	})
@@ -99,7 +110,11 @@ func (h *ProjectHandler) handleListProjects(w http.ResponseWriter, r *http.Reque
 	capped := capList(list.Items, maxListItems)
 	var resp []projectResponse
 	for i := range capped {
-		resp = append(resp, projectToResponse(&capped[i]))
+		r := projectToResponse(&capped[i])
+		if n, ok := runCounts[capped[i].Name]; ok {
+			r.RunCount = n
+		}
+		resp = append(resp, r)
 	}
 	if resp == nil {
 		resp = []projectResponse{}

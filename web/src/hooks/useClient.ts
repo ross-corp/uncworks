@@ -74,6 +74,7 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       orchestrationMode: r.spec.orchestrationMode as AgentRun["spec"]["orchestrationMode"],
       displayName: r.spec.displayName,
       project: r.spec.project,
+      projectRef: r.spec.projectRef,
       feature: r.spec.feature,
       tags: r.spec.tags,
       maxBudget: r.spec.maxBudget,

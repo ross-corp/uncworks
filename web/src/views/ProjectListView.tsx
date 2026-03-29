@@ -143,10 +143,12 @@ export default function ProjectListView() {
                 <span className="font-medium">{p.name}</span>
                 {p.configRepoReady ? (
                   <Badge variant="outline" className="text-xs border-green-500/40 text-green-500">ready</Badge>
-                ) : (
-                  <Badge variant="secondary" className="text-xs" title={p.configRepoMessage || "Waiting for soft-serve config repo"}>
+                ) : p.configRepoMessage ? (
+                  <Badge variant="secondary" className="text-xs" title={p.configRepoMessage}>
                     provisioning
                   </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs border-green-500/40 text-green-500">active</Badge>
                 )}
               </div>
               {p.description && (

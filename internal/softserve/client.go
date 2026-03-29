@@ -33,6 +33,9 @@ func (c *Client) sshCmd(args ...string) (string, error) {
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
+		// StrictModes=no bypasses key file permission checks — necessary when the
+		// key is mounted from a k8s Secret (owned by root, not the running UID).
+		"-o", "StrictModes=no",
 		"-p", port,
 		host,
 	}

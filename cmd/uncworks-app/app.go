@@ -278,7 +278,7 @@ func (a *App) countRunningJobs() int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL+"/api/v1/runs", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL+"/api/v1/counts", nil)
 	if err != nil {
 		return -1
 	}
@@ -290,21 +290,13 @@ func (a *App) countRunningJobs() int {
 	if resp.StatusCode != http.StatusOK {
 		return -1
 	}
-	var runs []struct {
-		Status struct {
-			Phase string `json:"phase"`
-		} `json:"status"`
+	var counts struct {
+		ActiveRuns int `json:"activeRuns"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&runs); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&counts); err != nil {
 		return -1
 	}
-	count := 0
-	for _, r := range runs {
-		if r.Status.Phase == "running" || r.Status.Phase == "waiting_for_input" {
-			count++
-		}
-	}
-	return count
+	return counts.ActiveRuns
 }
 
 // autoStartApiserverForward starts a port-forward for the apiserver if the
