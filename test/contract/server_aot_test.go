@@ -471,3 +471,114 @@ func TestContract_WatchAgentRun_NotFound(t *testing.T) {
 		t.Errorf("expected NotFound, got %v", connect.CodeOf(stream.Err()))
 	}
 }
+
+// --- GetRunGraph contract ---
+
+func TestContract_GetRunGraph_NotFound(t *testing.T) {
+	client, cleanup := startAOTServer(t, false)
+	defer cleanup()
+
+	_, err := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{
+		Id: "nonexistent",
+	}))
+	if err == nil {
+		t.Fatal("expected NotFound error")
+	}
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		t.Errorf("expected NotFound, got %v", connect.CodeOf(err))
+	}
+}
+
+func TestContract_GetRunGraph_ReturnsOneNodeForSingleRun(t *testing.T) {
+	client, cleanup := startAOTServer(t, false)
+	defer cleanup()
+
+	createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{
+		Spec: &apiv1.AgentRunSpec{
+			Backend: apiv1.Backend_BACKEND_POD,
+			Repos:   []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:  "single run graph",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("CreateAgentRun: %v", err)
+	}
+
+	graph, err := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{
+		Id: createResp.Msg.AgentRun.Id,
+	}))
+	if err != nil {
+		t.Fatalf("GetRunGraph: %v", err)
+	}
+	if len(graph.Msg.Nodes) != 1 {
+		t.Errorf("single run should produce 1 node, got %d", len(graph.Msg.Nodes))
+	}
+	if len(graph.Msg.Edges) != 0 {
+		t.Errorf("single run should produce 0 edges, got %d", len(graph.Msg.Edges))
+	}
+	if graph.Msg.Nodes[0].Name != createResp.Msg.AgentRun.Id {
+		t.Errorf("node Name = %q, want %q", graph.Msg.Nodes[0].Name, createResp.Msg.AgentRun.Id)
+	}
+}
+
+// --- SearchPastWork contract ---
+
+func TestContract_SearchPastWork_EmptyQueryReturnsInvalidArgument(t *testing.T) {
+	client, cleanup := startAOTServer(t, false)
+	defer cleanup()
+
+	_, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query: "",
+	}))
+	if err == nil {
+		t.Fatal("expected InvalidArgument for empty query")
+	}
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", connect.CodeOf(err))
+	}
+}
+
+func TestContract_SearchPastWork_NoBrainSearcher_ReturnsUnavailable(t *testing.T) {
+	// Without a BrainSearcher configured, ALL/CODE/TRACE filters should return
+	// CodeUnavailable to signal the feature is not enabled.
+	client, cleanup := startAOTServer(t, false)
+	defer cleanup()
+
+	for _, filter := range []apiv1.SourceFilter{
+		apiv1.SourceFilter_SOURCE_FILTER_ALL,
+		apiv1.SourceFilter_SOURCE_FILTER_CODE,
+		apiv1.SourceFilter_SOURCE_FILTER_TRACE,
+	} {
+		_, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+			Query:        "auth middleware",
+			SourceFilter: filter,
+		}))
+		if err == nil {
+			t.Errorf("filter %v: expected Unavailable, got nil", filter)
+			continue
+		}
+		if connect.CodeOf(err) != connect.CodeUnavailable {
+			t.Errorf("filter %v: expected Unavailable, got %v", filter, connect.CodeOf(err))
+		}
+	}
+}
+
+func TestContract_SearchPastWork_SourceCodeFilter_EmptyResultsWithoutEndpoint(t *testing.T) {
+	// SOURCE_FILTER_SOURCE_CODE delegates to the cudgel endpoint.
+	// Without CUDGEL_ENDPOINT set, it should return an empty result set (not an error).
+	t.Setenv("CUDGEL_ENDPOINT", "")
+
+	client, cleanup := startAOTServer(t, false)
+	defer cleanup()
+
+	resp, err := client.SearchPastWork(context.Background(), connect.NewRequest(&apiv1.SearchPastWorkRequest{
+		Query:        "auth middleware",
+		SourceFilter: apiv1.SourceFilter_SOURCE_FILTER_SOURCE_CODE,
+	}))
+	if err != nil {
+		t.Fatalf("expected empty response, got error: %v", err)
+	}
+	if len(resp.Msg.Results) != 0 {
+		t.Errorf("expected empty results without CUDGEL_ENDPOINT, got %d", len(resp.Msg.Results))
+	}
+}
