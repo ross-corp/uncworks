@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -26,6 +27,7 @@ type ChainRunReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// Reconcile handles changes to ChainRun resources, advancing the DAG execution step by step.
 func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -42,10 +44,15 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 					continue
 				}
 				var run aotv1alpha1.AgentRun
-				if err := r.Get(ctx, client.ObjectKey{Namespace: cr.Namespace, Name: s.RunID}, &run); err == nil {
-					if err := r.Delete(ctx, &run); err != nil {
-						logger.Error(err, "Failed to delete child AgentRun on ChainRun deletion", "run", s.RunID)
+				if err := r.Get(ctx, client.ObjectKey{Namespace: cr.Namespace, Name: s.RunID}, &run); err != nil {
+					if !errors.IsNotFound(err) {
+						logger.Error(err, "Failed to get child AgentRun on ChainRun deletion", "run", s.RunID)
 					}
+					// Already gone or unreadable — skip.
+					continue
+				}
+				if err := r.Delete(ctx, &run); err != nil && !errors.IsNotFound(err) {
+					logger.Error(err, "Failed to delete child AgentRun on ChainRun deletion", "run", s.RunID)
 				}
 			}
 			controllerutil.RemoveFinalizer(&cr, chainFinalizerName)
@@ -56,12 +63,15 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	// Ensure finalizer is set.
+	// Ensure finalizer is set. Return immediately after persisting so the next
+	// reconcile starts from a committed state rather than falling through into
+	// chain loading before the finalizer is durably recorded.
 	if !controllerutil.ContainsFinalizer(&cr, chainFinalizerName) {
 		controllerutil.AddFinalizer(&cr, chainFinalizerName)
 		if err := r.Update(ctx, &cr); err != nil {
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{}, nil
 	}
 
 	// Skip terminal states
@@ -257,6 +267,13 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		s.Message = "started"
 		updated = true
 		logger.Info("Started chain step", "chainRun", cr.Name, "step", s.Name, "run", run.Name)
+
+		// Update RunTemplate status to track usage.
+		tmpl.Status.LastTriggeredAt = &now
+		tmpl.Status.RunCount++
+		if updateErr := r.Status().Update(ctx, tmpl); updateErr != nil {
+			logger.Error(updateErr, "Failed to update RunTemplate status", "template", tmpl.Name, "step", s.Name)
+		}
 	}
 
 	// Propagate failures: skip pending steps whose dependencies have failed or been skipped.
@@ -323,6 +340,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager registers ChainRunReconciler with the controller manager.
 func (r *ChainRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.ChainRun{}).

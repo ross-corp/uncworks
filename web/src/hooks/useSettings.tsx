@@ -28,6 +28,8 @@ export interface AppSettings {
   llmKeyConfigured?: boolean;
   // Controls traffic-light visibility. Change takes effect on next launch.
   showTrafficLights?: boolean;
+  // Model used by the copilot panel. Empty string means LiteLLM's default model.
+  copilotModel?: string;
 }
 
 export const SETTINGS_DEFAULTS: AppSettings = {
@@ -97,6 +99,7 @@ interface SettingsContextValue {
   settings: AppSettings;
   configStatus: ConfigStatus;
   loading: boolean;
+  error: Error | null;
   reload: () => Promise<void>;
   save: (s: AppSettings) => Promise<void>;
 }
@@ -105,6 +108,7 @@ const SettingsContext = createContext<SettingsContextValue>({
   settings: SETTINGS_DEFAULTS,
   configStatus: deriveConfigStatus(SETTINGS_DEFAULTS),
   loading: false,
+  error: null,
   reload: async () => {},
   save: async () => {},
 });
@@ -113,13 +117,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const wails = isWails();
   const [settings, setSettings] = useState<AppSettings>(SETTINGS_DEFAULTS);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   const reload = useCallback(async () => {
+    setError(null);
     if (wails) {
       try {
         const s = await go().GetSettings();
         if (s) setSettings(s);
-      } catch { /* keep defaults */ }
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error(String(err)));
+      }
     } else {
       setSettings(loadFromStorage());
     }
@@ -140,7 +148,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const configStatus = deriveConfigStatus(settings);
 
   return (
-    <SettingsContext.Provider value={{ settings, configStatus, loading, reload, save }}>
+    <SettingsContext.Provider value={{ settings, configStatus, loading, error, reload, save }}>
       {children}
     </SettingsContext.Provider>
   );

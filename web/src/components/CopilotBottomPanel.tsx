@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { useCopilotContextValue } from "../hooks/useCopilotContext";
 import { useChatStreamSession } from "../hooks/useChatStreamSession";
+import { useSettings } from "../hooks/useSettings";
 
 // ── Guidance action parsing ─────────────────────────────────────────────────
 
@@ -95,7 +96,8 @@ export default function CopilotBottomPanel() {
     updateActiveMessages,
   } = useCopilotContextValue();
 
-  const { send, isStreaming } = useChatStreamSession();
+  const { settings } = useSettings();
+  const { send, isStreaming } = useChatStreamSession(settings.copilotModel || undefined);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);

@@ -63,6 +63,9 @@ type chatContext struct {
 type chatRequest struct {
 	Messages []chatMessage `json:"messages"`
 	Context  *chatContext  `json:"context,omitempty"`
+	// Model overrides the default LiteLLM model for this request.
+	// If empty, the server uses "default".
+	Model string `json:"model,omitempty"`
 }
 
 const (
@@ -120,8 +123,12 @@ func (h *ChatHandler) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build LiteLLM request with streaming enabled.
+	model := req.Model
+	if model == "" {
+		model = "default"
+	}
 	llmReqBody := map[string]interface{}{
-		"model":    "default",
+		"model":    model,
 		"messages": llmMessages,
 		"stream":   true,
 	}

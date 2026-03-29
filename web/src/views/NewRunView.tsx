@@ -251,7 +251,7 @@ export default function NewRunView() {
 
       const run = await client.createAgentRun({
         backend: "pod",
-        repos: [],
+        repos: form.repos,
         prompt: effectivePrompt,
         ttlSeconds: ttlMinutes * 60,
         modelTier,
