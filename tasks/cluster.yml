@@ -41,7 +41,7 @@ tasks:
       - echo "  task cluster:temporal:dev"
       - echo ""
       - echo "Port-forward the API server:"
-      - echo "  kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.NAMESPACE}}"
+      - echo "  kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.CLUSTER_NAMESPACE}}"
 
   status:
     desc: Show pod and service health in the UNCWORKS namespace
