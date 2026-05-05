@@ -61,8 +61,8 @@ spec:
               cpu: {{ .Values.softServe.resources.cpu | default "100m" }}
               memory: {{ .Values.softServe.resources.memory | default "128Mi" }}
             limits:
-              cpu: "500m"
-              memory: "256Mi"
+              cpu: "1000m"
+              memory: "512Mi"
           livenessProbe:
             tcpSocket:
               port: ssh
