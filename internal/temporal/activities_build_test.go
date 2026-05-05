@@ -220,10 +220,10 @@ func TestImagePullPolicy(t *testing.T) {
 		image string
 		want  string
 	}{
-		{"aot-agent:test", "Never"},                     // local image, no registry prefix
-		{"ghcr.io/uncworks/aot-agent:latest", "Always"}, // registry image
-		{"docker.io/library/nginx:latest", "Always"},    // registry image
-		{"my-local-image:dev", "Never"},                 // local image
+		{"aot-agent:test", "Never"},                            // local image, no registry prefix
+		{"ghcr.io/uncworks/aot-agent:latest", "IfNotPresent"}, // registry image
+		{"docker.io/library/nginx:latest", "IfNotPresent"},    // registry image
+		{"my-local-image:dev", "Never"},                       // local image
 	}
 
 	for _, tt := range tests {
