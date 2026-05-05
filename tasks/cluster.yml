@@ -3,7 +3,7 @@ version: "3"
 
 vars:
   COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
-  NAMESPACE: '{{.NAMESPACE | default "aot"}}'
+  CLUSTER_NAMESPACE: '{{.CLUSTER_NAMESPACE | default "aot"}}'
 
 tasks:
   setup:
@@ -17,7 +17,7 @@ tasks:
           echo "Colima VM '{{.COLIMA_PROFILE}}' already running."
         fi
       - kubectl config use-context colima-{{.COLIMA_PROFILE}}
-      - kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+      - kubectl create namespace {{.CLUSTER_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
       - task: :k8s:crd
       - task: :k8s:storage
       - task: :k8s:litellm
@@ -25,7 +25,7 @@ tasks:
       - task: :dev:images
       - >-
         helm upgrade --install uncworks ./deploy/helm/aot
-        --namespace {{.NAMESPACE}}
+        --namespace {{.CLUSTER_NAMESPACE}}
         --set images.controlplane.tag=local
         --set images.controlplane.pullPolicy=Never
         --set images.web.tag=local
@@ -41,17 +41,17 @@ tasks:
       - echo "  task cluster:temporal:dev"
       - echo ""
       - echo "Port-forward the API server:"
-      - echo "  kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.NAMESPACE}}"
+      - echo "  kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.CLUSTER_NAMESPACE}}"
 
   status:
     desc: Show pod and service health in the UNCWORKS namespace
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
       - echo "=== Pods ==="
-      - kubectl get pods -n {{.NAMESPACE}} 2>/dev/null || echo "(namespace not found)"
+      - kubectl get pods -n {{.CLUSTER_NAMESPACE}} 2>/dev/null || echo "(namespace not found)"
       - echo ""
       - echo "=== Services ==="
-      - kubectl get svc -n {{.NAMESPACE}} 2>/dev/null || echo "(none)"
+      - kubectl get svc -n {{.CLUSTER_NAMESPACE}} 2>/dev/null || echo "(none)"
       - echo ""
       - echo "=== Colima status ==="
       - colima status --profile {{.COLIMA_PROFILE}} 2>/dev/null || echo "(colima not running)"
@@ -60,8 +60,8 @@ tasks:
     desc: Delete all UNCWORKS resources and stop the Colima VM
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
-      - helm uninstall uncworks -n {{.NAMESPACE}} 2>/dev/null || true
-      - kubectl delete namespace {{.NAMESPACE}} --ignore-not-found
+      - helm uninstall uncworks -n {{.CLUSTER_NAMESPACE}} 2>/dev/null || true
+      - kubectl delete namespace {{.CLUSTER_NAMESPACE}} --ignore-not-found
       - colima stop --profile {{.COLIMA_PROFILE}} 2>/dev/null || true
       - echo "UNCWORKS cluster torn down."
 
@@ -69,13 +69,13 @@ tasks:
     desc: Tail logs from all UNCWORKS pods
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
-      - kubectl logs -n {{.NAMESPACE}} -l app.kubernetes.io/instance=uncworks --prefix --follow {{.CLI_ARGS}}
+      - kubectl logs -n {{.CLUSTER_NAMESPACE}} -l app.kubernetes.io/instance=uncworks --prefix --follow {{.CLI_ARGS}}
 
   forward:
     desc: Port-forward the apiserver to localhost:50055
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
-      - kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.NAMESPACE}}
+      - kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.CLUSTER_NAMESPACE}}
 
   temporal:dev:
     desc: Start Temporal dev server (SQLite, no external deps)
