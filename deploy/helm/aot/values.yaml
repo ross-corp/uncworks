@@ -43,6 +43,19 @@ github:
   # Secret must have a key named "token".
   # Create with: kubectl -n aot create secret generic github-token --from-literal=token=ghp_xxx
   tokenSecretName: ""
+  # -- GitHub webhook configuration. When set, the apiserver accepts push/PR events
+  # from GitHub and can trigger agent runs automatically (e.g. CI autofix).
+  webhook:
+    # -- Shared secret for HMAC-SHA256 signature validation. Must match the value
+    # configured in your GitHub repository/org webhook settings.
+    # Provide via secretName (preferred) or secret (dev convenience).
+    secretName: ""
+    secret: ""
+    # -- Comma-separated list of "owner/repo" strings that may deliver webhooks.
+    # Leave empty to allow any repo (not recommended for production).
+    repos: ""
+    # -- Maximum number of CI autofix retry attempts per PR.
+    ciAutofixMaxRetries: 3
 
 # -- Container image references
 images:
