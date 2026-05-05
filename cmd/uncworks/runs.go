@@ -85,20 +85,24 @@ func runRunsList(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tPROJECT\tPHASE\tSTARTED")
+	fmt.Fprintln(w, "ID\tPROJECT\tPHASE\tMODEL\tSTARTED")
 	for _, r := range runs {
 		project := r.GetSpec().GetProject()
 		if project == "" {
 			project = "-"
 		}
 		phase := phaseLabel(r.GetStatus().GetPhase())
+		model := r.GetSpec().GetModelTier()
+		if model == "" {
+			model = "default"
+		}
 		started := "-"
 		if r.GetStatus().GetStartedAt() != nil {
 			started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
 		} else if r.GetCreatedAt() != nil {
 			started = r.GetCreatedAt().AsTime().Format(time.RFC3339)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.GetId(), project, phase, started)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), project, phase, model, started)
 	}
 	w.Flush()
 	return nil
@@ -152,11 +156,18 @@ func runRunsGet(args []string) error {
 	for _, repo := range r.GetSpec().GetRepos() {
 		fmt.Printf("Repo:     %s @ %s\n", repo.GetUrl(), repo.GetBranch())
 	}
+	if r.GetSpec().GetModelTier() != "" {
+		fmt.Printf("Model:    %s\n", r.GetSpec().GetModelTier())
+	}
 	if r.GetStatus().GetStartedAt() != nil {
 		fmt.Printf("Started:  %s\n", r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339))
 	}
 	if r.GetStatus().GetCompletedAt() != nil {
 		fmt.Printf("Completed:%s\n", r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339))
+		if r.GetStatus().GetStartedAt() != nil {
+			dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime()).Round(time.Second)
+			fmt.Printf("Duration: %s\n", dur)
+		}
 	}
 	if r.GetStatus().GetPodName() != "" {
 		fmt.Printf("Pod:      %s\n", r.GetStatus().GetPodName())
