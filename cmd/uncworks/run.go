@@ -82,8 +82,10 @@ Flags:`)
 	startTime := time.Now()
 	var lastPhase apiv1.AgentRunPhase
 	var lastStage, lastMsg string
+	pollCount := 0
 	for {
 		time.Sleep(10 * time.Second)
+		pollCount++
 		getReq := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: run.GetId()})
 		getResp, err := client.GetAgentRun(context.Background(), getReq)
 		if err != nil {
@@ -97,6 +99,10 @@ Flags:`)
 		
 		// Only print if phase, stage, or message changed
 		if phase != lastPhase || stage != lastStage || msg != lastMsg {
+			// Print newline before status if we've been showing dots
+			if lastPhase != 0 && pollCount > 1 {
+				fmt.Println()
+			}
 			lastPhase = phase
 			lastStage = stage
 			lastMsg = msg
@@ -105,6 +111,10 @@ Flags:`)
 			} else {
 				fmt.Printf("  [%s | %ds] %s\n", phaseLabel(phase), elapsed, msg)
 			}
+			pollCount = 0
+		} else if pollCount % 3 == 0 { // Show a dot every 3 polls (30 seconds)
+			fmt.Print(".")
+			os.Stdout.Sync()
 		}
 		switch phase {
 		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
