@@ -134,7 +134,7 @@ func TestSSE_WatchGraph_EventsArriveCausally(t *testing.T) {
 	}()
 
 	// Give the stream a moment to connect.
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	// Publish events in a defined order.
 	orderedPayloads := []string{"pending", "running", "succeeded"}
