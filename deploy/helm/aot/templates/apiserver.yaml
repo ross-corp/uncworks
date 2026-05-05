@@ -19,9 +19,15 @@ spec:
         app.kubernetes.io/component: apiserver
     spec:
       serviceAccountName: {{ include "aot.fullname" . }}
+      {{- if and .Values.apiserver.pvcDataHostPath .Values.apiserver.pvcDataRunAsRoot }}
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+      {{- else }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
+      {{- end }}
       {{- if gt .Values.apiserver.replicas 1 }}
       topologySpreadConstraints:
         - maxSkew: 1
