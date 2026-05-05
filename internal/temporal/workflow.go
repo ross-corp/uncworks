@@ -644,10 +644,23 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 								MaximumAttempts: 2,
 							},
 						})
-						prBody := fmt.Sprintf("## Summary\n\n%s\n\n## Pipeline\n\n- **Run:** %s\n- **Model:** %s\n\n---\n*This PR was automatically created by UNCWORKS.*",
+						// Build PR body with proposal content or prompt summary
+						summary := pushOutput.ProposalContent
+						if summary == "" {
+							// Use first 300 chars of prompt as summary
+							if len(input.Prompt) > 300 {
+								summary = input.Prompt[:300] + "..."
+							} else {
+								summary = input.Prompt
+							}
+						}
+						runURL := fmt.Sprintf("https://uncworks.stork-eel.ts.net/run/%s", input.AgentRunName)
+						prBody := fmt.Sprintf("## Summary\n\n%s\n\n## Changes\n\n%s\n\n## Pipeline\n\n- **Run:** %s\n- **Model:** %s\n\n## Run\n\nView the full agent run: %s\n\n---\n*This PR was automatically created by UNCWORKS.*",
+							summary,
 							pushOutput.DiffStat,
 							input.AgentRunName,
 							input.ModelTier,
+							runURL,
 						)
 						var prOutput CreatePROutput
 						if err := workflow.ExecuteActivity(prCtx, ActivityCreatePR, CreatePRInput{
