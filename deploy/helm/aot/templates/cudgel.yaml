@@ -45,7 +45,7 @@ spec:
               memory: {{ .Values.cudgel.resources.memory | default "256Mi" }}
             limits:
               cpu: "1000m"
-              memory: "512Mi"
+              memory: "1Gi"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
