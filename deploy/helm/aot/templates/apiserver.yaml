@@ -79,6 +79,24 @@ spec:
                   name: {{ .Values.github.tokenSecretName }}
                   key: token
             {{- end }}
+            {{- if .Values.github.webhook.secretName }}
+            - name: GITHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.github.webhook.secretName }}
+                  key: webhook-secret
+            {{- else if .Values.github.webhook.secret }}
+            - name: GITHUB_WEBHOOK_SECRET
+              value: {{ .Values.github.webhook.secret | quote }}
+            {{- end }}
+            {{- if .Values.github.webhook.repos }}
+            - name: GITHUB_WEBHOOK_REPOS
+              value: {{ .Values.github.webhook.repos | quote }}
+            {{- end }}
+            {{- if .Values.github.webhook.ciAutofixMaxRetries }}
+            - name: CI_AUTOFIX_MAX_RETRIES
+              value: {{ .Values.github.webhook.ciAutofixMaxRetries | quote }}
+            {{- end }}
             {{- if .Values.softServe.enabled }}
             - name: SOFT_SERVE_ADDR
               value: "soft-serve.{{ .Release.Namespace }}.svc:23231"

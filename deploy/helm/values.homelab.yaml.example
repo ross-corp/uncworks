@@ -16,36 +16,40 @@ llm:
   baseUrl: "http://litellm.uncworks.svc.cluster.local:4000"
   masterKeySecretName: "litellm-master-key"
 
-# GitHub token for cloning private repos
+# GitHub token for cloning private repos + webhook configuration
 github:
   tokenSecretName: "github-token"
+  webhook:
+    # secretName: "github-webhook-secret"   # k8s Secret with key "webhook-secret"
+    repos: "your-org/your-repo"             # comma-separated; leave empty to allow all
+    ciAutofixMaxRetries: 3
 
 # All images built locally and imported into k0s containerd (amd64, pullPolicy: Never)
 # Tag must match what was imported — see tasks/homelab.yml.example for the build procedure
 images:
   controlplane:
     repository: docker.io/library/aot-controlplane
-    tag: homelab
+    tag: local
     pullPolicy: Never
   init:
     repository: docker.io/library/aot-init
-    tag: homelab
+    tag: local
     pullPolicy: Never
   sidecar:
     repository: docker.io/library/aot-sidecar
-    tag: homelab
+    tag: local
     pullPolicy: Never
   agent:
     repository: docker.io/library/aot-agent
-    tag: homelab
+    tag: local
     pullPolicy: Never
   web:
     repository: docker.io/library/aot-web
-    tag: homelab
+    tag: local
     pullPolicy: Never
   bff:
     repository: docker.io/library/aot-bff
-    tag: homelab
+    tag: local
     pullPolicy: Never
 
 # Controller
