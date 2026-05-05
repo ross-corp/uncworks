@@ -64,6 +64,7 @@ func runRunsList(args []string) error {
 	limit := fs.Int("limit", 20, "Maximum number of runs to return")
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
+	includeArchived := fs.Bool("include-archived", false, "Include archived runs")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -82,6 +83,9 @@ func runRunsList(args []string) error {
 		ProjectFilter: *project,
 		FeatureFilter: *feature,
 	})
+	if *includeArchived {
+		req.Header().Set("X-Include-Archived", "true")
+	}
 	resp, err := client.ListAgentRuns(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("%s", humanizeErr(err))
