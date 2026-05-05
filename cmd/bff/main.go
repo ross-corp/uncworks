@@ -81,18 +81,27 @@ func main() {
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           handler,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MB
 	}
 
 	// Graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	
 	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		<-ctx.Done()
+		slog.Info("shutting down BFF server...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		_ = server.Shutdown(ctx)
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			slog.Error("BFF shutdown error", "err", err)
+		} else {
+			slog.Info("BFF shutdown complete")
+		}
 	}()
 
 	slog.Info("BFF listening",

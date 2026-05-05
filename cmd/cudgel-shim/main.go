@@ -288,9 +288,40 @@ func main() {
 	mux.HandleFunc("/graph", s.handleGraph)
 	mux.HandleFunc("/index", s.handleIndex)
 
-	slog.Info("cudgel-shim starting", "addr", addr, "binary", s.cudgelBin)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		slog.Error("server exited", "err", err)
-		os.Exit(1)
+	// Create HTTP server with timeouts
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MB
+	}
+
+	// Start server in a goroutine
+	go func() {
+		slog.Info("cudgel-shim starting", "addr", addr, "binary", s.cudgelBin)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server exited", "err", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	
+	<-ctx.Done()
+	slog.Info("shutting down cudgel-shim server...")
+	
+	// Give in-flight requests up to 30 seconds to complete
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		slog.Error("cudgel-shim shutdown error", "err", err)
+	} else {
+		slog.Info("cudgel-shim shutdown complete")
 	}
 }
