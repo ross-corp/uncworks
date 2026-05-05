@@ -11,18 +11,16 @@ setupWailsEnv();
 // Bridge Wails runtime events → DOM custom events so React components
 // can listen without importing the Wails runtime directly.
 if (typeof window !== "undefined") {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const w = window as any;
   // Wails runtime is injected asynchronously; poll until it's available.
   const bridgeWailsEvents = () => {
-    if (!w.runtime?.EventsOn) return;
-    w.runtime.EventsOn("app:open-settings", () => {
+    if (!window.runtime?.EventsOn) return;
+    window.runtime.EventsOn("app:open-settings", () => {
       window.dispatchEvent(new CustomEvent("uncworks:open-settings"));
     });
-    w.runtime.EventsOn("app:local-reload", () => {
+    window.runtime.EventsOn("app:local-reload", () => {
       window.dispatchEvent(new CustomEvent("uncworks:local-reload"));
     });
-    w.runtime.EventsOn("settings:changed", () => {
+    window.runtime.EventsOn("settings:changed", () => {
       window.dispatchEvent(new CustomEvent("uncworks:settings-changed"));
     });
   };

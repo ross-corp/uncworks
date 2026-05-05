@@ -5,8 +5,7 @@ import { useThemeNew, type ColorMode } from "../hooks/useThemeNew";
 import { useSettings, type AppSettings } from "../hooks/useSettings";
 import SetupWizardModal from "../components/SetupWizard";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-const go = () => (window as any).go?.main?.App;
+const go = () => window.go!.main!.App!;
 
 interface EnvVarInfo {
   key: string;
