@@ -3,10 +3,10 @@ package server
 import "expvar"
 
 var (
-	// runsCreatedTotal counts the total number of agent runs created.
-	runsCreatedTotal = expvar.NewInt("uncworks_runs_created_total")
-	// runsSucceededTotal counts the total number of agent runs that succeeded.
-	runsSucceededTotal = expvar.NewInt("uncworks_runs_succeeded_total")
-	// runsFailedTotal counts the total number of agent runs that failed.
-	runsFailedTotal = expvar.NewInt("uncworks_runs_failed_total")
+	// RunsCreatedTotal counts the total number of agent runs created.
+	RunsCreatedTotal = expvar.NewInt("uncworks_runs_created_total")
+	// RunsSucceededTotal counts the total number of agent runs that succeeded.
+	RunsSucceededTotal = expvar.NewInt("uncworks_runs_succeeded_total")
+	// RunsFailedTotal counts the total number of agent runs that failed.
+	RunsFailedTotal = expvar.NewInt("uncworks_runs_failed_total")
 )
