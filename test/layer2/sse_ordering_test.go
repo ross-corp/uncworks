@@ -234,7 +234,7 @@ func TestSSE_WatchGraph_LogEventsBeforePhaseChange(t *testing.T) {
 		close(events)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	// Publish: log, log, then phase-change.
 	bus.Publish(runID, &apiv1.AgentRunEvent{
