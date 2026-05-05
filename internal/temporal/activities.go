@@ -726,15 +726,15 @@ func (a *Activities) CollectAgentLogs(ctx context.Context, input CollectAgentLog
 	}
 	pod := podList.Items[0]
 
-	// Collect from the "agent" container. With RestartPolicy:Always the container
-	// may have already restarted by cleanup time, so try current logs first; fall
-	// back to Previous=true (terminated container) if current logs are empty.
+	// The "agent" container runs "sleep infinity" — actual agent output is in "rpc-gateway".
+	// With RestartPolicy:Always the container may have restarted by cleanup time, so try
+	// current logs first, then Previous=true (terminated container) if current is empty.
 	var tailLines int64 = 500
 	var buf bytes.Buffer
 	for _, prev := range []bool{false, true} {
 		buf.Reset()
 		req := clientset.CoreV1().Pods(input.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-			Container: "agent",
+			Container: "rpc-gateway",
 			TailLines: &tailLines,
 			Previous:  prev,
 		})
