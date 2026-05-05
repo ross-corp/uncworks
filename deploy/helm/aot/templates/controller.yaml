@@ -20,6 +20,9 @@ spec:
         app.kubernetes.io/component: controller
     spec:
       serviceAccountName: {{ include "aot.fullname" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
       containers:
         - name: controller
           image: {{ include "aot.controlplaneImage" . }}
@@ -89,7 +92,7 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
-            runAsUser: 65532
+            runAsUser: 65534
             capabilities:
               drop: ["ALL"]
           volumeMounts:
