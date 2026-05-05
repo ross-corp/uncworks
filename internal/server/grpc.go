@@ -52,10 +52,10 @@ type AOTServiceHandler struct {
 var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
 
 func validateRunID(id string) error {
-    if !runIDPattern.MatchString(id) {
-        return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid run ID format: %q", id))
-    }
-    return nil
+	if !runIDPattern.MatchString(id) {
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid run ID format: %q", id))
+	}
+	return nil
 }
 
 // NewAOTServiceHandler creates a new AOTService handler.
