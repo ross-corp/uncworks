@@ -107,7 +107,7 @@ worker:
       memory: 256Mi
     limits:
       cpu: 1000m
-      memory: 512Mi
+      memory: 1Gi
   # -- PostgreSQL DSN for the brain (long-term memory) store.
   # When set, knowledge activities (persist, embed, hydrate) are enabled.
   # Format: "postgres://user:pass@host:5432/dbname"
