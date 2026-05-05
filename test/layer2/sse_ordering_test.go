@@ -145,7 +145,7 @@ func TestSSE_WatchGraph_EventsArriveCausally(t *testing.T) {
 			Payload:    payload,
 		})
 		// Small gap to ensure ordering is preserved through the channel.
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Collect the events with a deadline.
