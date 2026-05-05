@@ -36,6 +36,11 @@ Flags:`)
 	id := fs.Arg(0)
 	text := fs.Arg(1)
 
+	// Validate input length
+	if len(text) > 10000 {
+		return fmt.Errorf("input too long: %d chars (max 10000)", len(text))
+	}
+
 	client, err := newClient(*server)
 	if err != nil {
 		return err
