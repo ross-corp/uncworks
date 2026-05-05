@@ -68,7 +68,7 @@ func (s *AOTServiceHandler) extractClientIP(req *connect.Request[apiv1.CreateAge
 	// Check if we should trust proxy headers
 	trustProxy := false
 	if s.createAgentRunLimiter != nil {
-		trustProxy = s.createAgentRunLimiter.cfg.TrustProxy
+		trustProxy = s.createAgentRunLimiter.Config().TrustProxy
 	}
 	
 	if trustProxy {
