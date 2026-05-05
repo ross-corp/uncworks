@@ -49,6 +49,15 @@ type AOTServiceHandler struct {
 	Embedder      *embeddings.Embedder
 }
 
+var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
+
+func validateRunID(id string) error {
+	if !runIDPattern.MatchString(id) {
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid run ID format: %q", id))
+	}
+	return nil
+}
+
 // NewAOTServiceHandler creates a new AOTService handler.
 func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namespace string) *AOTServiceHandler {
 	litellmURL := os.Getenv("LITELLM_BASE_URL")
@@ -66,6 +75,12 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Request[apiv1.CreateAgentRunRequest]) (*connect.Response[apiv1.CreateAgentRunResponse], error) {
 	if req.Msg.Spec == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
+	}
+	if req.Msg.Spec.Prompt == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("prompt is required"))
+	}
+	if len(req.Msg.Spec.Prompt) > 32*1024 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("prompt exceeds 32KB limit"))
 	}
 
 	name, err := generateRunName()
@@ -128,6 +143,9 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 }
 
 func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Request[apiv1.GetAgentRunRequest]) (*connect.Response[apiv1.AgentRun], error) {
+	if err := validateRunID(req.Msg.Id); err != nil {
+		return nil, err
+	}
 	crd := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: s.Namespace,
@@ -282,6 +300,9 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 }
 
 func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Request[apiv1.WatchAgentRunRequest], stream *connect.ServerStream[apiv1.AgentRunEvent]) error {
+	if err := validateRunID(req.Msg.Id); err != nil {
+		return err
+	}
 	crd := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: s.Namespace,
@@ -333,6 +354,9 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 }
 
 func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Request[apiv1.CancelAgentRunRequest]) (*connect.Response[apiv1.CancelAgentRunResponse], error) {
+	if err := validateRunID(req.Msg.Id); err != nil {
+		return nil, err
+	}
 	crd := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: s.Namespace,
@@ -361,6 +385,9 @@ func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Req
 }
 
 func (s *AOTServiceHandler) GetRunGraph(ctx context.Context, req *connect.Request[apiv1.GetRunGraphRequest]) (*connect.Response[apiv1.RunGraph], error) {
+	if err := validateRunID(req.Msg.Id); err != nil {
+		return nil, err
+	}
 	// Get the root run
 	rootCRD := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
@@ -425,6 +452,9 @@ func (s *AOTServiceHandler) GetRunGraph(ctx context.Context, req *connect.Reques
 }
 
 func (s *AOTServiceHandler) SendHumanInput(ctx context.Context, req *connect.Request[apiv1.SendHumanInputRequest]) (*connect.Response[apiv1.SendHumanInputResponse], error) {
+	if err := validateRunID(req.Msg.AgentRunId); err != nil {
+		return nil, err
+	}
 	crd := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: s.Namespace,
