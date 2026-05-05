@@ -16,6 +16,41 @@ import (
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 )
 
+// TestExecSafeEnv_StripsSensitiveKeys verifies that execSafeEnv removes known
+// secret variables while preserving safe ones like PATH.
+func TestExecSafeEnv_StripsSensitiveKeys(t *testing.T) {
+	sensitive := []string{
+		"OPENAI_API_KEY",
+		"ANTHROPIC_API_KEY",
+		"LITELLM_MASTER_KEY",
+		"GITHUB_TOKEN",
+		"AOT_API_KEY",
+	}
+	for _, key := range sensitive {
+		t.Setenv(key, "secret-value")
+	}
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	env := execSafeEnv()
+	kvMap := make(map[string]string, len(env))
+	for _, kv := range env {
+		idx := strings.Index(kv, "=")
+		if idx < 0 {
+			continue
+		}
+		kvMap[kv[:idx]] = kv[idx+1:]
+	}
+
+	for _, key := range sensitive {
+		if _, found := kvMap[key]; found {
+			t.Errorf("sensitive key %q should be stripped but was present", key)
+		}
+	}
+	if kvMap["PATH"] != "/usr/bin:/bin" {
+		t.Errorf("PATH should be preserved, got %q", kvMap["PATH"])
+	}
+}
+
 func startTestGateway(t *testing.T) (agentv1connect.AgentSidecarServiceClient, func()) {
 	t.Helper()
 
