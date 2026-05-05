@@ -1,14 +1,12 @@
-# values.homelab.yaml — Helm values for the homelab k0s cluster (vorgossos).
-# Images are imported directly into containerd via ctr; pullPolicy: Never ensures
-# k8s does not attempt to pull from a registry.
+# values.homelab.yaml.example — Template for deploying UNCWORKS to a homelab k0s cluster.
+# Copy to values.homelab.yaml (gitignored) and fill in your environment values.
 #
 # Usage:
 #   helm upgrade --install uncworks ./deploy/helm/aot \
 #     -n uncworks --create-namespace \
-#     -f deploy/helm/values.homelab.yaml \
-#     --set temporal.host=temporal-dev.uncworks.svc.cluster.local:7233
+#     -f deploy/helm/values.homelab.yaml
 
-# Temporal — in-cluster dev server deployed as temporal-dev deployment
+# Temporal — in-cluster dev server
 temporal:
   host: "temporal-dev.uncworks.svc.cluster.local:7233"
   namespace: "default"
@@ -22,7 +20,8 @@ llm:
 github:
   tokenSecretName: "github-token"
 
-# All images built locally and imported into k0s containerd (amd64)
+# All images built locally and imported into k0s containerd (amd64, pullPolicy: Never)
+# Tag must match what was imported — see tasks/homelab.yml.example for the build procedure
 images:
   controlplane:
     repository: docker.io/library/aot-controlplane
@@ -49,7 +48,7 @@ images:
     tag: homelab
     pullPolicy: Never
 
-# Controller configuration
+# Controller
 controller:
   replicas: 1
   retentionDays: 7
@@ -61,7 +60,7 @@ controller:
       cpu: 250m
       memory: 128Mi
 
-# Worker configuration
+# Worker
 worker:
   replicas: 1
   resources:
@@ -72,14 +71,16 @@ worker:
       cpu: 1000m
       memory: 512Mi
 
-# API server — use NodePort for direct access from host
+# API server
 apiserver:
   replicas: 1
   port: 50055
   service:
     type: NodePort
-    nodePort: 30055
-  # k0s uses local-path-provisioner at /opt/local-path-provisioner by default
+    nodePort: 30055   # pick an available port in 30000-32767
+  # Path to local-path-provisioner data on the node.
+  # k0s default: /opt/local-path-provisioner
+  # k3s default: /var/lib/rancher/k3s/storage
   pvcDataHostPath: "/opt/local-path-provisioner"
   pvcDataRunAsRoot: true
   resources:
@@ -90,14 +91,14 @@ apiserver:
       cpu: 500m
       memory: 256Mi
 
-# Web dashboard — NodePort for direct access
+# Web dashboard
 web:
   enabled: true
   replicas: 1
   port: 3000
   service:
     type: NodePort
-    nodePort: 30300
+    nodePort: 30300   # pick an available port in 30000-32767
   resources:
     requests:
       cpu: 50m
@@ -106,13 +107,19 @@ web:
       cpu: 500m
       memory: 256Mi
 
-# BFF is disabled — using nginx web deployment
+# BFF disabled — nginx web deployment handles proxying
 bff:
   enabled: false
 
-# soft-serve git server — use local-path storage class
+# soft-serve disabled for homelab (optional)
 softServe:
   enabled: false
 
-# Logging
+# Tailscale ingress — set hostnames to your tailnet (requires Tailscale operator in cluster)
+ingress:
+  tailscale:
+    enabled: true
+    webHostname: "uncworks.your-tailnet.ts.net"
+    apiserverHostname: "uncworks-api.your-tailnet.ts.net"
+
 logLevel: "info"

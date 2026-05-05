@@ -1,0 +1,58 @@
+{{- if .Values.ingress.tailscale.enabled }}
+---
+# Tailscale Ingress: web dashboard
+{{- if .Values.ingress.tailscale.webHostname }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "aot.fullname" . }}-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  ingressClassName: tailscale
+  rules:
+  - host: {{ .Values.ingress.tailscale.webHostname }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "aot.fullname" . }}-web
+            port:
+              number: {{ .Values.web.port }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.tailscale.webHostname }}
+{{- end }}
+---
+# Tailscale Ingress: API server (ConnectRPC / gRPC-Web over HTTPS)
+{{- if .Values.ingress.tailscale.apiserverHostname }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "aot.fullname" . }}-apiserver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+spec:
+  ingressClassName: tailscale
+  rules:
+  - host: {{ .Values.ingress.tailscale.apiserverHostname }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "aot.fullname" . }}-apiserver
+            port:
+              number: {{ .Values.apiserver.port }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.tailscale.apiserverHostname }}
+{{- end }}
+{{- end }}

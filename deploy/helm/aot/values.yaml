@@ -2,6 +2,17 @@
 networkPolicy:
   enabled: false
 
+# -- Ingress configuration
+ingress:
+  # -- Tailscale ingress — requires the Tailscale Kubernetes operator installed in the cluster.
+  # Set enabled: true and provide hostnames to expose UNCWORKS on your tailnet.
+  tailscale:
+    enabled: false
+    # -- Tailscale hostname for the web dashboard (e.g. "uncworks.your-tailnet.ts.net")
+    webHostname: ""
+    # -- Tailscale hostname for the API server ConnectRPC/gRPC endpoint (e.g. "uncworks-api.your-tailnet.ts.net")
+    apiserverHostname: ""
+
 # -- Temporal configuration (required)
 temporal:
   # -- Temporal Frontend gRPC address (e.g. "temporal:7233")
