@@ -1,11 +1,14 @@
-// runs.go — uncworks runs: list, get, and stream logs for agent runs.
+// runs.go — uncworks runs: list, get, stream logs, and archive agent runs.
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"text/tabwriter"
 	"time"
@@ -18,9 +21,11 @@ import (
 const runsUsage = `Usage: uncworks runs <subcommand> [flags]
 
 Subcommands:
-  list            List recent agent runs
-  get <id>        Show full detail for a run
-  logs <id>       Stream log output until the run completes
+  list              List recent agent runs
+  get <id>          Show full detail for a run
+  logs <id>         Stream log output until the run completes
+  archive <id>      Mark a run as archived
+  unarchive <id>    Remove the archived flag from a run
 `
 
 func runRuns(args []string) error {
@@ -37,6 +42,10 @@ func runRuns(args []string) error {
 		return runRunsGet(rest)
 	case "logs":
 		return runRunsLogs(rest)
+	case "archive":
+		return runRunsArchive(rest, true)
+	case "unarchive":
+		return runRunsArchive(rest, false)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -257,6 +266,55 @@ func runRunsLogs(args []string) error {
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
 		fmt.Fprintln(os.Stderr, "Run cancelled.")
 		os.Exit(1)
+	}
+	return nil
+}
+
+// ── archive / unarchive ───────────────────────────────────────────────────────
+
+func runRunsArchive(args []string, archived bool) error {
+	verb := "archive"
+	if !archived {
+		verb = "unarchive"
+	}
+	fs := flag.NewFlagSet("runs "+verb, flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	fs.Usage = func() {
+		fmt.Fprintf(fs.Output(), "Usage: uncworks runs %s <id> [flags]\n\nFlags:\n", verb)
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	body, _ := json.Marshal(map[string]bool{"archived": archived})
+	url := serverBaseURL(*server) + "/api/v1/runs/" + id + "/archive"
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(b))
+	}
+
+	if archived {
+		fmt.Printf("Run %s archived\n", id)
+	} else {
+		fmt.Printf("Run %s unarchived\n", id)
 	}
 	return nil
 }

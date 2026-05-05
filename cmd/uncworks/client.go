@@ -11,9 +11,8 @@ import (
 
 const defaultServerPort = 50055
 
-// newClient returns an AOTServiceClient connected to the configured server.
-// If serverAddr is non-empty it overrides the stored config.
-func newClient(serverAddr string) (apiv1connect.AOTServiceClient, error) {
+// serverBaseURL resolves the server base URL from the flag override or stored config.
+func serverBaseURL(serverAddr string) string {
 	addr := serverAddr
 	if addr == "" {
 		cfg, err := loadConfig()
@@ -26,5 +25,11 @@ func newClient(serverAddr string) (apiv1connect.AOTServiceClient, error) {
 	if !strings.HasPrefix(addr, "http") {
 		addr = "http://" + addr
 	}
-	return apiv1connect.NewAOTServiceClient(http.DefaultClient, addr), nil
+	return addr
+}
+
+// newClient returns an AOTServiceClient connected to the configured server.
+// If serverAddr is non-empty it overrides the stored config.
+func newClient(serverAddr string) (apiv1connect.AOTServiceClient, error) {
+	return apiv1connect.NewAOTServiceClient(http.DefaultClient, serverBaseURL(serverAddr)), nil
 }
