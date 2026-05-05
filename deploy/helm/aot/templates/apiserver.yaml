@@ -151,7 +151,7 @@ spec:
             runAsUser: 0
             {{- else }}
             runAsNonRoot: true
-            runAsUser: 65532
+            runAsUser: 65534
             {{- end }}
             capabilities:
               drop: ["ALL"]
