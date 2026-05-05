@@ -49,6 +49,15 @@ type AOTServiceHandler struct {
 	Embedder      *embeddings.Embedder
 }
 
+var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
+
+func validateRunID(id string) error {
+    if !runIDPattern.MatchString(id) {
+        return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid run ID format: %q", id))
+    }
+    return nil
+}
+
 // NewAOTServiceHandler creates a new AOTService handler.
 func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namespace string) *AOTServiceHandler {
 	litellmURL := os.Getenv("LITELLM_BASE_URL")
