@@ -12,6 +12,7 @@ import RunStatusBadge from "../components/RunStatusBadge";
 import { formatAge } from "../lib/format";
 import type { AgentRun } from "../types/agent-run";
 import { MODEL_OPTIONS } from "../types/agent-run";
+import CustomSelect from "../components/CustomSelect";
 import { useCopilotContext, useCopilotContextValue } from "../hooks/useCopilotContext";
 
 interface ProjectDetail {
@@ -173,8 +174,7 @@ export default function ProjectDetailView() {
 
     const doFetch = async () => {
       try {
-        // Use the ConnectRPC client so the response goes through mapRun and all
-        // extended status fields (totalCost, lastCIStatus, etc.) are populated.
+        // Use the ConnectRPC client — listAgentRuns() already returns mapped AgentRun[].
         const raw = await client.listAgentRuns();
         if (!cancelled) {
           setRuns(raw.map(mapRun).filter((r) => r.spec.projectRef === name || r.spec.project === name));
@@ -677,16 +677,12 @@ export default function ProjectDetailView() {
                   return (
                     <div key={field}>
                       <label className="text-xs text-muted-foreground block mb-1">{labels[field]}</label>
-                      <select
-                        className="w-full h-8 text-sm border border-input bg-background rounded-md px-2 font-mono"
+                      <CustomSelect
                         value={editDefaults[field]}
-                        onChange={(e) => { setEditDefaults({ ...editDefaults, [field]: e.target.value }); setSettingsDirty(true); }}
-                      >
-                        <option value="">—</option>
-                        {MODEL_OPTIONS.map((m) => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => { setEditDefaults({ ...editDefaults, [field]: v }); setSettingsDirty(true); }}
+                        options={[{ value: "", label: "—" }, ...MODEL_OPTIONS.map((m) => ({ value: m.value, label: m.label }))]}
+                        className="h-8 text-sm font-mono"
+                      />
                     </div>
                   );
                 })}
@@ -706,15 +702,16 @@ export default function ProjectDetailView() {
 
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Orchestration Mode</label>
-                  <select
-                    className="w-full h-8 text-sm border border-input bg-background rounded-md px-2"
+                  <CustomSelect
                     value={editDefaults.orchestrationMode}
-                    onChange={(e) => { setEditDefaults({ ...editDefaults, orchestrationMode: e.target.value }); setSettingsDirty(true); }}
-                  >
-                    <option value="">—</option>
-                    <option value="spec-driven">spec-driven</option>
-                    <option value="prompt-driven">prompt-driven</option>
-                  </select>
+                    onChange={(v) => { setEditDefaults({ ...editDefaults, orchestrationMode: v }); setSettingsDirty(true); }}
+                    options={[
+                      { value: "", label: "—" },
+                      { value: "spec-driven", label: "spec-driven" },
+                      { value: "prompt-driven", label: "prompt-driven" },
+                    ]}
+                    className="h-8 text-sm"
+                  />
                 </div>
               </div>
 

@@ -5,6 +5,7 @@ import { apiFetch } from "../hooks/apiFetch";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
+import CustomSelect from "../components/CustomSelect";
 
 interface Template {
   metadata: { name: string };
@@ -165,18 +166,12 @@ export default function ChainNewView() {
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Project
             </label>
-            <select
+            <CustomSelect
               value={projectRef}
-              onChange={(e) => setProjectRef(e.target.value)}
-              className="w-full border border-input bg-background px-3 py-2 text-sm rounded-none focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">— none —</option>
-              {projects.map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.displayName || p.name}
-                </option>
-              ))}
-            </select>
+              onChange={setProjectRef}
+              options={[{ value: "", label: "— none —" }, ...projects.map((p) => ({ value: p.name, label: p.displayName || p.name }))]}
+              className="w-full text-sm"
+            />
           </div>
 
           {/* Steps builder */}
@@ -204,18 +199,12 @@ export default function ChainNewView() {
                       placeholder="step-name"
                       className="flex-1"
                     />
-                    <select
+                    <CustomSelect
                       value={step.templateRef}
-                      onChange={(e) => updateStep(idx, "templateRef", e.target.value)}
-                      className="flex-1 border border-input bg-background px-3 py-2 text-sm rounded-none focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      <option value="">— template —</option>
-                      {templates.map((t) => (
-                        <option key={t.metadata.name} value={t.metadata.name}>
-                          {t.spec.displayName || t.metadata.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => updateStep(idx, "templateRef", v)}
+                      options={[{ value: "", label: "— template —" }, ...templates.map((t) => ({ value: t.metadata.name, label: t.spec.displayName || t.metadata.name }))]}
+                      className="flex-1 text-sm"
+                    />
                     <Button
                       type="button"
                       size="sm"

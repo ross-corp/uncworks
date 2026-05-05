@@ -29,7 +29,7 @@ export default function TemplateListView() {
   const fetchData = useCallback(async () => {
     try {
       const resp = await apiFetch("/api/v1/templates");
-      if (resp.ok) setTemplates(await resp.json());
+      if (resp.ok) { const d = await resp.json(); setTemplates(Array.isArray(d) ? d : []); }
       else toast.error("Failed to load templates");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load templates");

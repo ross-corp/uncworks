@@ -18,6 +18,7 @@ export namespace main {
 	    llmApiKey: string;
 	    llmKeyConfigured: boolean;
 	    showTrafficLights: boolean;
+	    copilotModel: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -42,6 +43,7 @@ export namespace main {
 	        this.llmApiKey = source["llmApiKey"];
 	        this.llmKeyConfigured = source["llmKeyConfigured"];
 	        this.showTrafficLights = source["showTrafficLights"];
+	        this.copilotModel = source["copilotModel"];
 	    }
 	}
 	export class DeviceFlowPollResult {

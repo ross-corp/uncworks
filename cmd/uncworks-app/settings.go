@@ -6,9 +6,13 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/yaml.v3"
 )
 
@@ -38,7 +42,7 @@ type AppSettings struct {
 	// WizardComplete tracks whether the setup wizard has been completed.
 	WizardComplete       bool              `json:"wizardComplete"       yaml:"wizardComplete,omitempty"`
 	// APIServerURL is the base URL for the UNCWORKS API server.
-	// Defaults to http://localhost:50055 (local kubectl port-forward).
+	// Assigned dynamically by autoStartApiserverForward; empty until first connect.
 	APIServerURL         string            `json:"apiserverURL"         yaml:"apiserverURL,omitempty"`
 	// LLMAPIKey is the API key for the configured LLM provider (e.g. OpenRouter).
 	LLMAPIKey            string            `json:"llmApiKey"            yaml:"llmApiKey,omitempty"`
@@ -49,6 +53,8 @@ type AppSettings struct {
 	// shown in the title bar. When false (default), the window uses full-bleed
 	// inset mode. Change takes effect on next launch.
 	ShowTrafficLights    bool              `json:"showTrafficLights"    yaml:"showTrafficLights,omitempty"`
+	// CopilotModel is the model used by the copilot chat panel. Empty means LiteLLM default.
+	CopilotModel         string            `json:"copilotModel"         yaml:"copilotModel,omitempty"`
 }
 
 // EnvVarInfo describes a single environment variable — its current value
@@ -67,7 +73,8 @@ func defaultSettings() AppSettings {
 		PortRangeEnd:   50120,
 		LiteLLMURL:     "http://litellm:4000",
 		UpdateChannel:  "stable",
-		APIServerURL:   "http://localhost:50055",
+		// APIServerURL is left empty; autoStartApiserverForward assigns a free
+		// port from the configured range and persists the URL on first connect.
 	}
 }
 
@@ -138,9 +145,6 @@ func loadAppSettings() (AppSettings, error) {
 	if s.LiteLLMURL == "" {
 		s.LiteLLMURL = "http://litellm:4000"
 	}
-	if s.APIServerURL == "" {
-		s.APIServerURL = "http://localhost:50055"
-	}
 	if s.UpdateChannel == "" {
 		s.UpdateChannel = "stable"
 	}
@@ -161,4 +165,61 @@ func saveAppSettings(s AppSettings) error {
 	}
 	path := filepath.Join(dir, "app.yaml")
 	return os.WriteFile(path, data, 0o600)
+}
+
+// watchSettings monitors app.yaml for external changes (e.g. direct file edits)
+// and emits a "settings:changed" Wails event so the frontend can reload.
+// Runs until ctx is cancelled.
+func (a *App) watchSettings() {
+	path, err := appSettingsPath()
+	if err != nil {
+		slog.Error("settings watcher: cannot resolve path", "err", err)
+		return
+	}
+
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		slog.Error("settings watcher: cannot create fsnotify watcher", "err", err)
+		return
+	}
+	defer w.Close()
+
+	// Watch the directory so we catch atomic writes (rename-over).
+	dir := filepath.Dir(path)
+	if err := w.Add(dir); err != nil {
+		slog.Error("settings watcher: cannot watch config dir", "dir", dir, "err", err)
+		return
+	}
+
+	// Debounce: only emit once per burst of writes.
+	var debounce *time.Timer
+
+	slog.Info("settings watcher: started", "path", path)
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case ev, ok := <-w.Events:
+			if !ok {
+				return
+			}
+			if filepath.Base(ev.Name) != "app.yaml" {
+				continue
+			}
+			if ev.Has(fsnotify.Write) || ev.Has(fsnotify.Create) || ev.Has(fsnotify.Rename) {
+				if debounce != nil {
+					debounce.Stop()
+				}
+				debounce = time.AfterFunc(200*time.Millisecond, func() {
+					slog.Debug("settings watcher: emitting settings:changed")
+					runtime.EventsEmit(a.ctx, "settings:changed")
+				})
+			}
+		case err, ok := <-w.Errors:
+			if !ok {
+				return
+			}
+			slog.Error("settings watcher: fsnotify error", "err", err)
+		}
+	}
 }

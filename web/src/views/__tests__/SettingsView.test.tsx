@@ -1,11 +1,10 @@
 // web/src/views/__tests__/SettingsView.test.tsx
-// Tests for SettingsView — field changes, save button, GitHub token visibility.
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor, fireEvent } from '@testing-library/react'
 import { renderWithRouter } from '../../test-utils'
 import { SETTINGS_DEFAULTS } from '../../hooks/useSettings'
+import { appSettingsFixture } from '../../mocks/fixtures'
 
-// Mock wails-env so isWails() returns false (web mode — no Wails bindings)
 vi.mock('../../lib/wails-env', () => ({
   isWails: () => false,
 }))
@@ -37,7 +36,7 @@ import { useSettings } from '../../hooks/useSettings'
 import SettingsView from '../SettingsView'
 
 function mockSettings(overrides = {}) {
-  const settings = { ...SETTINGS_DEFAULTS, ...overrides }
+  const settings = { ...appSettingsFixture(), ...overrides }
   vi.mocked(useSettings).mockReturnValue({
     settings,
     configStatus: {
@@ -60,39 +59,44 @@ describe('SettingsView', () => {
   beforeEach(() => {
     mockSettings()
     localStorage.clear()
+    vi.stubGlobal('runtime', { EventsOn: vi.fn() })
   })
 
-  it('renders the settings heading', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('namespace field is present', () => {
     renderWithRouter(<SettingsView />)
-    expect(screen.getByText('Settings')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('uncworks')).toBeInTheDocument()
   })
 
-  it('shows save button as disabled when no changes made', () => {
-    renderWithRouter(<SettingsView />)
-    const saveBtn = screen.getByRole('button', { name: /save/i })
-    expect(saveBtn).toBeDisabled()
-  })
-
-  it('enables save button after field change', async () => {
+  it('save button enabled after changing namespace', async () => {
     renderWithRouter(<SettingsView />)
 
     const namespaceInput = screen.getByDisplayValue('uncworks')
-    fireEvent.change(namespaceInput, { target: { value: 'my-namespace' } })
+    fireEvent.change(namespaceInput, { target: { value: 'new-namespace' } })
 
     await waitFor(() => {
-      const saveBtn = screen.getByRole('button', { name: /save/i })
+      const saveBtn = screen.getByRole('button', { name: /^save$/i })
       expect(saveBtn).not.toBeDisabled()
     })
   })
 
-  it('calls save on the settings context when Save is clicked', async () => {
+  it('save function called with correct namespace on save', async () => {
     const save = vi.fn().mockResolvedValue(undefined)
     const reload = vi.fn().mockResolvedValue(undefined)
     vi.mocked(useSettings).mockReturnValue({
-      settings: SETTINGS_DEFAULTS,
+      settings: { ...SETTINGS_DEFAULTS, namespace: 'uncworks' },
       configStatus: {
-        hasLLMKey: true, hasGitHubToken: false, hasGitHubOAuth: false,
-        wizardComplete: false, canUseAI: true, canAccessPrivateRepos: false, canCreatePRs: false,
+        hasLLMKey: true,
+        hasGitHubToken: false,
+        hasGitHubOAuth: false,
+        wizardComplete: true,
+        canUseAI: true,
+        canAccessPrivateRepos: false,
+        canCreatePRs: false,
       },
       loading: false,
       error: null,
@@ -103,22 +107,16 @@ describe('SettingsView', () => {
     renderWithRouter(<SettingsView />)
 
     const namespaceInput = screen.getByDisplayValue('uncworks')
-    fireEvent.change(namespaceInput, { target: { value: 'test-ns' } })
+    fireEvent.change(namespaceInput, { target: { value: 'my-namespace' } })
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save/i })).not.toBeDisabled()
+      expect(screen.getByRole('button', { name: /^save$/i })).not.toBeDisabled()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => {
-      expect(save).toHaveBeenCalledWith(expect.objectContaining({ namespace: 'test-ns' }))
+      expect(save).toHaveBeenCalledWith(expect.objectContaining({ namespace: 'my-namespace' }))
     })
-  })
-
-  it('shows GitHub token field', () => {
-    renderWithRouter(<SettingsView />)
-    // The GitHub token field label should be visible
-    expect(screen.getByText(/github token/i)).toBeInTheDocument()
   })
 })

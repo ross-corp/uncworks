@@ -33,7 +33,7 @@ export default function ChainListView() {
   const fetchData = useCallback(async () => {
     try {
       const resp = await apiFetch("/api/v1/chains");
-      if (resp.ok) setChains(await resp.json());
+      if (resp.ok) { const d = await resp.json(); setChains(Array.isArray(d) ? d : []); }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load data");
     } finally { setLoading(false); }

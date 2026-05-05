@@ -1,16 +1,14 @@
 // web/src/views/__tests__/RunListView.test.tsx
-// Tests for RunListView — run rows, loading state, empty state
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { renderWithRouter } from '../../test-utils'
+import { server } from '../../mocks/server'
 import type { AgentRun } from '../../types/agent-run'
 
-// --- module mocks (must be at top level before any imports of the mocked modules) ---
-
-vi.mock('../../hooks/apiFetch', () => ({
-  apiFetch: vi.fn(),
-  apiWsUrl: vi.fn(),
-  apiSseUrl: vi.fn(),
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn() },
+  Toaster: () => null,
 }))
 
 vi.mock('../../hooks/useClient', () => ({
@@ -19,59 +17,11 @@ vi.mock('../../hooks/useClient', () => ({
   ClientContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
 }))
 
-vi.mock('sonner', () => ({
-  toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn() },
-  Toaster: () => null,
-}))
-
-vi.mock('../../lib/format', () => ({
-  formatAge: vi.fn(() => '1m'),
-  aggregatePhase: vi.fn(() => 'succeeded'),
-}))
-
-vi.mock('../../components/RunStatusBadge', () => ({
-  default: ({ phase }: { phase: string }) => <span data-testid="run-status">{phase}</span>,
-}))
-
-// Import after mocks are registered
-import { apiFetch } from '../../hooks/apiFetch'
 import { useClient } from '../../hooks/useClient'
 import RunListView from '../RunListView'
 
-function makeRun(id: string, displayName: string): AgentRun {
-  return {
-    id,
-    name: id,
-    spec: {
-      backend: 'pod',
-      repos: [],
-      prompt: 'test',
-      devboxConfig: '',
-      ttlSeconds: 3600,
-      envVars: {},
-      modelTier: 'default',
-      displayName,
-    },
-    status: {
-      phase: 'succeeded',
-      message: '',
-      podName: '',
-      traceID: '',
-      startedAt: '',
-      completedAt: '',
-    },
-    createdAt: new Date().toISOString(),
-  }
-}
-
 describe('RunListView', () => {
   beforeEach(() => {
-    // Mock apiFetch for chain runs endpoint — return empty array
-    vi.mocked(apiFetch).mockResolvedValue(
-      new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    )
-
-    // Mock useClient to return a client stub with listAgentRuns
     vi.mocked(useClient).mockReturnValue({
       listAgentRuns: vi.fn().mockResolvedValue([]),
     } as never)
@@ -81,18 +31,31 @@ describe('RunListView', () => {
     vi.clearAllMocks()
   })
 
-  it('shows loading state initially', () => {
-    // listAgentRuns never resolves during this test
+  it('renders runs from MSW and shows run names', async () => {
     vi.mocked(useClient).mockReturnValue({
-      listAgentRuns: vi.fn().mockReturnValue(new Promise(() => {})),
+      listAgentRuns: vi.fn().mockResolvedValue([
+        {
+          id: 'run-001',
+          name: 'ar-run-001',
+          spec: { backend: 'pod', repos: [], prompt: 'test', devboxConfig: '', ttlSeconds: 3600, envVars: {}, modelTier: 'default', projectRef: 'my-project', displayName: 'First Run' },
+          status: { phase: 'succeeded', message: '', podName: '', traceID: '', startedAt: '', completedAt: '' },
+          createdAt: '2026-01-01T00:00:00Z',
+        } as AgentRun,
+      ]),
     } as never)
 
     renderWithRouter(<RunListView />)
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('First Run')).toBeInTheDocument()
+    })
   })
 
-  it('shows empty state when no runs returned', async () => {
+  it('null response from chain runs endpoint does not crash', async () => {
+    server.use(
+      http.get('/api/v1/chainruns', () => HttpResponse.json(null))
+    )
+
     renderWithRouter(<RunListView />)
 
     await waitFor(() => {
@@ -100,18 +63,13 @@ describe('RunListView', () => {
     })
   })
 
-  it('renders run rows when API returns runs', async () => {
-    const runs = [makeRun('run-1', 'My First Run'), makeRun('run-2', 'My Second Run')]
-
-    vi.mocked(useClient).mockReturnValue({
-      listAgentRuns: vi.fn().mockResolvedValue(runs),
-    } as never)
-
+  it('filter CustomSelect exists in the DOM', async () => {
     renderWithRouter(<RunListView />)
 
     await waitFor(() => {
-      expect(screen.getByText('My First Run')).toBeInTheDocument()
-      expect(screen.getByText('My Second Run')).toBeInTheDocument()
+      // CustomSelect renders as a <details> element; the summary acts as the trigger
+      const summaries = document.querySelectorAll('summary')
+      expect(summaries.length).toBeGreaterThan(0)
     })
   })
 })

@@ -5,6 +5,7 @@ import cronstrue from "cronstrue";
 import { apiFetch } from "../hooks/apiFetch";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import CustomSelect from "../components/CustomSelect";
 
 export default function ScheduleNewView() {
   const navigate = useNavigate();
@@ -149,15 +150,16 @@ export default function ScheduleNewView() {
           {/* concurrencyPolicy */}
           <div className="space-y-1">
             <label className="text-xs font-medium">Concurrency Policy</label>
-            <select
+            <CustomSelect
               value={concurrencyPolicy}
-              onChange={(e) => setConcurrencyPolicy(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="Allow">Allow</option>
-              <option value="Forbid">Forbid</option>
-              <option value="Replace">Replace</option>
-            </select>
+              onChange={setConcurrencyPolicy}
+              options={[
+                { value: "Allow", label: "Allow" },
+                { value: "Forbid", label: "Forbid" },
+                { value: "Replace", label: "Replace" },
+              ]}
+              className="w-full text-sm"
+            />
           </div>
 
           {/* target type toggle */}
@@ -189,33 +191,21 @@ export default function ScheduleNewView() {
             </div>
 
             {targetType === "chain" && (
-              <select
+              <CustomSelect
                 value={chainRef}
-                onChange={(e) => setChainRef(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">Select a chain...</option>
-                {chains.map((c) => (
-                  <option key={c.metadata.name} value={c.metadata.name}>
-                    {c.spec.displayName || c.metadata.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setChainRef}
+                options={[{ value: "", label: "Select a chain..." }, ...chains.map((c) => ({ value: c.metadata.name, label: c.spec.displayName || c.metadata.name }))]}
+                className="w-full text-sm"
+              />
             )}
 
             {targetType === "template" && (
-              <select
+              <CustomSelect
                 value={templateRef}
-                onChange={(e) => setTemplateRef(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">Select a template...</option>
-                {templates.map((t) => (
-                  <option key={t.metadata.name} value={t.metadata.name}>
-                    {t.spec.displayName || t.metadata.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setTemplateRef}
+                options={[{ value: "", label: "Select a template..." }, ...templates.map((t) => ({ value: t.metadata.name, label: t.spec.displayName || t.metadata.name }))]}
+                className="w-full text-sm"
+              />
             )}
           </div>
 

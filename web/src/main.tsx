@@ -22,6 +22,9 @@ if (typeof window !== "undefined") {
     w.runtime.EventsOn("app:local-reload", () => {
       window.dispatchEvent(new CustomEvent("uncworks:local-reload"));
     });
+    w.runtime.EventsOn("settings:changed", () => {
+      window.dispatchEvent(new CustomEvent("uncworks:settings-changed"));
+    });
   };
   // Try immediately and again after DOMContentLoaded
   bridgeWailsEvents();

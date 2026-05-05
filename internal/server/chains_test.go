@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -400,6 +401,44 @@ func TestChainHandler_SuspendResumeSchedule(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("resume status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCapList_NilInput_ReturnsEmptySlice(t *testing.T) {
+	var items []aotv1alpha1.RunTemplate
+	result := capList(items, maxListItems)
+	if result == nil {
+		t.Error("capList(nil, ...) returned nil, want empty slice")
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if string(b) != "[]" {
+		t.Errorf("JSON = %q, want []", string(b))
+	}
+}
+
+func TestChainHandler_ListChainRuns_EmptyReturnsArray(t *testing.T) {
+	_, mux := newChainHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/chainruns", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+	body := strings.TrimSpace(rec.Body.String())
+	if body == "null" {
+		t.Error("GET /api/v1/chainruns returned JSON null, want []")
+	}
+	var out []aotv1alpha1.ChainRun
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out == nil {
+		t.Error("deserialized response is nil slice")
 	}
 }
 

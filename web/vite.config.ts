@@ -16,10 +16,14 @@ export default defineConfig({
     port: 3000,
     allowedHosts: true,
     proxy: {
+      "/api/": {
+        target: process.env.VITE_API_URL ?? "http://localhost:50055",
+        changeOrigin: true,
+      },
       "/aot.api.v1.AOTService": {
-        target: "http://localhost:50055",
-        changeOrigin: true
-      }
+        target: process.env.VITE_API_URL ?? "http://localhost:50055",
+        changeOrigin: true,
+      },
     }
   },
   test: {

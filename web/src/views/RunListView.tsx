@@ -14,6 +14,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "../components/ui/alert-dialog";
+import CustomSelect from "../components/CustomSelect";
 
 // ---- Chain run types ----
 interface ChainRunSummary {
@@ -496,6 +497,7 @@ export default function RunListView() {
     const badge = KIND_BADGE[ur.kind];
     return (
       <div
+        data-testid={`run-row-${ur.id}`}
         className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-border/40 transition-colors ${
           index === selected ? "bg-accent/40 outline outline-1 outline-border/60" : "hover:bg-muted/30"
         }`}
@@ -609,16 +611,12 @@ export default function RunListView() {
 
         {/* Persistent filter bar */}
         <div className="flex items-center gap-2">
-          <select
+          <CustomSelect
             value={filterField ?? ""}
-            onChange={(e) => setFilterField((e.target.value as FilterField) || null)}
-            className="text-xs bg-muted/50 border border-border/50 rounded-md px-2 py-1 outline-none cursor-pointer"
-          >
-            <option value="">Field...</option>
-            {FIELD_OPTIONS.map(({ field, label }) => (
-              <option key={field} value={field ?? ""}>{label}</option>
-            ))}
-          </select>
+            onChange={(v) => setFilterField((v as FilterField) || null)}
+            options={[{ value: "", label: "Field..." }, ...FIELD_OPTIONS.map(({ field, label }) => ({ value: field ?? "", label }))]}
+            className="text-xs"
+          />
           <div className="relative flex-1 flex items-center">
             {filterField && (
               <span className="absolute left-2 text-xs font-medium text-blue-500 pointer-events-none">

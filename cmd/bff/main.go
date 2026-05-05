@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,7 +18,29 @@ import (
 //go:embed dist/*
 var staticFS embed.FS
 
+func initLogger() {
+	level := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler
+	if os.Getenv("LOG_FORMAT") == "json" {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(handler))
+}
+
 func main() {
+	initLogger()
+
 	port := envOrDefault("BFF_PORT", "3000")
 	apiserverURL := envOrDefault("APISERVER_URL", "http://localhost:50055")
 	sessionSecret := envOrDefault("SESSION_SECRET", "dev-secret-change-in-prod")
@@ -72,7 +95,13 @@ func main() {
 		_ = server.Shutdown(ctx)
 	}()
 
-	slog.Info("BFF listening", "port", port, "apiserver", apiserverURL, "auth", authMode)
+	slog.Info("BFF listening",
+		"port", port,
+		"apiserver", apiserverURL,
+		"auth", authMode,
+		"allowedOrigin", allowedOrigin,
+		"log_level", os.Getenv("LOG_LEVEL"),
+	)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("BFF server error", "err", err)
 		os.Exit(1)

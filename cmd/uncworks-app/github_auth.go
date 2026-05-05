@@ -121,11 +121,17 @@ func (a *App) SaveGitHubToken(token string) error {
 	return keyring.Set(keychainSvc, keychainAcct, token)
 }
 
-// GetGitHubUser returns the authenticated GitHub username, reading the token from Keychain.
+// GetGitHubUser returns the authenticated GitHub username.
+// Prefers the PAT from app settings; falls back to the OAuth token in Keychain.
 func (a *App) GetGitHubUser() (string, error) {
-	token, err := keyring.Get(keychainSvc, keychainAcct)
-	if err != nil {
-		return "", fmt.Errorf("no token in keychain: %w", err)
+	s, _ := loadAppSettings()
+	token := s.GitHubToken
+	if token == "" {
+		var err error
+		token, err = keyring.Get(keychainSvc, keychainAcct)
+		if err != nil {
+			return "", fmt.Errorf("no github token configured")
+		}
 	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com/user", nil)
 	if err != nil {

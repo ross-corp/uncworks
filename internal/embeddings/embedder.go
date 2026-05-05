@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -21,6 +22,9 @@ const (
 
 	// EmbeddingDim is the expected embedding dimension.
 	EmbeddingDim = 384
+
+	// DefaultHTTPTimeout is the default timeout for embedding HTTP requests.
+	DefaultHTTPTimeout = 30 * time.Second
 )
 
 // Embedder generates text embeddings using Ollama's /api/embed endpoint.
@@ -39,7 +43,7 @@ func NewEmbedder(baseURL, model string, httpClient *http.Client) *Embedder {
 		model = DefaultModel
 	}
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: DefaultHTTPTimeout}
 	}
 	return &Embedder{
 		baseURL:    strings.TrimRight(baseURL, "/"),
@@ -99,8 +103,11 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 		return nil, fmt.Errorf("no embeddings returned")
 	}
 
-	// Convert float64 to float32
 	raw := embedResp.Embeddings[0]
+	if len(raw) != EmbeddingDim {
+		return nil, fmt.Errorf("unexpected embedding dimension: got %d, want %d", len(raw), EmbeddingDim)
+	}
+
 	result := make([]float32, len(raw))
 	for i, v := range raw {
 		result[i] = float32(v)

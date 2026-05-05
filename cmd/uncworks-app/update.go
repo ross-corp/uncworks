@@ -8,11 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -97,41 +100,59 @@ type ghRelease struct {
 	HTMLURL    string `json:"html_url"`
 }
 
+// localWatcherRunning ensures only one watcher goroutine is active at a time.
+var localWatcherRunning atomic.Bool
+
 // startLocalWatcher polls the running executable's mtime every 3 seconds.
 // When it detects a change (a new local build was installed), it emits a
 // "app:local-reload" event so the frontend can prompt the user, then
-// re-launches the app and quits.
+// re-launches the app and quits. Only one watcher runs at a time.
 func (a *App) startLocalWatcher() {
+	if !localWatcherRunning.CompareAndSwap(false, true) {
+		slog.Debug("local watcher: already running, skipping")
+		return
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
+		localWatcherRunning.Store(false)
 		return
 	}
 	info, err := os.Stat(exe)
 	if err != nil {
+		localWatcherRunning.Store(false)
 		return
 	}
 	baseline := info.ModTime()
 
+	slog.Info("local watcher: started", "exe", exe, "baseline", baseline)
+
 	go func() {
+		defer localWatcherRunning.Store(false)
 		for {
 			time.Sleep(3 * time.Second)
 
 			s, _ := loadAppSettings()
 			if s.UpdateChannel != "local" {
-				return // channel changed, stop watching
+				slog.Info("local watcher: channel changed, stopping")
+				return
 			}
 
 			fi, err := os.Stat(exe)
 			if err != nil {
+				// Binary removed mid-install; keep polling.
+				slog.Debug("local watcher: stat error (binary being replaced?)", "err", err)
 				continue
 			}
 			if fi.ModTime().After(baseline) {
+				slog.Info("local watcher: new binary detected, relaunching", "mtime", fi.ModTime())
 				runtime.EventsEmit(a.ctx, "app:local-reload")
-				time.Sleep(500 * time.Millisecond)
-				// Re-launch the (now updated) binary and quit this instance.
-				_ = relaunchApp()
-				runtime.Quit(a.ctx)
-				return
+				if err := relaunchApp(); err != nil {
+					slog.Error("local watcher: relaunch failed", "err", err)
+				}
+				// Use os.Exit to bypass OnBeforeClose (which hides the window instead of quitting).
+				// The sh+sleep in relaunchApp ensures the new instance starts after we die.
+				os.Exit(0)
 			}
 		}
 	}()
@@ -139,6 +160,8 @@ func (a *App) startLocalWatcher() {
 
 // relaunchApp opens the UNCWORKS.app bundle via `open` so the updated binary
 // starts in a fresh process after this instance quits.
+// Uses sh with a brief sleep so the old instance is fully gone before `open` runs.
+// Setpgid puts the shell in its own process group so it survives this process exiting.
 func relaunchApp() error {
 	exe, err := os.Executable()
 	if err != nil {
@@ -146,8 +169,9 @@ func relaunchApp() error {
 	}
 	// Walk up from Contents/MacOS/<binary> to find the .app bundle root.
 	app := appBundlePath(exe)
-	cmd := fmt.Sprintf("sleep 1 && open -a %q", app)
-	return exec.Command("sh", "-c", cmd).Start()
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("sleep 1 && open -a %q", app))
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return cmd.Start()
 }
 
 // appBundlePath finds the .app bundle root from the executable path.

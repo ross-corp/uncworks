@@ -2,6 +2,7 @@
 // Steps: 1) Cluster  2) GitHub OAuth  3) Models
 import { useState, useEffect, useCallback } from "react";
 import { useSettings } from "../hooks/useSettings";
+import CustomSelect from "./CustomSelect";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const go = () => (window as any).go?.main?.App;
@@ -131,13 +132,12 @@ function ClusterStep({ onNext }: { onNext: () => void }) {
         ) : contexts.length === 0 ? (
           <p className="text-xs text-muted-foreground">No kubecontexts found — is kubectl configured?</p>
         ) : (
-          <select
+          <CustomSelect
             value={selectedCtx}
-            onChange={e => setSelectedCtx(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            {contexts.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+            onChange={setSelectedCtx}
+            options={contexts.map(c => ({ value: c, label: c }))}
+            className="w-full text-sm"
+          />
         )}
       </div>
 
@@ -381,15 +381,12 @@ function ModelsStep({ onFinish }: { onFinish: () => void }) {
 
       <div className="mb-4">
         <label className="text-xs font-medium mb-1 block">Provider</label>
-        <select
+        <CustomSelect
           value={preset}
-          onChange={e => onPresetChange(e.target.value)}
-          className="w-full px-2.5 py-1.5 rounded-md border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {PROVIDER_PRESETS.map(p => (
-            <option key={p.label} value={p.label}>{p.label}</option>
-          ))}
-        </select>
+          onChange={onPresetChange}
+          options={PROVIDER_PRESETS.map(p => ({ value: p.label, label: p.label }))}
+          className="w-full text-sm"
+        />
         {currentPreset && (
           <p className="mt-1 text-xs text-muted-foreground">{currentPreset.hint}</p>
         )}

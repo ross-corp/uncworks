@@ -27,6 +27,10 @@ export function HealthCheck():Promise<main.HealthReport>;
 
 export function ListServices():Promise<Array<main.ServiceInfo>>;
 
+export function LogPath():Promise<string>;
+
+export function OpenLogInConsole():Promise<void>;
+
 export function OpenService(arg1:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;

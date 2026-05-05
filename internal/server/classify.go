@@ -166,7 +166,8 @@ func (h *ClassifyRunHandler) callLiteLLM(ctx context.Context, prompt string) (*c
 	llmCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
-	url := strings.TrimRight(h.LiteLLMBaseURL, "/") + "/v1/chat/completions"
+	llmBase := strings.TrimSuffix(strings.TrimRight(h.LiteLLMBaseURL, "/"), "/v1")
+	url := llmBase + "/v1/chat/completions"
 	httpReq, err := http.NewRequestWithContext(llmCtx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -282,15 +283,25 @@ Return ONLY the improved prompt text, no explanation.`
 	llmCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	url := strings.TrimRight(h.LiteLLMBaseURL, "/") + "/v1/chat/completions"
+	llmBaseURL := h.LiteLLMBaseURL
+	if override := r.Header.Get("X-LLM-Base-URL"); override != "" {
+		llmBaseURL = override
+	}
+	llmAPIKey := os.Getenv("LITELLM_MASTER_KEY")
+	if override := r.Header.Get("X-LLM-API-Key"); override != "" {
+		llmAPIKey = override
+	}
+
+	llmBase := strings.TrimSuffix(strings.TrimRight(llmBaseURL, "/"), "/v1")
+	url := llmBase + "/v1/chat/completions"
 	httpReq, err := http.NewRequestWithContext(llmCtx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "create request"})
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if masterKey := os.Getenv("LITELLM_MASTER_KEY"); masterKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+masterKey)
+	if llmAPIKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+llmAPIKey)
 	}
 
 	resp, err := h.HTTPClient.Do(httpReq)

@@ -117,8 +117,20 @@ func (h *ChatHandler) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if h.LiteLLMBaseURL == "" {
-		writeJSON(w, http.StatusBadGateway, errorResponse{Error: "LITELLM_BASE_URL not configured"})
+	// X-LLM-Base-URL and X-LLM-API-Key headers are injected by the desktop app
+	// proxy when the user has configured a custom LLM provider (e.g. OpenRouter).
+	// They override the server's env-var defaults so no cluster redeploy is needed.
+	llmBaseURL := h.LiteLLMBaseURL
+	if override := r.Header.Get("X-LLM-Base-URL"); override != "" {
+		llmBaseURL = override
+	}
+	llmAPIKey := os.Getenv("LITELLM_MASTER_KEY")
+	if override := r.Header.Get("X-LLM-API-Key"); override != "" {
+		llmAPIKey = override
+	}
+
+	if llmBaseURL == "" {
+		writeJSON(w, http.StatusBadGateway, errorResponse{Error: "LLM base URL not configured"})
 		return
 	}
 
@@ -138,15 +150,19 @@ func (h *ChatHandler) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := strings.TrimRight(h.LiteLLMBaseURL, "/") + "/v1/chat/completions"
+	// Normalize: providers like OpenRouter expose the API under /api/v1, so
+	// LiteLLMBaseURL may already end with /v1. Strip it before appending so we
+	// never produce double-/v1 paths (e.g. https://openrouter.ai/api/v1/v1/...).
+	llmBase := strings.TrimSuffix(strings.TrimRight(llmBaseURL, "/"), "/v1")
+	url := llmBase + "/v1/chat/completions"
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to create upstream request"})
 		return
 	}
 	upstreamReq.Header.Set("Content-Type", "application/json")
-	if masterKey := os.Getenv("LITELLM_MASTER_KEY"); masterKey != "" {
-		upstreamReq.Header.Set("Authorization", "Bearer "+masterKey)
+	if llmAPIKey != "" {
+		upstreamReq.Header.Set("Authorization", "Bearer "+llmAPIKey)
 	}
 
 	resp, err := h.HTTPClient.Do(upstreamReq)
