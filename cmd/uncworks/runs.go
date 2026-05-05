@@ -65,6 +65,10 @@ func runRunsList(args []string) error {
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
 	includeArchived := fs.Bool("include-archived", false, "Include archived runs")
+	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
+	tag := fs.String("tag", "", "Filter by tag")
+	parentRunID := fs.String("parent-run-id", "", "Filter by parent run ID")
+	cursor := fs.String("cursor", "", "Pagination cursor from previous response")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
