@@ -61,7 +61,7 @@ tasks:
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
       - helm uninstall uncworks -n {{.CLUSTER_NAMESPACE}} 2>/dev/null || true
-      - kubectl delete namespace {{.NAMESPACE}} --ignore-not-found
+      - kubectl delete namespace {{.CLUSTER_NAMESPACE}} --ignore-not-found
       - colima stop --profile {{.COLIMA_PROFILE}} 2>/dev/null || true
       - echo "UNCWORKS cluster torn down."
 
