@@ -152,8 +152,11 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Request[apiv1.CreateAgentRunRequest]) (*connect.Response[apiv1.CreateAgentRunResponse], error) {
 	// Rate limiting: max 10 CreateAgentRun calls per minute per IP
 	if s.createAgentRunLimiter != nil {
-		ip := extractClientIP(req)
-		if !s.createAgentRunLimiter.Allow(ip) {
+		ip := s.extractClientIP(req)
+		if ip == "" {
+			// If we can't determine IP, skip rate limiting for safety
+			slog.Warn("CreateAgentRun: could not determine client IP, skipping rate limit")
+		} else if !s.createAgentRunLimiter.Allow(ip) {
 			return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("rate limit exceeded: maximum 10 CreateAgentRun calls per minute per IP"))
 		}
 	}
