@@ -14,6 +14,10 @@ import (
 	"github.com/uncworks/aot/test/testutil"
 )
 
+// bddScheme is the shared k8s runtime.Scheme for BDD tests that construct
+// a fake k8s client directly (e.g. auth/rate-limit specs that bypass newTestEnv).
+var bddScheme = testutil.NewScheme()
+
 func TestBDD(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "AOT BDD Suite")

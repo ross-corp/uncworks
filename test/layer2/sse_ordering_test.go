@@ -22,7 +22,12 @@ import (
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/internal/eventbus"
 	"github.com/uncworks/aot/internal/server"
+	"github.com/uncworks/aot/test/testutil"
 )
+
+// layer2Scheme is the shared k8s runtime.Scheme for layer2 tests that
+// construct a fake k8s client directly.
+var layer2Scheme = testutil.NewScheme()
 
 // graphSSEEvent mirrors the JSON shape sent over the SSE stream.
 type graphSSEEvent struct {
