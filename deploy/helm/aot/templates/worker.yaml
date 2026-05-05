@@ -54,6 +54,14 @@ spec:
             - name: BRAIN_DATABASE_URL
               value: {{ .Values.worker.brainDatabaseURL | quote }}
             {{- end }}
+            {{- if .Values.worker.brainDBMaxConns }}
+            - name: BRAIN_DB_MAX_CONNS
+              value: {{ .Values.worker.brainDBMaxConns | quote }}
+            {{- end }}
+            {{- if .Values.worker.brainDBMinConns }}
+            - name: BRAIN_DB_MIN_CONNS
+              value: {{ .Values.worker.brainDBMinConns | quote }}
+            {{- end }}
             {{- if .Values.worker.embedderBaseURL }}
             - name: EMBEDDER_BASE_URL
               value: {{ .Values.worker.embedderBaseURL | quote }}

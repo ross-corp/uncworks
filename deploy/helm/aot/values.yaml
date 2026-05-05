@@ -112,6 +112,10 @@ worker:
   # When set, knowledge activities (persist, embed, hydrate) are enabled.
   # Format: "postgres://user:pass@host:5432/dbname"
   brainDatabaseURL: ""
+  # -- Maximum number of connections in the brain DB pool (BRAIN_DB_MAX_CONNS). Default: 10.
+  brainDBMaxConns: ""
+  # -- Minimum number of connections kept alive in the brain DB pool (BRAIN_DB_MIN_CONNS). Default: 2.
+  brainDBMinConns: ""
   # -- Base URL of the embedder service (e.g. "http://ollama:11434").
   # Requires brainDatabaseURL to also be set. When unset, embedding is skipped.
   embedderBaseURL: ""
