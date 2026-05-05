@@ -207,8 +207,16 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			if depStatus != nil && depStatus.RunID != "" {
 				var depRun aotv1alpha1.AgentRun
 				if err := r.Get(ctx, client.ObjectKey{Namespace: cr.Namespace, Name: depStatus.RunID}, &depRun); err == nil {
-					prompt = fmt.Sprintf("Context from previous step '%s': %s\n\n%s",
-						def.ContextFrom, depRun.Status.Message, prompt)
+					contextText := depRun.Status.Message
+					if depRun.Status.LogOutput != "" {
+						log := depRun.Status.LogOutput
+						if len(log) > 8000 {
+							log = log[len(log)-8000:]
+						}
+						contextText = log
+					}
+					prompt = fmt.Sprintf("Context from previous step '%s' (agent output):\n\n%s\n\n%s",
+						def.ContextFrom, contextText, prompt)
 				}
 			}
 		}
