@@ -108,12 +108,13 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 	
 	// Create rate limiter for CreateAgentRun: 10 requests per minute per IP (0.1667 RPS)
 	// Using burst of 2 to allow some small burst capacity
+	trustProxy := os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true"
 	createAgentRunLimiter := NewRateLimiter(RateLimiterConfig{
 		Enabled:    true,
 		RPS:        0.1667, // 10 per minute
 		Burst:      2,
 		TTLMinutes: 10,
-		TrustProxy: false, // Default to not trusting proxy, can be configured via env
+		TrustProxy: trustProxy,
 	})
 	
 	return &AOTServiceHandler{
