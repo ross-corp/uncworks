@@ -242,13 +242,13 @@ func TestSSE_WatchGraph_LogEventsBeforePhaseChange(t *testing.T) {
 		Type:       apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG,
 		Payload:    "cloning repo",
 	})
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	bus.Publish(runID, &apiv1.AgentRunEvent{
 		AgentRunId: runID,
 		Type:       apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG,
 		Payload:    "installing deps",
 	})
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	bus.Publish(runID, &apiv1.AgentRunEvent{
 		AgentRunId: runID,
 		Type:       apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED,
