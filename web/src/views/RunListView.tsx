@@ -373,6 +373,31 @@ export default function RunListView() {
     };
   }
 
+  function EmptyStateContent() {
+    const message = emptyStateMessage(true);
+    if (!message.title) return null;
+    
+    return (
+      <Empty className="h-full border-0">
+        <EmptyHeader>
+          <EmptyTitle>{message.title}</EmptyTitle>
+          {message.description && (
+            <EmptyDescription className="font-mono text-xs">
+              {message.description}
+            </EmptyDescription>
+          )}
+        </EmptyHeader>
+        {message.showCTA && (
+          <EmptyContent>
+            <Button onClick={() => navigate("/new")}>
+              Create First Run
+            </Button>
+          </EmptyContent>
+        )}
+      </Empty>
+    );
+  }
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       // Don't fire shortcuts when the user is typing in a focused input/select/textarea.
