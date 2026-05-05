@@ -434,6 +434,26 @@ export default function RunListView() {
     if (selected >= navList.length) setSelected(Math.max(0, navList.length - 1));
   }, [navList.length, selected]);
 
+  function EmptyState({ message, hasFilters }: { message: string; hasFilters: boolean }) {
+    if (hasFilters) {
+      return (
+        <div className="flex h-full items-center justify-center text-muted-foreground">
+          {message}
+        </div>
+      );
+    }
+    
+    return (
+      <div style={{textAlign:"center",padding:"48px",color:"#6b7280"}}>
+        <p style={{fontSize:"1.1rem",fontWeight:500,margin:0}}>No runs yet</p>
+        <p style={{fontSize:"0.875rem",marginTop:"8px",color:"#9ca3af"}}>Submit your first run:</p>
+        <code style={{display:"block",marginTop:"8px",padding:"8px 12px",background:"#f3f4f6",borderRadius:"6px",fontSize:"0.8rem",textAlign:"left"}}>
+          uncworks run --repo &lt;url&gt; --prompt &lt;task&gt;
+        </code>
+      </div>
+    );
+  }
+
   function RunRow({ run, index }: { run: AgentRun; index: number }) {
     const hasDiff = !!(run.status.totalAdditions || run.status.totalDeletions);
     return (
