@@ -569,6 +569,8 @@ func (a *Activities) CreateAgentDeployment(ctx context.Context, input CreateAgen
 	pvcName := fmt.Sprintf("aot-ws-%s", input.AgentRunName)
 	deployName := input.Name
 
+	slog.Info("agent deployment created", "agentRunName", input.AgentRunName, "deploymentName", deployName, "namespace", input.Namespace)
+
 	// Create PVC
 	storageClass := envOrDefault("AOT_STORAGE_CLASS", "local-path")
 	pvc := &corev1.PersistentVolumeClaim{
