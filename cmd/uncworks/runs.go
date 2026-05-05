@@ -27,6 +27,7 @@ Subcommands:
   logs <id>         Stream log output until the run completes
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
+  cancel <id>       Request cancellation of a running agent
 `
 
 func runRuns(args []string) error {
@@ -47,6 +48,8 @@ func runRuns(args []string) error {
 		return runRunsArchive(rest, true)
 	case "unarchive":
 		return runRunsArchive(rest, false)
+	case "cancel":
+		return runCancel(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
