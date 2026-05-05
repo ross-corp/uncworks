@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { AgentRun, AgentRunPhase } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
-import { formatAge, aggregatePhase } from "../lib/format";
+import { formatAge, formatDuration, aggregatePhase } from "../lib/format";
 import RunStatusBadge from "../components/RunStatusBadge";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -479,6 +479,12 @@ export default function RunListView() {
           <span className="text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
             {run.spec.modelTier || "default"}
           </span>
+
+          {run.status.completedAt && run.status.startedAt && (
+            <span className="text-xs text-muted-foreground font-mono w-14 text-right shrink-0">
+              {formatDuration(run.status.startedAt, run.status.completedAt)}
+            </span>
+          )}
 
           <span className="text-xs text-muted-foreground w-10 text-right">{formatAge(run.createdAt)}</span>
         </div>
