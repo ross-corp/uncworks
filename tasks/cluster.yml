@@ -48,7 +48,7 @@ tasks:
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
       - echo "=== Pods ==="
-      - kubectl get pods -n {{.NAMESPACE}} 2>/dev/null || echo "(namespace not found)"
+      - kubectl get pods -n {{.CLUSTER_NAMESPACE}} 2>/dev/null || echo "(namespace not found)"
       - echo ""
       - echo "=== Services ==="
       - kubectl get svc -n {{.NAMESPACE}} 2>/dev/null || echo "(none)"
