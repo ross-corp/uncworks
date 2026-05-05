@@ -25,7 +25,7 @@ tasks:
       - task: :dev:images
       - >-
         helm upgrade --install uncworks ./deploy/helm/aot
-        --namespace {{.NAMESPACE}}
+        --namespace {{.CLUSTER_NAMESPACE}}
         --set images.controlplane.tag=local
         --set images.controlplane.pullPolicy=Never
         --set images.web.tag=local
