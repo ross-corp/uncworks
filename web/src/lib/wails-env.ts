@@ -1,12 +1,120 @@
 // wails-env.ts — Detect and configure Wails desktop environment.
 // Sets data-wails on <html> for CSS targeting and installs native-app UX fixes.
 
+// ── Wails binding types ───────────────────────────────────────────────────────
+
+export interface WailsAppSettings {
+  githubToken: string;
+  namespace: string;
+  kubeContext: string;
+  portRangeStart: number;
+  portRangeEnd: number;
+  envOverrides: Record<string, string>;
+  litellmURL: string;
+  githubAuthed: boolean;
+  updateChannel: string;
+  autoUpdateEnabled: boolean;
+  defaultManageModel: string;
+  defaultImplementModel: string;
+  wizardComplete: boolean;
+  apiserverURL: string;
+  llmApiKey?: string;
+  llmKeyConfigured?: boolean;
+  showTrafficLights?: boolean;
+  copilotModel?: string;
+}
+
+export interface WailsEnvVarInfo {
+  key: string;
+  system: string;
+  override: string;
+  desc: string;
+}
+
+export interface WailsServiceInfo {
+  name: string;
+  displayName: string;
+  clusterPort: number;
+  localPort: number;
+  ready: boolean;
+  forwarding: boolean;
+}
+
+export type WailsHealthStatus = "ok" | "degraded" | "down" | "unknown";
+
+export interface WailsHealthComponent {
+  name: string;
+  label: string;
+  status: WailsHealthStatus;
+  message: string;
+}
+
+export interface WailsHealthReport {
+  overall: WailsHealthStatus;
+  components: WailsHealthComponent[];
+}
+
+export interface WailsLiteLLMCheckResult {
+  ok: boolean;
+  models: string[];
+  error?: string;
+}
+
+export interface WailsUpdateInfo {
+  localBuild: boolean;
+  upToDate: boolean;
+  currentVersion?: string;
+  latestVersion?: string;
+  releaseURL?: string;
+  error?: string;
+}
+
+// Wails v2 converts Go JSON tags (snake_case) to camelCase in JS bindings.
+export interface WailsDeviceFlowStart {
+  deviceCode: string;
+  userCode: string;
+  verificationURI: string;
+  expiresIn: number;
+  interval: number;
+}
+
+export interface WailsDeviceFlowPollResult {
+  done: boolean;
+  token?: string;
+}
+
+export interface WailsApp {
+  GetSettings(): Promise<WailsAppSettings>;
+  SaveSettings(s: WailsAppSettings): Promise<void>;
+  GetEnvVars(): Promise<WailsEnvVarInfo[]>;
+  GetKubeContexts(): Promise<string[]>;
+  AutodetectNamespace(kubeContext: string): Promise<string>;
+  ListServices(): Promise<WailsServiceInfo[]>;
+  RestartService(name: string): Promise<void>;
+  StartPortForward(name: string, localPort: number): Promise<void>;
+  StopPortForward(name: string): Promise<void>;
+  OpenURL(rawURL: string): Promise<void>;
+  OpenService(name: string): Promise<void>;
+  HealthCheck(): Promise<WailsHealthReport>;
+  CheckLiteLLM(url: string): Promise<WailsLiteLLMCheckResult>;
+  CheckForUpdate(): Promise<WailsUpdateInfo>;
+  StartGitHubDeviceFlow(): Promise<WailsDeviceFlowStart>;
+  PollGitHubDeviceFlow(deviceCode: string): Promise<WailsDeviceFlowPollResult>;
+  SaveGitHubToken(token: string): Promise<void>;
+  GetGitHubUser(): Promise<string>;
+  DisconnectGitHub(): Promise<void>;
+  OpenLogInConsole(): Promise<void>;
+  LogPath(): Promise<string>;
+}
+
 declare global {
   interface Window {
-    go?: unknown;
-    runtime?: unknown;
+    go?: { main?: { App?: WailsApp } };
+    runtime?: { EventsOn(event: string, callback: (...args: unknown[]) => void): void };
   }
 }
+
+// ── Environment helpers ───────────────────────────────────────────────────────
 
 export function isWails(): boolean {
   return typeof window.go !== "undefined" || typeof window.runtime !== "undefined";

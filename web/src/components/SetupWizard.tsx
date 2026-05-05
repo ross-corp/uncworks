@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSettings } from "../hooks/useSettings";
 import CustomSelect from "./CustomSelect";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-const go = () => (window as any).go?.main?.App;
+const go = () => window.go!.main!.App!;
 
 type Step = "cluster" | "github" | "models";
 const STEPS: Step[] = ["cluster", "github", "models"];

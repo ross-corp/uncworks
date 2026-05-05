@@ -4,8 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { isWails } from "../lib/wails-env";
 import type { KeybindingsConfig } from "../lib/keybindings/types";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-const go = () => (window as any).go?.main?.App;
+const go = () => window.go!.main!.App!;
 
 export interface AppSettings {
   githubToken: string;
