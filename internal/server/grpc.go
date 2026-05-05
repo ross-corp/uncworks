@@ -345,6 +345,9 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 }
 
 func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Request[apiv1.CancelAgentRunRequest]) (*connect.Response[apiv1.CancelAgentRunResponse], error) {
+	if err := validateRunID(req.Msg.Id); err != nil {
+		return nil, err
+	}
 	crd := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: s.Namespace,
