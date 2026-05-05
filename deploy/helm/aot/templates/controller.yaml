@@ -95,6 +95,8 @@ spec:
             runAsUser: 65534
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: tmp
               mountPath: /tmp
