@@ -294,6 +294,9 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 }
 
 func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Request[apiv1.WatchAgentRunRequest], stream *connect.ServerStream[apiv1.AgentRunEvent]) error {
+	if err := validateRunID(req.Msg.Id); err != nil {
+		return err
+	}
 	crd := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: s.Namespace,
