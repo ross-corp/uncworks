@@ -726,23 +726,27 @@ func (a *Activities) CollectAgentLogs(ctx context.Context, input CollectAgentLog
 	}
 	pod := podList.Items[0]
 
-	// Collect from the "agent" container (the Claude Code process).
+	// Collect from the "agent" container. With RestartPolicy:Always the container
+	// may have already restarted by cleanup time, so try current logs first; fall
+	// back to Previous=true (terminated container) if current logs are empty.
 	var tailLines int64 = 500
-	req := clientset.CoreV1().Pods(input.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-		Container: "agent",
-		TailLines: &tailLines,
-	})
-	stream, err := req.Stream(ctx)
-	if err != nil {
-		slog.Warn("collect logs: stream failed", "agentRun", input.AgentRunName, "err", err)
-		return nil
-	}
-	defer stream.Close()
-
 	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, stream); err != nil {
-		slog.Warn("collect logs: read failed", "agentRun", input.AgentRunName, "err", err)
-		return nil
+	for _, prev := range []bool{false, true} {
+		buf.Reset()
+		req := clientset.CoreV1().Pods(input.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+			Container: "agent",
+			TailLines: &tailLines,
+			Previous:  prev,
+		})
+		stream, err := req.Stream(ctx)
+		if err != nil {
+			continue
+		}
+		_, _ = io.Copy(&buf, stream)
+		stream.Close()
+		if buf.Len() > 0 {
+			break
+		}
 	}
 
 	logOutput := buf.String()
