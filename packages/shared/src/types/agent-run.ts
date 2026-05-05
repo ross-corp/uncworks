@@ -82,6 +82,13 @@ export interface AgentRunStatus {
   retryCount?: number;
   verificationResult?: string;
   prUrl?: string;
+  archived?: boolean;
+  totalCost?: string;
+  totalAdditions?: number;
+  totalDeletions?: number;
+  ciFixAttempts?: number;
+  lastCIStatus?: string;
+  parentPRUrl?: string;
 }
 
 /** Full AgentRun object. */

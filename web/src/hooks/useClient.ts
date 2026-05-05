@@ -9,24 +9,6 @@ import type { AgentRun, AgentRunEvent, AgentRunPhase, Backend, ModelTier, Reposi
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
-/**
- * ExtendedRunStatus extends the shared RunStatus type with fields that were
- * added to the Go AgentRunStatus struct after the TypeScript types were initially
- * generated. Using a local intersection avoids touching the shared package.
- *
- * TODO: remove this once the shared Go→TypeScript type generation is updated to
- * include these fields natively.
- */
-interface ExtendedRunStatus {
-  archived?: boolean;
-  totalCost?: string;
-  totalAdditions?: number;
-  totalDeletions?: number;
-  ciFixAttempts?: number;
-  lastCIStatus?: string;
-  parentPRUrl?: string;
-}
-
 const defaultClient = new AOTClient({
   baseUrl: API_BASE_URL,
   apiKey: API_KEY || undefined,
@@ -96,18 +78,13 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       verificationResult: r.status.verificationResult,
       debugActive: r.status.debugActive ?? false,
       prUrl: r.status.prUrl,
-      ...((): Pick<ExtendedRunStatus, "archived" | "totalCost" | "totalAdditions" | "totalDeletions" | "ciFixAttempts" | "lastCIStatus" | "parentPRUrl"> => {
-        const ext = r.status as ExtendedRunStatus;
-        return {
-          archived: ext.archived,
-          totalCost: ext.totalCost,
-          totalAdditions: ext.totalAdditions,
-          totalDeletions: ext.totalDeletions,
-          ciFixAttempts: ext.ciFixAttempts,
-          lastCIStatus: ext.lastCIStatus,
-          parentPRUrl: ext.parentPRUrl,
-        };
-      })(),
+      archived: r.status.archived,
+      totalCost: r.status.totalCost,
+      totalAdditions: r.status.totalAdditions,
+      totalDeletions: r.status.totalDeletions,
+      ciFixAttempts: r.status.ciFixAttempts,
+      lastCIStatus: r.status.lastCIStatus,
+      parentPRUrl: r.status.parentPRUrl,
     },
     createdAt: r.createdAt,
   };
