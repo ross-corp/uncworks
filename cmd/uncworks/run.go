@@ -21,6 +21,8 @@ func runRun(args []string) error {
 	project := fs.String("project", "", "Project name this run belongs to")
 	feature := fs.String("feature", "", "Feature/unit-of-work this run contributes to")
 	modelTier := fs.String("model-tier", "", "LLM model tier (e.g. deepseek-v3.2, default-cloud, premium)")
+	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
+	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
 	wait := fs.Bool("wait", false, "Wait for the run to complete; exit 0 on success, 1 on failure")
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
@@ -54,6 +56,8 @@ Flags:`)
 		Project:   *project,
 		Feature:   *feature,
 		ModelTier: *modelTier,
+		AutoPush:  *autoPush || *autoPR,
+		AutoPr:    *autoPR,
 	}
 
 	req := connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: spec})
