@@ -1116,3 +1116,29 @@ func mapWorkflowStateToProto(state aottemporal.WorkflowState) *apiv1.AgentRunSta
 		PrUrl:   state.PRUrl,
 	}
 }
+
+// envIntOrDefault reads an integer environment variable or returns a default.
+func envIntOrDefault(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			slog.Warn("invalid integer env var, using default", "key", key, "value", v, "default", def)
+			return def
+		}
+		return n
+	}
+	return def
+}
+
+// envFloatOrDefault reads a float environment variable or returns a default.
+func envFloatOrDefault(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			slog.Warn("invalid float env var, using default", "key", key, "value", v, "default", def)
+			return def
+		}
+		return f
+	}
+	return def
+}
