@@ -1221,16 +1221,13 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// TODO(security): ExecCommand runs arbitrary bash commands from the Temporal control plane
-	// with the full process environment (including OPENAI_API_KEY, GITHUB_TOKEN, etc.).
-	// The sidecar is intentionally a privileged executor inside the agent pod, but this means
-	// a compromised Temporal server or worker can exfiltrate secrets. Mitigations to consider:
-	// 1. Strip secret env vars (OPENAI_API_KEY, GITHUB_TOKEN) from cmd.Env here.
-	// 2. Run the sidecar under a restricted user without access to env-injected secrets.
-	// 3. Use network policies to restrict sidecar egress outside the cluster.
+	// ExecCommand runs arbitrary bash commands from the Temporal control plane.
+	// The sidecar is intentionally a privileged executor inside the agent pod.
+	// We strip known-sensitive env vars so a compromised worker cannot exfiltrate them.
+	// (Remaining mitigations: run sidecar as restricted user; apply egress NetworkPolicy.)
 	cmd := exec.CommandContext(cmdCtx, "bash", "-c", req.Msg.Command)
 	cmd.Dir = workDir
-	cmd.Env = os.Environ()
+	cmd.Env = execSafeEnv()
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -2220,4 +2217,32 @@ func extractToolCallSignature(line string) string {
 // for integration testing.
 func ExtractToolCallSignature(line string) string {
 	return extractToolCallSignature(line)
+}
+
+// execSafeEnv returns os.Environ() with known-sensitive variables stripped so
+// that ExecCommand cannot be used to exfiltrate secrets injected by the worker.
+func execSafeEnv() []string {
+	sensitive := map[string]bool{
+		"OPENAI_API_KEY":      true,
+		"ANTHROPIC_API_KEY":   true,
+		"LITELLM_MASTER_KEY":  true,
+		"LITELLM_API_KEY":     true,
+		"GITHUB_TOKEN":        true,
+		"GITHUB_PAT":          true,
+		"AOT_API_KEY":         true,
+		"AWS_ACCESS_KEY_ID":   true,
+		"AWS_SECRET_ACCESS_KEY": true,
+		"GOOGLE_API_KEY":      true,
+	}
+	var safe []string
+	for _, kv := range os.Environ() {
+		key := kv
+		if idx := strings.Index(kv, "="); idx >= 0 {
+			key = kv[:idx]
+		}
+		if !sensitive[key] {
+			safe = append(safe, kv)
+		}
+	}
+	return safe
 }
