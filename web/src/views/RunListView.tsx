@@ -353,11 +353,15 @@ export default function RunListView() {
   }
 
   // Build an empty-state message that distinguishes "no runs exist" from "filter matches nothing".
-  function emptyStateMessage(listEmpty: boolean): string {
-    if (!listEmpty) return "";
-    if (filter) return "No runs match filter";
-    if (statusFilter !== "all") return `No ${statusFilter} runs`;
-    return "No runs yet — press n to create one";
+  function emptyStateMessage(listEmpty: boolean): { title: string; description?: string; showCTA?: boolean } {
+    if (!listEmpty) return { title: "" };
+    if (filter) return { title: "No runs match filter", description: "Try adjusting your filters to see more results." };
+    if (statusFilter !== "all") return { title: `No ${statusFilter} runs`, description: "Try changing the status filter to see all runs." };
+    return { 
+      title: "No runs yet", 
+      description: "Submit your first run with `uncworks run --repo <url> --prompt <text>` or click the button below.",
+      showCTA: true
+    };
   }
 
   useEffect(() => {
