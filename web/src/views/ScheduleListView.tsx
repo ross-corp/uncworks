@@ -40,7 +40,7 @@ export default function ScheduleListView() {
   const fetchData = useCallback(async () => {
     try {
       const resp = await apiFetch("/api/v1/schedules");
-      if (resp.ok) setSchedules(await resp.json());
+      if (resp.ok) { const d = await resp.json(); setSchedules(Array.isArray(d) ? d : []); }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load schedules");
     } finally { setLoading(false); }

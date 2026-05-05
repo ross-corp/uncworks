@@ -50,6 +50,14 @@ export function ListServices() {
   return window['go']['main']['App']['ListServices']();
 }
 
+export function LogPath() {
+  return window['go']['main']['App']['LogPath']();
+}
+
+export function OpenLogInConsole() {
+  return window['go']['main']['App']['OpenLogInConsole']();
+}
+
 export function OpenService(arg1) {
   return window['go']['main']['App']['OpenService'](arg1);
 }

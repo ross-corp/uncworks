@@ -43,3 +43,20 @@ tasks:
       - rm -rf /Applications/UNCWORKS.app
       - cp -r cmd/uncworks-app/build/bin/UNCWORKS.app /Applications/UNCWORKS.app
       - echo "Installed to /Applications/UNCWORKS.app"
+
+  app:devtools:
+    desc: Build the native macOS app with devtools enabled (for Playwright CDP e2e)
+    cmds:
+      - |
+        if [ "$(uname)" != "Darwin" ]; then
+          echo "ERROR: macOS app can only be built on macOS"; exit 1
+        fi
+      - |
+        if ! command -v wails &>/dev/null; then
+          echo "ERROR: wails not found. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
+          exit 1
+        fi
+      - cd cmd/uncworks-app && wails build -clean -o UNCWORKS -devtools
+      - rm -rf /Applications/UNCWORKS.app
+      - cp -r cmd/uncworks-app/build/bin/UNCWORKS.app /Applications/UNCWORKS.app
+      - echo "Installed devtools build to /Applications/UNCWORKS.app"

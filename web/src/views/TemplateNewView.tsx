@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { apiFetch } from "../hooks/apiFetch";
 import { Button } from "../components/ui/button";
+import CustomSelect from "../components/CustomSelect";
 import { Input } from "../components/ui/input";
 
 interface ProjectSummary {
@@ -99,18 +100,12 @@ export default function TemplateNewView() {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">Project</label>
-            <select
+            <CustomSelect
               value={projectRef}
-              onChange={(e) => setProjectRef(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            >
-              <option value="">— none —</option>
-              {projects.map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.displayName || p.name}
-                </option>
-              ))}
-            </select>
+              onChange={setProjectRef}
+              options={[{ value: "", label: "— none —" }, ...projects.map((p) => ({ value: p.name, label: p.displayName || p.name }))]}
+              className="w-full text-sm"
+            />
           </div>
 
           <div className="space-y-1">

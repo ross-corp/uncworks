@@ -77,11 +77,49 @@ tasks:
     cmds:
       - go test -v ./test/bdd/... -count=1
 
+  ui:
+    desc: Run Vitest integration tests (React components, MSW, jsdom)
+    dir: web
+    cmds:
+      - npx vitest run --config vitest.config.ts
+
+  ui:watch:
+    desc: Run Vitest in watch mode
+    dir: web
+    cmds:
+      - npx vitest --config vitest.config.ts
+
+  e2e:app:
+    desc: Run Playwright e2e tests against the running UNCWORKS desktop app (requires build:app:devtools + open)
+    dir: web
+    cmds:
+      - |
+        if ! pgrep -x "UNCWORKS" > /dev/null 2>&1; then
+          echo "ERROR: UNCWORKS.app is not running."
+          echo "Build and launch first: task build:app:devtools && open /Applications/UNCWORKS.app"
+          exit 1
+        fi
+      - npx playwright test --config playwright-app.config.ts
+
   web:
     desc: Run Playwright E2E tests for web dashboard
     dir: web
     cmds:
       - npx playwright test
+
+  e2e:live:
+    desc: Run Playwright e2e against real cluster (auto port-forwards apiserver to :50055)
+    dir: ..
+    cmds:
+      - |
+        # Start port-forward if apiserver isn't already reachable
+        if ! curl -sf http://localhost:50055/healthz > /dev/null 2>&1; then
+          kubectl port-forward -n uncworks svc/uncworks-aot-apiserver 50055:50055 &
+          PF_PID=$!
+          echo "Started port-forward (PID $PF_PID)"
+          sleep 2
+        fi
+      - cd web && npx playwright test live-cluster --project chromium
 
   extension:
     desc: Run pi-aot-extension tests

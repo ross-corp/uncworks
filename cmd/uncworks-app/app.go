@@ -55,6 +55,10 @@ func (a *App) startup(ctx context.Context) {
 	}()
 	// Auto-start port-forwards for all cluster services.
 	go a.autoStartApiserverForward()
+	// Handle dock icon click: show window when no visible windows exist.
+	initDockHandler(a)
+	// Watch app.yaml for external changes and emit settings:changed to the frontend.
+	go a.watchSettings()
 	// Start local hot-reload watcher if channel == "local".
 	if s, err := loadAppSettings(); err == nil && s.UpdateChannel == "local" {
 		a.startLocalWatcher()
@@ -213,15 +217,23 @@ func (a *App) ClusterStatus() string {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "kubectl", "get", "pods",
 		"-n", ns, "--no-headers").Output()
-	if err != nil || strings.TrimSpace(string(out)) == "" {
+	if err != nil {
 		return "stopped"
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	for _, line := range lines {
+	return parseClusterStatus(string(out))
+}
+
+// parseClusterStatus parses raw `kubectl get pods --no-headers` output.
+// Returns "running" if all non-terminal pods are Running, "degraded" if any
+// are not, or "stopped" if the output is empty.
+func parseClusterStatus(out string) string {
+	if strings.TrimSpace(out) == "" {
+		return "stopped"
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		// Completed/Succeeded pods are not failures.
 		if strings.Contains(line, "Completed") || strings.Contains(line, "Succeeded") {
 			continue
 		}
@@ -291,7 +303,7 @@ func (a *App) countRunningJobs() int {
 	s, _ := loadAppSettings()
 	apiURL := s.APIServerURL
 	if apiURL == "" {
-		apiURL = "http://localhost:50055"
+		return -1
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -317,26 +329,33 @@ func (a *App) countRunningJobs() int {
 }
 
 // autoStartApiserverForward starts a port-forward for the apiserver if the
-// configured API server URL is the default localhost target and no forward is
-// already running. It retries with exponential backoff (1s→2s→4s…max 30s) so
-// that a cluster not yet ready at startup is picked up automatically.
+// configured API server URL is a localhost target (default or previously
+// assigned). It uses a dynamically allocated port from the configured range so
+// stale processes from a previous session can never block startup.
+// Retries with exponential backoff (1s→2s→4s…max 30s).
 func (a *App) autoStartApiserverForward() {
 	// Wait a moment for the cluster to be reachable.
 	time.Sleep(3 * time.Second)
 	s, _ := loadAppSettings()
-	// Only auto-start when using the default localhost URL (not a custom URL).
-	if s.APIServerURL != "" && s.APIServerURL != "http://localhost:50055" {
+	// Only auto-start when using a localhost URL (default or previously assigned).
+	// If the user pointed apiserverURL at a remote host, leave it alone.
+	if s.APIServerURL != "" && !strings.HasPrefix(s.APIServerURL, "http://localhost:") {
 		return
 	}
 	ns := s.Namespace
 	if ns == "" {
 		ns = "uncworks"
 	}
+	// Pick a free port once; reuse across retries so the persisted URL stays stable.
+	localPort := a.nextFreePort(s)
 	for attempt := 0; ; attempt++ {
 		if fwd, _ := a.pf.isForwarding("apiserver"); fwd {
 			return
 		}
-		if err := a.pf.start("apiserver", ns, 50055, 50055); err == nil {
+		if err := a.pf.start("apiserver", ns, localPort, 50055); err == nil {
+			// Persist the localhost URL so the proxy and health checks use it.
+			s.APIServerURL = fmt.Sprintf("http://localhost:%d", localPort)
+			_ = saveAppSettings(s)
 			return
 		}
 		// Cluster not ready yet; wait with backoff before retrying.
@@ -572,12 +591,22 @@ func (a *App) APIProxyMiddleware(next http.Handler) http.Handler {
 		s, _ := loadAppSettings()
 		target := s.APIServerURL
 		if target == "" {
-			target = "http://localhost:50055"
+			http.Error(w, "apiserver not configured", http.StatusServiceUnavailable)
+			return
 		}
 		u, err := url.Parse(target)
 		if err != nil {
 			http.Error(w, "invalid apiserver URL", http.StatusBadGateway)
 			return
+		}
+		// Inject LLM configuration from app settings so the in-cluster apiserver
+		// can use the user's configured provider (OpenRouter, etc.) without
+		// requiring a cluster redeploy whenever settings change.
+		if s.LiteLLMURL != "" {
+			r.Header.Set("X-LLM-Base-URL", s.LiteLLMURL)
+		}
+		if s.LLMAPIKey != "" {
+			r.Header.Set("X-LLM-API-Key", s.LLMAPIKey)
 		}
 		proxy := httputil.NewSingleHostReverseProxy(u)
 		r.Host = u.Host

@@ -66,7 +66,7 @@ export interface ConfigStatus {
 
 function isClusterLiteLLM(url: string | undefined): boolean {
   if (!url) return true;
-  return url === "http://litellm:4000" || url.startsWith("http://localhost:");
+  return url === "http://litellm:4000";
 }
 
 export function deriveConfigStatus(s: AppSettings): ConfigStatus {
@@ -138,6 +138,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [wails]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Real-time reload when app.yaml changes externally (file watcher → Wails event → DOM event).
+  useEffect(() => {
+    if (!wails) return;
+    const handler = () => reload();
+    window.addEventListener("uncworks:settings-changed", handler);
+    return () => window.removeEventListener("uncworks:settings-changed", handler);
+  }, [wails, reload]);
 
   const save = useCallback(async (s: AppSettings) => {
     if (wails) {

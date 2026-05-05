@@ -64,7 +64,7 @@ export default function ScheduleDetailView() {
       const resp = await apiFetch("/api/v1/runs");
       if (resp.ok) {
         const data: AgentRun[] = await resp.json();
-        const filtered = data.filter(
+        const filtered = (Array.isArray(data) ? data : []).filter(
           (r) =>
             (r.spec.tags && r.spec.tags.includes(`schedule:${name}`)) ||
             r.spec.feature === name

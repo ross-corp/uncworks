@@ -61,13 +61,18 @@ func (p *Proxy) RegisterRoutes(mux *http.ServeMux) {
 
 func (p *Proxy) proxyHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		// WebSocket requests need special handling —
 		// httputil.ReverseProxy does not support Upgrade: websocket.
 		if isWebSocketUpgrade(r) {
+			slog.Debug("bff: websocket proxy start", "path", r.URL.Path)
 			p.proxyWebSocket(w, r)
+			slog.Debug("bff: websocket proxy done", "path", r.URL.Path, "duration_ms", time.Since(start).Milliseconds())
 			return
 		}
+		slog.Debug("bff: proxy request", "method", r.Method, "path", r.URL.Path)
 		p.reverseProxy.ServeHTTP(w, r)
+		slog.Debug("bff: proxy response", "method", r.Method, "path", r.URL.Path, "duration_ms", time.Since(start).Milliseconds())
 	}
 }
 
@@ -92,6 +97,7 @@ func (p *Proxy) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Connect to backend.
 	backendConn, err := net.DialTimeout("tcp", backendHost, 10*time.Second)
 	if err != nil {
+		slog.Error("bff: websocket backend unreachable", "host", backendHost, "path", r.URL.Path, "error", err)
 		http.Error(w, "websocket proxy: backend unreachable", http.StatusBadGateway)
 		return
 	}

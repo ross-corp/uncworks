@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { isWails } from "../lib/wails-env";
 import { useThemeNew, type ColorMode } from "../hooks/useThemeNew";
 import { useSettings, type AppSettings } from "../hooks/useSettings";
-import SetupWizardModal, { GitHubAuthModal } from "../components/SetupWizard";
+import SetupWizardModal from "../components/SetupWizard";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const go = () => (window as any).go?.main?.App;
@@ -48,14 +48,12 @@ export default function SettingsView() {
   const [error, setError] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
-  const [showGitHubModal, setShowGitHubModal] = useState(false);
 
   // LiteLLM check state
   const [litellmChecking, setLitellmChecking] = useState(false);
   const [litellmResult, setLitellmResult] = useState<{ ok: boolean; models: string[]; error?: string } | null>(null);
 
   // GitHub auth state
-  const [ghUser, setGhUser] = useState<string | null>(null);
   const [ghLoading, setGhLoading] = useState(false);
   const [ghTestResult, setGhTestResult] = useState<{ ok: boolean; login?: string } | null>(null);
 
@@ -88,15 +86,7 @@ export default function SettingsView() {
     }
   }, [wails]);
 
-  const loadGitHubUser = useCallback(async () => {
-    if (!wails) return;
-    try {
-      const user = await go().GetGitHubUser();
-      setGhUser(user || null);
-    } catch { setGhUser(null); }
-  }, [wails]);
-
-  useEffect(() => { loadOperational(); loadGitHubUser(); }, [loadOperational, loadGitHubUser]);
+  useEffect(() => { loadOperational(); }, [loadOperational]);
 
   async function checkLiteLLM() {
     if (!wails) return;
@@ -119,19 +109,7 @@ export default function SettingsView() {
     try {
       const login = await go().GetGitHubUser();
       setGhTestResult({ ok: !!login, login: login || undefined });
-      if (login) setGhUser(login);
     } catch { setGhTestResult({ ok: false }); }
-    finally { setGhLoading(false); }
-  }
-
-  async function disconnectGitHub() {
-    if (!wails) return;
-    setGhLoading(true);
-    try {
-      await go().DisconnectGitHub();
-      await reloadGlobal();
-      setGhUser(null);
-    } catch (e: any) { setError(String(e)); }
     finally { setGhLoading(false); }
   }
 
@@ -190,10 +168,9 @@ export default function SettingsView() {
   return (
     // Outer shell fills the flex-col <main> from Layout; inner div scrolls
     <div className="flex h-full flex-col">
-      {showWizard && <SetupWizardModal onClose={() => { setShowWizard(false); reloadGlobal(); loadGitHubUser(); }} />}
-      {showGitHubModal && <GitHubAuthModal onClose={() => { setShowGitHubModal(false); reloadGlobal(); loadGitHubUser(); }} />}
+      {showWizard && <SetupWizardModal onClose={() => { setShowWizard(false); reloadGlobal(); }} />}
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-none">
-      <div className="px-8 py-8 max-w-2xl">
+      <div className="px-10 py-8 w-full">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-base font-semibold tracking-tight">Settings</h1>
           {wails && (
@@ -272,38 +249,6 @@ export default function SettingsView() {
 
         {/* GitHub */}
         <Section id="section-github" title="GitHub">
-          {configStatus.hasGitHubOAuth ? (
-            <Field label="GitHub account" status="ok" statusLabel="connected">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-mono">{ghUser ? `@${ghUser}` : "authenticated"}</span>
-                <button
-                  onClick={disconnectGitHub}
-                  disabled={ghLoading}
-                  className="text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                >
-                  {ghLoading ? "Disconnecting…" : "Disconnect"}
-                </button>
-              </div>
-            </Field>
-          ) : (
-            <Field
-              label="GitHub OAuth"
-              hint="Connect via GitHub device flow to enable private repo access and PR creation"
-              status="optional"
-              statusLabel="not connected"
-            >
-              {wails ? (
-                <button
-                  onClick={() => setShowGitHubModal(true)}
-                  className="px-3 py-1.5 rounded-md border text-sm hover:bg-accent transition-colors"
-                >
-                  Connect GitHub
-                </button>
-              ) : (
-                <span className="text-xs text-muted-foreground">Available in the desktop app.</span>
-              )}
-            </Field>
-          )}
           <Field
             id="field-github-token"
             label="GitHub token"
@@ -525,7 +470,7 @@ export default function SettingsView() {
                   // Hide litellm when using an external model serving endpoint
                   if (svc.name === "litellm") {
                     const url = local.litellmURL;
-                    const isCluster = !url || url === "http://litellm:4000" || url.startsWith("http://localhost:");
+                    const isCluster = !url || url === "http://litellm:4000";
                     return isCluster;
                   }
                   return true;

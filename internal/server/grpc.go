@@ -73,6 +73,13 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("generate name: %w", err))
 	}
 
+	slog.Debug("apiserver: CreateAgentRun",
+		"run_id", name,
+		"project", req.Msg.Spec.Project,
+		"feature", req.Msg.Spec.Feature,
+		"orchestration_mode", req.Msg.Spec.OrchestrationMode,
+	)
+
 	// Generate a human-readable display name from the prompt via LLM.
 	displayName := s.generateDisplayName(ctx, req.Msg.Spec.Prompt)
 
@@ -110,9 +117,11 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 	crd.Labels = labels
 
 	if err := s.K8sClient.Create(ctx, crd); err != nil {
+		slog.Error("apiserver: failed to create AgentRun CRD", "run_id", name, "error", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create agentrun CRD: %w", err))
 	}
 
+	slog.Info("apiserver: AgentRun created", "run_id", name, "display_name", displayName, "namespace", s.Namespace)
 	return connect.NewResponse(&apiv1.CreateAgentRunResponse{
 		AgentRun: crdToProto(crd),
 	}), nil
@@ -659,7 +668,8 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 	llmCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	url := strings.TrimRight(s.LiteLLMBaseURL, "/") + "/v1/chat/completions"
+	llmBase := strings.TrimSuffix(strings.TrimRight(s.LiteLLMBaseURL, "/"), "/v1")
+	url := llmBase + "/v1/chat/completions"
 	httpReq, err := http.NewRequestWithContext(llmCtx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		slog.Warn("failed to create display name request", slog.Any("error", err))

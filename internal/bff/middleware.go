@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -134,6 +135,7 @@ func RateLimitMiddleware(reqPerSec int) Middleware {
 
 			if bucket.tokens < 1 {
 				bucket.mu.Unlock()
+				slog.Warn("bff: rate limit exceeded", "ip", ip, "path", r.URL.Path)
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}

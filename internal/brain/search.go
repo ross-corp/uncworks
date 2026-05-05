@@ -2,6 +2,7 @@ package brain
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 )
@@ -50,6 +51,9 @@ func (s *Searcher) Search(ctx context.Context, q SearchQuery) ([]SearchResult, e
 	}
 	if q.Limit > 100 {
 		q.Limit = 100
+	}
+	if q.SourceFilter != "" && q.SourceFilter != "code" && q.SourceFilter != "trace" {
+		return nil, fmt.Errorf("invalid SourceFilter %q: must be empty, \"code\", or \"trace\"", q.SourceFilter)
 	}
 
 	var results []SearchResult

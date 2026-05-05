@@ -42,7 +42,7 @@ export default function ProjectListView() {
       const resp = await apiFetch("/api/v1/projects");
       if (resp.ok) {
         const data = await resp.json();
-        setProjects(data);
+        setProjects(Array.isArray(data) ? data : []);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load projects");
