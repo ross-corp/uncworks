@@ -219,3 +219,8 @@ func itoa(n int) string {
 	}
 	return string(buf[pos:])
 }
+
+// Config returns the rate limiter configuration.
+func (rl *RateLimiter) Config() RateLimiterConfig {
+	return rl.cfg
+}
