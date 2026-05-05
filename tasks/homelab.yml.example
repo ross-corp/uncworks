@@ -1,11 +1,13 @@
-# tasks/homelab.yml — Deploy UNCWORKS to the homelab k0s cluster (vorgossos, 192.168.50.37).
+# tasks/homelab.yml.example — Template for deploying UNCWORKS to a homelab k0s cluster.
+# Copy to tasks/homelab.yml (gitignored) and fill in your values.
+#
 # Images are built on the node (Docker) and imported into k0s containerd with the CRI
 # managed label so they survive the containerd GC and are visible to the kubelet.
 #
 # Prerequisites:
-#   - SSH access to vorgossos (ssh vorgossos)
+#   - SSH access to the cluster node (configured in ~/.ssh/config)
 #   - Node has Docker installed
-#   - k0s running on the node at /run/k0s/containerd.sock
+#   - k0s running at /run/k0s/containerd.sock on the node
 #
 # Usage:
 #   task homelab:deploy         # full deploy (sync, build, import, helm upgrade)
@@ -15,7 +17,8 @@
 version: "3"
 
 vars:
-  NODE: '{{.NODE | default "vorgossos"}}'
+  # SSH hostname or alias for your cluster node (required — no default)
+  NODE: "your-node-hostname"
   NAMESPACE: '{{.NAMESPACE | default "uncworks"}}'
   TAG: '{{.TAG | default "homelab"}}'
   K0S_CTR: "sudo ctr --address /run/k0s/containerd.sock -n k8s.io"
@@ -140,6 +143,9 @@ tasks:
           echo ''
           echo '=== Services ==='
           kubectl get svc -n {{.NAMESPACE}}
+          echo ''
+          echo '=== Ingresses ==='
+          kubectl get ingress -n {{.NAMESPACE}} 2>/dev/null || true
           echo ''
           echo '=== Node disk ==='
           df -h / | tail -1

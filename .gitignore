@@ -125,3 +125,10 @@ cmd/uncworks-app/build/bin/
 *.port
 uncworks-app
 cmd/uncworks-app/build/bin/
+
+# Environment-specific Helm overrides — copy values.*.yaml.example to create your own.
+# Never commit cluster-specific addresses, ports, or node names.
+deploy/helm/values.*.yaml
+
+# Environment-specific deploy scripts — copy tasks/homelab.yml.example to create your own.
+tasks/homelab.yml
