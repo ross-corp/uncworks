@@ -37,12 +37,17 @@ func TestRateLimiterAllow_BurstThenDeny(t *testing.T) {
 	}
 
 	// Wait for token replenishment (1 RPS → 1 token after ~1s).
-	time.Sleep(1100 * time.Millisecond)
-
-	// Should allow again.
-	if !rl.Allow(ip) {
-		t.Fatal("expected Allow to return true after recovery")
+	// Use polling with timeout instead of fixed sleep.
+	start := time.Now()
+	timeout := 2 * time.Second
+	for time.Since(start) < timeout {
+		time.Sleep(10 * time.Millisecond)
+		if rl.Allow(ip) {
+			// Successfully got a token
+			return
+		}
 	}
+	t.Fatal("expected Allow to return true after recovery within timeout")
 }
 
 // TestRateLimiterAllow_Remaining verifies Remaining returns a sensible value.

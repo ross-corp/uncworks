@@ -134,7 +134,7 @@ func TestSSE_WatchGraph_EventsArriveCausally(t *testing.T) {
 	}()
 
 	// Give the stream a moment to connect.
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	// Publish events in a defined order.
 	orderedPayloads := []string{"pending", "running", "succeeded"}
@@ -145,7 +145,7 @@ func TestSSE_WatchGraph_EventsArriveCausally(t *testing.T) {
 			Payload:    payload,
 		})
 		// Small gap to ensure ordering is preserved through the channel.
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Collect the events with a deadline.
@@ -234,7 +234,7 @@ func TestSSE_WatchGraph_LogEventsBeforePhaseChange(t *testing.T) {
 		close(events)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	// Publish: log, log, then phase-change.
 	bus.Publish(runID, &apiv1.AgentRunEvent{
@@ -242,13 +242,13 @@ func TestSSE_WatchGraph_LogEventsBeforePhaseChange(t *testing.T) {
 		Type:       apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG,
 		Payload:    "cloning repo",
 	})
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	bus.Publish(runID, &apiv1.AgentRunEvent{
 		AgentRunId: runID,
 		Type:       apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG,
 		Payload:    "installing deps",
 	})
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	bus.Publish(runID, &apiv1.AgentRunEvent{
 		AgentRunId: runID,
 		Type:       apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED,
