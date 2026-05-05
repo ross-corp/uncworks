@@ -102,6 +102,8 @@ spec:
             readOnlyRootFilesystem: false  # nginx needs to write to /tmp and /var/cache/nginx
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx/conf.d/default.conf
