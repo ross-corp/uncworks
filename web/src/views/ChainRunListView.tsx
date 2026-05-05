@@ -92,8 +92,11 @@ export default function ChainRunListView() {
         {!loading && chainRuns.map((cr) => (
           <div
             key={cr.metadata.name}
+            role="button"
+            tabIndex={0}
             className="flex items-center gap-3 px-4 py-2.5 border-b border-border/40 cursor-pointer hover:bg-muted/30 transition-colors"
             onClick={() => navigate(`/chainrun/${cr.metadata.name}`)}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && navigate(`/chainrun/${cr.metadata.name}`)}
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
