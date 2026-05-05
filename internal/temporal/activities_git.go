@@ -59,6 +59,29 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		return nil, fmt.Errorf("create branch %s: %w", input.BranchName, err)
 	}
 
+	// Squash checkpoint commits into one commit before push
+	// Check if HEAD is ahead of origin/main (has commits to squash)
+	logOut, logErr := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+		"git log --oneline origin/main..HEAD")
+	if logErr == nil && strings.TrimSpace(logOut) != "" {
+		// There are commits to squash
+		// Soft reset to merge base, keeping changes staged
+		if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+			"git reset --soft $(git merge-base HEAD origin/main)"); err != nil {
+			return nil, fmt.Errorf("git reset --soft for squash: %w", err)
+		}
+		// Check if there are staged changes after reset
+		statusOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+			"git status --porcelain")
+		if strings.TrimSpace(statusOut) != "" {
+			// Commit the squashed changes
+			commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
+			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
+				return nil, fmt.Errorf("git commit after squash: %w", err)
+			}
+		}
+	}
+
 	// Stage and commit any remaining unstaged changes
 	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
 		"git add -A"); err != nil {
