@@ -93,6 +93,8 @@ spec:
             runAsUser: 65534
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - name: health
               containerPort: 8091
