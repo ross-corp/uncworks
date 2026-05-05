@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"expvar"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
