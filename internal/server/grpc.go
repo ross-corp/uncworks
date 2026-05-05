@@ -137,6 +137,9 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 }
 
 func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Request[apiv1.GetAgentRunRequest]) (*connect.Response[apiv1.AgentRun], error) {
+	if err := validateRunID(req.Msg.Id); err != nil {
+		return nil, err
+	}
 	crd := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: s.Namespace,
