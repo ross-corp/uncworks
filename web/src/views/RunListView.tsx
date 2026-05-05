@@ -693,14 +693,10 @@ export default function RunListView() {
           <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
         )}
         {!loading && viewMode === "unified" && unifiedRuns.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            {emptyStateMessage(true)}
-          </div>
+          <EmptyState message={emptyStateMessage(true)} hasFilters={hasActiveFilter} />
         )}
         {!loading && viewMode !== "unified" && filtered.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            {emptyStateMessage(true)}
-          </div>
+          <EmptyState message={emptyStateMessage(true)} hasFilters={hasActiveFilter} />
         )}
 
         {viewMode === "unified"
