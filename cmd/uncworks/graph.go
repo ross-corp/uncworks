@@ -39,32 +39,27 @@ func runGraph(args []string) error {
 		return fmt.Errorf("%s", humanizeErr(err))
 	}
 
-	graph := resp.Msg
-	printGraph(id, graph)
+	printGraph(id, resp.Msg)
 	return nil
 }
 
 // printGraph renders the RunGraph as an ASCII tree.
-func printGraph(rootID string, graph *apiv1.RunGraph) {
-	// Build a node map by name and a parent->children adjacency list.
+func printGraph(_ string, graph *apiv1.RunGraph) {
 	nodeByName := make(map[string]*apiv1.RunGraphNode, len(graph.GetNodes()))
 	for _, n := range graph.GetNodes() {
 		nodeByName[n.GetName()] = n
 	}
 
-	children := make(map[string][]string)
+	kids := make(map[string][]string)
 	for _, e := range graph.GetEdges() {
-		children[e.GetParent()] = append(children[e.GetParent()], e.GetChild())
+		kids[e.GetParent()] = append(kids[e.GetParent()], e.GetChild())
 	}
 
-	// Find the root node: the node whose name matches rootID or the first node
-	// with no parent.
 	parentSet := make(map[string]bool)
 	for _, e := range graph.GetEdges() {
 		parentSet[e.GetChild()] = true
 	}
 
-	// Collect root nodes (no incoming edges).
 	var roots []string
 	for _, n := range graph.GetNodes() {
 		if !parentSet[n.GetName()] {
@@ -76,44 +71,36 @@ func printGraph(rootID string, graph *apiv1.RunGraph) {
 	}
 
 	for _, root := range roots {
-		printNode(root, "", true, nodeByName, children)
+		fmt.Printf("▶ %s\n", graphNodeLabel(root, nodeByName))
+		graphPrintChildren(root, "  ", nodeByName, kids)
 	}
 }
 
-func printNode(name, prefix string, isRoot bool, nodes map[string]*apiv1.RunGraphNode, children map[string][]string) {
-	node := nodes[name]
-	phase := "?"
-	role := ""
-	if node != nil {
-		phase = phaseLabel(node.GetPhase())
-		role = node.GetRole()
-	}
-
-	label := name
-	if role != "" {
-		label = fmt.Sprintf("%s (%s)", name, role)
-	}
-
-	if isRoot {
-		fmt.Printf("▶ %s [%s]\n", label, phase)
-	} else {
-		fmt.Printf("%s%s [%s]\n", prefix, label, phase)
-	}
-
-	kids := children[name]
-	for i, child := range kids {
-		isLast := i == len(kids)-1
+// graphPrintChildren prints all children of parent using box-drawing connectors.
+// indent is the prefix for each child's connector line.
+func graphPrintChildren(parent, indent string, nodes map[string]*apiv1.RunGraphNode, kids map[string][]string) {
+	children := kids[parent]
+	for i, child := range children {
+		isLast := i == len(children)-1
 		connector := "├─ "
-		childPrefix := prefix + "│  "
+		childIndent := indent + "│  "
 		if isLast {
 			connector = "└─ "
-			childPrefix = prefix + "   "
+			childIndent = indent + "   "
 		}
-		if isRoot {
-			connector = "  " + connector
-			childPrefix = "  " + childPrefix
-		}
-		fmt.Printf("%s", connector)
-		printNode(child, childPrefix, false, nodes, children)
+		fmt.Printf("%s%s%s\n", indent, connector, graphNodeLabel(child, nodes))
+		graphPrintChildren(child, childIndent, nodes, kids)
 	}
+}
+
+func graphNodeLabel(name string, nodes map[string]*apiv1.RunGraphNode) string {
+	node := nodes[name]
+	if node == nil {
+		return name + " [?]"
+	}
+	phase := phaseLabel(node.GetPhase())
+	if role := node.GetRole(); role != "" {
+		return fmt.Sprintf("%s (%s) [%s]", name, role, phase)
+	}
+	return fmt.Sprintf("%s [%s]", name, phase)
 }
