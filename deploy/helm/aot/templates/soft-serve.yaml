@@ -35,6 +35,9 @@ spec:
         app.kubernetes.io/name: soft-serve
         app.kubernetes.io/part-of: aot
     spec:
+      securityContext:
+        runAsNonRoot: false  # soft-serve image runs as root
+        runAsUser: 0
       containers:
         - name: soft-serve
           image: {{ .Values.softServe.image | default "charmcli/soft-serve:latest" }}
@@ -79,8 +82,11 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false  # soft-serve writes to /data (PVC) and /tmp
             runAsNonRoot: false  # TODO(helm): upstream image runs as root; switch to non-root when image supports it
+            runAsUser: 0
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
       volumes:
         - name: data
           persistentVolumeClaim:
