@@ -54,6 +54,7 @@ const PHASE_STYLE: Record<string, React.CSSProperties> = {
   running: { border: "2px solid #3b82f6", background: "#eff6ff", color: "#1d4ed8" },
   succeeded: { border: "2px solid #22c55e", background: "#f0fdf4", color: "#15803d" },
   failed: { border: "2px solid #ef4444", background: "#fef2f2", color: "#b91c1c" },
+  cancelled: { border: "2px solid #ef4444", background: "#fef2f2", color: "#b91c1c" },
   pending: { border: "2px solid #9ca3af", background: "#f9fafb", color: "#6b7280" },
   skipped: { border: "2px solid #eab308", background: "#fefce8", color: "#a16207" },
 };
