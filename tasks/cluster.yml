@@ -69,7 +69,7 @@ tasks:
     desc: Tail logs from all UNCWORKS pods
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
-      - kubectl logs -n {{.NAMESPACE}} -l app.kubernetes.io/instance=uncworks --prefix --follow {{.CLI_ARGS}}
+      - kubectl logs -n {{.CLUSTER_NAMESPACE}} -l app.kubernetes.io/instance=uncworks --prefix --follow {{.CLI_ARGS}}
 
   forward:
     desc: Port-forward the apiserver to localhost:50055
