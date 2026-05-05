@@ -129,14 +129,17 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		litellmURL = "http://litellm:4000"
 	}
 	
-	// Create rate limiter for CreateAgentRun: 10 requests per minute per IP (0.1667 RPS)
+	// Create rate limiter for CreateAgentRun: configurable via env, default 10 requests per minute per IP (0.1667 RPS)
 	// Using burst of 2 to allow some small burst capacity
 	trustProxy := os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true"
+	rps := envFloatOrDefault("RATE_LIMIT_CREATE_AGENT_RUN_RPS", 0.1667) // 10 per minute
+	burst := envIntOrDefault("RATE_LIMIT_CREATE_AGENT_RUN_BURST", 2)
+	ttl := envIntOrDefault("RATE_LIMIT_CREATE_AGENT_RUN_TTL_MINUTES", 10)
 	createAgentRunLimiter := NewRateLimiter(RateLimiterConfig{
 		Enabled:    true,
-		RPS:        0.1667, // 10 per minute
-		Burst:      2,
-		TTLMinutes: 10,
+		RPS:        rps,
+		Burst:      burst,
+		TTLMinutes: ttl,
 		TrustProxy: trustProxy,
 	})
 	
