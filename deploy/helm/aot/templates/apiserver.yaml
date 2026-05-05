@@ -19,6 +19,25 @@ spec:
         app.kubernetes.io/component: apiserver
     spec:
       serviceAccountName: {{ include "aot.fullname" . }}
+      {{- if and .Values.apiserver.pvcDataHostPath .Values.apiserver.pvcDataRunAsRoot }}
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+      {{- else }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      {{- end }}
+      {{- if gt .Values.apiserver.replicas 1 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "aot.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: apiserver
+      {{- end }}
       containers:
         - name: apiserver
           image: {{ include "aot.controlplaneImage" . }}
@@ -151,10 +170,12 @@ spec:
             runAsUser: 0
             {{- else }}
             runAsNonRoot: true
-            runAsUser: 65532
+            runAsUser: 65534
             {{- end }}
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: tmp
               mountPath: /tmp
