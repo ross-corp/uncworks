@@ -331,7 +331,6 @@ export default function SettingsView() {
               value={local.defaultManageModel || ""}
               onChange={e => set("defaultManageModel", e.target.value)}
               placeholder="default"
-              disabled={!wails}
             />
           </Field>
           <Field label="Implement phase" hint="Model used for the implement/coding agent">
@@ -339,7 +338,6 @@ export default function SettingsView() {
               value={local.defaultImplementModel || ""}
               onChange={e => set("defaultImplementModel", e.target.value)}
               placeholder="default"
-              disabled={!wails}
             />
           </Field>
           <Field label="Copilot" hint="Model used for the copilot chat panel (⌘K). Leave blank to use the endpoint default.">
@@ -347,7 +345,6 @@ export default function SettingsView() {
               value={local.copilotModel ?? ""}
               onChange={e => set("copilotModel", e.target.value)}
               placeholder="default"
-              disabled={!wails}
             />
           </Field>
         </Section>
