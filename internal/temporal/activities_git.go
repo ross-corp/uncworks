@@ -59,22 +59,53 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		return nil, fmt.Errorf("create branch %s: %w", input.BranchName, err)
 	}
 
-	// Stage and commit any remaining unstaged changes
-	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
-		"git add -A"); err != nil {
-		return nil, fmt.Errorf("git add: %w", err)
+	// Check if HEAD is ahead of origin/main (has commits to squash)
+	logOut, logErr := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+		"git log --oneline origin/main..HEAD")
+	var hasSquashed bool
+	if logErr == nil && strings.TrimSpace(logOut) != "" {
+		// There are commits to squash
+		// Soft reset to merge base, keeping changes staged
+		if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+			"git reset --soft $(git merge-base HEAD origin/main)"); err != nil {
+			return nil, fmt.Errorf("git reset --soft for squash: %w", err)
+		}
+		// Check if there are any changes (staged or unstaged) after reset
+		statusOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+			"git status --porcelain")
+		if strings.TrimSpace(statusOut) != "" {
+			// Stage any remaining unstaged changes
+			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+				"git add -A"); err != nil {
+				return nil, fmt.Errorf("git add after squash: %w", err)
+			}
+			// Commit the squashed changes
+			commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
+			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
+				return nil, fmt.Errorf("git commit after squash: %w", err)
+			}
+			hasSquashed = true
+		}
+		// If status is empty after reset, tree is clean, no commit needed
 	}
 
-	statusOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
-		"git status --porcelain")
-	if strings.TrimSpace(statusOut) != "" {
-		// There are unstaged changes — commit them
-		commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
-		if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
-			return nil, fmt.Errorf("git commit: %w", err)
+	// If we didn't squash, stage and commit any unstaged changes
+	if !hasSquashed {
+		if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+			"git add -A"); err != nil {
+			return nil, fmt.Errorf("git add: %w", err)
+		}
+
+		statusOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+			"git status --porcelain")
+		if strings.TrimSpace(statusOut) != "" {
+			// There are unstaged changes — commit them
+			commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
+			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
+				return nil, fmt.Errorf("git commit: %w", err)
+			}
 		}
 	}
-	// Even if no unstaged changes, the branch may have checkpoint commits to push
 
 	// Get commit SHA
 	sha, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,

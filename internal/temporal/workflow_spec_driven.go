@@ -833,7 +833,17 @@ func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *Workf
 	}
 	prCtx := workflow.WithActivityOptions(ctx, prOpts)
 
-	// Build enhanced PR body with proposal content, diff stats, and pipeline metadata
+	// Build enhanced PR body with proposal content or prompt summary, diff stats, and pipeline metadata
+	summary := pushOutput.ProposalContent
+	if summary == "" {
+		// Use first 300 chars of prompt as summary
+		if len(input.Prompt) > 300 {
+			summary = input.Prompt[:300] + "..."
+		} else {
+			summary = input.Prompt
+		}
+	}
+	runURL := fmt.Sprintf("https://uncworks.stork-eel.ts.net/run/%s", input.AgentRunName)
 	prBody := fmt.Sprintf(`## Summary
 
 %s
@@ -849,14 +859,19 @@ func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *Workf
 - **Model:** %s
 - **Attempt:** %d
 
+## Run
+
+View the full agent run: %s
+
 ---
 *This PR was automatically created by the UNCWORKS spec-driven pipeline.*`,
-		pushOutput.ProposalContent,
+		summary,
 		pushOutput.DiffStat,
 		input.AgentRunName,
 		changeName,
 		input.ModelTier,
 		attempt,
+		runURL,
 	)
 
 	var prOutput CreatePROutput
