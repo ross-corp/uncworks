@@ -165,6 +165,7 @@ const (
 	ActivityCreateAgentDeployment = "CreateAgentDeployment"
 	ActivityScaleDownDeployment   = "ScaleDownDeployment"
 	ActivityArchiveAndCleanup     = "ArchiveAndCleanup"
+	ActivityCollectAgentLogs      = "CollectAgentLogs"
 
 	// Knowledge system activities
 	ActivityPersistRunData = "PersistRunData"
@@ -302,6 +303,20 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			}
 		}
 		if deploymentName != "" {
+			// Collect agent logs before scale-down so chain contextFrom steps get real output.
+			logCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
+				StartToCloseTimeout: 60 * time.Second,
+				RetryPolicy: &temporal.RetryPolicy{
+					MaximumAttempts: 2,
+				},
+			})
+			if err := workflow.ExecuteActivity(logCtx, ActivityCollectAgentLogs, CollectAgentLogsInput{
+				AgentRunName: input.AgentRunName,
+				Namespace:    input.Namespace,
+			}).Get(logCtx, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Failed to collect agent logs", "error", err)
+			}
+
 			// Scale deployment to 0 — PVC persists for later access/debug
 			if err := workflow.ExecuteActivity(cleanupCtx, ActivityScaleDownDeployment, ScaleDownDeploymentInput{
 				DeploymentName: deploymentName,

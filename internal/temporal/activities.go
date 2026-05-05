@@ -2,9 +2,11 @@
 package temporal
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,12 +22,16 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"connectrpc.com/connect"
 
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
+	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/litellm"
 )
@@ -72,6 +78,9 @@ type Activities struct {
 	// GitHubTokenSecretName is the k8s Secret name containing the GitHub token.
 	// When set, the init container gets GITHUB_TOKEN from this Secret.
 	GitHubTokenSecretName string
+	// RESTConfig is the Kubernetes REST config used for streaming pod logs.
+	// When nil, log collection is skipped.
+	RESTConfig *rest.Config
 }
 
 // WaitForHydrationInput contains the parameters for waiting on hydration.
@@ -684,6 +693,75 @@ func (a *Activities) ScaleDownDeployment(ctx context.Context, input ScaleDownDep
 	if err := a.K8sClient.Update(ctx, &deployment); err != nil {
 		return fmt.Errorf("scale down deployment: %w", err)
 	}
+	return nil
+}
+
+// CollectAgentLogsInput contains parameters for collecting and persisting agent pod logs.
+type CollectAgentLogsInput struct {
+	AgentRunName string
+	Namespace    string
+}
+
+// CollectAgentLogs streams the agent container logs and persists them to the AgentRun
+// status.logOutput field. Must be called before ScaleDownDeployment while the pod exists.
+func (a *Activities) CollectAgentLogs(ctx context.Context, input CollectAgentLogsInput) error {
+	if a.RESTConfig == nil {
+		return nil // skip in test environments without a real cluster
+	}
+
+	clientset, err := kubernetes.NewForConfig(a.RESTConfig)
+	if err != nil {
+		slog.Warn("collect logs: failed to create clientset", "agentRun", input.AgentRunName, "err", err)
+		return nil // non-fatal
+	}
+
+	// Find pods by the agentrun label used in CreateAgentDeployment.
+	podList, err := clientset.CoreV1().Pods(input.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("aot.uncworks.io/agentrun=%s", input.AgentRunName),
+		Limit:         1,
+	})
+	if err != nil || len(podList.Items) == 0 {
+		slog.Warn("collect logs: no pod found", "agentRun", input.AgentRunName)
+		return nil
+	}
+	pod := podList.Items[0]
+
+	// Collect from the "agent" container (the Claude Code process).
+	var tailLines int64 = 500
+	req := clientset.CoreV1().Pods(input.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+		Container: "agent",
+		TailLines: &tailLines,
+	})
+	stream, err := req.Stream(ctx)
+	if err != nil {
+		slog.Warn("collect logs: stream failed", "agentRun", input.AgentRunName, "err", err)
+		return nil
+	}
+	defer stream.Close()
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, stream); err != nil {
+		slog.Warn("collect logs: read failed", "agentRun", input.AgentRunName, "err", err)
+		return nil
+	}
+
+	logOutput := buf.String()
+	const maxLogBytes = 32 * 1024
+	if len(logOutput) > maxLogBytes {
+		logOutput = logOutput[len(logOutput)-maxLogBytes:]
+	}
+
+	// Patch the AgentRun CRD status.logOutput using a merge patch.
+	patch := []byte(fmt.Sprintf(`{"status":{"logOutput":%q}}`, logOutput))
+	crd := &aotv1alpha1.AgentRun{}
+	crd.Name = input.AgentRunName
+	crd.Namespace = input.Namespace
+	if err := a.K8sClient.Status().Patch(ctx, crd, client.RawPatch(types.MergePatchType, patch)); err != nil {
+		slog.Warn("collect logs: patch failed", "agentRun", input.AgentRunName, "err", err)
+		return nil
+	}
+
+	slog.Info("collect logs: persisted agent output", "agentRun", input.AgentRunName, "bytes", len(logOutput))
 	return nil
 }
 

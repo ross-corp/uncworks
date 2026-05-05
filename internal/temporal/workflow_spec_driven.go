@@ -231,6 +231,17 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			}).Get(cleanupCtx, nil)
 		}
 		if deploymentName != "" {
+			logCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
+				StartToCloseTimeout: 60 * time.Second,
+				RetryPolicy: &temporal.RetryPolicy{
+					MaximumAttempts: 2,
+				},
+			})
+			_ = workflow.ExecuteActivity(logCtx, ActivityCollectAgentLogs, CollectAgentLogsInput{
+				AgentRunName: input.AgentRunName,
+				Namespace:    input.Namespace,
+			}).Get(logCtx, nil)
+
 			_ = workflow.ExecuteActivity(cleanupCtx, ActivityScaleDownDeployment, ScaleDownDeploymentInput{
 				DeploymentName: deploymentName,
 				Namespace:      input.Namespace,
