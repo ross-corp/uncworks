@@ -91,7 +91,8 @@ func runRunsList(args []string) error {
 	
 	if *phase != "" {
 		var phaseEnum apiv1.AgentRunPhase
-		switch *phase {
+		phaseUpper := strings.ToUpper(*phase)
+		switch phaseUpper {
 		case "RUNNING":
 			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
 		case "DONE":
@@ -105,24 +106,7 @@ func runRunsList(args []string) error {
 		case "CANCELLED":
 			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
 		default:
-			// Try case-insensitive match
-			phaseUpper := strings.ToUpper(*phase)
-			switch phaseUpper {
-			case "RUNNING":
-				phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
-			case "DONE":
-				phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
-			case "FAILED":
-				phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
-			case "PENDING":
-				phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
-			case "WAITING":
-				phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
-			case "CANCELLED":
-				phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
-			default:
-				return fmt.Errorf("invalid phase value %q, must be one of: RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED", *phase)
-			}
+			return fmt.Errorf("invalid phase value %q, must be one of: RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED", *phase)
 		}
 		listReq.PhaseFilter = phaseEnum
 	}
