@@ -75,7 +75,7 @@ tasks:
     desc: Port-forward the apiserver to localhost:50055
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
-      - kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.NAMESPACE}}
+      - kubectl port-forward svc/uncworks-apiserver 50055:50055 -n {{.CLUSTER_NAMESPACE}}
 
   temporal:dev:
     desc: Start Temporal dev server (SQLite, no external deps)
