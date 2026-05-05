@@ -18,8 +18,7 @@ export interface HealthReport {
 
 const EMPTY: HealthReport = { overall: "unknown", components: [] };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const go = () => (window as any).go?.main?.App;
+const go = () => window.go!.main!.App!;
 
 export function useHealth(intervalMs = 15_000) {
   const wails = isWails();
