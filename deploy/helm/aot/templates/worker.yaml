@@ -82,15 +82,20 @@ spec:
             runAsUser: 65532
             capabilities:
               drop: ["ALL"]
+          ports:
+            - name: health
+              containerPort: 8091
           livenessProbe:
-            exec:
-              command: ["/bin/sh", "-c", "pgrep -f temporal-worker"]
+            httpGet:
+              path: /healthz
+              port: health
             initialDelaySeconds: 10
             periodSeconds: 30
             failureThreshold: 3
           readinessProbe:
-            exec:
-              command: ["/bin/sh", "-c", "pgrep -f temporal-worker"]
+            httpGet:
+              path: /readyz
+              port: health
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
