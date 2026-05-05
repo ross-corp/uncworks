@@ -452,6 +452,9 @@ func (s *AOTServiceHandler) GetRunGraph(ctx context.Context, req *connect.Reques
 }
 
 func (s *AOTServiceHandler) SendHumanInput(ctx context.Context, req *connect.Request[apiv1.SendHumanInputRequest]) (*connect.Response[apiv1.SendHumanInputResponse], error) {
+	if err := validateRunID(req.Msg.AgentRunId); err != nil {
+		return nil, err
+	}
 	crd := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: s.Namespace,
