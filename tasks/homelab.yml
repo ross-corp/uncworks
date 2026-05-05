@@ -1,0 +1,149 @@
+# tasks/homelab.yml — Deploy UNCWORKS to the homelab k0s cluster (vorgossos, 192.168.50.37).
+# Images are built on the node (Docker) and imported into k0s containerd with the CRI
+# managed label so they survive the containerd GC and are visible to the kubelet.
+#
+# Prerequisites:
+#   - SSH access to vorgossos (ssh vorgossos)
+#   - Node has Docker installed
+#   - k0s running on the node at /run/k0s/containerd.sock
+#
+# Usage:
+#   task homelab:deploy         # full deploy (sync, build, import, helm upgrade)
+#   task homelab:images         # build + import images only
+#   task homelab:helm           # apply Helm chart only (no image rebuild)
+#   task homelab:status         # show pod / service status
+version: "3"
+
+vars:
+  NODE: '{{.NODE | default "vorgossos"}}'
+  NAMESPACE: '{{.NAMESPACE | default "uncworks"}}'
+  TAG: '{{.TAG | default "homelab"}}'
+  K0S_CTR: "sudo ctr --address /run/k0s/containerd.sock -n k8s.io"
+  IMAGES: "aot-controlplane aot-init aot-sidecar aot-agent aot-web"
+  SRC_DIR: /tmp/uncworks
+
+tasks:
+  sync:
+    desc: Rsync source to the homelab node
+    cmds:
+      - |
+        rsync -av --delete \
+          --exclude='.git' \
+          --exclude='node_modules' \
+          --exclude='vendor' \
+          --exclude='.temporal.db' \
+          --exclude='*.log' \
+          . \
+          {{.NODE}}:{{.SRC_DIR}}/
+
+  build:
+    desc: Build all UNCWORKS images on the homelab node using Docker
+    cmds:
+      - |
+        ssh {{.NODE}} "
+          set -e
+          cd {{.SRC_DIR}}
+
+          echo '=== Building aot-controlplane ==='
+          sudo docker build -t aot-controlplane:{{.TAG}} -f docker/Dockerfile.controlplane . 2>&1 | tail -3
+
+          echo '=== Building aot-init ==='
+          sudo docker build -t aot-init:{{.TAG}} -f docker/Dockerfile.hydration . 2>&1 | tail -3
+
+          echo '=== Building aot-sidecar ==='
+          sudo docker build -t aot-sidecar:{{.TAG}} -f docker/Dockerfile.sidecar . 2>&1 | tail -3
+
+          echo '=== Building aot-agent ==='
+          sudo docker build -t aot-agent:{{.TAG}} -f docker/Dockerfile.agent-base . 2>&1 | tail -3
+
+          echo '=== Building aot-web (requires web/dist to exist) ==='
+          mkdir -p /tmp/web-build
+          cp -r {{.SRC_DIR}}/web/dist /tmp/web-build/dist
+          cp {{.SRC_DIR}}/docker/nginx.conf /tmp/web-build/
+          sudo docker build -t aot-web:{{.TAG}} -f docker/Dockerfile.web /tmp/web-build 2>&1 | tail -3
+          rm -rf /tmp/web-build
+
+          echo '=== Build complete ==='
+        "
+
+  import:
+    desc: Import images into k0s containerd with CRI managed label
+    cmds:
+      - |
+        ssh {{.NODE}} "
+          set -e
+          for img in {{.IMAGES}}; do
+            echo \"Importing \${img}:{{.TAG}}...\"
+            sudo docker save \${img}:{{.TAG}} | {{.K0S_CTR}} images import - 2>&1 | grep -v '^$'
+            echo \"Labeling \${img}:{{.TAG}}...\"
+            {{.K0S_CTR}} images label docker.io/library/\${img}:{{.TAG}} 'io.cri-containerd.image=managed'
+          done
+          echo '=== Import complete ==='
+          {{.K0S_CTR}} images ls 2>/dev/null | grep 'aot-' | awk '{print \$1, \$NF}'
+        "
+
+  helm:
+    desc: Apply Helm chart to the homelab cluster
+    cmds:
+      - rsync -a deploy/ {{.NODE}}:{{.SRC_DIR}}/deploy/
+      - |
+        ssh {{.NODE}} "
+          helm upgrade --install uncworks {{.SRC_DIR}}/deploy/helm/aot \
+            --namespace {{.NAMESPACE}} \
+            --create-namespace \
+            -f {{.SRC_DIR}}/deploy/helm/values.homelab.yaml \
+            2>&1
+        "
+
+  restart:
+    desc: Rollout restart all UNCWORKS deployments
+    cmds:
+      - |
+        ssh {{.NODE}} "
+          kubectl rollout restart \
+            deployment/uncworks-aot-apiserver \
+            deployment/uncworks-aot-controller \
+            deployment/uncworks-aot-worker \
+            deployment/uncworks-aot-web \
+            -n {{.NAMESPACE}}
+          kubectl rollout status \
+            deployment/uncworks-aot-apiserver \
+            deployment/uncworks-aot-controller \
+            deployment/uncworks-aot-worker \
+            deployment/uncworks-aot-web \
+            -n {{.NAMESPACE}} --timeout=120s
+        "
+
+  images:
+    desc: Sync source, build images, import into k0s containerd
+    cmds:
+      - task: sync
+      - task: build
+      - task: import
+
+  deploy:
+    desc: Full homelab deploy — sync, build, import images, apply Helm, restart pods
+    cmds:
+      - task: sync
+      - task: build
+      - task: import
+      - task: helm
+      - task: restart
+
+  status:
+    desc: Show pod and service status on homelab cluster
+    cmds:
+      - |
+        ssh {{.NODE}} "
+          echo '=== Pods ==='
+          kubectl get pods -n {{.NAMESPACE}}
+          echo ''
+          echo '=== Services ==='
+          kubectl get svc -n {{.NAMESPACE}}
+          echo ''
+          echo '=== Node disk ==='
+          df -h / | tail -1
+          echo ''
+          echo '=== k0s images (aot-*) ==='
+          sudo ctr --address /run/k0s/containerd.sock -n k8s.io images ls 2>/dev/null | grep 'aot-' | awk '{print \$1, \$NF}'
+        "

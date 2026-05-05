@@ -107,6 +107,8 @@ apiserver:
       memory: 256Mi
   service:
     type: ClusterIP
+    # -- NodePort (only used when type is NodePort)
+    nodePort: ""
   # -- API key for authenticating requests (strongly recommended for production).
   # Prefer apiKeySecretName for production; apiKey is for dev convenience only.
   apiKey: ""
