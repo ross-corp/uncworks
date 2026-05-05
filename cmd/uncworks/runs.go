@@ -82,11 +82,46 @@ func runRunsList(args []string) error {
 		return err
 	}
 
-	req := connect.NewRequest(&apiv1.ListAgentRunsRequest{
+	listReq := &apiv1.ListAgentRunsRequest{
 		Limit:         int32(*limit),
 		ProjectFilter: *project,
 		FeatureFilter: *feature,
-	})
+	}
+	
+	if *phase != "" {
+		var phaseEnum apiv1.AgentRunPhase
+		switch *phase {
+		case "RUNNING":
+			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+		case "DONE":
+			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+		case "FAILED":
+			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+		case "PENDING":
+			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+		case "WAITING":
+			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+		case "CANCELLED":
+			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+		default:
+			return fmt.Errorf("invalid phase value %q, must be one of: RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED", *phase)
+		}
+		listReq.PhaseFilter = phaseEnum
+	}
+	
+	if *tag != "" {
+		listReq.TagFilter = *tag
+	}
+	
+	if *parentRunID != "" {
+		listReq.ParentRunId = *parentRunID
+	}
+	
+	if *cursor != "" {
+		listReq.Cursor = *cursor
+	}
+
+	req := connect.NewRequest(listReq)
 	if *includeArchived {
 		req.Header().Set("X-Include-Archived", "true")
 	}
