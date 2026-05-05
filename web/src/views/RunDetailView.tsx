@@ -299,6 +299,16 @@ export default function RunDetailView() {
           {elapsedStr && (
             <span className="text-xs text-muted-foreground font-mono">{elapsedStr}</span>
           )}
+          {/* Cost and diff stats — only populated after run completes */}
+          {run.status.totalCost && (
+            <span className="text-xs text-muted-foreground">{run.status.totalCost}</span>
+          )}
+          {(run.status.totalAdditions || run.status.totalDeletions) ? (
+            <span className="text-xs font-mono">
+              <span className="text-green-600 dark:text-green-400">+{run.status.totalAdditions ?? 0}</span>
+              <span className="text-red-600 dark:text-red-400 ml-1">-{run.status.totalDeletions ?? 0}</span>
+            </span>
+          ) : null}
           {run.status.message && !isWaiting && (
             <span
               className={`text-xs truncate max-w-[32rem] ${
