@@ -110,3 +110,21 @@ spec:
             # so ssh never sees the permissive mode.
             defaultMode: 0444
       {{- end }}
+---
+# PodDisruptionBudget: ensures at least one controller replica stays up during node drains.
+# With replicas=1 (default) this prevents voluntary eviction — increase controller.replicas to >=2
+# in production for rolling-drain tolerance.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aot.fullname" . }}-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "aot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller
