@@ -706,10 +706,10 @@ export default function RunListView() {
           <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
         )}
         {!loading && viewMode === "unified" && unifiedRuns.length === 0 && (
-          <EmptyState message={emptyStateMessage(true)} onCTAClick={() => navigate("/new")} />
+          <EmptyStateContent />
         )}
         {!loading && viewMode !== "unified" && filtered.length === 0 && (
-          <EmptyState message={emptyStateMessage(true)} onCTAClick={() => navigate("/new")} />
+          <EmptyStateContent />
         )}
 
         {viewMode === "unified"
