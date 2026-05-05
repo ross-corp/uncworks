@@ -40,6 +40,12 @@ import (
 
 var scheme = runtime.NewScheme()
 
+var (
+	runsCreatedTotal   = expvar.NewInt("uncworks_runs_created_total")
+	runsSucceededTotal = expvar.NewInt("uncworks_runs_succeeded_total")
+	runsFailedTotal    = expvar.NewInt("uncworks_runs_failed_total")
+)
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(aotv1alpha1.AddToScheme(scheme))
