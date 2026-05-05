@@ -9,8 +9,13 @@ NS=uncworks
 echo "=== UNCWORKS STATUS ==="
 
 # Cluster health
-CLUSTER=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | \
-  awk '!/Completed|Succeeded|Running/{if($0!="")bad++} END{print (bad>0?"degraded":"running")}')
+POD_OUTPUT=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null || true)
+if [ -z "$POD_OUTPUT" ]; then
+  CLUSTER="not_installed"
+else
+  CLUSTER=$(echo "$POD_OUTPUT" | \
+    awk '!/Completed|Succeeded|Running/{if($0!="")bad++} END{print (bad>0?"degraded":"running")}')
+fi
 echo "Cluster: $CLUSTER"
 
 # Core deployments (ready/desired)
