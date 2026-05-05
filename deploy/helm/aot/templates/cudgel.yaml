@@ -22,7 +22,7 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65532
+        runAsUser: 65534
       containers:
         - name: cudgel-shim
           image: {{ .Values.cudgel.image | default "ghcr.io/uncworks/aot-cudgel-shim:latest" }}
@@ -45,12 +45,14 @@ spec:
               memory: {{ .Values.cudgel.resources.memory | default "256Mi" }}
             limits:
               cpu: "1000m"
-              memory: "512Mi"
+              memory: "1Gi"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           livenessProbe:
             httpGet:
               path: /healthz
