@@ -18,6 +18,9 @@ spec:
         {{- include "aot.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: worker
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
       serviceAccountName: {{ include "aot.fullname" . }}
       containers:
         - name: worker
