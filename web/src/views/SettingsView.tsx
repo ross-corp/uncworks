@@ -80,7 +80,7 @@ export default function SettingsView() {
       ]);
       setServices(svcs ?? []);
       setEnvVars(evars ?? []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(String(e));
     }
   }, [wails]);
@@ -94,7 +94,7 @@ export default function SettingsView() {
     try {
       const result = await go().CheckLiteLLM(local.litellmURL || "");
       setLitellmResult(result);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setLitellmResult({ ok: false, models: [], error: String(e) });
     } finally {
       setLitellmChecking(false);
@@ -118,7 +118,7 @@ export default function SettingsView() {
     try {
       const info = await go().CheckForUpdate();
       setUpdateInfo(info);
-    } catch (e: any) { setError(String(e)); }
+    } catch (e: unknown) { setError(String(e)); }
     finally { setUpdateChecking(false); }
   }
 
@@ -136,7 +136,7 @@ export default function SettingsView() {
       setDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(String(e));
     } finally {
       setSaving(false);
@@ -148,7 +148,7 @@ export default function SettingsView() {
     try {
       await go().RestartService(name);
       setTimeout(loadOperational, 3000);
-    } catch (e: any) { setError(String(e)); }
+    } catch (e: unknown) { setError(String(e)); }
     finally { setRestarting(r => ({ ...r, [name]: false })); }
   }
 
