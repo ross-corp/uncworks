@@ -147,6 +147,27 @@ func run() error {
 	}
 	w.RegisterActivity(knowledgeActivities)
 
+	// Health probe server — liveness/readiness check Temporal connectivity.
+	healthAddr := envOrDefault("HEALTH_PROBE_ADDR", ":8091")
+	mux := http.NewServeMux()
+	checkTemporal := func(w http.ResponseWriter, _ *http.Request) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if _, err := c.CheckHealth(ctx, &client.CheckHealthRequest{}); err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+	mux.HandleFunc("/healthz", checkTemporal)
+	mux.HandleFunc("/readyz", checkTemporal)
+	healthSrv := &http.Server{Addr: healthAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Warn("health probe server stopped", "err", err)
+		}
+	}()
+
 	// Start worker (blocks until interrupted)
 	slog.Info("starting Temporal worker", "queue", taskQueue)
 	if err := w.Run(worker.InterruptCh()); err != nil {
