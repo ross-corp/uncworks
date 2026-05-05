@@ -199,3 +199,6 @@ spec:
     - name: grpc
       port: {{ .Values.apiserver.port }}
       targetPort: {{ .Values.apiserver.port }}
+      {{- if and (eq .Values.apiserver.service.type "NodePort") .Values.apiserver.service.nodePort }}
+      nodePort: {{ .Values.apiserver.service.nodePort }}
+      {{- end }}
