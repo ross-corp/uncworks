@@ -1,16 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsconfig "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -66,6 +70,7 @@ func run() error {
 	defer tc.Close()
 
 	metricsAddr := envOrDefault("METRICS_ADDR", ":8090")
+	healthAddr := envOrDefault("HEALTH_PROBE_ADDR", ":8091")
 	// LeaderElection is required for safe multi-replica deployments.
 	// The controller.replicas value in the Helm chart may be >1, so we must
 	// elect a single active replica to prevent split-brain reconciliation.
@@ -74,6 +79,7 @@ func run() error {
 		Metrics: metricsconfig.Options{
 			BindAddress: metricsAddr,
 		},
+		HealthProbeBindAddress:  healthAddr,
 		LeaderElection:          true,
 		LeaderElectionID:        "aot-controller-leader",
 		LeaderElectionNamespace: os.Getenv("POD_NAMESPACE"),
@@ -144,6 +150,25 @@ func run() error {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("create chain run controller: %w", err)
+	}
+
+	// Liveness: verify Temporal is reachable.
+	if err := mgr.AddHealthzCheck("temporal", healthz.Checker(func(req *http.Request) error {
+		ctx, cancel := context.WithTimeout(req.Context(), 3*time.Second)
+		defer cancel()
+		_, err := tc.CheckHealth(ctx, &temporalclient.CheckHealthRequest{})
+		return err
+	})); err != nil {
+		return fmt.Errorf("add healthz check: %w", err)
+	}
+	// Readiness: same check — pod is only ready when it can reach Temporal.
+	if err := mgr.AddReadyzCheck("temporal", healthz.Checker(func(req *http.Request) error {
+		ctx, cancel := context.WithTimeout(req.Context(), 3*time.Second)
+		defer cancel()
+		_, err := tc.CheckHealth(ctx, &temporalclient.CheckHealthRequest{})
+		return err
+	})); err != nil {
+		return fmt.Errorf("add readyz check: %w", err)
 	}
 
 	ctrl.Log.Info("starting manager")
