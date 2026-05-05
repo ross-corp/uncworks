@@ -469,8 +469,17 @@ func (h *Hydrator) createWorktree(ctx context.Context, bareDir, worktreeDir, bra
 		}
 	}
 
-	// Create a new worktree branch for the agent
-	worktreeBranch := fmt.Sprintf("aot/%s", branch)
+	// Create a new worktree branch for the agent.
+	// Use the run ID so the local branch name is unique and matches what PushChanges
+	// pushes to the remote (aot/<runID>). Using "aot/<baseBranch>" (e.g. aot/main)
+	// caused collisions when a previous run pushed that name to the remote and the
+	// next bare clone already contained it.
+	runID := os.Getenv("AOT_AGENT_RUN_ID")
+	worktreeBranch := fmt.Sprintf("aot/%s", runID)
+	if runID == "" {
+		// Fallback for local testing without a run ID set.
+		worktreeBranch = fmt.Sprintf("aot/%s-local", branch)
+	}
 	_, err := h.runner.Run(ctx, bareDir, "git", "worktree", "add", "-b", worktreeBranch, worktreeDir, branch)
 	return err
 }
