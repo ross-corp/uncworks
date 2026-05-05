@@ -107,6 +107,12 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            failureThreshold: 30
+            periodSeconds: 5
           volumeMounts:
             - name: tmp
               mountPath: /tmp
