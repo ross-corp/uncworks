@@ -19,6 +19,7 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"strconv"
 
 	temporalclient "go.temporal.io/sdk/client"
 	"sigs.k8s.io/controller-runtime/pkg/client"
