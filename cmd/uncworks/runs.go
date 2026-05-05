@@ -48,6 +48,8 @@ func runRuns(args []string) error {
 		return runRunsArchive(rest, true)
 	case "unarchive":
 		return runRunsArchive(rest, false)
+	case "cancel":
+		return runCancel(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
