@@ -260,6 +260,8 @@ func main() {
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           h2c.NewHandler(finalHandler, &http2.Server{}),
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20, // 1 MB
@@ -273,16 +275,24 @@ func main() {
 		}
 	}()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
-
-	slog.Info("shutting down...")
+	// Create context that will be cancelled on SIGINT/SIGTERM
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	
+	// Wait for shutdown signal
+	<-ctx.Done()
+	
+	slog.Info("shutting down UNCWORKS API server...")
 	serverCancel()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if err := httpServer.Shutdown(ctx); err != nil {
+	
+	// Give in-flight requests up to 30 seconds to complete
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+	
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "err", err)
+	} else {
+		slog.Info("shutdown complete")
 	}
 }
 
