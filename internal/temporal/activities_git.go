@@ -70,15 +70,22 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 			"git reset --soft $(git merge-base HEAD origin/main)"); err != nil {
 			return nil, fmt.Errorf("git reset --soft for squash: %w", err)
 		}
-		// Check if there are staged changes after reset
+		// Check if there are any changes (staged or unstaged) after reset
 		statusOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
 			"git status --porcelain")
 		if strings.TrimSpace(statusOut) != "" {
+			// Stage any remaining unstaged changes
+			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+				"git add -A"); err != nil {
+				return nil, fmt.Errorf("git add after squash: %w", err)
+			}
 			// Commit the squashed changes
 			commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
 			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
 				return nil, fmt.Errorf("git commit after squash: %w", err)
 			}
+		} else {
+			// Tree is clean after soft reset, no commit needed
 		}
 	}
 
