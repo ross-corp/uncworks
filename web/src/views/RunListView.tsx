@@ -10,6 +10,13 @@ import RunStatusBadge from "../components/RunStatusBadge";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "../components/ui/empty";
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
@@ -54,6 +61,8 @@ const FIELD_OPTIONS: { field: FilterField; label: string }[] = [
   { field: "stage", label: "Stage" },
   { field: "model", label: "Model" },
 ];
+
+
 
 interface FeatureGroup {
   feature: string;
@@ -353,11 +362,40 @@ export default function RunListView() {
   }
 
   // Build an empty-state message that distinguishes "no runs exist" from "filter matches nothing".
-  function emptyStateMessage(listEmpty: boolean): string {
-    if (!listEmpty) return "";
-    if (filter) return "No runs match filter";
-    if (statusFilter !== "all") return `No ${statusFilter} runs`;
-    return "No runs yet — press n to create one";
+  function emptyStateMessage(listEmpty: boolean): { title: string; description?: string; showCTA?: boolean } {
+    if (!listEmpty) return { title: "" };
+    if (filter) return { title: "No runs match filter", description: "Try adjusting your filters to see more results." };
+    if (statusFilter !== "all") return { title: `No ${statusFilter} runs`, description: "Try changing the status filter to see all runs." };
+    return { 
+      title: "No runs yet", 
+      description: "Submit your first run with `uncworks run --repo <url> --prompt <text>` or click the button below.",
+      showCTA: true
+    };
+  }
+
+  function EmptyStateContent() {
+    const message = emptyStateMessage(true);
+    if (!message.title) return null;
+    
+    return (
+      <Empty className="h-full border-0">
+        <EmptyHeader>
+          <EmptyTitle>{message.title}</EmptyTitle>
+          {message.description && (
+            <EmptyDescription className="font-mono text-xs">
+              {message.description}
+            </EmptyDescription>
+          )}
+        </EmptyHeader>
+        {message.showCTA && (
+          <EmptyContent>
+            <Button onClick={() => navigate("/new")}>
+              Create First Run
+            </Button>
+          </EmptyContent>
+        )}
+      </Empty>
+    );
   }
 
   useEffect(() => {
@@ -693,14 +731,10 @@ export default function RunListView() {
           <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>
         )}
         {!loading && viewMode === "unified" && unifiedRuns.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            {emptyStateMessage(true)}
-          </div>
+          <EmptyStateContent />
         )}
         {!loading && viewMode !== "unified" && filtered.length === 0 && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            {emptyStateMessage(true)}
-          </div>
+          <EmptyStateContent />
         )}
 
         {viewMode === "unified"
