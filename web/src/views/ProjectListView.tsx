@@ -134,8 +134,11 @@ export default function ProjectListView() {
         {projects.map((p) => (
           <div
             key={p.name}
+            role="button"
+            tabIndex={0}
             className="flex items-center gap-3 px-4 py-2.5 border-b border-border/40 cursor-pointer hover:bg-muted/30 transition-colors"
             onClick={() => navigate(`/projects/${p.name}`)}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && navigate(`/projects/${p.name}`)}
           >
             {/* Name and description */}
             <div className="flex-1 min-w-0">
