@@ -19,7 +19,7 @@ version: "3"
 vars:
   # SSH hostname or alias for your cluster node (required — no default)
   NODE: "your-node-hostname"
-  NAMESPACE: '{{.NAMESPACE | default "uncworks"}}'
+  NAMESPACE: uncworks
   TAG: '{{.TAG | default "homelab"}}'
   K0S_CTR: "sudo ctr --address /run/k0s/containerd.sock -n k8s.io"
   IMAGES: "aot-controlplane aot-init aot-sidecar aot-agent aot-web"
