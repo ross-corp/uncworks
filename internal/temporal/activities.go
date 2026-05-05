@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"sort"
@@ -568,6 +569,8 @@ func (a *Activities) CreateAgentDeployment(ctx context.Context, input CreateAgen
 	pvcName := fmt.Sprintf("aot-ws-%s", input.AgentRunName)
 	deployName := input.Name
 
+	slog.Info("agent deployment created", "agentRunName", input.AgentRunName, "deploymentName", deployName, "namespace", input.Namespace)
+
 	// Create PVC
 	storageClass := envOrDefault("AOT_STORAGE_CLASS", "local-path")
 	pvc := &corev1.PersistentVolumeClaim{
@@ -694,6 +697,8 @@ type ArchiveAndCleanupInput struct {
 // ArchiveAndCleanup deletes the Deployment and PVC for a completed run.
 // This is called after the archive retention period expires.
 func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndCleanupInput) error {
+	slog.Info("cleanup started", "agentRunName", input.DeploymentName, "deploymentName", input.DeploymentName)
+
 	// Delete Deployment
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -720,6 +725,7 @@ func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndClea
 		}
 	}
 
+	slog.Info("cleanup complete", "agentRunName", input.DeploymentName, "deploymentName", input.DeploymentName)
 	return nil
 }
 
