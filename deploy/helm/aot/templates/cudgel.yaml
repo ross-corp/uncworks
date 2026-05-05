@@ -22,7 +22,7 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65532
+        runAsUser: 65534
       containers:
         - name: cudgel-shim
           image: {{ .Values.cudgel.image | default "ghcr.io/uncworks/aot-cudgel-shim:latest" }}
