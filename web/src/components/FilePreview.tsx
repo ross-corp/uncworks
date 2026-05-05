@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { useThemeNew } from "../hooks/useThemeNew";
+import ErrorBoundary from "./ErrorBoundary";
 
 const MonacoEditor = lazy(() => import("@monaco-editor/react"));
 
@@ -61,30 +62,38 @@ export default function FilePreview({
 
       {/* Editor */}
       <div className="flex-1 overflow-hidden">
-        <Suspense
+        <ErrorBoundary
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
-              Loading editor...
+              Failed to load editor
             </div>
           }
         >
-          <MonacoEditor
-            height="100%"
-            language={language}
-            theme={monacoTheme}
-            value={content}
-            options={{
-              readOnly: true,
-              minimap: { enabled: false },
-              wordWrap: "on",
-              lineNumbers: "on",
-              scrollBeyondLastLine: false,
-              fontSize: 13,
-              fontFamily: "'IoskeleyMono', monospace",
-              padding: { top: 8 },
-            }}
-          />
-        </Suspense>
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
+                Loading editor...
+              </div>
+            }
+          >
+            <MonacoEditor
+              height="100%"
+              language={language}
+              theme={monacoTheme}
+              value={content}
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                wordWrap: "on",
+                lineNumbers: "on",
+                scrollBeyondLastLine: false,
+                fontSize: 13,
+                fontFamily: "'IoskeleyMono', monospace",
+                padding: { top: 8 },
+              }}
+            />
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </div>
   );
