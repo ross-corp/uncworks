@@ -105,6 +105,10 @@ Flags:`)
 			} else {
 				fmt.Printf("  [%s | %ds] %s\n", phaseLabel(phase), elapsed, msg)
 			}
+		} else {
+			// Show a progress indicator when status hasn't changed
+			fmt.Print(".")
+			os.Stdout.Sync()
 		}
 		switch phase {
 		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
