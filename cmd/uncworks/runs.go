@@ -157,6 +157,11 @@ func runRunsList(args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), project, phase, model, started)
 	}
 	w.Flush()
+	
+	if resp.Msg.GetNextCursor() != "" {
+		fmt.Printf("next-cursor: %s\n", resp.Msg.GetNextCursor())
+	}
+	
 	return nil
 }
 
