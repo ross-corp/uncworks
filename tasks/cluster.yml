@@ -3,7 +3,7 @@ version: "3"
 
 vars:
   COLIMA_PROFILE: '{{.COLIMA_PROFILE | default "uncworks"}}'
-  NAMESPACE: '{{.NAMESPACE | default "aot"}}'
+  CLUSTER_NAMESPACE: '{{.CLUSTER_NAMESPACE | default "aot"}}'
 
 tasks:
   setup:
