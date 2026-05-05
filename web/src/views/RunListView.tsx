@@ -62,37 +62,7 @@ const FIELD_OPTIONS: { field: FilterField; label: string }[] = [
   { field: "model", label: "Model" },
 ];
 
-interface EmptyStateProps {
-  message: { title: string; description?: string; showCTA?: boolean };
-  onCTAClick: () => void;
-}
 
-function EmptyState({ message, onCTAClick }: EmptyStateProps) {
-  if (!message.title) return null;
-  
-  return (
-    <div className="flex h-full items-center justify-center">
-      <div className="text-center max-w-md px-6 py-8">
-        <div className="text-2xl mb-3 text-muted-foreground">
-          {message.title}
-        </div>
-        {message.description && (
-          <div className="text-sm text-muted-foreground/70 mb-6 font-mono">
-            {message.description}
-          </div>
-        )}
-        {message.showCTA && (
-          <Button 
-            onClick={onCTAClick}
-            className="px-4 py-2"
-          >
-            Create First Run
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 interface FeatureGroup {
   feature: string;
