@@ -463,9 +463,17 @@ Output JSON: {"pass": true/false, "criteria": [{"scenario": "...", "pass": true/
 
 Key rules:
 - Use RELATIVE paths (e.g. "src/foo.go", "README.md") for ALL file operations. Never write to /workspace directly.
-- If you must use absolute paths, the repo root is your CWD — files belong inside it, not at /workspace/<file>.
-- After making code changes, commit them with git (git add -A && git commit -m "...") and push (git push).
-- Run builds and tests before committing to verify correctness.`
+- DO NOT run git add, git commit, or git push — the system handles all git operations automatically after you finish.
+- To verify Go code, run: devbox run go build ./... (Go is available via devbox, not in PATH directly).
+- If a build or test command fails or is slow, skip it and finish — CI will catch errors. Never get stuck waiting.
+
+When your changes are complete, write your commit message to /workspace/.aot/commit_message.txt:
+  echo "type(scope): short description" > /workspace/.aot/commit_message.txt
+
+Use conventional commits format. Valid types: feat, fix, refactor, docs, test, chore, perf
+The description must be 72 characters or fewer on the first line.
+Example: feat(ratelimit): add per-endpoint rate limiting for AgentRun creation
+The system reads this file to produce the final commit — do not skip this step.`
 	}
 }
 

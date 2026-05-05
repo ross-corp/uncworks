@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	temporalsdk "go.temporal.io/sdk/temporal"
@@ -36,6 +37,24 @@ type PushChangesOutput struct {
 	CommitSHA       string
 	DiffStat        string // output of `git diff --stat HEAD~1`
 	ProposalContent string // contents of openspec/changes/{changeName}/proposal.md
+}
+
+// conventionalCommitRE validates the conventional commits specification.
+// Format: type(optional-scope): description
+var conventionalCommitRE = regexp.MustCompile(`^(feat|fix|refactor|docs|test|chore|perf|ci|build|revert)(\([^)]+\))?: .{1,72}$`)
+
+// readAgentCommitMessage reads the commit message the agent wrote to /workspace/.aot/commit_message.txt.
+// Returns the fallback message if the file is missing, empty, or not in conventional commits format.
+func readAgentCommitMessage(ctx context.Context, sc agentv1connect.AgentSidecarServiceClient, runID, repoPath, fallback string) string {
+	raw, err := gitExec(ctx, sc, runID, repoPath, "cat /workspace/.aot/commit_message.txt 2>/dev/null || echo ''")
+	if err != nil {
+		return fallback
+	}
+	msg := strings.TrimSpace(raw)
+	if msg == "" || !conventionalCommitRE.MatchString(msg) {
+		return fallback
+	}
+	return msg
 }
 
 // PushChanges commits all workspace changes and pushes to a feature branch via the sidecar.
@@ -79,8 +98,9 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 				"git add -A"); err != nil {
 				return nil, fmt.Errorf("git add after squash: %w", err)
 			}
-			// Commit the squashed changes
-			commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
+			// Commit the squashed changes using the agent-provided message when valid.
+			commitMsg := readAgentCommitMessage(ctx, sc, input.AgentRunName, input.RepoPath, input.CommitMessage)
+			commitCmd := fmt.Sprintf("git commit -m %q", commitMsg)
 			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
 				return nil, fmt.Errorf("git commit after squash: %w", err)
 			}
@@ -99,8 +119,9 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		statusOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
 			"git status --porcelain")
 		if strings.TrimSpace(statusOut) != "" {
-			// There are unstaged changes — commit them
-			commitCmd := fmt.Sprintf("git commit -m %q", input.CommitMessage)
+			// There are unstaged changes — commit them using the agent-provided message when valid.
+			commitMsg := readAgentCommitMessage(ctx, sc, input.AgentRunName, input.RepoPath, input.CommitMessage)
+			commitCmd := fmt.Sprintf("git commit -m %q", commitMsg)
 			if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, commitCmd); err != nil {
 				return nil, fmt.Errorf("git commit: %w", err)
 			}
