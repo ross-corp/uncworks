@@ -325,14 +325,36 @@ export default function RunDetailView() {
             </button>
           )}
 
-          {/* Retry/Clone button - visible when failed or cancelled */}
-          {isFailed && (
+          {/* Retry button - visible when failed */}
+          {run.status.phase === "failed" && (
             <button
               onClick={() => navigate(`/new?clone=${id}`)}
               className="px-2 py-0.5 text-xs bg-primary text-primary-foreground hover:opacity-90 transition-colors"
             >
               Retry
             </button>
+          )}
+
+          {/* Clone button - visible when succeeded or cancelled */}
+          {(run.status.phase === "succeeded" || run.status.phase === "cancelled") && (
+            <button
+              onClick={() => navigate(`/new?clone=${id}`)}
+              className="px-2 py-0.5 text-xs border border-primary/20 text-primary hover:bg-primary/5 transition-colors"
+            >
+              Clone
+            </button>
+          )}
+
+          {/* View PR button - visible when PR URL exists and run is not archived */}
+          {run.status.prUrl && !run.status.archived && (
+            <a
+              href={run.status.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-0.5 text-xs border border-green-500/30 bg-green-500/10 text-green-600 hover:bg-green-500/20 transition-colors"
+            >
+              View PR
+            </a>
           )}
 
           {/* Archive button - visible when not running */}
