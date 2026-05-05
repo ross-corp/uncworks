@@ -71,6 +71,9 @@ spec:
         {{- include "aot.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: web
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
       containers:
         - name: nginx
           image: {{ include "aot.webImage" . }}
@@ -96,7 +99,7 @@ spec:
             runAsNonRoot: true
             runAsUser: 101
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
+            readOnlyRootFilesystem: false  # nginx needs to write to /tmp and /var/cache/nginx
             capabilities:
               drop: ["ALL"]
           volumeMounts:
