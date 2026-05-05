@@ -62,6 +62,8 @@ spec:
             runAsUser: 65534
             capabilities:
               drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           {{- with .Values.bff.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
