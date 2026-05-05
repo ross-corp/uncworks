@@ -201,8 +201,8 @@ bff:
       cpu: 100m
       memory: 128Mi
     limits:
-      cpu: 500m
-      memory: 256Mi
+      cpu: 1000m
+      memory: 512Mi
 
 # -- Web Dashboard configuration
 # TODO(7.4): The nginx web deployment will be removed once the BFF is
