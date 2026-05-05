@@ -153,8 +153,11 @@ export default function ChainRunDetailView() {
               </div>
             )}
             <div
-              className={`border-2 rounded-lg p-3 cursor-pointer transition-colors ${colors}`}
+              role={step.runId ? "button" : undefined}
+              tabIndex={step.runId ? 0 : undefined}
+              className={`border-2 rounded-lg p-3 ${step.runId ? "cursor-pointer" : ""} transition-colors ${colors}`}
               onClick={() => step.runId && navigate(`/run/${step.runId}`)}
+              onKeyDown={(e) => step.runId && (e.key === "Enter" || e.key === " ") && navigate(`/run/${step.runId}`)}
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium text-sm">{step.name}</span>
@@ -243,8 +246,11 @@ export default function ChainRunDetailView() {
                 return (
                   <div
                     key={step.name}
-                    className="flex items-center gap-3 cursor-pointer group"
+                    role={step.runId ? "button" : undefined}
+                    tabIndex={step.runId ? 0 : undefined}
+                    className={`flex items-center gap-3 group ${step.runId ? "cursor-pointer" : ""}`}
                     onClick={() => step.runId && navigate(`/run/${step.runId}`)}
+                    onKeyDown={(e) => step.runId && (e.key === "Enter" || e.key === " ") && navigate(`/run/${step.runId}`)}
                   >
                     <span className="w-5 text-xs text-muted-foreground text-right shrink-0">{idx + 1}</span>
                     <span className="w-32 text-sm font-medium truncate shrink-0 group-hover:text-primary transition-colors">
