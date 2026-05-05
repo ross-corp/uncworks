@@ -183,6 +183,14 @@ func main() {
 		_ = writeJSONResponse(w, map[string]interface{}{"status": status, "checks": checks})
 	})
 
+	// Metrics endpoint (exposes expvar metrics)
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		expvar.Do(func(kv expvar.KeyValue) {
+			fmt.Fprintf(w, "%s %s\n", kv.Key, kv.Value)
+		})
+	})
+
 	// Create GitHub token provider from environment
 	ghProvider := aotgithub.NewPATProvider(os.Getenv("GITHUB_TOKEN"))
 
