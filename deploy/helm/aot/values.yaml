@@ -131,8 +131,8 @@ apiserver:
       cpu: 100m
       memory: 128Mi
     limits:
-      cpu: 500m
-      memory: 256Mi
+      cpu: 1000m
+      memory: 512Mi
   service:
     type: ClusterIP
     # -- NodePort (only used when type is NodePort)
