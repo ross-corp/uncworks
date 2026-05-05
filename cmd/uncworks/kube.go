@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -27,7 +28,14 @@ func ListContexts() ([]KubeContext, error) {
 	}
 
 	var contexts []KubeContext
-	for name, ctx := range cfg.Contexts {
+	// Collect and sort keys for deterministic iteration
+	keys := make([]string, 0, len(cfg.Contexts))
+	for name := range cfg.Contexts {
+		keys = append(keys, name)
+	}
+	sort.Strings(keys)
+	for _, name := range keys {
+		ctx := cfg.Contexts[name]
 		serverURL := ""
 		if cluster, ok := cfg.Clusters[ctx.Cluster]; ok {
 			serverURL = cluster.Server
