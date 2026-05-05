@@ -185,7 +185,11 @@ func (m *Ci) PlaywrightTests(ctx context.Context, source *dagger.Directory) (str
 		WithMountedCache("/root/.npm", dag.CacheVolume("npm-cache-playwright")).
 		WithEnvVariable("CI", "true").
 		WithEnvVariable("PLAYWRIGHT_BROWSERS_PATH", "/ms-playwright").
-		WithExec([]string{"npm", "ci"}).
+		WithExec([]string{"bash", "-c", `
+			set -e
+			cd /src/packages/shared && npm ci
+			cd /src/web && npm ci
+		`}).
 		WithExec([]string{"npx", "playwright", "test", "--reporter=list"}).
 		Stdout(ctx)
 	if err != nil {
