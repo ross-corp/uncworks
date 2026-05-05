@@ -47,7 +47,10 @@ func envOrDefault(key, fallback string) string {
 	return fallback
 }
 
-// imagePullPolicy returns Never for local images (no registry prefix or :local tag), Always otherwise.
+// imagePullPolicy returns Never for local images (no registry prefix or :local tag),
+// IfNotPresent otherwise. PullAlways is intentionally avoided: it causes ErrImagePull
+// in air-gapped or local-only clusters where a versioned image (e.g. docker.io/library/aot-init:v1.0)
+// is already present but not reachable on the public registry.
 func imagePullPolicy(image string) corev1.PullPolicy {
 	if !strings.Contains(image, "/") {
 		return corev1.PullNever
@@ -55,7 +58,7 @@ func imagePullPolicy(image string) corev1.PullPolicy {
 	if strings.HasSuffix(image, ":local") {
 		return corev1.PullNever
 	}
-	return corev1.PullAlways
+	return corev1.PullIfNotPresent
 }
 
 // Activities holds the dependencies needed by Temporal activity implementations.
