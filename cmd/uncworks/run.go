@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -19,6 +20,8 @@ func runRun(args []string) error {
 	prompt := fs.String("prompt", "", "Agent prompt describing the task (required)")
 	project := fs.String("project", "", "Project name this run belongs to")
 	feature := fs.String("feature", "", "Feature/unit-of-work this run contributes to")
+	modelTier := fs.String("model-tier", "", "LLM model tier (e.g. deepseek-v3.2, default-cloud, premium)")
+	wait := fs.Bool("wait", false, "Wait for the run to complete; exit 0 on success, 1 on failure")
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
@@ -47,9 +50,10 @@ Flags:`)
 		Repos: []*apiv1.Repository{
 			{Url: *repo, Branch: *branch},
 		},
-		Prompt:  *prompt,
-		Project: *project,
-		Feature: *feature,
+		Prompt:    *prompt,
+		Project:   *project,
+		Feature:   *feature,
+		ModelTier: *modelTier,
 	}
 
 	req := connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: spec})
@@ -65,5 +69,31 @@ Flags:`)
 
 	fmt.Printf("Run created: %s\n", run.GetId())
 	fmt.Printf("Follow progress: uncworks runs logs %s\n", run.GetId())
-	return nil
+
+	if !*wait {
+		return nil
+	}
+
+	fmt.Printf("Waiting for run %s to complete...\n", run.GetId())
+	for {
+		time.Sleep(5 * time.Second)
+		getReq := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: run.GetId()})
+		getResp, err := client.GetAgentRun(context.Background(), getReq)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warn: poll error: %s\n", humanizeErr(err))
+			continue
+		}
+		phase := getResp.Msg.GetStatus().GetPhase()
+		msg := getResp.Msg.GetStatus().GetMessage()
+		fmt.Printf("  [%s] %s\n", phase, msg)
+		switch phase {
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+			if url := getResp.Msg.GetStatus().GetPrUrl(); url != "" {
+				fmt.Printf("PR: %s\n", url)
+			}
+			return nil
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED, apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+			return fmt.Errorf("run %s ended with phase: %s", run.GetId(), phase)
+		}
+	}
 }
