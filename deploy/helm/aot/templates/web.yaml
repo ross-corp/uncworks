@@ -71,6 +71,9 @@ spec:
         {{- include "aot.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: web
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
       containers:
         - name: nginx
           image: {{ include "aot.webImage" . }}
