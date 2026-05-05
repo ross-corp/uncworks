@@ -10,7 +10,7 @@ const STATUS_CONFIG: Record<string, { variant: BadgeVariant; className?: string;
   failed: { variant: "destructive", dot: "bg-red-500" },
   pending: { variant: "secondary", dot: "bg-neutral-400" },
   waiting_for_input: { variant: "warning", dot: "bg-amber-500" },
-  cancelled: { variant: "outline", className: "text-muted-foreground", dot: "bg-neutral-400" },
+  cancelled: { variant: "destructive", dot: "bg-red-500" },
 };
 
 interface RunStatusBadgeProps {
