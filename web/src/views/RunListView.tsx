@@ -442,7 +442,10 @@ export default function RunListView() {
         className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer border-b border-border/40 transition-colors ${
           index === selected ? "bg-accent/40 outline outline-1 outline-border/60" : "hover:bg-muted/30"
         } ${run.status.archived ? "opacity-40" : ""}`}
+        role="button"
+        tabIndex={0}
         onClick={() => selectMode ? toggleSelect(run.id) : navigate(`/run/${run.id}`)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectMode ? toggleSelect(run.id) : navigate(`/run/${run.id}`); } }}
       >
         {selectMode && (
           <input
