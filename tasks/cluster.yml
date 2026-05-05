@@ -60,7 +60,7 @@ tasks:
     desc: Delete all UNCWORKS resources and stop the Colima VM
     cmds:
       - kubectl config use-context colima-{{.COLIMA_PROFILE}} 2>/dev/null || true
-      - helm uninstall uncworks -n {{.NAMESPACE}} 2>/dev/null || true
+      - helm uninstall uncworks -n {{.CLUSTER_NAMESPACE}} 2>/dev/null || true
       - kubectl delete namespace {{.NAMESPACE}} --ignore-not-found
       - colima stop --profile {{.COLIMA_PROFILE}} 2>/dev/null || true
       - echo "UNCWORKS cluster torn down."
