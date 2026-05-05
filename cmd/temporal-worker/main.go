@@ -108,6 +108,7 @@ func run() error {
 		HTTPClient:            &http.Client{Timeout: 30 * time.Second},
 		GitHubProvider:        ghProvider,
 		GitHubTokenSecretName: ghTokenSecretName,
+		RESTConfig:            restConfig,
 	}
 
 	// Create worker
