@@ -85,7 +85,12 @@ Flags:`)
 		}
 		phase := getResp.Msg.GetStatus().GetPhase()
 		msg := getResp.Msg.GetStatus().GetMessage()
-		fmt.Printf("  [%s] %s\n", phaseLabel(phase), msg)
+		stage := getResp.Msg.GetStatus().GetStage()
+		if stage != "" {
+			fmt.Printf("  [%s | stage:%s] %s\n", phaseLabel(phase), stage, msg)
+		} else {
+			fmt.Printf("  [%s] %s\n", phaseLabel(phase), msg)
+		}
 		switch phase {
 		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
 			if url := getResp.Msg.GetStatus().GetPrUrl(); url != "" {
