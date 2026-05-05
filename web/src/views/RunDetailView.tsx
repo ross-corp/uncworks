@@ -266,7 +266,7 @@ export default function RunDetailView() {
 
   const isSpecDriven = run.spec.orchestrationMode === "spec-driven";
   const isRunning = run.status.phase === "running" || run.status.phase === "waiting_for_input";
-  const isFailed = run.status.phase === "failed" || run.status.phase === "cancelled";
+  const isFailed = run.status.phase === "failed";
   const isWaiting = run.status.phase === "waiting_for_input";
   const hitlPrompt = run.status.message || "The agent is requesting your input to continue.";
 
