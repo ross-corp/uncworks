@@ -34,7 +34,7 @@ func TestPathTraversal_ListFiles_DotDot(t *testing.T) {
 		{
 			name:     "normal subdir is allowed",
 			hostPath: "/data/pvc-abc",
-			dirPath:  "/workspace/src",
+			dirPath:  "/workspace/my-repo",
 			wantOK:   true,
 		},
 		{
