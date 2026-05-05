@@ -51,7 +51,7 @@ tasks:
       - kubectl get pods -n {{.CLUSTER_NAMESPACE}} 2>/dev/null || echo "(namespace not found)"
       - echo ""
       - echo "=== Services ==="
-      - kubectl get svc -n {{.NAMESPACE}} 2>/dev/null || echo "(none)"
+      - kubectl get svc -n {{.CLUSTER_NAMESPACE}} 2>/dev/null || echo "(none)"
       - echo ""
       - echo "=== Colima status ==="
       - colima status --profile {{.COLIMA_PROFILE}} 2>/dev/null || echo "(colima not running)"
