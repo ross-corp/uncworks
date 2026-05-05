@@ -19,6 +19,9 @@ spec:
         {{- include "aot.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: bff
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
       serviceAccountName: {{ include "aot.fullname" . }}
       containers:
         - name: bff
