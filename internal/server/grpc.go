@@ -385,6 +385,9 @@ func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Req
 }
 
 func (s *AOTServiceHandler) GetRunGraph(ctx context.Context, req *connect.Request[apiv1.GetRunGraphRequest]) (*connect.Response[apiv1.RunGraph], error) {
+	if err := validateRunID(req.Msg.Id); err != nil {
+		return nil, err
+	}
 	// Get the root run
 	rootCRD := &aotv1alpha1.AgentRun{}
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{
