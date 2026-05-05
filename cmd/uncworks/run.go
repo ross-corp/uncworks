@@ -79,8 +79,11 @@ Flags:`)
 	}
 
 	fmt.Printf("Waiting for run %s to complete...\n", run.GetId())
+	startTime := time.Now()
+	var lastPhase apiv1.AgentRunPhase
+	var lastStage, lastMsg string
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 		getReq := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: run.GetId()})
 		getResp, err := client.GetAgentRun(context.Background(), getReq)
 		if err != nil {
@@ -90,10 +93,18 @@ Flags:`)
 		phase := getResp.Msg.GetStatus().GetPhase()
 		msg := getResp.Msg.GetStatus().GetMessage()
 		stage := getResp.Msg.GetStatus().GetStage()
-		if stage != "" {
-			fmt.Printf("  [%s | stage:%s] %s\n", phaseLabel(phase), stage, msg)
-		} else {
-			fmt.Printf("  [%s] %s\n", phaseLabel(phase), msg)
+		elapsed := int(time.Since(startTime).Seconds())
+		
+		// Only print if phase, stage, or message changed
+		if phase != lastPhase || stage != lastStage || msg != lastMsg {
+			lastPhase = phase
+			lastStage = stage
+			lastMsg = msg
+			if stage != "" {
+				fmt.Printf("  [%s | %ds | stage:%s] %s\n", phaseLabel(phase), elapsed, stage, msg)
+			} else {
+				fmt.Printf("  [%s | %ds] %s\n", phaseLabel(phase), elapsed, msg)
+			}
 		}
 		switch phase {
 		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
