@@ -144,15 +144,22 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		ready := true
 		checks := map[string]string{"k8s": "ok"}
 
 		if svc.TemporalClient == nil {
 			ready = false
-			checks["temporal"] = "not connected"
+			checks["temporal"] = "not configured"
 		} else {
-			checks["temporal"] = "ok"
+			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+			defer cancel()
+			if _, err := svc.TemporalClient.CheckHealth(ctx, &temporalclient.CheckHealthRequest{}); err != nil {
+				ready = false
+				checks["temporal"] = "unreachable"
+			} else {
+				checks["temporal"] = "ok"
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
