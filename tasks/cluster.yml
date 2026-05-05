@@ -17,7 +17,7 @@ tasks:
           echo "Colima VM '{{.COLIMA_PROFILE}}' already running."
         fi
       - kubectl config use-context colima-{{.COLIMA_PROFILE}}
-      - kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+      - kubectl create namespace {{.CLUSTER_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
       - task: :k8s:crd
       - task: :k8s:storage
       - task: :k8s:litellm
