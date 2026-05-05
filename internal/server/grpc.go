@@ -62,27 +62,50 @@ func validateRunID(id string) error {
 }
 
 // extractClientIP extracts the client IP from a ConnectRPC request.
-// It checks X-Forwarded-For header first, then falls back to Peer().Addr.
-func extractClientIP(req *connect.Request[apiv1.CreateAgentRunRequest]) string {
-	// Check X-Forwarded-For header
-	if fwd := req.Header().Get("X-Forwarded-For"); fwd != "" {
-		// Take the first (leftmost) address.
-		for i := 0; i < len(fwd); i++ {
-			if fwd[i] == ',' {
-				return stripPort(strings.TrimSpace(fwd[:i]))
+// If trustProxy is true, it checks X-Forwarded-For header first.
+// Otherwise, it uses the peer address.
+func (s *AOTServiceHandler) extractClientIP(req *connect.Request[apiv1.CreateAgentRunRequest]) string {
+	// Check if we should trust proxy headers
+	trustProxy := false
+	if s.createAgentRunLimiter != nil {
+		trustProxy = s.createAgentRunLimiter.cfg.TrustProxy
+	}
+	
+	if trustProxy {
+		// Check X-Forwarded-For header
+		if fwd := req.Header().Get("X-Forwarded-For"); fwd != "" {
+			// Take the first (leftmost) address.
+			for i := 0; i < len(fwd); i++ {
+				if fwd[i] == ',' {
+					return s.stripPort(strings.TrimSpace(fwd[:i]))
+				}
 			}
+			return s.stripPort(strings.TrimSpace(fwd))
 		}
-		return stripPort(strings.TrimSpace(fwd))
 	}
 	
 	// Fall back to peer address
 	peer := req.Peer()
 	if peer.Addr != "" {
-		return stripPort(peer.Addr)
+		return s.stripPort(peer.Addr)
 	}
 	
 	// Default to empty string if we can't determine IP
 	return ""
+}
+
+// stripPort removes the port suffix from an address like "1.2.3.4:5678".
+func (s *AOTServiceHandler) stripPort(addr string) string {
+	// Simple implementation: find last ':' and cut there
+	if idx := strings.LastIndex(addr, ":"); idx != -1 {
+		// Check if this might be IPv6 address (contains ':' in address part)
+		// For simplicity, just handle common case
+		if !strings.Contains(addr, "[") {
+			// Not IPv6 with brackets, assume IPv4 with port
+			return addr[:idx]
+		}
+	}
+	return addr
 }
 
 // stripPort removes the port suffix from an address like "1.2.3.4:5678".
