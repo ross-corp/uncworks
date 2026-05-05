@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -285,8 +286,14 @@ func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
 	if input.SpecContent != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: "AOT_SPEC_CONTENT", Value: input.SpecContent})
 	}
-	for k, v := range input.EnvVars {
-		envVars = append(envVars, corev1.EnvVar{Name: k, Value: v})
+	// Collect and sort env var keys for deterministic iteration
+	keys := make([]string, 0, len(input.EnvVars))
+	for k := range input.EnvVars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		envVars = append(envVars, corev1.EnvVar{Name: k, Value: input.EnvVars[k]})
 	}
 
 	// LiteLLM gateway env vars — inject into agent container only
