@@ -122,6 +122,7 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 	}
 
 	slog.Info("apiserver: AgentRun created", "run_id", name, "display_name", displayName, "namespace", s.Namespace)
+	runsCreatedTotal.Add(1)
 	return connect.NewResponse(&apiv1.CreateAgentRunResponse{
 		AgentRun: crdToProto(crd),
 	}), nil
