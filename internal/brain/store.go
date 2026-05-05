@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,18 +112,19 @@ type Store struct {
 	pgvectorReady bool
 }
 
-// NewPool creates a pgxpool with sensible production defaults from a DSN.
+// NewPool creates a pgxpool from a DSN. Pool size can be tuned via:
+//   - BRAIN_DB_MAX_CONNS (default 10)
+//   - BRAIN_DB_MIN_CONNS (default 2)
+//
 // Callers should defer pool.Close().
-// TODO(db): expose pool sizing via env vars (BRAIN_DB_MAX_CONNS, BRAIN_DB_MIN_CONNS)
-// once load profiles are known. Current defaults: max 10 / min 2 are conservative
-// but safe for a single-replica worker; increase for apiserver or high-throughput workers.
 func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse brain DB DSN: %w", err)
 	}
-	cfg.MaxConns = 10
-	cfg.MinConns = 2
+	cfg.MaxConns = int32(envInt("BRAIN_DB_MAX_CONNS", 10))
+	cfg.MinConns = int32(envInt("BRAIN_DB_MIN_CONNS", 2))
+	slog.Debug("brain DB pool configured", "maxConns", cfg.MaxConns, "minConns", cfg.MinConns)
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open brain DB pool: %w", err)
@@ -725,4 +728,14 @@ func nilIfEmpty(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// envInt returns the integer value of an env var, or the given default.
+func envInt(key string, defaultVal int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultVal
 }
