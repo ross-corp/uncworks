@@ -697,6 +697,8 @@ type ArchiveAndCleanupInput struct {
 // ArchiveAndCleanup deletes the Deployment and PVC for a completed run.
 // This is called after the archive retention period expires.
 func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndCleanupInput) error {
+	slog.Info("cleanup started", "agentRunName", input.DeploymentName, "deploymentName", input.DeploymentName)
+
 	// Delete Deployment
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -723,6 +725,7 @@ func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndClea
 		}
 	}
 
+	slog.Info("cleanup complete", "agentRunName", input.DeploymentName, "deploymentName", input.DeploymentName)
 	return nil
 }
 
