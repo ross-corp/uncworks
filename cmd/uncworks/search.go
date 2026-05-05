@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -43,8 +45,8 @@ Flags:`)
 	}
 
 	req := connect.NewRequest(&apiv1.SearchPastWorkRequest{
-		Query:  query,
-		Limit:  int32(*limit),
+		Query:   query,
+		Limit:   int32(*limit),
 		RepoUrl: *repo,
 	})
 	resp, err := client.SearchPastWork(context.Background(), req)
@@ -59,11 +61,24 @@ Flags:`)
 	}
 
 	for i, r := range results {
-		snippet := r.GetChunkText()
-		if len(snippet) > 120 {
-			snippet = snippet[:117] + "..."
+		// Header line: rank, score, run ID, and age if available.
+		age := ""
+		if ts := r.GetCreatedAt(); ts != nil {
+			age = " · " + time.Since(ts.AsTime()).Round(time.Hour).String() + " ago"
 		}
-		fmt.Printf("%d. [%.3f] %s: %s\n", i+1, r.GetSimilarityScore(), r.GetRunId(), snippet)
+		fmt.Printf("%d. [%.3f] %s%s\n", i+1, r.GetSimilarityScore(), r.GetRunId(), age)
+
+		// Repo URL on its own line when present.
+		if u := r.GetRepoUrl(); u != "" {
+			fmt.Printf("   repo: %s\n", u)
+		}
+
+		// Snippet: collapse whitespace, then truncate.
+		snippet := strings.Join(strings.Fields(r.GetChunkText()), " ")
+		if len(snippet) > 200 {
+			snippet = snippet[:197] + "..."
+		}
+		fmt.Printf("   %s\n\n", snippet)
 	}
 	return nil
 }
