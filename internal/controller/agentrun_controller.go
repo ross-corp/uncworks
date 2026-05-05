@@ -31,6 +31,7 @@ import (
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	"github.com/uncworks/aot/internal/eventbus"
+	"github.com/uncworks/aot/internal/server"
 	"github.com/uncworks/aot/internal/softserve"
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
@@ -414,18 +415,22 @@ func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *
 	case enums.WORKFLOW_EXECUTION_STATUS_COMPLETED:
 		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseSucceeded
 		agentRun.Status.Message = "Workflow completed"
+		server.RunsSucceededTotal.Add(1)
 	case enums.WORKFLOW_EXECUTION_STATUS_FAILED:
 		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
 		agentRun.Status.Message = "Workflow failed"
+		server.RunsFailedTotal.Add(1)
 	case enums.WORKFLOW_EXECUTION_STATUS_CANCELED:
 		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseCancelled
 		agentRun.Status.Message = "Workflow cancelled"
 	case enums.WORKFLOW_EXECUTION_STATUS_TERMINATED:
 		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
 		agentRun.Status.Message = "Workflow terminated"
+		server.RunsFailedTotal.Add(1)
 	case enums.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:
 		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
 		agentRun.Status.Message = "Workflow timed out"
+		server.RunsFailedTotal.Add(1)
 	default:
 		return ctrl.Result{RequeueAfter: reconcileInterval}, nil
 	}
