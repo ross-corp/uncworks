@@ -19,6 +19,19 @@ spec:
         app.kubernetes.io/component: apiserver
     spec:
       serviceAccountName: {{ include "aot.fullname" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      {{- if gt .Values.apiserver.replicas 1 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "aot.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: apiserver
+      {{- end }}
       containers:
         - name: apiserver
           image: {{ include "aot.controlplaneImage" . }}
