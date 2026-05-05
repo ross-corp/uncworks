@@ -63,17 +63,19 @@ spec:
           ports:
             - name: metrics
               containerPort: {{ .Values.controller.metricsPort }}
+            - name: health
+              containerPort: 8091
           livenessProbe:
             httpGet:
-              path: /metrics
-              port: metrics
+              path: /healthz
+              port: health
             initialDelaySeconds: 10
             periodSeconds: 30
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /metrics
-              port: metrics
+              path: /readyz
+              port: health
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
