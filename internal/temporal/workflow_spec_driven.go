@@ -215,6 +215,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 
 	// Compensation: ensure deployment scale-down and LLM key revocation on any exit.
 	var podName string
+	var podIP string
 	var deploymentName string
 	var llmKey string
 	defer func() {
@@ -240,6 +241,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			_ = workflow.ExecuteActivity(logCtx, ActivityCollectAgentLogs, CollectAgentLogsInput{
 				AgentRunName: input.AgentRunName,
 				Namespace:    input.Namespace,
+				PodIP:        podIP,
 			}).Get(logCtx, nil)
 
 			_ = workflow.ExecuteActivity(cleanupCtx, ActivityScaleDownDeployment, ScaleDownDeploymentInput{
@@ -334,7 +336,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		state.Message = fmt.Sprintf("Hydration failed: %v", err)
 		return err
 	}
-	podIP := hydrationOutput.PodIP
+	podIP = hydrationOutput.PodIP
 
 	// checkCancel does a non-blocking drain of the cancel channel.
 	// Returns true if a cancel signal was pending (caller should return nil).

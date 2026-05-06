@@ -2,11 +2,9 @@
 package temporal
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -23,8 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"connectrpc.com/connect"
@@ -78,9 +74,6 @@ type Activities struct {
 	// GitHubTokenSecretName is the k8s Secret name containing the GitHub token.
 	// When set, the init container gets GITHUB_TOKEN from this Secret.
 	GitHubTokenSecretName string
-	// RESTConfig is the Kubernetes REST config used for streaming pod logs.
-	// When nil, log collection is skipped.
-	RESTConfig *rest.Config
 }
 
 // WaitForHydrationInput contains the parameters for waiting on hydration.
@@ -700,60 +693,37 @@ func (a *Activities) ScaleDownDeployment(ctx context.Context, input ScaleDownDep
 type CollectAgentLogsInput struct {
 	AgentRunName string
 	Namespace    string
+	PodIP        string // sidecar address; required to read log from PVC via ExecCommand
 }
 
-// CollectAgentLogs streams the agent container logs and persists them to the AgentRun
-// status.logOutput field. Must be called before ScaleDownDeployment while the pod exists.
+// CollectAgentLogs reads the agent log file from the workspace PVC via the sidecar's
+// ExecCommand RPC and persists the last 32 KB to AgentRun status.logOutput. Must be
+// called before ScaleDownDeployment while the sidecar is still reachable.
 func (a *Activities) CollectAgentLogs(ctx context.Context, input CollectAgentLogsInput) error {
-	if a.RESTConfig == nil {
-		return nil // skip in test environments without a real cluster
+	if input.PodIP == "" {
+		slog.Warn("collect logs: no pod IP, skipping", "agentRun", input.AgentRunName)
+		return nil
 	}
 
-	clientset, err := kubernetes.NewForConfig(a.RESTConfig)
+	sidecarURL := fmt.Sprintf("http://%s:%d", input.PodIP, sidecarPort)
+	sc := agentv1connect.NewAgentSidecarServiceClient(
+		&http.Client{Timeout: 30 * time.Second},
+		sidecarURL,
+	)
+
+	// Read the last 32 KB of the agent log file written by pi on the shared PVC.
+	// tail -c 32768 is equivalent to the 32 KB cap applied below.
+	resp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "tail -c 32768 /workspace/.aot/logs/agent.log 2>/dev/null || echo ''",
+		WorkingDir:     "/workspace",
+		TimeoutSeconds: 30,
+	}))
 	if err != nil {
-		slog.Warn("collect logs: failed to create clientset", "agentRun", input.AgentRunName, "err", err)
+		slog.Warn("collect logs: exec failed", "agentRun", input.AgentRunName, "err", err)
 		return nil // non-fatal
 	}
 
-	// Find pods by the agentrun label used in CreateAgentDeployment.
-	podList, err := clientset.CoreV1().Pods(input.Namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("aot.uncworks.io/agentrun=%s", input.AgentRunName),
-		Limit:         1,
-	})
-	if err != nil || len(podList.Items) == 0 {
-		slog.Warn("collect logs: no pod found", "agentRun", input.AgentRunName)
-		return nil
-	}
-	pod := podList.Items[0]
-
-	// The "agent" container runs "sleep infinity" — actual agent output is in "rpc-gateway".
-	// With RestartPolicy:Always the container may have restarted by cleanup time, so try
-	// current logs first, then Previous=true (terminated container) if current is empty.
-	var tailLines int64 = 500
-	var buf bytes.Buffer
-	for _, prev := range []bool{false, true} {
-		buf.Reset()
-		req := clientset.CoreV1().Pods(input.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-			Container: "rpc-gateway",
-			TailLines: &tailLines,
-			Previous:  prev,
-		})
-		stream, err := req.Stream(ctx)
-		if err != nil {
-			continue
-		}
-		_, _ = io.Copy(&buf, stream)
-		stream.Close()
-		if buf.Len() > 0 {
-			break
-		}
-	}
-
-	logOutput := buf.String()
-	const maxLogBytes = 32 * 1024
-	if len(logOutput) > maxLogBytes {
-		logOutput = logOutput[len(logOutput)-maxLogBytes:]
-	}
+	logOutput := strings.TrimRight(resp.Msg.Stdout, "\x00")
 
 	// Patch the AgentRun CRD status.logOutput using a merge patch.
 	patch := []byte(fmt.Sprintf(`{"status":{"logOutput":%q}}`, logOutput))
