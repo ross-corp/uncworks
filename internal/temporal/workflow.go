@@ -313,6 +313,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			if err := workflow.ExecuteActivity(logCtx, ActivityCollectAgentLogs, CollectAgentLogsInput{
 				AgentRunName: input.AgentRunName,
 				Namespace:    input.Namespace,
+				PodIP:        podIP,
 			}).Get(logCtx, nil); err != nil {
 				workflow.GetLogger(ctx).Warn("Failed to collect agent logs", "error", err)
 			}
