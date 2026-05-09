@@ -39,6 +39,7 @@ Subcommands:
   open <id>         Open the PR URL for a completed run in browser
   retry <id>        Create a new run with the same spec as an existing run
   rerun <id>        Alias for retry
+  copy <id>         Alias for retry
   cancel-all        Cancel all active (non-terminal) runs
   graph <id>        Show the run graph (parent/child relationships)
   latest            Show the most recent run in detail
@@ -76,7 +77,7 @@ func runRuns(args []string) error {
 		return runRunsStats(rest)
 	case "open":
 		return runRunsOpen(rest)
-	case "retry", "rerun":
+	case "retry", "rerun", "copy":
 		return runRunsRetry(rest)
 	case "cancel-all":
 		return runRunsCancelAll(rest)
