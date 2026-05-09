@@ -26,34 +26,34 @@ import (
 const runsUsage = `Usage: uncworks runs <subcommand> [flags]
 
 Subcommands:
-  list              List recent agent runs
-  get <id>          Show full detail for a run
+  list              List recent agent runs (--json, --active, --phase, --project, --since, --show-tags)
+  get <id>          Show full detail for a run (--json, --short, --wait, multiple IDs supported)
   describe <id>     Show full detail including persisted log output
-  logs <id>         Stream log output until the run completes
+  logs <id>         Stream log output until the run completes (--no-follow, --grep, --lines, --head, --timestamps)
   tail <id>         Stream logs and show summary when run completes
   watch             Auto-refresh the runs list (like watch kubectl get pods)
+  wait <id>         Block until a run reaches a terminal phase (exit 0 on success, 1 on failure)
+  stats             Show aggregate counts of runs by phase (--format json|table, --since, --project)
+  count             Print a count of runs (--by-phase, --project, --since)
+  summary           Show a dashboard summary of recent run activity
+  latest            Show the most recent N runs (--n, --phase, --project, --tag)
+  graph <id>        Show the run graph (parent/child relationships)
+  inspect <id>      Diagnostic view: details, graph, and log tail
+  diff <id>         Show git commands to inspect a run's diff
+  open <id>         Open the PR URL for a completed run in browser
+  retry <id>        Re-run with same spec; override with --prompt, --branch, --model-tier, --append-prompt, --add-env
+  rerun <id>        Alias for retry
+  copy <id>         Alias for retry
+  retry-failed      Bulk retry all FAILED runs matching filters (--project, --since, --dry-run)
+  cancel <id>       Request cancellation of a running agent (multiple IDs supported)
+  kill <id>         Alias for cancel
+  cancel-all        Cancel all active runs (--project, --tag, --title-contains)
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
   archive-done      Bulk archive all SUCCEEDED runs
   archive-failed    Bulk archive all FAILED runs
-  prune             Bulk archive all terminal runs older than a given age
-  cancel <id>       Request cancellation of a running agent
-  kill <id>         Alias for cancel
-  stats             Show aggregate counts of runs by phase
-  open <id>         Open the PR URL for a completed run in browser
-  retry <id>        Create a new run with the same spec as an existing run
-  rerun <id>        Alias for retry
-  copy <id>         Alias for retry
-  cancel-all        Cancel all active (non-terminal) runs
-  graph <id>        Show the run graph (parent/child relationships)
-  latest            Show the most recent run in detail
-  count             Print a count of runs (by phase or total)
-  export            Export runs as CSV
-  diff <id>         Show git commands to inspect a run's diff
-  inspect <id>      Diagnostic view: details, graph, and log tail
-  wait <id>         Block until a run reaches a terminal phase (exit 1 on failure)
-  retry-failed      Bulk retry all FAILED runs matching filters
-  summary           Show a dashboard summary of recent run activity
+  prune             Bulk archive all terminal runs older than a given age (--failed, --done)
+  export            Export runs as CSV, JSON, or TSV (--format csv|json|tsv)
 `
 
 func runRuns(args []string) error {
