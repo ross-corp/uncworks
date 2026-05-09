@@ -322,7 +322,7 @@ func runRunsList(args []string) error {
 		}
 		runs = append(runs, resp.Msg.GetAgentRuns()...)
 		nextCursor = resp.Msg.GetNextCursor()
-		if !*all || nextCursor == "" {
+		if (!*all && !*activeOnly) || nextCursor == "" {
 			break
 		}
 		fetchCursor = nextCursor
