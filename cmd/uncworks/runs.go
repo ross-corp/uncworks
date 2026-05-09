@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -45,6 +46,7 @@ Subcommands:
   graph <id>        Show the run graph (parent/child relationships)
   latest            Show the most recent run in detail
   count             Print a count of runs (by phase or total)
+  export            Export runs as CSV
 `
 
 func runRuns(args []string) error {
@@ -91,6 +93,8 @@ func runRuns(args []string) error {
 		return runRunsLatest(rest)
 	case "count":
 		return runRunsCount(rest)
+	case "export":
+		return runRunsExport(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -1640,6 +1644,137 @@ func runRunsLatest(args []string) error {
 		getArgs = append(getArgs, "--log")
 	}
 	return runRunsGet(getArgs)
+}
+
+// ── export ────────────────────────────────────────────────────────────────────
+
+func runRunsExport(args []string) error {
+	fs := flag.NewFlagSet("runs export", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
+	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
+	outFile := fs.String("out", "", "Write CSV to file instead of stdout")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs export [flags]\n\nExport runs as CSV (stdout by default).\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	listReq := &apiv1.ListAgentRunsRequest{
+		Limit:         100,
+		ProjectFilter: *project,
+		FeatureFilter: *feature,
+	}
+	if *phase != "" {
+		switch strings.ToUpper(*phase) {
+		case "RUNNING":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+		case "DONE":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+		case "FAILED":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+		case "PENDING":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+		case "WAITING":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+		case "CANCELLED":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+		default:
+			return fmt.Errorf("invalid phase %q", *phase)
+		}
+	}
+
+	var allRuns []*apiv1.AgentRun
+	cursor := ""
+	for {
+		listReq.Cursor = cursor
+		resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			if !sinceTime.IsZero() {
+				ts := r.GetStatus().GetStartedAt()
+				if ts == nil || !ts.AsTime().After(sinceTime) {
+					continue
+				}
+			}
+			allRuns = append(allRuns, r)
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	var out *os.File
+	if *outFile != "" {
+		f, err := os.Create(*outFile)
+		if err != nil {
+			return fmt.Errorf("create %s: %w", *outFile, err)
+		}
+		defer f.Close()
+		out = f
+	} else {
+		out = os.Stdout
+	}
+
+	w := csv.NewWriter(out)
+	_ = w.Write([]string{"id", "title", "phase", "project", "feature", "model", "started", "completed", "duration_s", "pr_url", "tags"})
+	for _, r := range allRuns {
+		started := ""
+		completed := ""
+		durationS := ""
+		if r.GetStatus().GetStartedAt() != nil {
+			started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
+		}
+		if r.GetStatus().GetCompletedAt() != nil {
+			completed = r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339)
+			if r.GetStatus().GetStartedAt() != nil {
+				dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime())
+				durationS = fmt.Sprintf("%.0f", dur.Seconds())
+			}
+		}
+		_ = w.Write([]string{
+			r.GetId(),
+			r.GetSpec().GetDisplayName(),
+			phaseLabel(r.GetStatus().GetPhase()),
+			r.GetSpec().GetProject(),
+			r.GetSpec().GetFeature(),
+			r.GetSpec().GetModelTier(),
+			started,
+			completed,
+			durationS,
+			r.GetStatus().GetPrUrl(),
+			strings.Join(r.GetSpec().GetTags(), ";"),
+		})
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return fmt.Errorf("csv write: %w", err)
+	}
+	if *outFile != "" {
+		fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
+	}
+	return nil
 }
 
 // ── count ─────────────────────────────────────────────────────────────────────
