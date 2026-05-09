@@ -215,6 +215,7 @@ func runRunsList(args []string) error {
 	doneOnly := fs.Bool("done", false, "Shorthand for --phase DONE (successful runs)")
 	cancelledOnly := fs.Bool("cancelled", false, "Shorthand for --phase CANCELLED")
 	noHeader := fs.Bool("no-header", false, "Omit the column header row (useful for scripting)")
+	titleWidth := fs.Int("title-width", 32, "Max characters to show in the title column (min: 10)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -471,8 +472,12 @@ func runRunsList(args []string) error {
 		if title == "" {
 			title = "-"
 		}
-		if len(title) > 32 {
-			title = title[:29] + "..."
+		maxTitle := *titleWidth
+		if maxTitle < 10 {
+			maxTitle = 10
+		}
+		if len(title) > maxTitle {
+			title = title[:maxTitle-3] + "..."
 		}
 		phase := phaseLabel(r.GetStatus().GetPhase())
 		model := r.GetSpec().GetModelTier()
