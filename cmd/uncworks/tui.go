@@ -320,6 +320,9 @@ func (m tuiModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.repoInput.Focus()
 			m.branchInput.Blur()
 			return m, nil
+		case "r":
+			m.loading = true
+			return m, loadRuns(m.client)
 		case "enter":
 			if item, ok := m.list.SelectedItem().(runItem); ok {
 				m.view = viewLog
@@ -431,7 +434,7 @@ func (m tuiModel) View() string {
 		if m.loading {
 			return fmt.Sprintf("\n  %s Loading runs...\n", m.spinner.View())
 		}
-		return m.list.View() + "\n" + styleHelp.Render("  n new  enter view logs  ? help  q quit")
+		return m.list.View() + "\n" + styleHelp.Render("  n new  r refresh  enter view logs  ? help  q quit")
 
 	case viewLog:
 		header := styleTitle.Render(fmt.Sprintf("Logs: %s", m.watchRunID))
@@ -463,6 +466,7 @@ func (m tuiModel) View() string {
 				"    j/k or ↑/↓  Navigate\n" +
 				"    enter        View logs\n" +
 				"    n            New run\n" +
+				"    r            Refresh\n" +
 				"    /            Filter\n" +
 				"    q            Quit\n\n" +
 				"  Log view:\n" +
