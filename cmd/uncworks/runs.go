@@ -2445,6 +2445,7 @@ func runRunsExport(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
 	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	outFile := fs.String("out", "", "Write output to file instead of stdout")
@@ -2475,6 +2476,7 @@ func runRunsExport(args []string) error {
 		Limit:         100,
 		ProjectFilter: *project,
 		FeatureFilter: *feature,
+		TagFilter:     *tag,
 	}
 	if *phase != "" {
 		switch strings.ToUpper(*phase) {
@@ -2596,11 +2598,13 @@ func runRunsExport(args []string) error {
 	if *format == "tsv" {
 		w.Comma = '\t'
 	}
-	_ = w.Write([]string{"id", "title", "phase", "project", "feature", "model", "started", "completed", "duration_s", "pr_url", "tags"})
+	_ = w.Write([]string{"id", "title", "phase", "project", "feature", "model", "repo", "branch", "started", "completed", "duration_s", "pr_url", "tags", "parent_run_id"})
 	for _, r := range allRuns {
 		started := ""
 		completed := ""
 		durationS := ""
+		repoURL := ""
+		branch := ""
 		if r.GetStatus().GetStartedAt() != nil {
 			started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
 		}
@@ -2611,6 +2615,10 @@ func runRunsExport(args []string) error {
 				durationS = fmt.Sprintf("%.0f", dur.Seconds())
 			}
 		}
+		if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
+			repoURL = repos[0].GetUrl()
+			branch = repos[0].GetBranch()
+		}
 		_ = w.Write([]string{
 			r.GetId(),
 			r.GetSpec().GetDisplayName(),
@@ -2618,11 +2626,14 @@ func runRunsExport(args []string) error {
 			r.GetSpec().GetProject(),
 			r.GetSpec().GetFeature(),
 			r.GetSpec().GetModelTier(),
+			repoURL,
+			branch,
 			started,
 			completed,
 			durationS,
 			r.GetStatus().GetPrUrl(),
 			strings.Join(r.GetSpec().GetTags(), ";"),
+			r.GetSpec().GetParentRunId(),
 		})
 	}
 	w.Flush()
