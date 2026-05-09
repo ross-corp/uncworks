@@ -11,7 +11,7 @@ import (
 func runConfig(args []string) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show    Print the current CLI configuration\n\nFlags:")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show          Print the current CLI configuration\n  set-server    Set the gRPC server address\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -24,11 +24,47 @@ func runConfig(args []string) error {
 	switch fs.Arg(0) {
 	case "show":
 		return runConfigShow(fs.Args()[1:])
+	case "set-server":
+		return runConfigSetServer(fs.Args()[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n", fs.Arg(0))
 		fs.Usage()
 		return fmt.Errorf("unknown subcommand %q", fs.Arg(0))
 	}
+}
+
+func runConfigSetServer(args []string) error {
+	fs := flag.NewFlagSet("config set-server", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-server <address>\n\nSet the gRPC server address. Use 'local' to reset to port-forward mode.")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("address argument required")
+	}
+	addr := fs.Arg(0)
+	if addr == "local" {
+		addr = ""
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	cfg.Server.Address = addr
+	if err := saveConfig(cfg); err != nil {
+		return err
+	}
+	path, _ := configPath()
+	if addr == "" {
+		fmt.Printf("server.address reset to local port-forward (config: %s)\n", path)
+	} else {
+		fmt.Printf("server.address set to %s (config: %s)\n", addr, path)
+	}
+	return nil
 }
 
 func runConfigShow(args []string) error {
