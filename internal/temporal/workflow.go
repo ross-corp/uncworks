@@ -318,12 +318,34 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 				workflow.GetLogger(ctx).Warn("Failed to collect agent logs", "error", err)
 			}
 
-			// Scale deployment to 0 — PVC persists for later access/debug
+			// Scale deployment to 0 then delete deployment + PVC after retention window.
 			if err := workflow.ExecuteActivity(cleanupCtx, ActivityScaleDownDeployment, ScaleDownDeploymentInput{
 				DeploymentName: deploymentName,
 				Namespace:      input.Namespace,
 			}).Get(cleanupCtx, nil); err != nil {
 				workflow.GetLogger(ctx).Error("Failed to scale down deployment", "deployment", deploymentName, "error", err)
+			}
+
+			// Wait for retention window then delete deployment and PVC.
+			retainDuration := 24 * time.Hour
+			if input.TTLSeconds > 0 && time.Duration(input.TTLSeconds)*time.Second < retainDuration {
+				retainDuration = time.Duration(input.TTLSeconds) * time.Second
+			}
+			_ = workflow.Sleep(cleanupCtx, retainDuration)
+
+			pvcName := fmt.Sprintf("aot-ws-%s", input.AgentRunName)
+			archCtx := workflow.WithActivityOptions(cleanupCtx, workflow.ActivityOptions{
+				StartToCloseTimeout: 2 * time.Minute,
+				RetryPolicy: &temporal.RetryPolicy{
+					MaximumAttempts: 3,
+				},
+			})
+			if err := workflow.ExecuteActivity(archCtx, ActivityArchiveAndCleanup, ArchiveAndCleanupInput{
+				DeploymentName: deploymentName,
+				PVCName:        pvcName,
+				Namespace:      input.Namespace,
+			}).Get(archCtx, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Failed to archive and cleanup", "deployment", deploymentName, "error", err)
 			}
 		}
 	}()
