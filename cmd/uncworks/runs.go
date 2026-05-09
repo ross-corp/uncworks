@@ -27,6 +27,7 @@ Subcommands:
   get <id>          Show full detail for a run
   describe <id>     Show full detail including persisted log output
   logs <id>         Stream log output until the run completes
+  watch <id>        Alias for logs
   tail <id>         Stream logs and show summary when run completes
   watch <id>        Alias for 'logs' (stream live output)
   archive <id>      Mark a run as archived
