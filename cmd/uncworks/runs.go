@@ -58,6 +58,7 @@ Subcommands:
   multi-tail        Tail logs from multiple runs simultaneously (prefixed by run ID)
   top               Live view of active runs sorted by elapsed time (auto-refresh)
   batch <file>      Submit multiple runs from a JSON file
+  histogram         Show a bar chart of run activity over a time window (--since, --buckets)
 `
 
 func runRuns(args []string) error {
@@ -124,6 +125,8 @@ func runRuns(args []string) error {
 		return runRunsTop(rest)
 	case "batch":
 		return runRunsBatch(rest)
+	case "histogram":
+		return runRunsHistogram(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -147,6 +150,7 @@ func runRunsWatch(args []string) error {
 	feature := fs.String("feature", "", "Filter by feature name")
 	tag := fs.String("tag", "", "Filter by tag")
 	titleContains := fs.String("title-contains", "", "Filter runs by display name substring")
+	titleShortW := fs.String("title", "", "Shorthand for --title-contains")
 	active := fs.Bool("active", false, "Show only active runs (RUNNING + PENDING + WAITING)")
 	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
@@ -156,6 +160,9 @@ func runRunsWatch(args []string) error {
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *titleShortW != "" && *titleContains == "" {
+		*titleContains = *titleShortW
 	}
 	if *interval < 1 {
 		return fmt.Errorf("--interval must be >= 1")
@@ -266,6 +273,7 @@ func runRunsList(args []string) error {
 	titleWidth := fs.Int("title-width", 32, "Max characters to show in the title column (min: 10)")
 	showTags := fs.Bool("show-tags", false, "Add a tags column to the output")
 	showPR := fs.Bool("show-pr", false, "Add a PR URL column to the output")
+	titleShort := fs.String("title", "", "Shorthand for --title-contains")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -274,6 +282,9 @@ func runRunsList(args []string) error {
 		os.Exit(2)
 	}
 
+	if *titleShort != "" && *titleContains == "" {
+		*titleContains = *titleShort
+	}
 	if *recent && *since == "" {
 		*since = "24h"
 	}
@@ -2849,6 +2860,168 @@ func runRunsExport(args []string) error {
 	if *outFile != "" {
 		fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
 	}
+	return nil
+}
+
+// ── histogram ─────────────────────────────────────────────────────────────────
+
+func runRunsHistogram(args []string) error {
+	fs := flag.NewFlagSet("runs histogram", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	since := fs.String("since", "24h", "Time window to cover (e.g. 1h, 24h, 7d)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	buckets := fs.Int("buckets", 0, "Number of time buckets (0 = auto: 24 for <=24h windows, 7 for <=7d, else 30)")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs histogram [flags]\n\nShow a bar chart of run starts bucketed over a time window.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	d, err := parseSinceDuration(*since)
+	if err != nil {
+		return fmt.Errorf("--since %q: %w", *since, err)
+	}
+	sinceTime := time.Now().Add(-d)
+
+	numBuckets := *buckets
+	if numBuckets <= 0 {
+		switch {
+		case d <= 24*time.Hour:
+			numBuckets = 24
+		case d <= 7*24*time.Hour:
+			numBuckets = 7
+		default:
+			numBuckets = 30
+		}
+	}
+	bucketDur := d / time.Duration(numBuckets)
+
+	counts := make([]int, numBuckets)
+	phaseBuckets := map[string][]int{
+		"DONE":    make([]int, numBuckets),
+		"FAILED":  make([]int, numBuckets),
+		"RUNNING": make([]int, numBuckets),
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	cursor := ""
+	for {
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			TagFilter:     *tag,
+			Cursor:        cursor,
+		}))
+		if err != nil {
+			// On connection error mid-pagination, render with data collected so far.
+			break
+		}
+		done := false
+		for _, r := range resp.Msg.GetAgentRuns() {
+			ts := r.GetStatus().GetStartedAt()
+			if ts == nil {
+				ts = r.GetCreatedAt()
+			}
+			if ts == nil {
+				continue
+			}
+			t := ts.AsTime()
+			if t.Before(sinceTime) {
+				done = true
+				break
+			}
+			offset := time.Since(sinceTime) - time.Since(t)
+			idx := int(offset / bucketDur)
+			if idx < 0 {
+				idx = 0
+			}
+			if idx >= numBuckets {
+				idx = numBuckets - 1
+			}
+			counts[idx]++
+			label := phaseLabel(r.GetStatus().GetPhase())
+			if pb, ok := phaseBuckets[label]; ok {
+				pb[idx]++
+			}
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" || done {
+			break
+		}
+	}
+
+	maxCount := 0
+	for _, n := range counts {
+		if n > maxCount {
+			maxCount = n
+		}
+	}
+
+	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+
+	const barWidth = 30
+	fmt.Printf("Run activity — last %s  (bucket size: %s)\n\n", *since, bucketDur.Round(time.Minute))
+
+	for i := 0; i < numBuckets; i++ {
+		bucketStart := sinceTime.Add(time.Duration(i) * bucketDur)
+		label := bucketStart.Format("01/02 15:04")
+		if bucketDur >= 24*time.Hour {
+			label = bucketStart.Format("01/02")
+		} else if bucketDur >= time.Hour {
+			label = bucketStart.Format("15:04")
+		}
+
+		n := counts[i]
+		barLen := 0
+		if maxCount > 0 {
+			barLen = int(float64(n) / float64(maxCount) * barWidth)
+		}
+		bar := strings.Repeat("█", barLen)
+
+		doneN := phaseBuckets["DONE"][i]
+		failN := phaseBuckets["FAILED"][i]
+
+		if useColor && n > 0 {
+			color := "\033[32m" // green for mostly done
+			if failN > doneN {
+				color = "\033[31m" // red if more failures
+			} else if failN > 0 {
+				color = "\033[33m" // yellow if mixed
+			}
+			bar = color + bar + "\033[0m"
+		}
+
+		fmt.Printf("  %s │%-*s %d", label, barWidth, bar, n)
+		if n > 0 {
+			extras := []string{}
+			if doneN > 0 {
+				extras = append(extras, fmt.Sprintf("%d✓", doneN))
+			}
+			if failN > 0 {
+				extras = append(extras, fmt.Sprintf("%d✗", failN))
+			}
+			if len(extras) > 0 {
+				fmt.Printf(" (%s)", strings.Join(extras, " "))
+			}
+		}
+		fmt.Println()
+	}
+
+	total := 0
+	for _, n := range counts {
+		total += n
+	}
+	fmt.Printf("\nTotal: %d runs\n", total)
 	return nil
 }
 
