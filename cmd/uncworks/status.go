@@ -2,12 +2,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"text/tabwriter"
+
+	"connectrpc.com/connect"
+
+	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 )
 
 // podStatus holds the summarised status of a single pod for output purposes.
@@ -21,8 +26,9 @@ type podStatus struct {
 func runStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	namespace := fs.String("namespace", defaultNamespace, "Kubernetes namespace")
-	context := fs.String("context", "", "Kubeconfig context to use")
+	kubeContext := fs.String("context", "", "Kubeconfig context to use")
 	output := fs.String("output", "", `Output format. One of: json`)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks status [flags]\n\nShow health of the UNCWORKS stack.\nExits non-zero if any pod is not ready.")
 		fs.PrintDefaults()
@@ -37,9 +43,11 @@ func runStatus(args []string) error {
 		return err
 	}
 
-	kubectlArgs := []string{"get", "pods", "--namespace", *namespace, "-o", "json"}
-	if *context != "" {
-		kubectlArgs = append([]string{"--context", *context}, kubectlArgs...)
+	kubectlArgs := []string{"get", "pods", "--namespace", *namespace,
+		"-l", "app.kubernetes.io/instance=uncworks",
+		"-o", "json"}
+	if *kubeContext != "" {
+		kubectlArgs = append([]string{"--context", *kubeContext}, kubectlArgs...)
 	}
 	out, err := exec.Command("kubectl", kubectlArgs...).Output()
 	if err != nil {
@@ -122,8 +130,34 @@ func runStatus(args []string) error {
 		w.Flush()
 	}
 
+	// Check gRPC API connectivity
+	apiOK := false
+	apiMsg := ""
+	if client, err := newClient(*server); err == nil {
+		_, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if apiErr == nil {
+			apiOK = true
+			apiMsg = "OK"
+		} else {
+			apiMsg = humanizeErr(apiErr)
+		}
+	} else {
+		apiMsg = "no server configured (run 'uncworks connect')"
+	}
+
+	if *output != "json" {
+		apiStatus := "OK"
+		if !apiOK {
+			apiStatus = "UNREACHABLE (" + apiMsg + ")"
+		}
+		fmt.Printf("\nAPI server: %s\n", apiStatus)
+	}
+
 	if !allReady {
 		return fmt.Errorf("one or more pods are not ready")
+	}
+	if !apiOK {
+		return fmt.Errorf("API server unreachable: %s", apiMsg)
 	}
 	return nil
 }
