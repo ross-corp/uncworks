@@ -483,6 +483,7 @@ func runRunsStats(args []string) error {
 	fs := flag.NewFlagSet("runs stats", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -512,6 +513,7 @@ func runRunsStats(args []string) error {
 		listReq := &apiv1.ListAgentRunsRequest{
 			Limit:         100,
 			ProjectFilter: *project,
+			FeatureFilter: *feature,
 			Cursor:        cursor,
 		}
 		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
@@ -524,7 +526,7 @@ func runRunsStats(args []string) error {
 			total++
 		}
 		cursor = resp.Msg.GetNextCursor()
-		if cursor == "" || len(resp.Msg.GetAgentRuns()) == 0 {
+		if cursor == "" {
 			break
 		}
 	}
