@@ -892,6 +892,7 @@ func runRunsStats(args []string) error {
 	cursor := ""
 	total := 0
 	var doneDurations []time.Duration
+	failureReasons := map[string]int{}
 	for {
 		pageSize := int32(100)
 		if *limit > 0 && *limit-total < 100 {
@@ -923,6 +924,13 @@ func runRunsStats(args []string) error {
 				if sa != nil && ca != nil {
 					doneDurations = append(doneDurations, ca.AsTime().Sub(sa.AsTime()))
 				}
+			}
+			if label == "FAILED" {
+				msg := r.GetStatus().GetMessage()
+				if msg == "" {
+					msg = "(no message)"
+				}
+				failureReasons[msg]++
 			}
 		}
 		cursor = resp.Msg.GetNextCursor()
@@ -1006,6 +1014,33 @@ func runRunsStats(args []string) error {
 		fmt.Printf("Median duration: %s\n", medianDuration.Round(time.Second))
 	} else if done > 0 {
 		fmt.Printf("Median duration: —\n")
+	}
+	if len(failureReasons) > 0 {
+		type reasonCount struct {
+			reason string
+			count  int
+		}
+		var reasons []reasonCount
+		for r, c := range failureReasons {
+			reasons = append(reasons, reasonCount{r, c})
+		}
+		sort.Slice(reasons, func(i, j int) bool {
+			if reasons[i].count != reasons[j].count {
+				return reasons[i].count > reasons[j].count
+			}
+			return reasons[i].reason < reasons[j].reason
+		})
+		if len(reasons) > 5 {
+			reasons = reasons[:5]
+		}
+		fmt.Printf("\nTop failure reasons:\n")
+		for i, rc := range reasons {
+			fmt.Printf("  %d. %s (%d run", i+1, rc.reason, rc.count)
+			if rc.count != 1 {
+				fmt.Print("s")
+			}
+			fmt.Println(")")
+		}
 	}
 	return nil
 }
