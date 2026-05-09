@@ -113,7 +113,6 @@ Flags:`)
 		}
 	}
 
-	fmt.Printf("Waiting for run %s to complete...\n", run.GetId())
 	startTime := time.Now()
 	waitCtx := context.Background()
 	var waitCancel context.CancelFunc
@@ -123,15 +122,29 @@ Flags:`)
 	}
 	var lastPhase apiv1.AgentRunPhase
 	var lastStage, lastMsg string
+	var needNewline bool
+	var dotCount int
+
+	if !*outputID {
+		fmt.Printf("Waiting for run %s ", run.GetId())
+	}
+
 	for {
 		select {
 		case <-waitCtx.Done():
+			if !*outputID && dotCount > 0 {
+				fmt.Println()
+			}
 			return fmt.Errorf("timed out after %s waiting for run %s", *timeout, run.GetId())
 		case <-time.After(10 * time.Second):
 		}
 		getReq := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: run.GetId()})
 		getResp, err := client.GetAgentRun(waitCtx, getReq)
 		if err != nil {
+			if !*outputID && needNewline {
+				fmt.Println()
+				needNewline = false
+			}
 			fmt.Fprintf(os.Stderr, "warn: poll error: %s\n", humanizeErr(err))
 			continue
 		}
@@ -139,12 +152,21 @@ Flags:`)
 		msg := getResp.Msg.GetStatus().GetMessage()
 		stage := getResp.Msg.GetStatus().GetStage()
 		elapsed := int(time.Since(startTime).Seconds())
-		
-		// Only print if phase, stage, or message changed
+
+		if !*outputID {
+			fmt.Print(".")
+			dotCount++
+			needNewline = true
+		}
+
 		if phase != lastPhase || stage != lastStage || msg != lastMsg {
 			lastPhase = phase
 			lastStage = stage
 			lastMsg = msg
+			if !*outputID && needNewline {
+				fmt.Println()
+				needNewline = false
+			}
 			if stage != "" {
 				fmt.Printf("  [%s | %ds | stage:%s] %s\n", phaseLabel(phase), elapsed, stage, msg)
 			} else {
@@ -153,16 +175,25 @@ Flags:`)
 		}
 		switch phase {
 		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+			if !*outputID && needNewline {
+				fmt.Println()
+			}
 			if url := getResp.Msg.GetStatus().GetPrUrl(); url != "" {
 				fmt.Printf("PR: %s\n", url)
 			}
 			return nil
 		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+			if !*outputID && needNewline {
+				fmt.Println()
+			}
 			if msg != "" {
 				return fmt.Errorf("run %s failed: %s", run.GetId(), msg)
 			}
 			return fmt.Errorf("run %s failed", run.GetId())
 		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+			if !*outputID && needNewline {
+				fmt.Println()
+			}
 			return fmt.Errorf("run %s was cancelled", run.GetId())
 		}
 	}
