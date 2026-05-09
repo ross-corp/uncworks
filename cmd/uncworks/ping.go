@@ -17,8 +17,9 @@ import (
 func runPing(args []string) error {
 	fs := flag.NewFlagSet("ping", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
-	count := fs.Int("count", 3, "Number of pings to send")
+	count := fs.Int("count", 3, "Number of pings to send (0 = infinite with --watch)")
 	interval := fs.Duration("interval", 0, "Delay between pings (e.g. 500ms, 1s; 0 = no delay)")
+	watch := fs.Bool("watch", false, "Continuous mode: ping every --interval until Ctrl+C")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	quiet := fs.Bool("quiet", false, "Print only the average RTT or 'error' (for scripting)")
 	fs.Usage = func() {
@@ -54,6 +55,38 @@ func runPing(args []string) error {
 	var total time.Duration
 	var minRTT, maxRTT time.Duration
 	var failures int
+
+	if *watch {
+		watchInterval := *interval
+		if watchInterval == 0 {
+			watchInterval = time.Second
+		}
+		if !*jsonOut && !*quiet {
+			fmt.Printf("PING %s (Ctrl+C to stop)\n", addr)
+		}
+		for seq := 1; ; seq++ {
+			if seq > 1 {
+				time.Sleep(watchInterval)
+			}
+			start := time.Now()
+			_, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+			rtt := time.Since(start)
+			ts := time.Now().Format("15:04:05")
+			if apiErr != nil {
+				if *quiet {
+					fmt.Println("error")
+				} else {
+					fmt.Printf("[%s] seq=%d error: %s\n", ts, seq, humanizeErr(apiErr))
+				}
+			} else {
+				if *quiet {
+					fmt.Println(rtt.Round(time.Millisecond))
+				} else {
+					fmt.Printf("[%s] seq=%d rtt=%s\n", ts, seq, rtt.Round(time.Millisecond))
+				}
+			}
+		}
+	}
 
 	if !*jsonOut && !*quiet {
 		fmt.Printf("PING %s\n", addr)
