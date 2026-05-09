@@ -43,6 +43,7 @@ Subcommands:
   cancel-all        Cancel all active (non-terminal) runs
   graph <id>        Show the run graph (parent/child relationships)
   latest            Show the most recent run in detail
+  count             Print a count of runs (by phase or total)
 `
 
 func runRuns(args []string) error {
@@ -85,6 +86,8 @@ func runRuns(args []string) error {
 		return runRunsGraph(rest)
 	case "latest":
 		return runRunsLatest(rest)
+	case "count":
+		return runRunsCount(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -1386,6 +1389,94 @@ func runRunsLatest(args []string) error {
 		getArgs = append(getArgs, "--json")
 	}
 	return runRunsGet(getArgs)
+}
+
+// ── count ─────────────────────────────────────────────────────────────────────
+
+func runRunsCount(args []string) error {
+	fs := flag.NewFlagSet("runs count", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	phaseFilter := fs.String("phase", "", "Count only runs in this phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
+	}
+
+	var wantPhase apiv1.AgentRunPhase
+	phaseFiltered := false
+	if *phaseFilter != "" {
+		phaseFiltered = true
+		switch strings.ToUpper(*phaseFilter) {
+		case "RUNNING":
+			wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+		case "DONE":
+			wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+		case "FAILED":
+			wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+		case "PENDING":
+			wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+		case "WAITING":
+			wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+		case "CANCELLED":
+			wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+		default:
+			return fmt.Errorf("invalid phase %q: must be RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED", *phaseFilter)
+		}
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	count := 0
+	cursor := ""
+	for {
+		listReq := &apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			Cursor:        cursor,
+		}
+		if phaseFiltered {
+			listReq.PhaseFilter = wantPhase
+		}
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			if !sinceTime.IsZero() {
+				ts := r.GetStatus().GetStartedAt()
+				if ts == nil || !ts.AsTime().After(sinceTime) {
+					continue
+				}
+			}
+			count++
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	fmt.Println(count)
+	return nil
 }
 
 // parseSinceDuration parses a human duration like "1h", "24h", "7d".
