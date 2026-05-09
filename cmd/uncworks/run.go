@@ -46,6 +46,7 @@ func runRun(args []string) error {
 	parentRunID := fs.String("parent-run-id", "", "Parent run ID to link this run as a child")
 	var envFlags multiFlag
 	fs.Var(&envFlags, "env", "Environment variable for the agent pod (repeatable, KEY=VALUE)")
+	envFile := fs.String("env-file", "", "Load env vars from a KEY=VALUE file (one per line; # comments ignored)")
 	outputID := fs.Bool("output-id", false, "Print only the run ID (for scripting)")
 	dryRun := fs.Bool("dry-run", false, "Preview the run spec without actually creating the run")
 	fs.Usage = func() {
@@ -98,9 +99,13 @@ Flags:`)
 		}
 	}
 
-	if *repo == "" || *prompt == "" {
+	if *prompt == "" {
 		fs.Usage()
-		return fmt.Errorf("--repo and --prompt are required")
+		return fmt.Errorf("--prompt is required")
+	}
+	if *repo == "" {
+		fs.Usage()
+		return fmt.Errorf("--repo is required (could not auto-detect git remote origin)")
 	}
 
 	envVars := map[string]string{}
@@ -110,6 +115,23 @@ Flags:`)
 			return fmt.Errorf("--env %q: must be KEY=VALUE", kv)
 		}
 		envVars[parts[0]] = parts[1]
+	}
+	if *envFile != "" {
+		data, err := os.ReadFile(*envFile)
+		if err != nil {
+			return fmt.Errorf("--env-file %q: %w", *envFile, err)
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("--env-file line %q: must be KEY=VALUE", line)
+			}
+			envVars[strings.TrimSpace(parts[0])] = parts[1]
+		}
 	}
 
 	if *dryRun {
