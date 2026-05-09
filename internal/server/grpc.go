@@ -67,11 +67,29 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 	if litellmURL == "" {
 		litellmURL = "http://litellm:4000"
 	}
+	
+	// Create rate limiter for CreateAgentRun
+	// Default: 5 RPS, burst 3 (more restrictive than global defaults)
+	rps := parseEnvFloat("RATE_LIMIT_CREATE_AGENT_RUN_RPS", 5.0)
+	burst := parseEnvInt("RATE_LIMIT_CREATE_AGENT_RUN_BURST", 3)
+	
+	var createAgentRunRateLimiter *RateLimiter
+	if rps > 0 && burst > 0 {
+		createAgentRunRateLimiter = NewRateLimiter(RateLimiterConfig{
+			Enabled:    true,
+			RPS:        rps,
+			Burst:      burst,
+			TTLMinutes: 10,
+			TrustProxy: os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true",
+		})
+	}
+	
 	return &AOTServiceHandler{
-		K8sClient:      k8sClient,
-		EventBus:       bus,
-		Namespace:      namespace,
-		LiteLLMBaseURL: litellmURL,
+		K8sClient:                 k8sClient,
+		EventBus:                  bus,
+		Namespace:                 namespace,
+		LiteLLMBaseURL:            litellmURL,
+		createAgentRunRateLimiter: createAgentRunRateLimiter,
 	}
 }
 
