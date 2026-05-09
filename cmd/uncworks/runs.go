@@ -27,12 +27,12 @@ Subcommands:
   get <id>          Show full detail for a run
   describe <id>     Show full detail including persisted log output
   logs <id>         Stream log output until the run completes
-  watch <id>        Alias for logs
   tail <id>         Stream logs and show summary when run completes
-  watch <id>        Alias for 'logs' (stream live output)
+  watch <id>        Alias for logs
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
   cancel <id>       Request cancellation of a running agent
+  kill <id>         Alias for cancel
   stats             Show aggregate counts of runs by phase
   open <id>         Open the PR URL for a completed run in browser
   retry <id>        Create a new run with the same spec as an existing run
@@ -65,7 +65,7 @@ func runRuns(args []string) error {
 		return runRunsArchive(rest, true)
 	case "unarchive":
 		return runRunsArchive(rest, false)
-	case "cancel":
+	case "cancel", "kill":
 		return runCancel(rest)
 	case "stats":
 		return runRunsStats(rest)
