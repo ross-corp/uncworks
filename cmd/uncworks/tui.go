@@ -478,6 +478,8 @@ func humanizeErr(err error) string {
 			return "resource not found"
 		case connect.CodeUnimplemented:
 			return "this operation is not supported by the server version"
+		case connect.CodeResourceExhausted:
+			return fmt.Sprintf("request rejected: %s", connectErr.Message())
 		default:
 			return connectErr.Message()
 		}
