@@ -1008,6 +1008,7 @@ func runRunsCancelAll(args []string) error {
 	yes := fs.Bool("yes", false, "Skip confirmation prompt")
 	limit := fs.Int("limit", 0, "Cancel at most N runs (0 = no limit)")
 	since := fs.String("since", "", "Only cancel runs created within this window (e.g. 1h, 24h, 7d)")
+	phaseFilter := fs.String("phase", "", "Only cancel runs in this phase (RUNNING, PENDING, WAITING)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cancel-all [flags]\n\nCancel all active (non-terminal) runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1044,10 +1045,25 @@ func runRunsCancelAll(args []string) error {
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			phase := r.GetStatus().GetPhase()
-			if phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING &&
-				phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING &&
-				phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+			isActive := phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
+				phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING ||
+				phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+			if !isActive {
 				continue
+			}
+			if *phaseFilter != "" {
+				var wantPhase apiv1.AgentRunPhase
+				switch strings.ToUpper(*phaseFilter) {
+				case "RUNNING":
+					wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+				case "PENDING":
+					wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+				case "WAITING":
+					wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+				}
+				if phase != wantPhase {
+					continue
+				}
 			}
 			if !sinceTime.IsZero() {
 				ts := r.GetCreatedAt()
