@@ -782,38 +782,52 @@ func runRunsGet(args []string) error {
 
 	if *jsonOut {
 		type runGetJSON struct {
-			ID          string            `json:"id"`
-			Title       string            `json:"title,omitempty"`
-			Phase       string            `json:"phase"`
-			Message     string            `json:"message,omitempty"`
-			Project     string            `json:"project,omitempty"`
-			Feature     string            `json:"feature,omitempty"`
-			Prompt      string            `json:"prompt,omitempty"`
-			Repo        string            `json:"repo,omitempty"`
-			Branch      string            `json:"branch,omitempty"`
-			Model       string            `json:"model,omitempty"`
-			Tags        []string          `json:"tags,omitempty"`
-			EnvVars     map[string]string `json:"env_vars,omitempty"`
-			ParentRunID string            `json:"parent_run_id,omitempty"`
-			Children    []string          `json:"children,omitempty"`
-			Started     string            `json:"started,omitempty"`
-			Completed   string            `json:"completed,omitempty"`
-			Duration    string            `json:"duration,omitempty"`
-			PrURL       string            `json:"pr_url,omitempty"`
+			ID                 string            `json:"id"`
+			Title              string            `json:"title,omitempty"`
+			Phase              string            `json:"phase"`
+			Stage              string            `json:"stage,omitempty"`
+			Message            string            `json:"message,omitempty"`
+			VerificationResult string            `json:"verification_result,omitempty"`
+			Project            string            `json:"project,omitempty"`
+			Feature            string            `json:"feature,omitempty"`
+			Prompt             string            `json:"prompt,omitempty"`
+			Repo               string            `json:"repo,omitempty"`
+			Branch             string            `json:"branch,omitempty"`
+			Model              string            `json:"model,omitempty"`
+			Tags               []string          `json:"tags,omitempty"`
+			EnvVars            map[string]string `json:"env_vars,omitempty"`
+			ParentRunID        string            `json:"parent_run_id,omitempty"`
+			Children           []string          `json:"children,omitempty"`
+			CreatedAt          string            `json:"created_at,omitempty"`
+			Started            string            `json:"started,omitempty"`
+			Completed          string            `json:"completed,omitempty"`
+			Duration           string            `json:"duration,omitempty"`
+			PrURL              string            `json:"pr_url,omitempty"`
+			RetryCount         int32             `json:"retry_count,omitempty"`
+			PodName            string            `json:"pod_name,omitempty"`
+			TraceID            string            `json:"trace_id,omitempty"`
 		}
 		out := runGetJSON{
-			ID:       r.GetId(),
-			Title:    r.GetSpec().GetDisplayName(),
-			Phase:    phaseLabel(r.GetStatus().GetPhase()),
-			Message:  r.GetStatus().GetMessage(),
-			Project:  r.GetSpec().GetProject(),
-			Feature:  r.GetSpec().GetFeature(),
-			Prompt:   r.GetSpec().GetPrompt(),
-			Model:    r.GetSpec().GetModelTier(),
-			Tags:     r.GetSpec().GetTags(),
-			EnvVars:  r.GetSpec().GetEnvVars(),
-			Children: r.GetChildren(),
-			PrURL:    r.GetStatus().GetPrUrl(),
+			ID:                 r.GetId(),
+			Title:              r.GetSpec().GetDisplayName(),
+			Phase:              phaseLabel(r.GetStatus().GetPhase()),
+			Stage:              r.GetStatus().GetStage(),
+			Message:            r.GetStatus().GetMessage(),
+			VerificationResult: r.GetStatus().GetVerificationResult(),
+			Project:            r.GetSpec().GetProject(),
+			Feature:            r.GetSpec().GetFeature(),
+			Prompt:             r.GetSpec().GetPrompt(),
+			Model:              r.GetSpec().GetModelTier(),
+			Tags:               r.GetSpec().GetTags(),
+			EnvVars:            r.GetSpec().GetEnvVars(),
+			Children:           r.GetChildren(),
+			PrURL:              r.GetStatus().GetPrUrl(),
+			RetryCount:         r.GetStatus().GetRetryCount(),
+			PodName:            r.GetStatus().GetPodName(),
+			TraceID:            r.GetStatus().GetTraceId(),
+		}
+		if r.GetCreatedAt() != nil {
+			out.CreatedAt = r.GetCreatedAt().AsTime().Format(time.RFC3339)
 		}
 		if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
 			out.Repo = repos[0].GetUrl()
@@ -924,6 +938,12 @@ func runRunsGet(args []string) error {
 	}
 	if r.GetStatus().GetStage() != "" {
 		fmt.Printf("Stage:    %s\n", r.GetStatus().GetStage())
+	}
+	if r.GetStatus().GetRetryCount() > 0 {
+		fmt.Printf("Retries:  %d\n", r.GetStatus().GetRetryCount())
+	}
+	if r.GetStatus().GetVerificationResult() != "" {
+		fmt.Printf("Verify:   %s\n", r.GetStatus().GetVerificationResult())
 	}
 	if r.GetStatus().GetPrUrl() != "" {
 		fmt.Printf("PR:       %s\n", r.GetStatus().GetPrUrl())
