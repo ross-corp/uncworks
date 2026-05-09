@@ -29,7 +29,7 @@ Subcommands:
   describe <id>     Show full detail including persisted log output
   logs <id>         Stream log output until the run completes
   tail <id>         Stream logs and show summary when run completes
-  watch <id>        Alias for logs
+  watch             Auto-refresh the runs list (like watch kubectl get pods)
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
   archive-done      Bulk archive all SUCCEEDED runs
@@ -64,7 +64,7 @@ func runRuns(args []string) error {
 	case "tail":
 		return runRunsTail(rest)
 	case "watch":
-		return runRunsLogs(rest)
+		return runRunsWatch(rest)
 	case "archive":
 		return runRunsArchive(rest, true)
 	case "unarchive":
@@ -93,6 +93,54 @@ func runRuns(args []string) error {
 		os.Exit(2)
 	}
 	return nil
+}
+
+// ── watch ─────────────────────────────────────────────────────────────────────
+
+func runRunsWatch(args []string) error {
+	fs := flag.NewFlagSet("runs watch", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	interval := fs.Int("interval", 5, "Refresh interval in seconds")
+	limit := fs.Int("limit", 20, "Max runs to show per refresh")
+	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
+	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs watch [flags]\n\nAuto-refresh the runs list every N seconds. Press Ctrl+C to stop.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *interval < 1 {
+		return fmt.Errorf("--interval must be >= 1")
+	}
+
+	listArgs := []string{"--limit", fmt.Sprintf("%d", *limit)}
+	if *server != "" {
+		listArgs = append(listArgs, "--server="+*server)
+	}
+	if *since != "" {
+		listArgs = append(listArgs, "--since="+*since)
+	}
+	if *phase != "" {
+		listArgs = append(listArgs, "--phase="+*phase)
+	}
+	if *project != "" {
+		listArgs = append(listArgs, "--project="+*project)
+	}
+	if *feature != "" {
+		listArgs = append(listArgs, "--feature="+*feature)
+	}
+
+	for {
+		fmt.Print("\033[H\033[2J") // clear screen + move cursor home
+		fmt.Printf("uncworks runs watch — every %ds  %s  (Ctrl+C to stop)\n\n",
+			*interval, time.Now().Format("15:04:05"))
+		_ = runRunsList(listArgs)
+		time.Sleep(time.Duration(*interval) * time.Second)
+	}
 }
 
 // ── list ──────────────────────────────────────────────────────────────────────
