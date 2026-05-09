@@ -280,6 +280,7 @@ func runRunsList(args []string) error {
 	showTags := fs.Bool("show-tags", false, "Add a tags column to the output")
 	showPR := fs.Bool("show-pr", false, "Add a PR URL column to the output")
 	titleShort := fs.String("title", "", "Shorthand for --title-contains")
+	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -485,6 +486,11 @@ func runRunsList(args []string) error {
 	}
 	if len(runs) == 0 && !*jsonOut && !*idsOnly {
 		fmt.Println("No runs found.")
+		return nil
+	}
+
+	if *countOnly {
+		fmt.Println(len(runs))
 		return nil
 	}
 
@@ -2237,10 +2243,48 @@ func runRunsRetry(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() != 1 {
+	if fs.NArg() == 0 {
 		fs.Usage()
 		return fmt.Errorf("run ID argument required")
 	}
+
+	// Multi-ID support: retry each and collect new IDs.
+	if fs.NArg() > 1 {
+		ids := fs.Args()
+		var newIDs []string
+		for _, rid := range ids {
+			subArgs := []string{rid}
+			if *server != "" {
+				subArgs = append(subArgs, "--server="+*server)
+			}
+			if *prompt != "" {
+				subArgs = append(subArgs, "--prompt="+*prompt)
+			}
+			if *appendPrompt != "" {
+				subArgs = append(subArgs, "--append-prompt="+*appendPrompt)
+			}
+			if *modelTier != "" {
+				subArgs = append(subArgs, "--model-tier="+*modelTier)
+			}
+			if *outputID {
+				subArgs = append(subArgs, "--output-id")
+			}
+			for _, t := range tagFlags {
+				subArgs = append(subArgs, "--tag="+t)
+			}
+			if err := runRunsRetry(subArgs); err != nil {
+				fmt.Fprintf(os.Stderr, "  failed to retry %s: %v\n", rid, err)
+			} else if *outputID {
+				newIDs = append(newIDs, rid) // id is printed in subArgs call
+			}
+		}
+		if *wait && len(newIDs) > 0 {
+			waitArgs := append(newIDs, "--server="+*server)
+			return runRunsWait(waitArgs)
+		}
+		return nil
+	}
+
 	id := fs.Arg(0)
 
 	client, err := newClient(*server)
