@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"connectrpc.com/connect"
 	"golang.org/x/term"
@@ -18,6 +19,8 @@ func runGraph(args []string) error {
 	fs := flag.NewFlagSet("graph", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	jsonOut := fs.Bool("json", false, "Output as JSON instead of ASCII tree")
+	watch := fs.Bool("watch", false, "Auto-refresh the graph every --interval seconds (Ctrl+C to stop)")
+	interval := fs.Int("interval", 3, "Refresh interval in seconds for --watch mode")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks graph <run-id> [flags]\n\nPrint the execution tree for a run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -36,45 +39,64 @@ func runGraph(args []string) error {
 		return err
 	}
 
-	req := connect.NewRequest(&apiv1.GetRunGraphRequest{Id: id})
-	resp, err := client.GetRunGraph(context.Background(), req)
-	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
-	}
-
-	if *jsonOut {
-		type nodeJSON struct {
-			Name  string `json:"name"`
-			Phase string `json:"phase"`
-			Role  string `json:"role,omitempty"`
-		}
-		type edgeJSON struct {
-			Parent string `json:"parent"`
-			Child  string `json:"child"`
-		}
-		type graphJSON struct {
-			Nodes []nodeJSON `json:"nodes"`
-			Edges []edgeJSON `json:"edges"`
-		}
-		g := graphJSON{}
-		for _, n := range resp.Msg.GetNodes() {
-			g.Nodes = append(g.Nodes, nodeJSON{
-				Name:  n.GetName(),
-				Phase: phaseLabel(n.GetPhase()),
-				Role:  n.GetRole(),
-			})
-		}
-		for _, e := range resp.Msg.GetEdges() {
-			g.Edges = append(g.Edges, edgeJSON{Parent: e.GetParent(), Child: e.GetChild()})
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(g)
-	}
-
 	useColor := term.IsTerminal(int(os.Stdout.Fd()))
-	printGraph(id, resp.Msg, useColor)
-	return nil
+
+	fetchAndPrint := func() error {
+		req := connect.NewRequest(&apiv1.GetRunGraphRequest{Id: id})
+		resp, err := client.GetRunGraph(context.Background(), req)
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+
+		if *jsonOut {
+			type nodeJSON struct {
+				Name  string `json:"name"`
+				Phase string `json:"phase"`
+				Role  string `json:"role,omitempty"`
+			}
+			type edgeJSON struct {
+				Parent string `json:"parent"`
+				Child  string `json:"child"`
+			}
+			type graphJSON struct {
+				Nodes []nodeJSON `json:"nodes"`
+				Edges []edgeJSON `json:"edges"`
+			}
+			g := graphJSON{}
+			for _, n := range resp.Msg.GetNodes() {
+				g.Nodes = append(g.Nodes, nodeJSON{
+					Name:  n.GetName(),
+					Phase: phaseLabel(n.GetPhase()),
+					Role:  n.GetRole(),
+				})
+			}
+			for _, e := range resp.Msg.GetEdges() {
+				g.Edges = append(g.Edges, edgeJSON{Parent: e.GetParent(), Child: e.GetChild()})
+			}
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(g)
+		}
+
+		printGraph(id, resp.Msg, useColor)
+		return nil
+	}
+
+	if !*watch {
+		return fetchAndPrint()
+	}
+
+	// Watch mode: clear and redraw on each tick.
+	for {
+		if useColor {
+			fmt.Print("\033[2J\033[H")
+		}
+		fmt.Printf("graph %s  (every %ds, Ctrl+C to stop)\n\n", id, *interval)
+		if err := fetchAndPrint(); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		}
+		time.Sleep(time.Duration(*interval) * time.Second)
+	}
 }
 
 // printGraph renders the RunGraph as an ASCII tree.
