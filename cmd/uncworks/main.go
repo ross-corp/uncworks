@@ -30,6 +30,7 @@ Commands:
   kill       Alias for cancel
   input      Send human-in-the-loop response to a paused agent
   graph      Print the run execution tree
+  ping       Check API connectivity and measure round-trip latency
   search     Search the knowledge base for past work
   config     Show or edit the CLI configuration
 
@@ -73,6 +74,8 @@ func main() {
 		err = runInput(args)
 	case "graph":
 		err = runGraph(args)
+	case "ping":
+		err = runPing(args)
 	case "search":
 		err = runSearch(args)
 	case "config":
