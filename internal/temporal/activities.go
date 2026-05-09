@@ -107,6 +107,11 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			continue
 		}
 
+		// Check for eviction specifically
+		if pod.Status.Reason == "Evicted" {
+			return nil, fmt.Errorf("pod was evicted before hydration completed: %s", pod.Status.Message)
+		}
+
 		for _, initStatus := range pod.Status.InitContainerStatuses {
 			if initStatus.Name == "hydration" {
 				if initStatus.State.Terminated != nil {
@@ -127,7 +132,11 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			return &WaitForHydrationOutput{PodIP: pod.Status.PodIP, PodName: pod.Name}, nil
 		}
 		if pod.Status.Phase == corev1.PodFailed {
-			return nil, fmt.Errorf("pod failed before hydration completed")
+			// Check if pod failed due to eviction
+			if pod.Status.Reason == "Evicted" {
+				return nil, fmt.Errorf("pod was evicted before hydration completed: %s", pod.Status.Message)
+			}
+			return nil, fmt.Errorf("pod failed before hydration completed: %s", pod.Status.Message)
 		}
 
 		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for hydration: pod %s", pod.Name))
