@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestBuildAgentPod_Structure(t *testing.T) {
@@ -62,10 +63,16 @@ func TestBuildAgentPod_Structure(t *testing.T) {
 	assert.Equal(t, "agentrun-test", pod.Name)
 	assert.Equal(t, "default", pod.Namespace)
 
-	// Verify volume
-	require.Len(t, pod.Spec.Volumes, 1)
-	assert.Equal(t, "workspace", pod.Spec.Volumes[0].Name)
-	assert.NotNil(t, pod.Spec.Volumes[0].EmptyDir, "workspace volume should be emptyDir")
+	// Verify workspace volume exists
+	var workspaceVol *corev1.Volume
+	for i := range pod.Spec.Volumes {
+		if pod.Spec.Volumes[i].Name == "workspace" {
+			workspaceVol = &pod.Spec.Volumes[i]
+			break
+		}
+	}
+	require.NotNil(t, workspaceVol, "expected workspace volume")
+	assert.NotNil(t, workspaceVol.EmptyDir, "workspace volume should be emptyDir")
 }
 
 func TestBuildAgentPod_DefaultImage(t *testing.T) {

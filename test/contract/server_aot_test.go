@@ -136,7 +136,7 @@ func TestContract_GetAgentRun_NotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{
-		Id: "nonexistent",
+		Id: "ar-notfound",
 	}))
 	if err == nil {
 		t.Fatal("expected error")
@@ -187,6 +187,8 @@ func TestContract_ListAgentRuns_WithRuns(t *testing.T) {
 }
 
 func TestContract_ListAgentRuns_WithLimit(t *testing.T) {
+	t.Setenv("RATE_LIMIT_CREATE_AGENT_RUN_RPS", "100")
+	t.Setenv("RATE_LIMIT_CREATE_AGENT_RUN_BURST", "100")
 	client, cleanup := startAOTServer(t, false)
 	defer cleanup()
 
@@ -287,7 +289,7 @@ func TestContract_CancelAgentRun_NotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := client.CancelAgentRun(context.Background(), connect.NewRequest(&apiv1.CancelAgentRunRequest{
-		Id: "nonexistent",
+		Id: "ar-notfound",
 	}))
 	if err == nil {
 		t.Fatal("expected error")
@@ -304,7 +306,7 @@ func TestContract_SendHumanInput_NotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := client.SendHumanInput(context.Background(), connect.NewRequest(&apiv1.SendHumanInputRequest{
-		AgentRunId: "nonexistent",
+		AgentRunId: "ar-notfound",
 		Input:      "hello",
 	}))
 	if err == nil {
@@ -447,7 +449,7 @@ func TestContract_WatchAgentRun_NotFound(t *testing.T) {
 	defer cleanup()
 
 	stream, err := client.WatchAgentRun(context.Background(), connect.NewRequest(&apiv1.WatchAgentRunRequest{
-		Id: "nonexistent",
+		Id: "ar-notfound",
 	}))
 	if err != nil {
 		// Some implementations return error immediately
@@ -472,7 +474,7 @@ func TestContract_GetRunGraph_NotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{
-		Id: "nonexistent",
+		Id: "ar-notfound",
 	}))
 	if err == nil {
 		t.Fatal("expected NotFound error")

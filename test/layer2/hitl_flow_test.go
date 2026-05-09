@@ -76,7 +76,7 @@ func TestHITLFlow_SendHumanInput_NotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := c.SendHumanInput(context.Background(), connect.NewRequest(&apiv1.SendHumanInputRequest{
-		AgentRunId: "nonexistent-run",
+		AgentRunId: "ar-notfound",
 		Input:      "any input",
 	}))
 	require.Error(t, err)

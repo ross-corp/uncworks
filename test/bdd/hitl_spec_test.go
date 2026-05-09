@@ -66,7 +66,7 @@ var _ = Describe("Human-in-the-Loop (HITL) flow", func() {
 		When("a non-existent run ID is provided", func() {
 			It("returns NotFound", func() {
 				_, err := env.Client.SendHumanInput(ctx, connect.NewRequest(&apiv1.SendHumanInputRequest{
-					AgentRunId: "ar-does-not-exist",
+					AgentRunId: "ar-notfound",
 					Input:      "hello",
 				}))
 				Expect(err).To(HaveOccurred())
