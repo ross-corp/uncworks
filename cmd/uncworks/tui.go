@@ -65,12 +65,26 @@ func (r runItem) Title() string {
 	if r.run.GetStatus() != nil {
 		phase = phaseLabel(r.run.GetStatus().GetPhase())
 	}
+	dur := runDuration(r.run)
+	if dur != "-" {
+		return fmt.Sprintf("[%s] %s (%s)", phase, r.run.GetName(), dur)
+	}
 	return fmt.Sprintf("[%s] %s", phase, r.run.GetName())
 }
 
 func (r runItem) Description() string {
+	var parts []string
+	if dn := r.run.GetSpec().GetDisplayName(); dn != "" {
+		parts = append(parts, dn)
+	}
+	if p := r.run.GetSpec().GetProject(); p != "" {
+		parts = append(parts, p)
+	}
 	if r.run.GetStatus() != nil && r.run.GetStatus().GetMessage() != "" {
-		return r.run.GetStatus().GetMessage()
+		parts = append(parts, r.run.GetStatus().GetMessage())
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, " · ")
 	}
 	return r.run.GetId()
 }
