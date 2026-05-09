@@ -537,8 +537,8 @@ func runRunsGet(args []string) error {
 	if r.GetSpec().GetParentRunId() != "" {
 		fmt.Printf("Parent:   %s\n", r.GetSpec().GetParentRunId())
 	}
-	if len(r.GetChildren()) > 0 {
-		fmt.Printf("Children: %v\n", r.GetChildren())
+	if children := r.GetChildren(); len(children) > 0 {
+		fmt.Printf("Children: %s\n", strings.Join(children, ", "))
 	}
 	if *showLog && r.GetStatus().GetLogOutput() != "" {
 		fmt.Printf("\n--- agent log ---\n%s\n", r.GetStatus().GetLogOutput())
