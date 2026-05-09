@@ -166,6 +166,8 @@ func runRunsList(args []string) error {
 	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
+	runningOnly := fs.Bool("running", false, "Shorthand for --phase RUNNING")
+	failedOnly := fs.Bool("failed", false, "Shorthand for --phase FAILED")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -176,6 +178,15 @@ func runRunsList(args []string) error {
 
 	if *recent && *since == "" {
 		*since = "24h"
+	}
+	if *runningOnly && *failedOnly {
+		return fmt.Errorf("--running and --failed are mutually exclusive")
+	}
+	if *runningOnly && *phase == "" {
+		*phase = "RUNNING"
+	}
+	if *failedOnly && *phase == "" {
+		*phase = "FAILED"
 	}
 
 	var sinceTime time.Time
