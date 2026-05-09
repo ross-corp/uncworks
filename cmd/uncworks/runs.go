@@ -2532,35 +2532,49 @@ func runRunsExport(args []string) error {
 
 	if *format == "json" {
 		type exportJSON struct {
-			ID         string   `json:"id"`
-			Title      string   `json:"title,omitempty"`
-			Phase      string   `json:"phase"`
-			Project    string   `json:"project,omitempty"`
-			Feature    string   `json:"feature,omitempty"`
-			Model      string   `json:"model,omitempty"`
-			Started    string   `json:"started,omitempty"`
-			Completed  string   `json:"completed,omitempty"`
-			DurationS  float64  `json:"duration_s,omitempty"`
-			PrURL      string   `json:"pr_url,omitempty"`
-			Tags       []string `json:"tags,omitempty"`
+			ID          string   `json:"id"`
+			Title       string   `json:"title,omitempty"`
+			Phase       string   `json:"phase"`
+			Message     string   `json:"message,omitempty"`
+			Project     string   `json:"project,omitempty"`
+			Feature     string   `json:"feature,omitempty"`
+			Model       string   `json:"model,omitempty"`
+			CreatedAt   string   `json:"created_at,omitempty"`
+			StartedAt   string   `json:"started_at,omitempty"`
+			CompletedAt string   `json:"completed_at,omitempty"`
+			DurationS   float64  `json:"duration_s,omitempty"`
+			PrURL       string   `json:"pr_url,omitempty"`
+			Tags        []string `json:"tags,omitempty"`
+			ParentRunID string   `json:"parent_run_id,omitempty"`
+			Repo        string   `json:"repo,omitempty"`
+			Branch      string   `json:"branch,omitempty"`
 		}
 		var rows []exportJSON
 		for _, r := range allRuns {
 			row := exportJSON{
-				ID:      r.GetId(),
-				Title:   r.GetSpec().GetDisplayName(),
-				Phase:   phaseLabel(r.GetStatus().GetPhase()),
-				Project: r.GetSpec().GetProject(),
-				Feature: r.GetSpec().GetFeature(),
-				Model:   r.GetSpec().GetModelTier(),
-				PrURL:   r.GetStatus().GetPrUrl(),
-				Tags:    r.GetSpec().GetTags(),
+				ID:          r.GetId(),
+				Title:       r.GetSpec().GetDisplayName(),
+				Phase:       phaseLabel(r.GetStatus().GetPhase()),
+				Message:     r.GetStatus().GetMessage(),
+				Project:     r.GetSpec().GetProject(),
+				Feature:     r.GetSpec().GetFeature(),
+				Model:       r.GetSpec().GetModelTier(),
+				PrURL:       r.GetStatus().GetPrUrl(),
+				Tags:        r.GetSpec().GetTags(),
+				ParentRunID: r.GetSpec().GetParentRunId(),
+			}
+			if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
+				row.Repo = repos[0].GetUrl()
+				row.Branch = repos[0].GetBranch()
+			}
+			if r.GetCreatedAt() != nil {
+				row.CreatedAt = r.GetCreatedAt().AsTime().Format(time.RFC3339)
 			}
 			if r.GetStatus().GetStartedAt() != nil {
-				row.Started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
+				row.StartedAt = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
 			}
 			if r.GetStatus().GetCompletedAt() != nil {
-				row.Completed = r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339)
+				row.CompletedAt = r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339)
 				if r.GetStatus().GetStartedAt() != nil {
 					row.DurationS = r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime()).Seconds()
 				}
