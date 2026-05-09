@@ -163,6 +163,7 @@ func runRunsList(args []string) error {
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	all := fs.Bool("all", false, "Fetch all pages (overrides --limit)")
 	repoURL := fs.String("repo-url", "", "Filter runs by repository URL (substring match)")
+	titleContains := fs.String("title-contains", "", "Filter runs by display name substring (case-insensitive)")
 	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
@@ -282,6 +283,17 @@ func runRunsList(args []string) error {
 					filtered = append(filtered, r)
 					break
 				}
+			}
+		}
+		runs = filtered
+	}
+	if *titleContains != "" {
+		needle := strings.ToLower(*titleContains)
+		filtered := runs[:0]
+		for _, r := range runs {
+			title := strings.ToLower(r.GetSpec().GetDisplayName())
+			if strings.Contains(title, needle) {
+				filtered = append(filtered, r)
 			}
 		}
 		runs = filtered
@@ -414,7 +426,7 @@ func runRunsList(args []string) error {
 		fmt.Printf("Showing all %d run(s)\n", len(runs))
 	} else if len(runs) > 0 {
 		suffix := ""
-		if !sinceTime.IsZero() || *repoURL != "" {
+		if !sinceTime.IsZero() || *repoURL != "" || *titleContains != "" {
 			suffix = " (filtered)"
 		}
 		fmt.Printf("Showing %d run(s)%s\n", len(runs), suffix)
@@ -1370,6 +1382,7 @@ func runRunsLatest(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, etc.)")
 	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs latest [flags]\n\nShow the most recent agent run in detail.\n\nFlags:")
@@ -1387,6 +1400,7 @@ func runRunsLatest(args []string) error {
 	listReq := &apiv1.ListAgentRunsRequest{
 		Limit:         1,
 		ProjectFilter: *project,
+		FeatureFilter: *feature,
 	}
 	if *phase != "" {
 		switch strings.ToUpper(*phase) {
