@@ -12,7 +12,7 @@ import (
 func runConfig(args []string) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show          Print the current CLI configuration\n  set-server    Set the gRPC server address\n  edit          Open the config file in $EDITOR\n  reset         Reset the config to defaults\n\nFlags:")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show           Print the current CLI configuration\n  set-server     Set the gRPC server address\n  set-web-url    Set the web dashboard URL (used by 'runs ui')\n  edit           Open the config file in $EDITOR\n  reset          Reset the config to defaults\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -27,6 +27,8 @@ func runConfig(args []string) error {
 		return runConfigShow(fs.Args()[1:])
 	case "set-server":
 		return runConfigSetServer(fs.Args()[1:])
+	case "set-web-url":
+		return runConfigSetWebURL(fs.Args()[1:])
 	case "edit":
 		return runConfigEdit(fs.Args()[1:])
 	case "reset":
@@ -69,6 +71,33 @@ func runConfigSetServer(args []string) error {
 	} else {
 		fmt.Printf("server.address set to %s (config: %s)\n", addr, path)
 	}
+	return nil
+}
+
+func runConfigSetWebURL(args []string) error {
+	fs := flag.NewFlagSet("config set-web-url", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-web-url <url>\n\nSet the UNCWORKS web dashboard base URL (e.g. http://192.168.1.10:30080).\nUsed by 'uncworks runs ui' to open run detail pages.")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("URL argument required")
+	}
+	url := fs.Arg(0)
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	cfg.WebURL = url
+	if err := saveConfig(cfg); err != nil {
+		return err
+	}
+	path, _ := configPath()
+	fmt.Printf("web_url set to %s (config: %s)\n", url, path)
 	return nil
 }
 
@@ -126,6 +155,7 @@ func runConfigShow(args []string) error {
 	if *jsonOut {
 		out := map[string]interface{}{
 			"server_address": cfg.Server.Address,
+			"web_url":        cfg.WebURL,
 			"config_file":    path,
 		}
 		enc := json.NewEncoder(os.Stdout)
@@ -138,6 +168,11 @@ func runConfigShow(args []string) error {
 		addr = "(not set — using local port-forward)"
 	}
 	fmt.Printf("server.address:  %s\n", addr)
+	webURL := cfg.WebURL
+	if webURL == "" {
+		webURL = "(not set — use 'config set-web-url <url>')"
+	}
+	fmt.Printf("web_url:         %s\n", webURL)
 	fmt.Printf("config file:     %s\n", path)
 	return nil
 }

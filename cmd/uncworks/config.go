@@ -16,6 +16,9 @@ type Config struct {
 		// Empty means use local port-forward.
 		Address string `yaml:"address,omitempty"`
 	} `yaml:"server,omitempty"`
+	// WebURL is the base URL of the UNCWORKS web dashboard (e.g. "http://192.168.1.10:30080").
+	// Used by 'uncworks runs ui' to open run detail pages.
+	WebURL string `yaml:"web_url,omitempty"`
 }
 
 // configDir returns the XDG config directory for uncworks.
