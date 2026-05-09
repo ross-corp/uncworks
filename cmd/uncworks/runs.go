@@ -86,7 +86,7 @@ func runRuns(args []string) error {
 		return runRunsOpen(rest)
 	case "retry", "rerun", "copy":
 		return runRunsRetry(rest)
-	case "cancel-all":
+	case "cancel-all", "kill-all":
 		return runRunsCancelAll(rest)
 	case "graph":
 		return runRunsGraph(rest)
