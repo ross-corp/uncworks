@@ -27,6 +27,7 @@ Commands:
   run        Submit a new agent run non-interactively
   runs       List, inspect, and stream logs for agent runs (list/get/logs)
   cancel     Request cancellation of a running agent
+  kill       Alias for cancel
   input      Send human-in-the-loop response to a paused agent
   graph      Print the run execution tree
   search     Search the knowledge base for past work
@@ -66,7 +67,7 @@ func main() {
 		err = runRun(args)
 	case "runs":
 		err = runRuns(args)
-	case "cancel":
+	case "cancel", "kill":
 		err = runCancel(args)
 	case "input":
 		err = runInput(args)
