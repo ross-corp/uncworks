@@ -101,12 +101,22 @@ func runRunsList(args []string) error {
 	parentRunID := fs.String("parent-run-id", "", "Filter by parent run ID")
 	cursor := fs.String("cursor", "", "Pagination cursor from previous response")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
+	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
 	}
 
 	client, err := newClient(*server)
@@ -164,6 +174,16 @@ func runRunsList(args []string) error {
 	}
 
 	runs := resp.Msg.GetAgentRuns()
+	if !sinceTime.IsZero() {
+		filtered := runs[:0]
+		for _, r := range runs {
+			ts := r.GetCreatedAt()
+			if ts != nil && ts.AsTime().After(sinceTime) {
+				filtered = append(filtered, r)
+			}
+		}
+		runs = filtered
+	}
 	if len(runs) == 0 && !*jsonOut {
 		fmt.Println("No runs found.")
 		return nil
@@ -852,4 +872,18 @@ func runRunsGraph(args []string) error {
 
 	printGraph(id, resp.Msg)
 	return nil
+}
+
+// parseSinceDuration parses a human duration like "1h", "24h", "7d".
+// Standard time.ParseDuration handles h/m/s; "d" is handled manually.
+func parseSinceDuration(s string) (time.Duration, error) {
+	if strings.HasSuffix(s, "d") {
+		n := strings.TrimSuffix(s, "d")
+		var days int
+		if _, err := fmt.Sscanf(n, "%d", &days); err != nil || days <= 0 {
+			return 0, fmt.Errorf("invalid duration %q: days must be a positive integer", s)
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(s)
 }
