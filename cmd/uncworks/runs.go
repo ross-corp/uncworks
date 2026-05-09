@@ -51,6 +51,7 @@ Subcommands:
   diff <id>         Show git commands to inspect a run's diff
   inspect <id>      Diagnostic view: details, graph, and log tail
   wait <id>         Block until a run reaches a terminal phase (exit 1 on failure)
+  retry-failed      Bulk retry all FAILED runs matching filters
 `
 
 func runRuns(args []string) error {
@@ -107,6 +108,8 @@ func runRuns(args []string) error {
 		return runRunsInspect(rest)
 	case "wait":
 		return runRunsWait(rest)
+	case "retry-failed":
+		return runRunsRetryFailed(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -1813,6 +1816,137 @@ func runRunsRetry(args []string) error {
 	}
 	if *wait {
 		return runRunsTail([]string{newRun.GetId(), "--server=" + *server})
+	}
+	return nil
+}
+
+// ── retry-failed ─────────────────────────────────────────────────────────────
+
+func runRunsRetryFailed(args []string) error {
+	fs := flag.NewFlagSet("runs retry-failed", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Only retry runs in this project")
+	feature := fs.String("feature", "", "Only retry runs for this feature")
+	tag := fs.String("tag", "", "Only retry runs with this tag")
+	since := fs.String("since", "", "Only retry runs created within this window (e.g. 1h, 24h, 7d)")
+	limit := fs.Int("limit", 0, "Retry at most N runs (0 = no limit)")
+	dryRun := fs.Bool("dry-run", false, "Print what would be retried without actually doing it")
+	yes := fs.Bool("yes", false, "Skip confirmation prompt")
+	modelTier := fs.String("model-tier", "", "Override model tier for all retried runs")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry-failed [flags]\n\nBulk retry all FAILED runs matching the given filters.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	// Fetch FAILED runs.
+	var failedRuns []*apiv1.AgentRun
+	cursor := ""
+	for {
+		listReq := &apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			PhaseFilter:   apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			TagFilter:     *tag,
+			Cursor:        cursor,
+		}
+		resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			if !sinceTime.IsZero() {
+				ts := r.GetCreatedAt()
+				if ts == nil || !ts.AsTime().After(sinceTime) {
+					continue
+				}
+			}
+			failedRuns = append(failedRuns, r)
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	if *limit > 0 && len(failedRuns) > *limit {
+		failedRuns = failedRuns[:*limit]
+	}
+
+	if len(failedRuns) == 0 {
+		fmt.Println("No failed runs found matching the given filters.")
+		return nil
+	}
+
+	fmt.Printf("Found %d failed run(s) to retry:\n", len(failedRuns))
+	for _, r := range failedRuns {
+		title := r.GetSpec().GetDisplayName()
+		if title == "" {
+			title = r.GetSpec().GetProject()
+		}
+		if len(title) > 40 {
+			title = title[:37] + "..."
+		}
+		fmt.Printf("  %s  %s\n", r.GetId(), title)
+	}
+
+	if *dryRun {
+		fmt.Printf("\nDry run: no runs created.\n")
+		return nil
+	}
+
+	if !*yes {
+		fmt.Printf("\nRetry %d run(s)? [y/N] ", len(failedRuns))
+		var resp string
+		fmt.Scanln(&resp)
+		if strings.ToLower(strings.TrimSpace(resp)) != "y" {
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
+	fmt.Println()
+	for _, r := range failedRuns {
+		spec := r.GetSpec()
+		newSpec := &apiv1.AgentRunSpec{
+			Backend:     spec.Backend,
+			Repos:       spec.Repos,
+			Prompt:      spec.Prompt,
+			Project:     spec.Project,
+			Feature:     spec.Feature,
+			ModelTier:   spec.ModelTier,
+			Tags:        spec.Tags,
+			AutoPush:    spec.AutoPush,
+			AutoPr:      spec.AutoPr,
+			ParentRunId: spec.GetParentRunId(),
+			EnvVars:     spec.GetEnvVars(),
+		}
+		if *modelTier != "" {
+			newSpec.ModelTier = *modelTier
+		}
+		createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  %s → error: %s\n", r.GetId(), humanizeErr(err))
+			continue
+		}
+		fmt.Printf("  %s → %s\n", r.GetId(), createResp.Msg.GetAgentRun().GetId())
 	}
 	return nil
 }
