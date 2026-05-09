@@ -725,6 +725,7 @@ func runRunsLogs(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	noFollow := fs.Bool("no-follow", false, "Print stored log output only (don't stream live)")
 	lines := fs.Int("lines", 0, "Show only the last N lines of output (0 = all)")
+	timestamps := fs.Bool("timestamps", false, "Prefix each line with a timestamp (--no-follow only)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
 		fs.PrintDefaults()
@@ -756,14 +757,20 @@ func runRunsLogs(args []string) error {
 			fmt.Fprintf(os.Stderr, "No stored log output for run %s\n", id)
 			return nil
 		}
-		if *lines > 0 {
-			allLines := strings.Split(logOutput, "\n")
-			if len(allLines) > *lines {
-				allLines = allLines[len(allLines)-*lines:]
-			}
-			logOutput = strings.Join(allLines, "\n")
+		allLines := strings.Split(logOutput, "\n")
+		if *lines > 0 && len(allLines) > *lines {
+			allLines = allLines[len(allLines)-*lines:]
 		}
-		fmt.Print(logOutput)
+		if *timestamps {
+			now := time.Now().Format("15:04:05")
+			for _, line := range allLines {
+				if line != "" {
+					fmt.Printf("[%s] %s\n", now, line)
+				}
+			}
+		} else {
+			fmt.Print(strings.Join(allLines, "\n"))
+		}
 		return nil
 	}
 
