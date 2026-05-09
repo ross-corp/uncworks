@@ -30,7 +30,8 @@ func runRun(args []string) error {
 	repo := fs.String("repo", "", "Git repository URL (auto-detected from git remote if omitted)")
 	branch := fs.String("branch", "", "Branch to check out (auto-detected from current branch if omitted; fallback: main)")
 	name := fs.String("name", "", "Display name for the run (auto-generated from prompt if omitted)")
-	prompt := fs.String("prompt", "", "Agent prompt describing the task (required)")
+	prompt := fs.String("prompt", "", "Agent prompt describing the task (required; use '-' to read from stdin)")
+	promptFile := fs.String("prompt-file", "", "Read the agent prompt from a file")
 	project := fs.String("project", "", "Project name this run belongs to")
 	feature := fs.String("feature", "", "Feature/unit-of-work this run contributes to")
 	modelTier := fs.String("model-tier", "", "LLM model tier (e.g. deepseek-v3.2, default-cloud, premium)")
@@ -58,7 +59,16 @@ Flags:`)
 		os.Exit(2)
 	}
 
-	// Allow reading prompt from stdin when --prompt is "-" or omitted with stdin piped.
+	// Allow reading prompt from a file.
+	if *promptFile != "" {
+		raw, err := os.ReadFile(*promptFile)
+		if err != nil {
+			return fmt.Errorf("reading prompt file %q: %w", *promptFile, err)
+		}
+		*prompt = strings.TrimRight(string(raw), "\n")
+	}
+
+	// Allow reading prompt from stdin when --prompt is "-".
 	if *prompt == "-" {
 		raw, err := io.ReadAll(os.Stdin)
 		if err != nil {
