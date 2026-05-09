@@ -219,12 +219,15 @@ func runRunsList(args []string) error {
 
 	if *jsonOut {
 		type runJSON struct {
-			ID       string `json:"id"`
-			Title    string `json:"title"`
-			Phase    string `json:"phase"`
-			Duration string `json:"duration"`
-			Model    string `json:"model"`
-			Started  string `json:"started"`
+			ID       string   `json:"id"`
+			Title    string   `json:"title"`
+			Phase    string   `json:"phase"`
+			Duration string   `json:"duration"`
+			Model    string   `json:"model"`
+			Started  string   `json:"started"`
+			Project  string   `json:"project,omitempty"`
+			Feature  string   `json:"feature,omitempty"`
+			Tags     []string `json:"tags,omitempty"`
 		}
 		out := make([]runJSON, 0, len(runs))
 		for _, r := range runs {
@@ -249,6 +252,9 @@ func runRunsList(args []string) error {
 				Duration: runDuration(r),
 				Model:    model,
 				Started:  started,
+				Project:  r.GetSpec().GetProject(),
+				Feature:  r.GetSpec().GetFeature(),
+				Tags:     r.GetSpec().GetTags(),
 			})
 		}
 		enc := json.NewEncoder(os.Stdout)
