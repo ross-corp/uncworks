@@ -35,6 +35,7 @@ Subcommands:
   stats             Show aggregate counts of runs by phase
   open <id>         Open the PR URL for a completed run in browser
   retry <id>        Create a new run with the same spec as an existing run
+  rerun <id>        Alias for retry
   cancel-all        Cancel all active (non-terminal) runs
   graph <id>        Show the run graph (parent/child relationships)
 `
@@ -69,7 +70,7 @@ func runRuns(args []string) error {
 		return runRunsStats(rest)
 	case "open":
 		return runRunsOpen(rest)
-	case "retry":
+	case "retry", "rerun":
 		return runRunsRetry(rest)
 	case "cancel-all":
 		return runRunsCancelAll(rest)
@@ -98,6 +99,7 @@ func runRunsList(args []string) error {
 	tag := fs.String("tag", "", "Filter by tag")
 	parentRunID := fs.String("parent-run-id", "", "Filter by parent run ID")
 	cursor := fs.String("cursor", "", "Pagination cursor from previous response")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -161,9 +163,48 @@ func runRunsList(args []string) error {
 	}
 
 	runs := resp.Msg.GetAgentRuns()
-	if len(runs) == 0 {
+	if len(runs) == 0 && !*jsonOut {
 		fmt.Println("No runs found.")
 		return nil
+	}
+
+	if *jsonOut {
+		type runJSON struct {
+			ID       string `json:"id"`
+			Title    string `json:"title"`
+			Phase    string `json:"phase"`
+			Duration string `json:"duration"`
+			Model    string `json:"model"`
+			Started  string `json:"started"`
+		}
+		out := make([]runJSON, 0, len(runs))
+		for _, r := range runs {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			model := r.GetSpec().GetModelTier()
+			if model == "" {
+				model = "default"
+			}
+			started := ""
+			if r.GetStatus().GetStartedAt() != nil {
+				started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
+			} else if r.GetCreatedAt() != nil {
+				started = r.GetCreatedAt().AsTime().Format(time.RFC3339)
+			}
+			out = append(out, runJSON{
+				ID:       r.GetId(),
+				Title:    title,
+				Phase:    phaseLabel(r.GetStatus().GetPhase()),
+				Duration: runDuration(r),
+				Model:    model,
+				Started:  started,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -197,11 +238,11 @@ func runRunsList(args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started)
 	}
 	w.Flush()
-	
+
 	if resp.Msg.GetNextCursor() != "" {
 		fmt.Printf("next-cursor: %s\n", resp.Msg.GetNextCursor())
 	}
-	
+
 	return nil
 }
 
@@ -211,6 +252,7 @@ func runRunsGet(args []string) error {
 	fs := flag.NewFlagSet("runs get", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	showLog := fs.Bool("log", false, "Print the persisted agent log output")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -236,6 +278,54 @@ func runRunsGet(args []string) error {
 	}
 
 	r := resp.Msg
+
+	if *jsonOut {
+		type runGetJSON struct {
+			ID        string   `json:"id"`
+			Title     string   `json:"title,omitempty"`
+			Phase     string   `json:"phase"`
+			Message   string   `json:"message,omitempty"`
+			Project   string   `json:"project,omitempty"`
+			Feature   string   `json:"feature,omitempty"`
+			Prompt    string   `json:"prompt,omitempty"`
+			Repo      string   `json:"repo,omitempty"`
+			Model     string   `json:"model,omitempty"`
+			Tags      []string `json:"tags,omitempty"`
+			Started   string   `json:"started,omitempty"`
+			Completed string   `json:"completed,omitempty"`
+			Duration  string   `json:"duration,omitempty"`
+			PrURL     string   `json:"pr_url,omitempty"`
+		}
+		out := runGetJSON{
+			ID:      r.GetId(),
+			Title:   r.GetSpec().GetDisplayName(),
+			Phase:   phaseLabel(r.GetStatus().GetPhase()),
+			Message: r.GetStatus().GetMessage(),
+			Project: r.GetSpec().GetProject(),
+			Feature: r.GetSpec().GetFeature(),
+			Prompt:  r.GetSpec().GetPrompt(),
+			Model:   r.GetSpec().GetModelTier(),
+			Tags:    r.GetSpec().GetTags(),
+			PrURL:   r.GetStatus().GetPrUrl(),
+		}
+		if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
+			out.Repo = repos[0].GetUrl() + " @ " + repos[0].GetBranch()
+		}
+		if r.GetStatus().GetStartedAt() != nil {
+			out.Started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
+		}
+		if r.GetStatus().GetCompletedAt() != nil {
+			out.Completed = r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339)
+			if r.GetStatus().GetStartedAt() != nil {
+				dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime())
+				out.Duration = formatDuration(dur)
+			}
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+
 	fmt.Printf("ID:       %s\n", r.GetId())
 	if dn := r.GetSpec().GetDisplayName(); dn != "" {
 		fmt.Printf("Title:    %s\n", dn)
