@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -26,8 +27,8 @@ func (f *multiFlag) Set(v string) error {
 
 func runRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
-	repo := fs.String("repo", "", "Git repository URL (required)")
-	branch := fs.String("branch", "main", "Branch to check out")
+	repo := fs.String("repo", "", "Git repository URL (auto-detected from git remote if omitted)")
+	branch := fs.String("branch", "", "Branch to check out (auto-detected from current branch if omitted; fallback: main)")
 	name := fs.String("name", "", "Display name for the run (auto-generated from prompt if omitted)")
 	prompt := fs.String("prompt", "", "Agent prompt describing the task (required)")
 	project := fs.String("project", "", "Project name this run belongs to")
@@ -64,6 +65,26 @@ Flags:`)
 			return fmt.Errorf("reading prompt from stdin: %w", err)
 		}
 		*prompt = strings.TrimRight(string(raw), "\n")
+	}
+
+	// Auto-detect repo from git origin if not specified.
+	if *repo == "" {
+		if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+			*repo = strings.TrimSpace(string(out))
+		}
+	}
+
+	// Auto-detect current branch if not specified.
+	if *branch == "" {
+		if out, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+			b := strings.TrimSpace(string(out))
+			if b != "" && b != "HEAD" {
+				*branch = b
+			}
+		}
+		if *branch == "" {
+			*branch = "main"
+		}
 	}
 
 	if *repo == "" || *prompt == "" {
