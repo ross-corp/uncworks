@@ -1621,7 +1621,7 @@ func runRunsInspect(args []string) error {
 		fmt.Println("\n─── execution graph ────────────────────────────────────────────────────────")
 		graphResp, graphErr := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{Id: id}))
 		if graphErr == nil {
-			printGraph(id, graphResp.Msg)
+			printGraph(id, graphResp.Msg, term.IsTerminal(int(os.Stdout.Fd())))
 		}
 	}
 
