@@ -3354,6 +3354,8 @@ func runRunsMultiTail(args []string) error {
 	fs := flag.NewFlagSet("runs multi-tail", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	grep := fs.String("grep", "", "Only show lines matching this substring (case-insensitive)")
+	noColor := fs.Bool("no-color", false, "Disable per-run ANSI color coding")
+	allActive := fs.Bool("active", false, "Automatically discover and tail all active runs")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs multi-tail <id> [<id> ...] [flags]\n\nTail logs from multiple runs simultaneously.\nEach log line is prefixed with the run ID.\n\nFlags:")
 		fs.PrintDefaults()
@@ -3361,17 +3363,54 @@ func runRunsMultiTail(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() == 0 {
-		fs.Usage()
-		return fmt.Errorf("at least one run ID required")
-	}
 
 	client, err := newClient(*server)
 	if err != nil {
 		return err
 	}
 
+	runIDs := fs.Args()
+
+	// Auto-discover active runs if --active flag is set.
+	if *allActive {
+		var cursor string
+		for {
+			listReq := connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 100, Cursor: cursor})
+			listResp, listErr := client.ListAgentRuns(context.Background(), listReq)
+			if listErr != nil {
+				return fmt.Errorf("%s", humanizeErr(listErr))
+			}
+			for _, r := range listResp.Msg.GetAgentRuns() {
+				ph := r.GetStatus().GetPhase()
+				if ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
+					ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING ||
+					ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+					runIDs = append(runIDs, r.GetId())
+				}
+			}
+			cursor = listResp.Msg.GetNextCursor()
+			if cursor == "" {
+				break
+			}
+		}
+	}
+
+	if len(runIDs) == 0 {
+		if *allActive {
+			fmt.Println("No active runs to tail.")
+		} else {
+			fs.Usage()
+			return fmt.Errorf("at least one run ID required")
+		}
+		return nil
+	}
+
 	grepNeedle := strings.ToLower(*grep)
+	useColorMT := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+
+	// ANSI colors for cycling per-run labels.
+	colorCodes := []string{"\033[36m", "\033[32m", "\033[33m", "\033[35m", "\033[34m", "\033[96m", "\033[92m", "\033[93m"}
+	colorReset := "\033[0m"
 
 	type logLine struct {
 		id   string
@@ -3380,7 +3419,7 @@ func runRunsMultiTail(args []string) error {
 	ch := make(chan logLine, 256)
 
 	var wg sync.WaitGroup
-	for _, id := range fs.Args() {
+	for _, id := range runIDs {
 		wg.Add(1)
 		go func(runID string) {
 			defer wg.Done()
@@ -3417,19 +3456,27 @@ func runRunsMultiTail(args []string) error {
 		close(ch)
 	}()
 
-	// Assign a short label (last 6 chars of ID) per run for compact output.
-	labels := make(map[string]string, len(fs.Args()))
-	for _, id := range fs.Args() {
+	// Assign a short label (last 6 chars of ID) and a color per run.
+	labels := make(map[string]string, len(runIDs))
+	colors := make(map[string]string, len(runIDs))
+	for i, id := range runIDs {
+		label := id
 		if len(id) > 6 {
-			labels[id] = id[len(id)-6:]
-		} else {
-			labels[id] = id
+			label = id[len(id)-6:]
+		}
+		labels[id] = label
+		if useColorMT {
+			colors[id] = colorCodes[i%len(colorCodes)]
 		}
 	}
 
 	for ll := range ch {
 		label := labels[ll.id]
-		fmt.Printf("[%s] %s\n", label, ll.line)
+		if useColorMT {
+			fmt.Printf("%s[%s]%s %s\n", colors[ll.id], label, colorReset, ll.line)
+		} else {
+			fmt.Printf("[%s] %s\n", label, ll.line)
+		}
 	}
 	return nil
 }
