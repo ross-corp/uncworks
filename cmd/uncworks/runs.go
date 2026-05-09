@@ -621,6 +621,7 @@ func runRunsStats(args []string) error {
 	feature := fs.String("feature", "", "Filter by feature name")
 	format := fs.String("format", "table", "Output format (table|json)")
 	limit := fs.Int("limit", 0, "Count only the N most recent runs (0 = all)")
+	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -630,6 +631,15 @@ func runRunsStats(args []string) error {
 	}
 	if *format != "table" && *format != "json" {
 		return fmt.Errorf("invalid format %q: must be table or json", *format)
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
 	}
 
 	c, err := newClient(*server)
@@ -665,6 +675,12 @@ func runRunsStats(args []string) error {
 			return fmt.Errorf("%s", humanizeErr(err))
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
+			if !sinceTime.IsZero() {
+				ts := r.GetStatus().GetStartedAt()
+				if ts == nil || !ts.AsTime().After(sinceTime) {
+					continue
+				}
+			}
 			label := phaseLabel(r.GetStatus().GetPhase())
 			counts[label]++
 			total++
@@ -688,12 +704,19 @@ func runRunsStats(args []string) error {
 			"phases":       counts,
 			"success_rate": successRate,
 		}
+		if *since != "" {
+			out["window"] = *since
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
 	}
 
-	fmt.Printf("Total: %d\n\n", total)
+	header := "Stats (all time)"
+	if *since != "" {
+		header = fmt.Sprintf("Stats (last %s)", *since)
+	}
+	fmt.Printf("%s — Total: %d\n\n", header, total)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "PHASE\tCOUNT\tPCT")
 	for _, phase := range order {
