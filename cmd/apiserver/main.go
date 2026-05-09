@@ -398,7 +398,7 @@ func withAuth(h http.Handler, apiKey string) http.Handler {
 }
 
 // rateLimitConfigs reads rate limit configuration from environment variables.
-func rateLimitConfigs() (global, llm, webhook server.RateLimiterConfig, createAgentRunRPS float64, createAgentRunBurst int) {
+func rateLimitConfigs() (global, llm, webhook server.RateLimiterConfig) {
 	enabled := os.Getenv("RATE_LIMIT_ENABLED") == "true"
 	trustProxy := os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true"
 	ttl := envIntOrDefault("RATE_LIMIT_TTL_MINUTES", 10)
@@ -424,10 +424,6 @@ func rateLimitConfigs() (global, llm, webhook server.RateLimiterConfig, createAg
 		TTLMinutes: ttl,
 		TrustProxy: trustProxy,
 	}
-	
-	// CreateAgentRun specific rate limiting
-	createAgentRunRPS = envFloatOrDefault("RATE_LIMIT_CREATE_AGENT_RUN_RPS", 5)
-	createAgentRunBurst = envIntOrDefault("RATE_LIMIT_CREATE_AGENT_RUN_BURST", 3)
 	return
 }
 
