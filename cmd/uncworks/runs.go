@@ -215,6 +215,9 @@ func runRunsGet(args []string) error {
 	if r.GetSpec().GetFeature() != "" {
 		fmt.Printf("Feature:  %s\n", r.GetSpec().GetFeature())
 	}
+	if len(r.GetSpec().GetTags()) > 0 {
+		fmt.Printf("Tags:     %s\n", strings.Join(r.GetSpec().GetTags(), ", "))
+	}
 	if r.GetSpec().GetPrompt() != "" {
 		fmt.Printf("Prompt:   %s\n", r.GetSpec().GetPrompt())
 	}
