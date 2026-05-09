@@ -25,6 +25,7 @@ Subcommands:
   list              List recent agent runs
   get <id>          Show full detail for a run
   logs <id>         Stream log output until the run completes
+  watch <id>        Alias for 'logs' (stream live output)
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
   cancel <id>       Request cancellation of a running agent
@@ -47,6 +48,8 @@ func runRuns(args []string) error {
 	case "get":
 		return runRunsGet(rest)
 	case "logs":
+		return runRunsLogs(rest)
+	case "watch":
 		return runRunsLogs(rest)
 	case "archive":
 		return runRunsArchive(rest, true)
