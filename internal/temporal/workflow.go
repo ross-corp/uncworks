@@ -166,6 +166,7 @@ const (
 	ActivityScaleDownDeployment   = "ScaleDownDeployment"
 	ActivityArchiveAndCleanup     = "ArchiveAndCleanup"
 	ActivityCollectAgentLogs      = "CollectAgentLogs"
+	ActivityCheckPodStatus        = "CheckPodStatus"
 
 	// Knowledge system activities
 	ActivityPersistRunData = "PersistRunData"

@@ -127,9 +127,6 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			return &WaitForHydrationOutput{PodIP: pod.Status.PodIP, PodName: pod.Name}, nil
 		}
 		if pod.Status.Phase == corev1.PodFailed {
-			if pod.Status.Reason == "Evicted" {
-				return nil, fmt.Errorf("pod evicted before hydration completed: %s", pod.Status.Message)
-			}
 			return nil, fmt.Errorf("pod failed before hydration completed")
 		}
 
@@ -228,6 +225,33 @@ func (a *Activities) GetAgentStatus(ctx context.Context, input GetAgentStatusInp
 	return &GetAgentStatusOutput{
 		State: status.State.String(),
 		Error: status.Error,
+	}, nil
+}
+
+// CheckPodStatusInput contains the parameters for checking pod status.
+type CheckPodStatusInput struct {
+	PodName   string
+	Namespace string
+}
+
+// CheckPodStatusOutput contains the pod's current status.
+type CheckPodStatusOutput struct {
+	Phase  corev1.PodPhase
+	Reason string
+	Message string
+}
+
+// CheckPodStatus checks the current phase and reason of a pod.
+func (a *Activities) CheckPodStatus(ctx context.Context, input CheckPodStatusInput) (*CheckPodStatusOutput, error) {
+	pod, err := a.findPod(ctx, input.Namespace, "", input.PodName)
+	if err != nil {
+		return nil, fmt.Errorf("find pod %s: %w", input.PodName, err)
+	}
+	
+	return &CheckPodStatusOutput{
+		Phase:   pod.Status.Phase,
+		Reason:  pod.Status.Reason,
+		Message: pod.Status.Message,
 	}, nil
 }
 
