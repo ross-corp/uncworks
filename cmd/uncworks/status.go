@@ -110,11 +110,7 @@ func runStatus(args []string) error {
 		statuses = append(statuses, ps)
 	}
 
-	if *output == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		_ = enc.Encode(statuses)
-	} else {
+	if *output != "json" {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "POD\tPHASE\tREADY")
 		for _, ps := range statuses {
@@ -157,7 +153,24 @@ func runStatus(args []string) error {
 		apiMsg = "no server configured (run 'uncworks connect')"
 	}
 
-	if *output != "json" {
+	if *output == "json" {
+		type apiJSON struct {
+			OK         bool   `json:"ok"`
+			Message    string `json:"message"`
+			ActiveRuns int    `json:"active_runs"`
+		}
+		out := map[string]interface{}{
+			"pods": statuses,
+			"api": apiJSON{
+				OK:         apiOK,
+				Message:    apiMsg,
+				ActiveRuns: activeRunCount,
+			},
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(out)
+	} else {
 		apiStatus := "OK"
 		if !apiOK {
 			apiStatus = "UNREACHABLE (" + apiMsg + ")"
