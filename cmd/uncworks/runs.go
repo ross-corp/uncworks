@@ -2138,6 +2138,8 @@ func runRunsCancelAll(args []string) error {
 	phaseFilter := fs.String("phase", "", "Only cancel runs in this phase (RUNNING, PENDING, WAITING)")
 	project := fs.String("project", "", "Only cancel runs in this project")
 	feature := fs.String("feature", "", "Only cancel runs for this feature")
+	tag := fs.String("tag", "", "Only cancel runs with this tag")
+	titleContains := fs.String("title-contains", "", "Only cancel runs whose title contains this string (case-insensitive)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cancel-all [flags]\n\nCancel all active (non-terminal) runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2169,6 +2171,7 @@ func runRunsCancelAll(args []string) error {
 			Cursor:        cursor,
 			ProjectFilter: *project,
 			FeatureFilter: *feature,
+			TagFilter:     *tag,
 		})
 		resp, err := client.ListAgentRuns(context.Background(), req)
 		if err != nil {
@@ -2193,6 +2196,12 @@ func runRunsCancelAll(args []string) error {
 					wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
 				}
 				if phase != wantPhase {
+					continue
+				}
+			}
+			if *titleContains != "" {
+				needle := strings.ToLower(*titleContains)
+				if !strings.Contains(strings.ToLower(r.GetSpec().GetDisplayName()), needle) {
 					continue
 				}
 			}
