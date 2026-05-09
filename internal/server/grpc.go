@@ -486,6 +486,7 @@ func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Req
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("re-read agentrun: %w", err))
 	}
 
+	RunsCancelledTotal.Add(1)
 	return connect.NewResponse(&apiv1.CancelAgentRunResponse{AgentRun: crdToProto(crd)}), nil
 }
 
