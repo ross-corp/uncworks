@@ -110,8 +110,8 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			if initStatus.Name == "hydration" {
 				if initStatus.State.Terminated != nil {
 					if initStatus.State.Terminated.ExitCode == 0 {
-						slog.Info("hydration complete", "agentRun", input.AgentRunName, "podIP", pod.Status.PodIP)
-						return &WaitForHydrationOutput{PodIP: pod.Status.PodIP}, nil
+						slog.Info("hydration complete", "agentRun", input.AgentRunName, "podIP", pod.Status.PodIP, "pod", pod.Name)
+						return &WaitForHydrationOutput{PodIP: pod.Status.PodIP, PodName: pod.Name}, nil
 					}
 					return nil, fmt.Errorf("hydration failed with exit code %d: %s",
 						initStatus.State.Terminated.ExitCode,
@@ -123,7 +123,7 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 		// Pod is running (past init) — hydration succeeded
 		if pod.Status.Phase == corev1.PodRunning {
 			slog.Info("hydration complete", "agentRun", input.AgentRunName, "podIP", pod.Status.PodIP, "pod", pod.Name)
-			return &WaitForHydrationOutput{PodIP: pod.Status.PodIP}, nil
+			return &WaitForHydrationOutput{PodIP: pod.Status.PodIP, PodName: pod.Name}, nil
 		}
 		if pod.Status.Phase == corev1.PodFailed {
 			return nil, fmt.Errorf("pod failed before hydration completed")

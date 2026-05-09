@@ -30,6 +30,8 @@ Subcommands:
   cancel <id>       Request cancellation of a running agent
   stats             Show aggregate counts of runs by phase
   open <id>         Open the PR URL for a completed run in browser
+  retry <id>        Create a new run with the same spec as an existing run
+  cancel-all        Cancel all active (non-terminal) runs
 `
 
 func runRuns(args []string) error {
@@ -56,6 +58,10 @@ func runRuns(args []string) error {
 		return runRunsStats(rest)
 	case "open":
 		return runRunsOpen(rest)
+	case "retry":
+		return runRunsRetry(rest)
+	case "cancel-all":
+		return runRunsCancelAll(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -502,5 +508,134 @@ func runRunsOpen(args []string) error {
 		return fmt.Errorf("failed to open browser: %w", err)
 	}
 
+	return nil
+}
+
+// ── retry ────────────────────────────────────────────────────────────────────
+
+func runRunsRetry(args []string) error {
+	fs := flag.NewFlagSet("runs retry", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	getResp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+
+	orig := getResp.Msg
+	spec := orig.GetSpec()
+	if spec == nil {
+		return fmt.Errorf("run %s has no spec", id)
+	}
+
+	newSpec := &apiv1.AgentRunSpec{
+		Backend:   spec.Backend,
+		Repos:     spec.Repos,
+		Prompt:    spec.Prompt,
+		Project:   spec.Project,
+		Feature:   spec.Feature,
+		ModelTier: spec.ModelTier,
+		Tags:      spec.Tags,
+		AutoPush:  spec.AutoPush,
+		AutoPr:    spec.AutoPr,
+	}
+
+	createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+
+	newRun := createResp.Msg.GetAgentRun()
+	fmt.Printf("Run created: %s\n", newRun.GetId())
+	fmt.Printf("Follow progress: uncworks runs logs %s\n", newRun.GetId())
+	return nil
+}
+
+// ── cancel-all ───────────────────────────────────────────────────────────────
+
+func runRunsCancelAll(args []string) error {
+	fs := flag.NewFlagSet("runs cancel-all", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	dryRun := fs.Bool("dry-run", false, "Print what would be cancelled without actually doing it")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cancel-all [flags]\n\nCancel all active (non-terminal) runs.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	// Collect all active runs by paginating through the list
+	var activeRuns []string
+	var cursor string
+	for {
+		req := connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:  100,
+			Cursor: cursor,
+		})
+		resp, err := client.ListAgentRuns(context.Background(), req)
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			phase := r.GetStatus().GetPhase()
+			if phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
+				phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING ||
+				phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+				activeRuns = append(activeRuns, r.GetId())
+			}
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	if len(activeRuns) == 0 {
+		fmt.Println("No active runs to cancel.")
+		return nil
+	}
+
+	if *dryRun {
+		fmt.Printf("Would cancel %d run(s):\n", len(activeRuns))
+		for _, id := range activeRuns {
+			fmt.Printf("  %s\n", id)
+		}
+		return nil
+	}
+
+	cancelled := 0
+	for _, id := range activeRuns {
+		_, err := client.CancelAgentRun(context.Background(), connect.NewRequest(&apiv1.CancelAgentRunRequest{Id: id}))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to cancel %s: %s\n", id, humanizeErr(err))
+		} else {
+			fmt.Printf("  cancelled %s\n", id)
+			cancelled++
+		}
+	}
+	fmt.Printf("Cancelled %d/%d run(s).\n", cancelled, len(activeRuns))
 	return nil
 }
