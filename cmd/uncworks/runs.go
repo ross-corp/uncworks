@@ -2258,7 +2258,8 @@ func runRunsExport(args []string) error {
 	feature := fs.String("feature", "", "Filter by feature name")
 	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
-	outFile := fs.String("out", "", "Write CSV to file instead of stdout")
+	outFile := fs.String("out", "", "Write output to file instead of stdout")
+	format := fs.String("format", "csv", "Output format: csv, tsv, or json")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs export [flags]\n\nExport runs as CSV (stdout by default).\n\nFlags:")
 		fs.PrintDefaults()
@@ -2340,7 +2341,58 @@ func runRunsExport(args []string) error {
 		out = os.Stdout
 	}
 
+	if *format == "json" {
+		type exportJSON struct {
+			ID         string   `json:"id"`
+			Title      string   `json:"title,omitempty"`
+			Phase      string   `json:"phase"`
+			Project    string   `json:"project,omitempty"`
+			Feature    string   `json:"feature,omitempty"`
+			Model      string   `json:"model,omitempty"`
+			Started    string   `json:"started,omitempty"`
+			Completed  string   `json:"completed,omitempty"`
+			DurationS  float64  `json:"duration_s,omitempty"`
+			PrURL      string   `json:"pr_url,omitempty"`
+			Tags       []string `json:"tags,omitempty"`
+		}
+		var rows []exportJSON
+		for _, r := range allRuns {
+			row := exportJSON{
+				ID:      r.GetId(),
+				Title:   r.GetSpec().GetDisplayName(),
+				Phase:   phaseLabel(r.GetStatus().GetPhase()),
+				Project: r.GetSpec().GetProject(),
+				Feature: r.GetSpec().GetFeature(),
+				Model:   r.GetSpec().GetModelTier(),
+				PrURL:   r.GetStatus().GetPrUrl(),
+				Tags:    r.GetSpec().GetTags(),
+			}
+			if r.GetStatus().GetStartedAt() != nil {
+				row.Started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
+			}
+			if r.GetStatus().GetCompletedAt() != nil {
+				row.Completed = r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339)
+				if r.GetStatus().GetStartedAt() != nil {
+					row.DurationS = r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime()).Seconds()
+				}
+			}
+			rows = append(rows, row)
+		}
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(rows); err != nil {
+			return fmt.Errorf("json encode: %w", err)
+		}
+		if *outFile != "" {
+			fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
+		}
+		return nil
+	}
+
 	w := csv.NewWriter(out)
+	if *format == "tsv" {
+		w.Comma = '\t'
+	}
 	_ = w.Write([]string{"id", "title", "phase", "project", "feature", "model", "started", "completed", "duration_s", "pr_url", "tags"})
 	for _, r := range allRuns {
 		started := ""
