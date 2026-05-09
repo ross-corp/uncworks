@@ -145,11 +145,17 @@ func runRunsList(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tPROJECT\tPHASE\tMODEL\tSTARTED")
+	fmt.Fprintln(w, "ID\tTITLE\tPHASE\tMODEL\tSTARTED")
 	for _, r := range runs {
-		project := r.GetSpec().GetProject()
-		if project == "" {
-			project = "-"
+		title := r.GetSpec().GetDisplayName()
+		if title == "" {
+			title = r.GetSpec().GetProject()
+		}
+		if title == "" {
+			title = "-"
+		}
+		if len(title) > 32 {
+			title = title[:29] + "..."
 		}
 		phase := phaseLabel(r.GetStatus().GetPhase())
 		model := r.GetSpec().GetModelTier()
@@ -162,7 +168,7 @@ func runRunsList(args []string) error {
 		} else if r.GetCreatedAt() != nil {
 			started = r.GetCreatedAt().AsTime().Format(time.RFC3339)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), project, phase, model, started)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, model, started)
 	}
 	w.Flush()
 	
