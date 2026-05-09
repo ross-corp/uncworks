@@ -178,6 +178,7 @@ func runRunsList(args []string) error {
 func runRunsGet(args []string) error {
 	fs := flag.NewFlagSet("runs get", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
+	showLog := fs.Bool("log", false, "Print the persisted agent log output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -248,6 +249,9 @@ func runRunsGet(args []string) error {
 	}
 	if len(r.GetChildren()) > 0 {
 		fmt.Printf("Children: %v\n", r.GetChildren())
+	}
+	if *showLog && r.GetStatus().GetLogOutput() != "" {
+		fmt.Printf("\n--- agent log ---\n%s\n", r.GetStatus().GetLogOutput())
 	}
 	return nil
 }
