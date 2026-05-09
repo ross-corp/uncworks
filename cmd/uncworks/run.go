@@ -148,6 +148,11 @@ Flags:`)
 		fmt.Println(run.GetId())
 	} else {
 		fmt.Printf("Run created: %s\n", run.GetId())
+		fmt.Printf("  repo:   %s\n", *repo)
+		fmt.Printf("  branch: %s\n", *branch)
+		if *project != "" {
+			fmt.Printf("  project: %s\n", *project)
+		}
 	}
 
 	if *follow {
