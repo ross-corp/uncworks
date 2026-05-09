@@ -29,6 +29,7 @@ Subcommands:
   unarchive <id>    Remove the archived flag from a run
   cancel <id>       Request cancellation of a running agent
   stats             Show aggregate counts of runs by phase
+  open <id>         Open the PR URL for a completed run in browser
 `
 
 func runRuns(args []string) error {
@@ -53,6 +54,8 @@ func runRuns(args []string) error {
 		return runCancel(rest)
 	case "stats":
 		return runRunsStats(rest)
+	case "open":
+		return runRunsOpen(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -456,5 +459,48 @@ func runRunsStats(args []string) error {
 		fmt.Fprintf(w, "%s\t%d\n", phase, counts[phase])
 	}
 	_ = w.Flush()
+	return nil
+}
+
+// ── open ────────────────────────────────────────────────────────────────────────
+
+func runRunsOpen(args []string) error {
+	fs := flag.NewFlagSet("runs open", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs open <id> [flags]\n\nOpen the PR URL for a completed agent run in the default browser.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	req := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id})
+	resp, err := client.GetAgentRun(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+
+	r := resp.Msg
+	prURL := r.GetStatus().GetPrUrl()
+	if prURL == "" {
+		return fmt.Errorf("run %s has no PR URL", id)
+	}
+
+	fmt.Printf("Opening PR URL: %s\n", prURL)
+	if err := openBrowser(prURL); err != nil {
+		return fmt.Errorf("failed to open browser: %w", err)
+	}
+
 	return nil
 }
