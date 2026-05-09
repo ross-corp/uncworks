@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -30,7 +31,11 @@ func runConfig(args []string) error {
 	}
 }
 
-func runConfigShow(_ []string) error {
+func runConfigShow(args []string) error {
+	fs := flag.NewFlagSet("config show", flag.ContinueOnError)
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	_ = fs.Parse(args)
+
 	path, err := configPath()
 	if err != nil {
 		return err
@@ -39,6 +44,17 @@ func runConfigShow(_ []string) error {
 	if err != nil {
 		return err
 	}
+
+	if *jsonOut {
+		out := map[string]interface{}{
+			"server_address": cfg.Server.Address,
+			"config_file":    path,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+
 	addr := cfg.Server.Address
 	if addr == "" {
 		addr = "(not set — using local port-forward)"
