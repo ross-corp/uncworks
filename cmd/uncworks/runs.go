@@ -193,6 +193,7 @@ func runRunsList(args []string) error {
 	failedOnly := fs.Bool("failed", false, "Shorthand for --phase FAILED")
 	pendingOnly := fs.Bool("pending", false, "Shorthand for --phase PENDING")
 	waitingOnly := fs.Bool("waiting", false, "Shorthand for --phase WAITING")
+	activeOnly := fs.Bool("active", false, "Show only active runs (RUNNING + PENDING + WAITING)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -336,6 +337,18 @@ func runRunsList(args []string) error {
 		for _, r := range runs {
 			title := strings.ToLower(r.GetSpec().GetDisplayName())
 			if strings.Contains(title, needle) {
+				filtered = append(filtered, r)
+			}
+		}
+		runs = filtered
+	}
+	if *activeOnly {
+		filtered := runs[:0]
+		for _, r := range runs {
+			switch r.GetStatus().GetPhase() {
+			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING,
+				apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
+				apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
 				filtered = append(filtered, r)
 			}
 		}
