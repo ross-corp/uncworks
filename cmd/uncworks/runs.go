@@ -595,12 +595,16 @@ func runRunsStats(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
+	format := fs.String("format", "table", "Output format (table|json)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+	if *format != "table" && *format != "json" {
+		return fmt.Errorf("invalid format %q: must be table or json", *format)
 	}
 
 	c, err := newClient(*server)
@@ -642,6 +646,24 @@ func runRunsStats(args []string) error {
 		}
 	}
 
+	done := counts["DONE"]
+	failed := counts["FAILED"]
+
+	if *format == "json" {
+		successRate := 0.0
+		if done+failed > 0 {
+			successRate = float64(done) / float64(done+failed) * 100
+		}
+		out := map[string]interface{}{
+			"total":        total,
+			"phases":       counts,
+			"success_rate": successRate,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+
 	fmt.Printf("Total: %d\n\n", total)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "PHASE\tCOUNT\tPCT")
@@ -654,8 +676,6 @@ func runRunsStats(args []string) error {
 	}
 	_ = w.Flush()
 
-	done := counts["DONE"]
-	failed := counts["FAILED"]
 	if done+failed > 0 {
 		rate := float64(done) / float64(done+failed) * 100
 		fmt.Printf("\nSuccess rate: %.1f%% (%d/%d completed runs)\n", rate, done, done+failed)
