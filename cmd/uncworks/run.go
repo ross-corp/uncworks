@@ -47,6 +47,7 @@ func runRun(args []string) error {
 	var envFlags multiFlag
 	fs.Var(&envFlags, "env", "Environment variable for the agent pod (repeatable, KEY=VALUE)")
 	outputID := fs.Bool("output-id", false, "Print only the run ID (for scripting)")
+	dryRun := fs.Bool("dry-run", false, "Preview the run spec without actually creating the run")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
 
@@ -111,6 +112,41 @@ Flags:`)
 		envVars[parts[0]] = parts[1]
 	}
 
+	if *dryRun {
+		fmt.Println("Dry run — would create:")
+		fmt.Printf("  repo:     %s\n", *repo)
+		fmt.Printf("  branch:   %s\n", *branch)
+		if *name != "" {
+			fmt.Printf("  name:     %s\n", *name)
+		}
+		if *project != "" {
+			fmt.Printf("  project:  %s\n", *project)
+		}
+		if *feature != "" {
+			fmt.Printf("  feature:  %s\n", *feature)
+		}
+		if *modelTier != "" {
+			fmt.Printf("  model:    %s\n", *modelTier)
+		}
+		if len(tags) > 0 {
+			fmt.Printf("  tags:     %s\n", strings.Join(tags, ", "))
+		}
+		if *autoPR {
+			fmt.Println("  auto-pr:  yes")
+		} else if *autoPush {
+			fmt.Println("  auto-push: yes")
+		}
+		if *parentRunID != "" {
+			fmt.Printf("  parent:   %s\n", *parentRunID)
+		}
+		promptPreview := *prompt
+		if len(promptPreview) > 200 {
+			promptPreview = promptPreview[:197] + "..."
+		}
+		fmt.Printf("  prompt:   %s\n", promptPreview)
+		return nil
+	}
+
 	client, err := newClient(*server)
 	if err != nil {
 		return err
@@ -148,10 +184,16 @@ Flags:`)
 		fmt.Println(run.GetId())
 	} else {
 		fmt.Printf("Run created: %s\n", run.GetId())
-		fmt.Printf("  repo:   %s\n", *repo)
-		fmt.Printf("  branch: %s\n", *branch)
+		fmt.Printf("  repo:    %s\n", *repo)
+		fmt.Printf("  branch:  %s\n", *branch)
 		if *project != "" {
 			fmt.Printf("  project: %s\n", *project)
+		}
+		if *feature != "" {
+			fmt.Printf("  feature: %s\n", *feature)
+		}
+		if *modelTier != "" {
+			fmt.Printf("  model:   %s\n", *modelTier)
 		}
 	}
 
