@@ -194,6 +194,7 @@ func runRunsList(args []string) error {
 	pendingOnly := fs.Bool("pending", false, "Shorthand for --phase PENDING")
 	waitingOnly := fs.Bool("waiting", false, "Shorthand for --phase WAITING")
 	activeOnly := fs.Bool("active", false, "Show only active runs (RUNNING + PENDING + WAITING)")
+	noHeader := fs.Bool("no-header", false, "Omit the column header row (useful for scripting)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -436,10 +437,12 @@ func runRunsList(args []string) error {
 	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
 	var listBuf bytes.Buffer
 	w := tabwriter.NewWriter(&listBuf, 0, 0, 2, ' ', 0)
-	if *verbose {
-		fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT")
-	} else {
-		fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED")
+	if !*noHeader {
+		if *verbose {
+			fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT")
+		} else {
+			fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED")
+		}
 	}
 	for _, r := range runs {
 		title := r.GetSpec().GetDisplayName()
@@ -2157,6 +2160,7 @@ func runRunsCount(args []string) error {
 	feature := fs.String("feature", "", "Filter by feature name")
 	tag := fs.String("tag", "", "Filter by tag")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
+	byPhase := fs.Bool("by-phase", false, "Show count breakdown by phase instead of total")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2202,6 +2206,7 @@ func runRunsCount(args []string) error {
 	}
 
 	count := 0
+	phaseCounts := map[string]int{}
 	cursor := ""
 	for {
 		listReq := &apiv1.ListAgentRunsRequest{
@@ -2226,6 +2231,9 @@ func runRunsCount(args []string) error {
 				}
 			}
 			count++
+			if *byPhase {
+				phaseCounts[phaseLabel(r.GetStatus().GetPhase())]++
+			}
 		}
 		cursor = resp.Msg.GetNextCursor()
 		if cursor == "" {
@@ -2233,7 +2241,19 @@ func runRunsCount(args []string) error {
 		}
 	}
 
-	fmt.Println(count)
+	if *byPhase {
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "PHASE\tCOUNT")
+		for _, ph := range []string{"RUNNING", "PENDING", "WAITING", "DONE", "FAILED", "CANCELLED", "UNKNOWN"} {
+			if n, ok := phaseCounts[ph]; ok {
+				fmt.Fprintf(w, "%s\t%d\n", ph, n)
+			}
+		}
+		w.Flush()
+		fmt.Printf("Total: %d\n", count)
+	} else {
+		fmt.Println(count)
+	}
 	return nil
 }
 
