@@ -140,6 +140,23 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dd%02dh", d/(24*time.Hour), (d%(24*time.Hour))/time.Hour)
 }
 
+func relativeTime(t time.Time) string {
+	d := time.Since(t).Round(time.Second)
+	if d < 0 {
+		return "just now"
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%ds ago", d/time.Second)
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm ago", d/time.Minute)
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh ago", d/time.Hour)
+	}
+	return fmt.Sprintf("%dd ago", d/(24*time.Hour))
+}
+
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type tuiModel struct {

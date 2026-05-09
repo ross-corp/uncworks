@@ -166,6 +166,7 @@ func runRunsList(args []string) error {
 	titleContains := fs.String("title-contains", "", "Filter runs by display name substring (case-insensitive)")
 	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
+	relative := fs.Bool("relative", false, "Show relative timestamps (e.g. '5m ago') instead of ISO")
 	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
 	runningOnly := fs.Bool("running", false, "Shorthand for --phase RUNNING")
 	failedOnly := fs.Bool("failed", false, "Shorthand for --phase FAILED")
@@ -377,9 +378,19 @@ func runRunsList(args []string) error {
 		}
 		started := "-"
 		if r.GetStatus().GetStartedAt() != nil {
-			started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
+			t := r.GetStatus().GetStartedAt().AsTime()
+			if *relative {
+				started = relativeTime(t)
+			} else {
+				started = t.Format(time.RFC3339)
+			}
 		} else if r.GetCreatedAt() != nil {
-			started = r.GetCreatedAt().AsTime().Format(time.RFC3339)
+			t := r.GetCreatedAt().AsTime()
+			if *relative {
+				started = relativeTime(t)
+			} else {
+				started = t.Format(time.RFC3339)
+			}
 		}
 		duration := runDuration(r)
 		if *verbose {
