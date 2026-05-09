@@ -163,6 +163,17 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		}
 	}
 	
+	if s.maxConcurrentRuns > 0 {
+		active, err := s.countActiveRuns(ctx)
+		if err != nil {
+			slog.Warn("CreateAgentRun: failed to count active runs", "error", err)
+		} else if active >= s.maxConcurrentRuns {
+			slog.Warn("CreateAgentRun: concurrent run limit reached", "active", active, "max", s.maxConcurrentRuns)
+			return nil, connect.NewError(connect.CodeResourceExhausted,
+				fmt.Errorf("concurrent run limit reached (%d/%d active); try again later", active, s.maxConcurrentRuns))
+		}
+	}
+	
 	if req.Msg.Spec == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
 	}
