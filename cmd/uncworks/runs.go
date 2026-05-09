@@ -2833,6 +2833,7 @@ func runRunsCount(args []string) error {
 	tag := fs.String("tag", "", "Filter by tag")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	byPhase := fs.Bool("by-phase", false, "Show count breakdown by phase instead of total")
+	byFeature := fs.Bool("by-feature", false, "Show count breakdown by feature name")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
@@ -2880,6 +2881,7 @@ func runRunsCount(args []string) error {
 
 	count := 0
 	phaseCounts := map[string]int{}
+	featureCounts := map[string]int{}
 	cursor := ""
 	for {
 		listReq := &apiv1.ListAgentRunsRequest{
@@ -2907,6 +2909,13 @@ func runRunsCount(args []string) error {
 			if *byPhase {
 				phaseCounts[phaseLabel(r.GetStatus().GetPhase())]++
 			}
+			if *byFeature {
+				feat := r.GetSpec().GetFeature()
+				if feat == "" {
+					feat = "(none)"
+				}
+				featureCounts[feat]++
+			}
 		}
 		cursor = resp.Msg.GetNextCursor()
 		if cursor == "" {
@@ -2915,11 +2924,15 @@ func runRunsCount(args []string) error {
 	}
 
 	if *jsonOut {
-		var out interface{}
+		out := map[string]interface{}{"count": count}
 		if *byPhase {
-			out = map[string]interface{}{"total": count, "by_phase": phaseCounts}
-		} else {
-			out = map[string]interface{}{"count": count}
+			out["by_phase"] = phaseCounts
+		}
+		if *byFeature {
+			out["by_feature"] = featureCounts
+		}
+		if *byPhase {
+			out["total"] = count
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -2933,6 +2946,29 @@ func runRunsCount(args []string) error {
 			if n, ok := phaseCounts[ph]; ok {
 				fmt.Fprintf(w, "%s\t%d\n", ph, n)
 			}
+		}
+		w.Flush()
+		fmt.Printf("Total: %d\n", count)
+	} else if *byFeature {
+		// Sort features by count descending.
+		type pair struct {
+			k string
+			v int
+		}
+		var pairs []pair
+		for k, v := range featureCounts {
+			pairs = append(pairs, pair{k, v})
+		}
+		sort.Slice(pairs, func(i, j int) bool {
+			if pairs[i].v != pairs[j].v {
+				return pairs[i].v > pairs[j].v
+			}
+			return pairs[i].k < pairs[j].k
+		})
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "FEATURE\tCOUNT")
+		for _, p := range pairs {
+			fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
 		}
 		w.Flush()
 		fmt.Printf("Total: %d\n", count)
