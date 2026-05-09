@@ -50,6 +50,7 @@ Subcommands:
   export            Export runs as CSV
   diff <id>         Show git commands to inspect a run's diff
   inspect <id>      Diagnostic view: details, graph, and log tail
+  wait <id>         Block until a run reaches a terminal phase (exit 1 on failure)
 `
 
 func runRuns(args []string) error {
@@ -104,6 +105,8 @@ func runRuns(args []string) error {
 		return runRunsDiff(rest)
 	case "inspect":
 		return runRunsInspect(rest)
+	case "wait":
+		return runRunsWait(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -2202,6 +2205,108 @@ func runRunsCount(args []string) error {
 
 // parseSinceDuration parses a human duration like "1h", "24h", "7d".
 // Standard time.ParseDuration handles h/m/s; "d" is handled manually.
+// ── wait ──────────────────────────────────────────────────────────────────────
+
+func runRunsWait(args []string) error {
+	fs := flag.NewFlagSet("runs wait", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	timeout := fs.Duration("timeout", 0, "Max time to wait (e.g. 10m, 1h); 0 = no limit")
+	quiet := fs.Bool("quiet", false, "Suppress all output; use exit code only")
+	log := fs.Bool("log", false, "Stream log lines while waiting (like logs --follow)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs wait <id> [flags]\n\nBlock until the run reaches a terminal phase.\nExits 0 on success, 1 on failure or cancellation.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if *timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, *timeout)
+		defer cancel()
+	}
+
+	req := connect.NewRequest(&apiv1.WatchAgentRunRequest{Id: id})
+	stream, err := client.WatchAgentRun(ctx, req)
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+
+	var finalPayload string
+	var finalType apiv1.AgentRunEventType
+	for stream.Receive() {
+		ev := stream.Msg()
+		switch ev.GetType() {
+		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG:
+			if *log && ev.GetPayload() != "" {
+				fmt.Print(ev.GetPayload())
+			}
+		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED:
+			if !*quiet {
+				fmt.Printf("[%s] phase: %s\n", id, ev.GetPayload())
+			}
+		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_WAITING_FOR_INPUT:
+			if !*quiet {
+				fmt.Printf("[%s] waiting for input: %s\n", id, ev.GetPayload())
+				fmt.Printf("Use 'uncworks input %s <text>' to respond.\n", id)
+			}
+		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED:
+			finalPayload = ev.GetPayload()
+			finalType = ev.GetType()
+		}
+	}
+	if err := stream.Err(); err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("timed out after %s waiting for run %s", *timeout, id)
+		}
+		return fmt.Errorf("stream error: %s", humanizeErr(err))
+	}
+	_ = finalType
+
+	// Get final status to determine exit code.
+	getResp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+	phase := getResp.Msg.GetStatus().GetPhase()
+	msg := getResp.Msg.GetStatus().GetMessage()
+	if finalPayload == "" {
+		finalPayload = msg
+	}
+
+	switch phase {
+	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+		if !*quiet {
+			fmt.Printf("[%s] done\n", id)
+			if url := getResp.Msg.GetStatus().GetPrUrl(); url != "" {
+				fmt.Printf("PR: %s\n", url)
+			}
+		}
+		return nil
+	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+		if finalPayload != "" {
+			return fmt.Errorf("run %s failed: %s", id, finalPayload)
+		}
+		return fmt.Errorf("run %s failed", id)
+	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+		return fmt.Errorf("run %s was cancelled", id)
+	default:
+		return fmt.Errorf("run %s ended in unexpected phase: %s", id, phaseLabel(phase))
+	}
+}
+
 func parseSinceDuration(s string) (time.Duration, error) {
 	if strings.HasSuffix(s, "d") {
 		n := strings.TrimSuffix(s, "d")
