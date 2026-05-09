@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"connectrpc.com/connect"
+	"golang.org/x/term"
 
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 )
@@ -71,12 +72,13 @@ func runGraph(args []string) error {
 		return enc.Encode(g)
 	}
 
-	printGraph(id, resp.Msg)
+	useColor := term.IsTerminal(int(os.Stdout.Fd()))
+	printGraph(id, resp.Msg, useColor)
 	return nil
 }
 
 // printGraph renders the RunGraph as an ASCII tree.
-func printGraph(_ string, graph *apiv1.RunGraph) {
+func printGraph(_ string, graph *apiv1.RunGraph, useColor bool) {
 	nodeByName := make(map[string]*apiv1.RunGraphNode, len(graph.GetNodes()))
 	for _, n := range graph.GetNodes() {
 		nodeByName[n.GetName()] = n
@@ -103,14 +105,13 @@ func printGraph(_ string, graph *apiv1.RunGraph) {
 	}
 
 	for _, root := range roots {
-		fmt.Printf("▶ %s\n", graphNodeLabel(root, nodeByName))
-		graphPrintChildren(root, "  ", nodeByName, kids)
+		fmt.Printf("▶ %s\n", graphNodeLabel(root, nodeByName, useColor))
+		graphPrintChildren(root, "  ", nodeByName, kids, useColor)
 	}
 }
 
 // graphPrintChildren prints all children of parent using box-drawing connectors.
-// indent is the prefix for each child's connector line.
-func graphPrintChildren(parent, indent string, nodes map[string]*apiv1.RunGraphNode, kids map[string][]string) {
+func graphPrintChildren(parent, indent string, nodes map[string]*apiv1.RunGraphNode, kids map[string][]string, useColor bool) {
 	children := kids[parent]
 	for i, child := range children {
 		isLast := i == len(children)-1
@@ -120,19 +121,36 @@ func graphPrintChildren(parent, indent string, nodes map[string]*apiv1.RunGraphN
 			connector = "└─ "
 			childIndent = indent + "   "
 		}
-		fmt.Printf("%s%s%s\n", indent, connector, graphNodeLabel(child, nodes))
-		graphPrintChildren(child, childIndent, nodes, kids)
+		fmt.Printf("%s%s%s\n", indent, connector, graphNodeLabel(child, nodes, useColor))
+		graphPrintChildren(child, childIndent, nodes, kids, useColor)
 	}
 }
 
-func graphNodeLabel(name string, nodes map[string]*apiv1.RunGraphNode) string {
+func graphNodeLabel(name string, nodes map[string]*apiv1.RunGraphNode, useColor bool) string {
 	node := nodes[name]
 	if node == nil {
 		return name + " [?]"
 	}
 	phase := phaseLabel(node.GetPhase())
-	if role := node.GetRole(); role != "" {
-		return fmt.Sprintf("%s (%s) [%s]", name, role, phase)
+	coloredPhase := phase
+	if useColor {
+		switch node.GetPhase() {
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING:
+			coloredPhase = "\033[32m" + phase + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING:
+			coloredPhase = "\033[33m" + phase + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
+			coloredPhase = "\033[36m" + phase + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+			coloredPhase = "\033[31m" + phase + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+			coloredPhase = "\033[90m" + phase + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+			coloredPhase = "\033[35m" + phase + "\033[0m"
+		}
 	}
-	return fmt.Sprintf("%s [%s]", name, phase)
+	if role := node.GetRole(); role != "" {
+		return fmt.Sprintf("%s (%s) [%s]", name, role, coloredPhase)
+	}
+	return fmt.Sprintf("%s [%s]", name, coloredPhase)
 }
