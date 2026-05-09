@@ -580,10 +580,17 @@ func runRunsTail(args []string) error {
 	}
 	r := resp.Msg
 	fmt.Printf("\n─── summary ───────────────────────────────────────────────────────────────\n")
+	fmt.Printf("Run:      %s\n", r.GetId())
 	fmt.Printf("Phase:    %s\n", phaseLabel(r.GetStatus().GetPhase()))
+	if msg := r.GetStatus().GetMessage(); msg != "" {
+		fmt.Printf("Message:  %s\n", msg)
+	}
 	if r.GetStatus().GetStartedAt() != nil && r.GetStatus().GetCompletedAt() != nil {
 		dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime()).Round(time.Second)
 		fmt.Printf("Duration: %s\n", dur)
+	}
+	if tier := r.GetSpec().GetModelTier(); tier != "" {
+		fmt.Printf("Model:    %s\n", tier)
 	}
 	if r.GetStatus().GetPrUrl() != "" {
 		fmt.Printf("PR:       %s\n", r.GetStatus().GetPrUrl())
