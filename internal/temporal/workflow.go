@@ -710,7 +710,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 							RepoName:     repo,
 							BranchName:   branchName,
 							BaseBranch:   baseBranch,
-							Title:        fmt.Sprintf("feat: %s", truncateForTitle(input.Prompt, 60)),
+							Title:        prTitleFrom(pushOutput.CommitMessage, input.Prompt),
 							Body:         prBody,
 							AgentRunName: input.AgentRunName,
 						}).Get(ctx, &prOutput); err != nil {

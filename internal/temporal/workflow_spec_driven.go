@@ -925,7 +925,7 @@ View the full agent run: %s
 		RepoName:     repo,
 		BranchName:   branchName,
 		BaseBranch:   baseBranch,
-		Title:        fmt.Sprintf("feat(%s): %s", changeName, truncateForTitle(input.Prompt, 50)),
+		Title:        prTitleFrom(pushOutput.CommitMessage, input.Prompt),
 		Body:         prBody,
 		AgentRunName: input.AgentRunName,
 	}).Get(ctx, &prOutput); err != nil {
@@ -981,6 +981,15 @@ func truncateForTitle(s string, max int) string {
 		truncated = truncated[:idx]
 	}
 	return truncated + "..."
+}
+
+// prTitleFrom returns a PR title using the agent's commit message when it's a valid
+// conventional commit, otherwise falling back to a truncated prompt.
+func prTitleFrom(commitMessage, prompt string) string {
+	if conventionalCommitRE.MatchString(commitMessage) {
+		return commitMessage
+	}
+	return fmt.Sprintf("feat: %s", truncateForTitle(prompt, 60))
 }
 
 // newWorkflowUUID generates a UUID inside a Temporal SideEffect for deterministic replay.

@@ -35,6 +35,7 @@ type PushChangesInput struct {
 type PushChangesOutput struct {
 	BranchName      string
 	CommitSHA       string
+	CommitMessage   string // the validated conventional commit message used
 	DiffStat        string // output of `git diff --stat HEAD~1`
 	ProposalContent string // contents of openspec/changes/{changeName}/proposal.md
 	HasChanges      bool   // true when an actual commit was made (branch differs from origin/main)
@@ -141,6 +142,10 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		"git log --oneline origin/main..HEAD")
 	hasChanges := strings.TrimSpace(aheadOut) != ""
 
+	// Capture the commit subject for use as PR title.
+	commitSubject, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+		"git log -1 --format=%s HEAD 2>/dev/null || echo ''")
+
 	// Capture diff stats for PR body
 	diffStat, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, "git diff --stat HEAD~1")
 
@@ -179,6 +184,7 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 	return &PushChangesOutput{
 		BranchName:      input.BranchName,
 		CommitSHA:       strings.TrimSpace(sha),
+		CommitMessage:   strings.TrimSpace(commitSubject),
 		DiffStat:        strings.TrimSpace(diffStat),
 		ProposalContent: strings.TrimSpace(proposalContent),
 		HasChanges:      hasChanges,
