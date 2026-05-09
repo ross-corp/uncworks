@@ -331,20 +331,22 @@ func runRunsGet(args []string) error {
 
 	if *jsonOut {
 		type runGetJSON struct {
-			ID        string   `json:"id"`
-			Title     string   `json:"title,omitempty"`
-			Phase     string   `json:"phase"`
-			Message   string   `json:"message,omitempty"`
-			Project   string   `json:"project,omitempty"`
-			Feature   string   `json:"feature,omitempty"`
-			Prompt    string   `json:"prompt,omitempty"`
-			Repo      string   `json:"repo,omitempty"`
-			Model     string   `json:"model,omitempty"`
-			Tags      []string `json:"tags,omitempty"`
-			Started   string   `json:"started,omitempty"`
-			Completed string   `json:"completed,omitempty"`
-			Duration  string   `json:"duration,omitempty"`
-			PrURL     string   `json:"pr_url,omitempty"`
+			ID          string   `json:"id"`
+			Title       string   `json:"title,omitempty"`
+			Phase       string   `json:"phase"`
+			Message     string   `json:"message,omitempty"`
+			Project     string   `json:"project,omitempty"`
+			Feature     string   `json:"feature,omitempty"`
+			Prompt      string   `json:"prompt,omitempty"`
+			Repo        string   `json:"repo,omitempty"`
+			Branch      string   `json:"branch,omitempty"`
+			Model       string   `json:"model,omitempty"`
+			Tags        []string `json:"tags,omitempty"`
+			ParentRunID string   `json:"parent_run_id,omitempty"`
+			Started     string   `json:"started,omitempty"`
+			Completed   string   `json:"completed,omitempty"`
+			Duration    string   `json:"duration,omitempty"`
+			PrURL       string   `json:"pr_url,omitempty"`
 		}
 		out := runGetJSON{
 			ID:      r.GetId(),
@@ -359,8 +361,10 @@ func runRunsGet(args []string) error {
 			PrURL:   r.GetStatus().GetPrUrl(),
 		}
 		if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
-			out.Repo = repos[0].GetUrl() + " @ " + repos[0].GetBranch()
+			out.Repo = repos[0].GetUrl()
+			out.Branch = repos[0].GetBranch()
 		}
+		out.ParentRunID = r.GetSpec().GetParentRunId()
 		if r.GetStatus().GetStartedAt() != nil {
 			out.Started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
 		}
@@ -415,7 +419,7 @@ func runRunsGet(args []string) error {
 		fmt.Printf("Started:  %s\n", r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339))
 	}
 	if r.GetStatus().GetCompletedAt() != nil {
-		fmt.Printf("Completed:%s\n", r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339))
+		fmt.Printf("Completed: %s\n", r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339))
 		if r.GetStatus().GetStartedAt() != nil {
 			dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime())
 			fmt.Printf("Duration: %s\n", formatDuration(dur))
@@ -429,6 +433,9 @@ func runRunsGet(args []string) error {
 	}
 	if r.GetStatus().GetPrUrl() != "" {
 		fmt.Printf("PR:       %s\n", r.GetStatus().GetPrUrl())
+	}
+	if r.GetSpec().GetParentRunId() != "" {
+		fmt.Printf("Parent:   %s\n", r.GetSpec().GetParentRunId())
 	}
 	if len(r.GetChildren()) > 0 {
 		fmt.Printf("Children: %v\n", r.GetChildren())
