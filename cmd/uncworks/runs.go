@@ -28,7 +28,7 @@ const runsUsage = `Usage: uncworks runs <subcommand> [flags]
 
 Subcommands:
   list              List recent agent runs (--json, --active, --phase, --project, --since, --show-tags)
-  get <id>          Show full detail for a run (--json, --short, --wait, multiple IDs supported)
+  get <id>          Show full detail for a run (--json, --short, --wait, --poll N, multiple IDs supported)
   describe <id>     Show full detail including persisted log output
   logs <id>         Stream log output until the run completes (--no-follow, --grep, --lines, --head, --timestamps)
   tail <id>         Stream logs and show summary when run completes
@@ -38,7 +38,7 @@ Subcommands:
   count             Print a count of runs (--by-phase, --project, --since)
   summary           Show a dashboard summary of recent run activity
   latest            Show the most recent N runs (--n, --phase, --project, --tag)
-  graph <id>        Show the run graph (parent/child relationships)
+  graph <id>        Show the run graph (parent/child relationships) (--watch for live refresh)
   inspect <id>      Diagnostic view: details, graph, and log tail
   diff <id>         Show git commands to inspect a run's diff
   open <id>         Open the PR URL for a completed run in browser
@@ -3073,17 +3073,62 @@ func runRunsWait(args []string) error {
 	log := fs.Bool("log", false, "Stream log lines while waiting (like logs --follow)")
 	onSuccess := fs.String("on-success", "", "Shell command to run on success (run ID is passed as $RUN_ID)")
 	onFailure := fs.String("on-failure", "", "Shell command to run on failure (run ID is passed as $RUN_ID, message as $RUN_MESSAGE)")
+	anyFlag := fs.Bool("any", false, "Return as soon as any one run completes (default: wait for all)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs wait <id> [flags]\n\nBlock until the run reaches a terminal phase.\nExits 0 on success, 1 on failure or cancellation.\n\nFlags:")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs wait <id> [<id2> ...] [flags]\n\nBlock until run(s) reach a terminal phase.\nExits 0 if all succeed, 1 if any fail or are cancelled.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
+	if fs.NArg() == 0 {
 		fs.Usage()
 		return fmt.Errorf("run ID argument required")
 	}
+
+	// Multi-run support: fan out goroutines when multiple IDs given.
+	if fs.NArg() > 1 {
+		type result struct {
+			id  string
+			err error
+		}
+		ids := fs.Args()
+		ch := make(chan result, len(ids))
+		for _, rid := range ids {
+			rid := rid
+			go func() {
+				subArgs := []string{rid, "--server=" + *server}
+				if *timeout > 0 {
+					subArgs = append(subArgs, "--timeout="+timeout.String())
+				}
+				if *quiet {
+					subArgs = append(subArgs, "--quiet")
+				}
+				if *log {
+					subArgs = append(subArgs, "--log")
+				}
+				if *onSuccess != "" {
+					subArgs = append(subArgs, "--on-success="+*onSuccess)
+				}
+				if *onFailure != "" {
+					subArgs = append(subArgs, "--on-failure="+*onFailure)
+				}
+				ch <- result{id: rid, err: runRunsWait(subArgs)}
+			}()
+		}
+		var firstErr error
+		for i := 0; i < len(ids); i++ {
+			r := <-ch
+			if r.err != nil && firstErr == nil {
+				firstErr = r.err
+			}
+			if *anyFlag {
+				return firstErr
+			}
+		}
+		return firstErr
+	}
+
 	id := fs.Arg(0)
 
 	client, err := newClient(*server)
