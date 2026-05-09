@@ -269,6 +269,12 @@ func (a *Activities) StopAgent(ctx context.Context, input StopAgentInput) error 
 	return nil
 }
 
+// hostPathDirectoryOrCreate returns the HostPathType value for DirectoryOrCreate.
+func hostPathDirectoryOrCreate() *corev1.HostPathType {
+	t := corev1.HostPathDirectoryOrCreate
+	return &t
+}
+
 // BuildAgentPod creates a pod spec for an agent run.
 // Used by CreateAgentDeployment as the pod template source.
 func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
@@ -363,6 +369,10 @@ func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
 					Env:             initEnvVars,
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "workspace", MountPath: "/workspace"},
+						// Shared Nix store: devbox packages survive pod restarts and are
+						// shared across all agent runs on the same node, making subsequent
+						// devbox installs fast (cache hit) instead of re-downloading ~1 GB.
+						{Name: "nix-store", MountPath: "/nix"},
 					},
 				},
 			},
@@ -400,6 +410,15 @@ func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
 					Name: "workspace",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "nix-store",
+					VolumeSource: corev1.VolumeSource{
+						HostPath: &corev1.HostPathVolumeSource{
+							Path: "/var/aot/nix",
+							Type: hostPathDirectoryOrCreate(),
+						},
 					},
 				},
 			},

@@ -318,7 +318,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	var hydrationOutput WaitForHydrationOutput
 	if err := workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-			StartToCloseTimeout: 10 * time.Minute,
+			StartToCloseTimeout: 20 * time.Minute,
 			HeartbeatTimeout:    30 * time.Second,
 		}),
 		ActivityWaitForHydration, WaitForHydrationInput{
