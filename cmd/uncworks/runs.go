@@ -1068,6 +1068,8 @@ func runRunsCancelAll(args []string) error {
 	limit := fs.Int("limit", 0, "Cancel at most N runs (0 = no limit)")
 	since := fs.String("since", "", "Only cancel runs created within this window (e.g. 1h, 24h, 7d)")
 	phaseFilter := fs.String("phase", "", "Only cancel runs in this phase (RUNNING, PENDING, WAITING)")
+	project := fs.String("project", "", "Only cancel runs in this project")
+	feature := fs.String("feature", "", "Only cancel runs for this feature")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cancel-all [flags]\n\nCancel all active (non-terminal) runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1095,8 +1097,10 @@ func runRunsCancelAll(args []string) error {
 	var cursor string
 	for {
 		req := connect.NewRequest(&apiv1.ListAgentRunsRequest{
-			Limit:  100,
-			Cursor: cursor,
+			Limit:         100,
+			Cursor:        cursor,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
 		})
 		resp, err := client.ListAgentRuns(context.Background(), req)
 		if err != nil {
