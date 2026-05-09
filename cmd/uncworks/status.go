@@ -130,14 +130,26 @@ func runStatus(args []string) error {
 		w.Flush()
 	}
 
-	// Check gRPC API connectivity
+	// Check gRPC API connectivity and active run count
 	apiOK := false
 	apiMsg := ""
+	activeRunCount := -1
 	if client, err := newClient(*server); err == nil {
-		_, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		listResp, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 100}))
 		if apiErr == nil {
 			apiOK = true
 			apiMsg = "OK"
+			// Count active runs
+			active := 0
+			for _, r := range listResp.Msg.GetAgentRuns() {
+				p := r.GetStatus().GetPhase()
+				if p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
+					p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING ||
+					p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+					active++
+				}
+			}
+			activeRunCount = active
 		} else {
 			apiMsg = humanizeErr(apiErr)
 		}
@@ -151,6 +163,9 @@ func runStatus(args []string) error {
 			apiStatus = "UNREACHABLE (" + apiMsg + ")"
 		}
 		fmt.Printf("\nAPI server: %s\n", apiStatus)
+		if activeRunCount >= 0 {
+			fmt.Printf("Active runs: %d\n", activeRunCount)
+		}
 	}
 
 	if !allReady {
