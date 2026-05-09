@@ -31,6 +31,7 @@ Subcommands:
   watch <id>        Alias for logs
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
+  archive-done      Bulk archive all SUCCEEDED runs
   cancel <id>       Request cancellation of a running agent
   kill <id>         Alias for cancel
   stats             Show aggregate counts of runs by phase
@@ -65,6 +66,8 @@ func runRuns(args []string) error {
 		return runRunsArchive(rest, true)
 	case "unarchive":
 		return runRunsArchive(rest, false)
+	case "archive-done":
+		return runRunsArchiveDone(rest)
 	case "cancel", "kill":
 		return runCancel(rest)
 	case "stats":
@@ -623,6 +626,87 @@ func runRunsArchive(args []string, archived bool) error {
 	} else {
 		fmt.Printf("Run %s unarchived\n", id)
 	}
+	return nil
+}
+
+func runRunsArchiveDone(args []string) error {
+	fs := flag.NewFlagSet("runs archive-done", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	dryRun := fs.Bool("dry-run", false, "Print what would be archived without doing it")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs archive-done [flags]\n\nBulk archive all SUCCEEDED runs.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	var doneRuns []string
+	var cursor string
+	for {
+		req := connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			PhaseFilter:   apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			Cursor:        cursor,
+		})
+		resp, err := client.ListAgentRuns(context.Background(), req)
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			doneRuns = append(doneRuns, r.GetId())
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	if len(doneRuns) == 0 {
+		fmt.Println("No SUCCEEDED runs to archive.")
+		return nil
+	}
+
+	if *dryRun {
+		fmt.Printf("Would archive %d run(s):\n", len(doneRuns))
+		for _, id := range doneRuns {
+			fmt.Printf("  %s\n", id)
+		}
+		return nil
+	}
+
+	archived := 0
+	archiveBody, _ := json.Marshal(map[string]bool{"archived": true})
+	for _, id := range doneRuns {
+		url := serverBaseURL(*server) + "/api/v1/runs/" + id + "/archive"
+		archReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(archiveBody))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
+			continue
+		}
+		archReq.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(archReq)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
+			continue
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
+			continue
+		}
+		archived++
+	}
+	fmt.Printf("Archived %d/%d run(s).\n", archived, len(doneRuns))
 	return nil
 }
 
