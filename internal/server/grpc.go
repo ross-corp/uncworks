@@ -105,6 +105,8 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		})
 	}
 	
+	maxConcurrent := parseEnvInt("MAX_CONCURRENT_RUNS", 10)
+	
 	return &AOTServiceHandler{
 		K8sClient:                 k8sClient,
 		EventBus:                  bus,
@@ -112,6 +114,7 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		LiteLLMBaseURL:            litellmURL,
 		createAgentRunRateLimiter: createAgentRunRateLimiter,
 		cancelAgentRunRateLimiter: cancelAgentRunRateLimiter,
+		maxConcurrentRuns:         maxConcurrent,
 	}
 }
 
