@@ -35,6 +35,7 @@ Subcommands:
   unarchive <id>    Remove the archived flag from a run
   archive-done      Bulk archive all SUCCEEDED runs
   archive-failed    Bulk archive all FAILED runs
+  prune             Bulk archive all terminal runs older than a given age
   cancel <id>       Request cancellation of a running agent
   kill <id>         Alias for cancel
   stats             Show aggregate counts of runs by phase
@@ -79,6 +80,8 @@ func runRuns(args []string) error {
 		return runRunsArchiveDone(rest)
 	case "archive-failed":
 		return runRunsArchiveFailed(rest)
+	case "prune":
+		return runRunsPrune(rest)
 	case "cancel", "kill":
 		return runCancel(rest)
 	case "stats":
@@ -1075,6 +1078,111 @@ func runRunsArchiveFailed(args []string) error {
 		archived++
 	}
 	fmt.Printf("Archived %d/%d run(s).\n", archived, len(failedRuns))
+	return nil
+}
+
+func runRunsPrune(args []string) error {
+	fs := flag.NewFlagSet("runs prune", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	olderThan := fs.Duration("older-than", 7*24*time.Hour, "Archive runs completed longer ago than this (e.g. 24h, 7d)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	dryRun := fs.Bool("dry-run", false, "Print what would be archived without doing it")
+	yes := fs.Bool("yes", false, "Skip confirmation prompt")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs prune [flags]\n\nBulk archive all terminal (DONE, FAILED, CANCELLED) runs older than the given age.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	threshold := time.Now().Add(-*olderThan)
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	terminalPhases := []apiv1.AgentRunPhase{
+		apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED,
+		apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED,
+		apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED,
+	}
+
+	var toArchive []string
+	for _, phase := range terminalPhases {
+		cursor := ""
+		for {
+			req := connect.NewRequest(&apiv1.ListAgentRunsRequest{
+				Limit:         100,
+				PhaseFilter:   phase,
+				ProjectFilter: *project,
+				FeatureFilter: *feature,
+				Cursor:        cursor,
+			})
+			resp, err := client.ListAgentRuns(context.Background(), req)
+			if err != nil {
+				return fmt.Errorf("%s", humanizeErr(err))
+			}
+			for _, r := range resp.Msg.GetAgentRuns() {
+				completedAt := r.GetStatus().GetCompletedAt()
+				if completedAt != nil && completedAt.AsTime().Before(threshold) {
+					toArchive = append(toArchive, r.GetId())
+				}
+			}
+			cursor = resp.Msg.GetNextCursor()
+			if cursor == "" {
+				break
+			}
+		}
+	}
+
+	if len(toArchive) == 0 {
+		fmt.Printf("No terminal runs older than %s to archive.\n", *olderThan)
+		return nil
+	}
+
+	if *dryRun {
+		fmt.Printf("Would archive %d run(s) older than %s:\n", len(toArchive), *olderThan)
+		for _, id := range toArchive {
+			fmt.Printf("  %s\n", id)
+		}
+		return nil
+	}
+
+	if !*yes {
+		fmt.Printf("Archive %d terminal run(s) older than %s? [y/N] ", len(toArchive), *olderThan)
+		var answer string
+		fmt.Scanln(&answer)
+		if answer != "y" && answer != "Y" && answer != "yes" {
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
+	archived := 0
+	archiveBody, _ := json.Marshal(map[string]bool{"archived": true})
+	for _, id := range toArchive {
+		url := serverBaseURL(*server) + "/api/v1/runs/" + id + "/archive"
+		archReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(archiveBody))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
+			continue
+		}
+		archReq.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(archReq)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
+			continue
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
+			continue
+		}
+		archived++
+	}
+	fmt.Printf("Archived %d/%d run(s).\n", archived, len(toArchive))
 	return nil
 }
 
