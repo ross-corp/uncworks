@@ -2167,6 +2167,8 @@ func runRunsLatest(args []string) error {
 	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, etc.)")
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	n := fs.Int("n", 1, "Number of latest runs to show")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	showLog := fs.Bool("log", false, "Also print the stored agent log output")
 	fs.Usage = func() {
@@ -2182,10 +2184,14 @@ func runRunsLatest(args []string) error {
 		return err
 	}
 
+	if *n < 1 {
+		return fmt.Errorf("--n must be >= 1")
+	}
 	listReq := &apiv1.ListAgentRunsRequest{
-		Limit:         1,
+		Limit:         int32(*n),
 		ProjectFilter: *project,
 		FeatureFilter: *feature,
+		TagFilter:     *tag,
 	}
 	if *phase != "" {
 		switch strings.ToUpper(*phase) {
@@ -2212,17 +2218,25 @@ func runRunsLatest(args []string) error {
 		return nil
 	}
 
-	getArgs := []string{runs[0].GetId()}
-	if *server != "" {
-		getArgs = append(getArgs, "--server="+*server)
+	for i, r := range runs {
+		if i > 0 {
+			fmt.Println()
+		}
+		getArgs := []string{r.GetId()}
+		if *server != "" {
+			getArgs = append(getArgs, "--server="+*server)
+		}
+		if *jsonOut {
+			getArgs = append(getArgs, "--json")
+		}
+		if *showLog {
+			getArgs = append(getArgs, "--log")
+		}
+		if err := runRunsGet(getArgs); err != nil {
+			return err
+		}
 	}
-	if *jsonOut {
-		getArgs = append(getArgs, "--json")
-	}
-	if *showLog {
-		getArgs = append(getArgs, "--log")
-	}
-	return runRunsGet(getArgs)
+	return nil
 }
 
 // ── export ────────────────────────────────────────────────────────────────────
