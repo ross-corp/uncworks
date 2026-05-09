@@ -592,10 +592,41 @@ func runRunsGet(args []string) error {
 	if *showLogs {
 		*showLog = true
 	}
-	if fs.NArg() != 1 {
+	if fs.NArg() == 0 {
 		fs.Usage()
 		return fmt.Errorf("run ID argument required")
 	}
+
+	// Support multiple IDs: print each separated by a blank line.
+	if fs.NArg() > 1 {
+		var firstErr error
+		for i, id := range fs.Args() {
+			if i > 0 {
+				fmt.Println()
+			}
+			subArgs := []string{id}
+			if *server != "" {
+				subArgs = append(subArgs, "--server="+*server)
+			}
+			if *showLog {
+				subArgs = append(subArgs, "--log")
+			}
+			if *jsonOut {
+				subArgs = append(subArgs, "--json")
+			}
+			if *noColor {
+				subArgs = append(subArgs, "--no-color")
+			}
+			if *short {
+				subArgs = append(subArgs, "--short")
+			}
+			if err := runRunsGet(subArgs); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		return firstErr
+	}
+
 	id := fs.Arg(0)
 
 	client, err := newClient(*server)
