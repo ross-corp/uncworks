@@ -166,7 +166,7 @@ func runRunsList(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tTITLE\tPHASE\tMODEL\tSTARTED")
+	fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED")
 	for _, r := range runs {
 		title := r.GetSpec().GetDisplayName()
 		if title == "" {
@@ -189,7 +189,8 @@ func runRunsList(args []string) error {
 		} else if r.GetCreatedAt() != nil {
 			started = r.GetCreatedAt().AsTime().Format(time.RFC3339)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, model, started)
+		duration := runDuration(r)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started)
 	}
 	w.Flush()
 	

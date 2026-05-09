@@ -95,6 +95,27 @@ func phaseLabel(p apiv1.AgentRunPhase) string {
 	}
 }
 
+func runDuration(r *apiv1.AgentRun) string {
+	if r.GetStatus().GetStartedAt() == nil {
+		return "-"
+	}
+	start := r.GetStatus().GetStartedAt().AsTime()
+	var end time.Time
+	if r.GetStatus().GetCompletedAt() != nil {
+		end = r.GetStatus().GetCompletedAt().AsTime()
+	} else {
+		end = time.Now()
+	}
+	d := end.Sub(start).Round(time.Second)
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type tuiModel struct {
