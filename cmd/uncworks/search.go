@@ -24,6 +24,7 @@ func runSearch(args []string) error {
 	since := fs.String("since", "", "Filter to results created within this window (e.g. 1h, 24h, 7d)")
 	source := fs.String("source", "", "Filter by source type (code, trace, source-code; default: all)")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
+	snippetLen := fs.Int("snippet-length", 200, "Maximum length of result snippets")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks search <query> [flags]
 
@@ -136,10 +137,15 @@ Flags:`)
 			fmt.Printf("   repo: %s\n", u)
 		}
 
-		// Snippet: collapse whitespace, then truncate.
+		// Snippet: collapse whitespace, then truncate at word boundary.
 		snippet := strings.Join(strings.Fields(r.GetChunkText()), " ")
-		if len(snippet) > 200 {
-			snippet = snippet[:197] + "..."
+		max := *snippetLen
+		if len(snippet) > max {
+			cutAt := strings.LastIndex(snippet[:max], " ")
+			if cutAt < max/2 {
+				cutAt = max
+			}
+			snippet = snippet[:cutAt] + "..."
 		}
 		fmt.Printf("   %s\n\n", snippet)
 	}
