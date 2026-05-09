@@ -544,8 +544,11 @@ func runRunsList(args []string) error {
 	} else if *all {
 		fmt.Printf("Showing all %d run(s)%s\n", len(runs), phaseSummary())
 	} else if len(runs) > 0 {
+		isFiltered := !sinceTime.IsZero() || *repoURL != "" || *titleContains != "" ||
+			*activeOnly || *runningOnly || *failedOnly || *pendingOnly || *waitingOnly ||
+			*project != "" || *feature != "" || *tag != "" || *phase != ""
 		suffix := ""
-		if !sinceTime.IsZero() || *repoURL != "" || *titleContains != "" {
+		if isFiltered {
 			suffix = " (filtered)"
 		}
 		fmt.Printf("Showing %d run(s)%s%s\n", len(runs), suffix, phaseSummary())
@@ -1275,6 +1278,7 @@ func runRunsStats(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
 	format := fs.String("format", "table", "Output format (table|json)")
 	limit := fs.Int("limit", 0, "Count only the N most recent runs (0 = all)")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
@@ -1327,6 +1331,7 @@ func runRunsStats(args []string) error {
 			Limit:         pageSize,
 			ProjectFilter: *project,
 			FeatureFilter: *feature,
+			TagFilter:     *tag,
 			Cursor:        cursor,
 		}
 		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
