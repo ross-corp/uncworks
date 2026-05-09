@@ -94,6 +94,9 @@ type WaitForHydrationOutput struct {
 // Returns the pod IP so subsequent activities can reach the sidecar directly.
 // When AgentRunName is set, discovers the pod via label selector (Deployment-managed).
 func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydrationInput) (*WaitForHydrationOutput, error) {
+	slog.Debug("WaitForHydration started", "agentRun", input.AgentRunName, "namespace", input.Namespace, "podName", input.PodName)
+	
+	iteration := 0
 	for {
 		pod, err := a.findPod(ctx, input.Namespace, input.AgentRunName, input.PodName)
 		if err != nil {
@@ -139,6 +142,12 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			return nil, fmt.Errorf("pod failed before hydration completed: %s", pod.Status.Message)
 		}
 
+		// Log debug message every 10 iterations (~20 seconds)
+		iteration++
+		if iteration%10 == 0 {
+			slog.Debug("WaitForHydration polling", "iteration", iteration, "agentRun", input.AgentRunName, "podPhase", pod.Status.Phase)
+		}
+
 		activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for hydration: pod %s", pod.Name))
 
 		select {
@@ -171,6 +180,7 @@ type StartAgentInput struct {
 
 // StartAgent calls the sidecar StartAgent RPC, retrying until the sidecar is ready.
 func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) error {
+	slog.Debug("StartAgent started", "podName", input.PodName, "namespace", input.Namespace, "podIP", input.PodIP, "stage", input.Stage, "promptLength", len(input.Prompt))
 	sc := a.sidecarClient(input.PodIP)
 
 	// Retry until sidecar is ready (it may still be starting)
@@ -223,6 +233,7 @@ type GetAgentStatusOutput struct {
 
 // GetAgentStatus calls the sidecar GetStatus RPC.
 func (a *Activities) GetAgentStatus(ctx context.Context, input GetAgentStatusInput) (*GetAgentStatusOutput, error) {
+	slog.Debug("GetAgentStatus started", "podName", input.PodName, "namespace", input.Namespace, "podIP", input.PodIP)
 	sidecarClient := a.sidecarClient(input.PodIP)
 
 	resp, err := sidecarClient.GetStatus(ctx, connect.NewRequest(&agentv1.GetStatusRequest{}))
@@ -799,6 +810,7 @@ type CollectAgentLogsInput struct {
 // ExecCommand RPC and persists the last 32 KB to AgentRun status.logOutput. Must be
 // called before ScaleDownDeployment while the sidecar is still reachable.
 func (a *Activities) CollectAgentLogs(ctx context.Context, input CollectAgentLogsInput) error {
+	slog.Info("CollectAgentLogs started", "agentRun", input.AgentRunName, "namespace", input.Namespace, "podIP", input.PodIP)
 	if input.PodIP == "" {
 		slog.Warn("collect logs: no pod IP, skipping", "agentRun", input.AgentRunName)
 		return nil
@@ -853,7 +865,7 @@ process.stdout.write(lastText.slice(-32768));
 		return nil
 	}
 
-	slog.Info("collect logs: persisted agent output", "agentRun", input.AgentRunName, "bytes", len(logOutput))
+	slog.Info("CollectAgentLogs completed", "agentRun", input.AgentRunName, "bytes", len(logOutput))
 	return nil
 }
 
