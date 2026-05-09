@@ -10,7 +10,6 @@ import (
 	"io"
 	"log/slog"
 	"math/big"
-	"net"
 	"net/http"
 	"os"
 	"regexp"
