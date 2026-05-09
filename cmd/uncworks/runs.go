@@ -760,8 +760,11 @@ func runRunsOpen(args []string) error {
 func runRunsRetry(args []string) error {
 	fs := flag.NewFlagSet("runs retry", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
+	prompt := fs.String("prompt", "", "Override the agent prompt")
+	branch := fs.String("branch", "", "Override the branch")
+	modelTier := fs.String("model-tier", "", "Override the model tier")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run.\n\nFlags:")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run. Use flags to override specific fields.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -799,6 +802,16 @@ func runRunsRetry(args []string) error {
 		Tags:      spec.Tags,
 		AutoPush:  spec.AutoPush,
 		AutoPr:    spec.AutoPr,
+	}
+
+	if *prompt != "" {
+		newSpec.Prompt = *prompt
+	}
+	if *branch != "" && len(newSpec.Repos) > 0 {
+		newSpec.Repos[0].Branch = *branch
+	}
+	if *modelTier != "" {
+		newSpec.ModelTier = *modelTier
 	}
 
 	createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
