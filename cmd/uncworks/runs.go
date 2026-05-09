@@ -2874,6 +2874,7 @@ func runRunsHistogram(args []string) error {
 	tag := fs.String("tag", "", "Filter by tag")
 	buckets := fs.Int("buckets", 0, "Number of time buckets (0 = auto: 24 for <=24h windows, 7 for <=7d, else 30)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	jsonOut := fs.Bool("json", false, "Output as JSON array of bucket objects")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs histogram [flags]\n\nShow a bar chart of run starts bucketed over a time window.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2965,6 +2966,33 @@ func runRunsHistogram(args []string) error {
 		if n > maxCount {
 			maxCount = n
 		}
+	}
+
+	if *jsonOut {
+		type bucketJSON struct {
+			Start   string `json:"start"`
+			End     string `json:"end"`
+			Count   int    `json:"count"`
+			Done    int    `json:"done"`
+			Failed  int    `json:"failed"`
+			Running int    `json:"running"`
+		}
+		var out []bucketJSON
+		for i := 0; i < numBuckets; i++ {
+			start := sinceTime.Add(time.Duration(i) * bucketDur)
+			end := start.Add(bucketDur)
+			out = append(out, bucketJSON{
+				Start:   start.UTC().Format(time.RFC3339),
+				End:     end.UTC().Format(time.RFC3339),
+				Count:   counts[i],
+				Done:    phaseBuckets["DONE"][i],
+				Failed:  phaseBuckets["FAILED"][i],
+				Running: phaseBuckets["RUNNING"][i],
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
 	}
 
 	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
@@ -3395,6 +3423,7 @@ func runRunsWait(args []string) error {
 	log := fs.Bool("log", false, "Stream log lines while waiting (like logs --follow)")
 	onSuccess := fs.String("on-success", "", "Shell command to run on success (run ID is passed as $RUN_ID)")
 	onFailure := fs.String("on-failure", "", "Shell command to run on failure (run ID is passed as $RUN_ID, message as $RUN_MESSAGE)")
+	notify := fs.Bool("notify", false, "Send a macOS desktop notification when the run completes")
 	anyFlag := fs.Bool("any", false, "Return as soon as any one run completes (default: wait for all)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs wait <id> [<id2> ...] [flags]\n\nBlock until run(s) reach a terminal phase.\nExits 0 if all succeed, 1 if any fail or are cancelled.\n\nFlags:")
@@ -3434,6 +3463,9 @@ func runRunsWait(args []string) error {
 				}
 				if *onFailure != "" {
 					subArgs = append(subArgs, "--on-failure="+*onFailure)
+				}
+				if *notify {
+					subArgs = append(subArgs, "--notify")
 				}
 				ch <- result{id: rid, err: runRunsWait(subArgs)}
 			}()
@@ -3526,6 +3558,14 @@ func runRunsWait(args []string) error {
 		}
 	}
 
+	sendNotify := func(title, body string) {
+		if !*notify {
+			return
+		}
+		script := fmt.Sprintf(`display notification %q with title %q`, body, title)
+		_ = exec.Command("osascript", "-e", script).Run()
+	}
+
 	switch phase {
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
 		if !*quiet {
@@ -3534,16 +3574,19 @@ func runRunsWait(args []string) error {
 				fmt.Printf("PR: %s\n", url)
 			}
 		}
+		sendNotify("UNCWORKS: run succeeded", id)
 		runHook(*onSuccess)
 		return nil
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
 		runHook(*onFailure, "RUN_MESSAGE="+msg)
+		sendNotify("UNCWORKS: run failed", id)
 		if finalPayload != "" {
 			return fmt.Errorf("run %s failed: %s", id, finalPayload)
 		}
 		return fmt.Errorf("run %s failed", id)
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
 		runHook(*onFailure, "RUN_MESSAGE=cancelled")
+		sendNotify("UNCWORKS: run cancelled", id)
 		return fmt.Errorf("run %s was cancelled", id)
 	default:
 		return fmt.Errorf("run %s ended in unexpected phase: %s", id, phaseLabel(phase))
