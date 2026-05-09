@@ -47,6 +47,9 @@ type AOTServiceHandler struct {
 	// Knowledge system (optional — nil means search is unavailable)
 	BrainSearcher *brain.Searcher
 	Embedder      *embeddings.Embedder
+
+	// Rate limiting for CreateAgentRun
+	createAgentRunRateLimiter *RateLimiter
 }
 
 var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
