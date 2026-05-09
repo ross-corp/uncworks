@@ -87,12 +87,28 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		})
 	}
 	
+	// Create rate limiter for CancelAgentRun
+	// Default: 1 RPS, burst 5
+	cancelRPS := parseEnvFloat("RATE_LIMIT_CANCEL_AGENT_RUN_RPS", 1.0)
+	cancelBurst := parseEnvInt("RATE_LIMIT_CANCEL_AGENT_RUN_BURST", 5)
+	var cancelAgentRunRateLimiter *RateLimiter
+	if cancelRPS > 0 && cancelBurst > 0 {
+		cancelAgentRunRateLimiter = NewRateLimiter(RateLimiterConfig{
+			Enabled:    true,
+			RPS:        cancelRPS,
+			Burst:      cancelBurst,
+			TTLMinutes: 10,
+			TrustProxy: os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true",
+		})
+	}
+	
 	return &AOTServiceHandler{
 		K8sClient:                 k8sClient,
 		EventBus:                  bus,
 		Namespace:                 namespace,
 		LiteLLMBaseURL:            litellmURL,
 		createAgentRunRateLimiter: createAgentRunRateLimiter,
+		cancelAgentRunRateLimiter: cancelAgentRunRateLimiter,
 	}
 }
 
