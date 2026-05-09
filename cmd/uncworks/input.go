@@ -5,7 +5,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"connectrpc.com/connect"
 
@@ -15,13 +17,17 @@ import (
 func runInput(args []string) error {
 	fs := flag.NewFlagSet("input", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
+	follow := fs.Bool("follow", false, "Stream logs after sending input until the run completes")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks input <run-id> <text> [flags]
+		fmt.Fprintln(fs.Output(), `Usage: uncworks input <run-id> [<text>] [flags]
 
 Send a human-in-the-loop response to a paused agent run.
+If <text> is omitted, reads from stdin.
 
-Example:
+Examples:
   uncworks input abc123 "approved, proceed"
+  echo "approved" | uncworks input abc123
+  uncworks input abc123 --follow
 
 Flags:`)
 		fs.PrintDefaults()
@@ -29,14 +35,26 @@ Flags:`)
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() != 2 {
+	if fs.NArg() < 1 {
 		fs.Usage()
-		return fmt.Errorf("run ID and input text arguments are required")
+		return fmt.Errorf("run ID argument required")
 	}
 	id := fs.Arg(0)
-	text := fs.Arg(1)
 
-	// Validate input length
+	var text string
+	if fs.NArg() >= 2 {
+		text = strings.Join(fs.Args()[1:], " ")
+	} else {
+		raw, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("reading stdin: %w", err)
+		}
+		text = strings.TrimRight(string(raw), "\n")
+		if text == "" {
+			return fmt.Errorf("input text is empty")
+		}
+	}
+
 	if len(text) > 10000 {
 		return fmt.Errorf("input too long: %d chars (max 10000)", len(text))
 	}
@@ -56,5 +74,9 @@ Flags:`)
 	}
 
 	fmt.Printf("Input sent to run %s\n", id)
+
+	if *follow {
+		return runRunsTail([]string{id, "--server=" + *server})
+	}
 	return nil
 }
