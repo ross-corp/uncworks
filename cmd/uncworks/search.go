@@ -25,6 +25,8 @@ func runSearch(args []string) error {
 	source := fs.String("source", "", "Filter by source type (code, trace, source-code; default: all)")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	snippetLen := fs.Int("snippet-length", 200, "Maximum length of result snippets")
+	minScore := fs.Float64("min-score", 0, "Minimum similarity score threshold (0.0-1.0; 0 = no filter)")
+	idsOnly := fs.Bool("ids-only", false, "Print only matching run IDs (one per line)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks search <query> [flags]
 
@@ -86,11 +88,31 @@ Flags:`)
 	}
 
 	results := resp.Msg.GetResults()
+	if *minScore > 0 {
+		filtered := results[:0]
+		for _, r := range results {
+			if float64(r.GetSimilarityScore()) >= *minScore {
+				filtered = append(filtered, r)
+			}
+		}
+		results = filtered
+	}
 	if len(results) == 0 {
 		if *jsonOut {
 			fmt.Println("[]")
 		} else {
 			fmt.Println("No results found.")
+		}
+		return nil
+	}
+
+	if *idsOnly {
+		seen := map[string]bool{}
+		for _, r := range results {
+			if id := r.GetRunId(); id != "" && !seen[id] {
+				fmt.Println(id)
+				seen[id] = true
+			}
 		}
 		return nil
 	}
