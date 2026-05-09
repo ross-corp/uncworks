@@ -6,12 +6,22 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 )
+
+// multiFlag collects repeated flag values (e.g. --tag foo --tag bar).
+type multiFlag []string
+
+func (f *multiFlag) String() string { return strings.Join(*f, ",") }
+func (f *multiFlag) Set(v string) error {
+	*f = append(*f, v)
+	return nil
+}
 
 func runRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
@@ -24,7 +34,10 @@ func runRun(args []string) error {
 	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
 	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
 	wait := fs.Bool("wait", false, "Wait for the run to complete; exit 0 on success, 1 on failure")
+	timeout := fs.Duration("timeout", 0, "Timeout for --wait mode (e.g. 30m, 1h); 0 means no timeout")
 	server := fs.String("server", "", "gRPC server address (overrides config)")
+	var tags multiFlag
+	fs.Var(&tags, "tag", "Freeform tag for filtering (repeatable, e.g. --tag ci --tag infra)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
 
@@ -58,6 +71,7 @@ Flags:`)
 		ModelTier: *modelTier,
 		AutoPush:  *autoPush || *autoPR,
 		AutoPr:    *autoPR,
+		Tags:      []string(tags),
 	}
 
 	req := connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: spec})
@@ -80,12 +94,22 @@ Flags:`)
 
 	fmt.Printf("Waiting for run %s to complete...\n", run.GetId())
 	startTime := time.Now()
+	waitCtx := context.Background()
+	var waitCancel context.CancelFunc
+	if *timeout > 0 {
+		waitCtx, waitCancel = context.WithTimeout(waitCtx, *timeout)
+		defer waitCancel()
+	}
 	var lastPhase apiv1.AgentRunPhase
 	var lastStage, lastMsg string
 	for {
-		time.Sleep(10 * time.Second)
+		select {
+		case <-waitCtx.Done():
+			return fmt.Errorf("timed out after %s waiting for run %s", *timeout, run.GetId())
+		case <-time.After(10 * time.Second):
+		}
 		getReq := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: run.GetId()})
-		getResp, err := client.GetAgentRun(context.Background(), getReq)
+		getResp, err := client.GetAgentRun(waitCtx, getReq)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warn: poll error: %s\n", humanizeErr(err))
 			continue
