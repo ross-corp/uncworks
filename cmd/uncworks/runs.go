@@ -1097,6 +1097,7 @@ func runRunsStats(args []string) error {
 func runRunsOpen(args []string) error {
 	fs := flag.NewFlagSet("runs open", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
+	printURL := fs.Bool("print-url", false, "Print the PR URL instead of opening the browser")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs open <id> [flags]\n\nOpen the PR URL for a completed agent run in the default browser.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1130,6 +1131,11 @@ func runRunsOpen(args []string) error {
 		} else {
 			return fmt.Errorf("run %s has no PR — was --auto-pr used?", id)
 		}
+		return nil
+	}
+
+	if *printURL {
+		fmt.Println(prURL)
 		return nil
 	}
 
@@ -1384,6 +1390,7 @@ func runRunsLatest(args []string) error {
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
+	showLog := fs.Bool("log", false, "Also print the stored agent log output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs latest [flags]\n\nShow the most recent agent run in detail.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1433,6 +1440,9 @@ func runRunsLatest(args []string) error {
 	}
 	if *jsonOut {
 		getArgs = append(getArgs, "--json")
+	}
+	if *showLog {
+		getArgs = append(getArgs, "--log")
 	}
 	return runRunsGet(getArgs)
 }
