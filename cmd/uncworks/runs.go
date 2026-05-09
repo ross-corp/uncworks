@@ -604,6 +604,7 @@ func runRunsLogs(args []string) error {
 	fs := flag.NewFlagSet("runs logs", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	noFollow := fs.Bool("no-follow", false, "Print stored log output only (don't stream live)")
+	lines := fs.Int("lines", 0, "Show only the last N lines of output (0 = all)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
 		fs.PrintDefaults()
@@ -634,6 +635,13 @@ func runRunsLogs(args []string) error {
 		if logOutput == "" {
 			fmt.Fprintf(os.Stderr, "No stored log output for run %s\n", id)
 			return nil
+		}
+		if *lines > 0 {
+			allLines := strings.Split(logOutput, "\n")
+			if len(allLines) > *lines {
+				allLines = allLines[len(allLines)-*lines:]
+			}
+			logOutput = strings.Join(allLines, "\n")
 		}
 		fmt.Print(logOutput)
 		return nil
