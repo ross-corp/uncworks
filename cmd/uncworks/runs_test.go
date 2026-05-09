@@ -81,3 +81,31 @@ func TestPhaseLabel(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want string
+	}{
+		{0, "<1s"},
+		{500 * time.Millisecond, "<1s"},
+		{5 * time.Second, "5s"},
+		{90 * time.Second, "1m30s"},
+		{65 * time.Minute, "1h05m"},
+		{25 * time.Hour, "1d01h"},
+	}
+	for _, tt := range tests {
+		got := formatDuration(tt.d)
+		if got != tt.want {
+			t.Errorf("formatDuration(%v) = %q, want %q", tt.d, got, tt.want)
+		}
+	}
+}
+
+func TestRunDurationPending(t *testing.T) {
+	r := &apiv1.AgentRun{}
+	got := runDuration(r)
+	if got != "-" {
+		t.Errorf("runDuration(pending) = %q, want %q", got, "-")
+	}
+}
