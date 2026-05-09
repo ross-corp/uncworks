@@ -113,6 +113,7 @@ func runRunsList(args []string) error {
 	all := fs.Bool("all", false, "Fetch all pages (overrides --limit)")
 	repoURL := fs.String("repo-url", "", "Filter runs by repository URL (substring match)")
 	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -268,7 +269,7 @@ func runRunsList(args []string) error {
 		return enc.Encode(out)
 	}
 
-	useColor := term.IsTerminal(int(os.Stdout.Fd()))
+	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
 	var listBuf bytes.Buffer
 	w := tabwriter.NewWriter(&listBuf, 0, 0, 2, ' ', 0)
 	if *verbose {
