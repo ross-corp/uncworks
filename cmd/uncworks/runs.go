@@ -596,6 +596,7 @@ func runRunsStats(args []string) error {
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
 	format := fs.String("format", "table", "Output format (table|json)")
+	limit := fs.Int("limit", 0, "Count only the N most recent runs (0 = all)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -625,8 +626,12 @@ func runRunsStats(args []string) error {
 	cursor := ""
 	total := 0
 	for {
+		pageSize := int32(100)
+		if *limit > 0 && *limit-total < 100 {
+			pageSize = int32(*limit - total)
+		}
 		listReq := &apiv1.ListAgentRunsRequest{
-			Limit:         100,
+			Limit:         pageSize,
 			ProjectFilter: *project,
 			FeatureFilter: *feature,
 			Cursor:        cursor,
@@ -641,7 +646,7 @@ func runRunsStats(args []string) error {
 			total++
 		}
 		cursor = resp.Msg.GetNextCursor()
-		if cursor == "" {
+		if cursor == "" || (*limit > 0 && total >= *limit) {
 			break
 		}
 	}
