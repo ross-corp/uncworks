@@ -127,6 +127,9 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			return &WaitForHydrationOutput{PodIP: pod.Status.PodIP, PodName: pod.Name}, nil
 		}
 		if pod.Status.Phase == corev1.PodFailed {
+			if pod.Status.Reason == "Evicted" {
+				return nil, fmt.Errorf("pod evicted before hydration completed: %s", pod.Status.Message)
+			}
 			return nil, fmt.Errorf("pod failed before hydration completed")
 		}
 
