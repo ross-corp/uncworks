@@ -124,20 +124,19 @@ func parseEnvFloat(key string, def float64) float64 {
 func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Request[apiv1.CreateAgentRunRequest]) (*connect.Response[apiv1.CreateAgentRunResponse], error) {
 	// Check rate limiting if enabled
 	if s.createAgentRunRateLimiter != nil {
-		// Extract client IP from HTTP request
-		httpReq := connect.GetHTTPRequest(ctx)
-		if httpReq != nil {
-			// Get the rate limiter config to pass to clientIP
-			cfg := s.createAgentRunRateLimiter.cfg
-			ip := clientIP(httpReq, cfg)
-			if ip != "" && !s.createAgentRunRateLimiter.Allow(ip) {
-				slog.Warn("CreateAgentRun rate limit exceeded", "ip", ip)
-				return nil, connect.NewError(connect.CodeResourceExhausted, 
-					fmt.Errorf("rate limit exceeded for CreateAgentRun"))
-			}
-		} else {
-			// If we can't get HTTP request, log and skip rate limiting
-			slog.Debug("CreateAgentRun: could not get HTTP request for rate limiting")
+		// Extract client IP from peer information
+		peer := req.Peer()
+		ip := ""
+		if peer.Addr != "" {
+			// Extract IP from address (e.g., "192.168.1.1:12345" -> "192.168.1.1")
+			// Use the same logic as stripPort in ratelimit.go
+			ip = stripPort(peer.Addr)
+		}
+		
+		if ip != "" && !s.createAgentRunRateLimiter.Allow(ip) {
+			slog.Warn("CreateAgentRun rate limit exceeded", "ip", ip)
+			return nil, connect.NewError(connect.CodeResourceExhausted, 
+				fmt.Errorf("rate limit exceeded for CreateAgentRun"))
 		}
 	}
 	
