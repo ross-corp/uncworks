@@ -52,6 +52,7 @@ Subcommands:
   inspect <id>      Diagnostic view: details, graph, and log tail
   wait <id>         Block until a run reaches a terminal phase (exit 1 on failure)
   retry-failed      Bulk retry all FAILED runs matching filters
+  summary           Show a dashboard summary of recent run activity
 `
 
 func runRuns(args []string) error {
@@ -110,6 +111,8 @@ func runRuns(args []string) error {
 		return runRunsWait(rest)
 	case "retry-failed":
 		return runRunsRetryFailed(rest)
+	case "summary":
+		return runRunsSummary(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -2404,6 +2407,151 @@ func runRunsCount(args []string) error {
 	} else {
 		fmt.Println(count)
 	}
+	return nil
+}
+
+// ── summary ───────────────────────────────────────────────────────────────────
+
+func runRunsSummary(args []string) error {
+	fs := flag.NewFlagSet("runs summary", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	since := fs.String("since", "24h", "Time window for summary (e.g. 1h, 24h, 7d)")
+	project := fs.String("project", "", "Filter by project name")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs summary [flags]\n\nShow a dashboard summary of recent run activity.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	d, err := parseSinceDuration(*since)
+	if err != nil {
+		return fmt.Errorf("--since %q: %w", *since, err)
+	}
+	sinceTime := time.Now().Add(-d)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	phaseCounts := map[string]int{}
+	var activeRuns []*apiv1.AgentRun
+	var latestRun *apiv1.AgentRun
+	total := 0
+	cursor := ""
+	for {
+		listReq := &apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			Cursor:        cursor,
+		}
+		resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			ts := r.GetCreatedAt()
+			if ts == nil || !ts.AsTime().After(sinceTime) {
+				continue
+			}
+			total++
+			label := phaseLabel(r.GetStatus().GetPhase())
+			phaseCounts[label]++
+			switch r.GetStatus().GetPhase() {
+			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING,
+				apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
+				apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
+				activeRuns = append(activeRuns, r)
+			}
+			if latestRun == nil {
+				latestRun = r
+			}
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	useColor := term.IsTerminal(int(os.Stdout.Fd()))
+	colorPhase := func(label string) string {
+		if !useColor {
+			return label
+		}
+		switch label {
+		case "RUNNING":
+			return "\033[32m" + label + "\033[0m"
+		case "PENDING":
+			return "\033[33m" + label + "\033[0m"
+		case "WAITING":
+			return "\033[36m" + label + "\033[0m"
+		case "FAILED":
+			return "\033[31m" + label + "\033[0m"
+		case "DONE":
+			return "\033[90m" + label + "\033[0m"
+		case "CANCELLED":
+			return "\033[35m" + label + "\033[0m"
+		}
+		return label
+	}
+
+	fmt.Printf("Runs in the last %s", *since)
+	if *project != "" {
+		fmt.Printf(" (project: %s)", *project)
+	}
+	fmt.Printf(":\n\n")
+
+	if total == 0 {
+		fmt.Println("  No runs found.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	for _, ph := range []string{"RUNNING", "PENDING", "WAITING", "DONE", "FAILED", "CANCELLED"} {
+		if n := phaseCounts[ph]; n > 0 {
+			pct := n * 100 / total
+			bar := strings.Repeat("█", pct/5)
+			fmt.Fprintf(w, "  %s\t%d\t(%d%%)\t%s\n", colorPhase(ph), n, pct, bar)
+		}
+	}
+	fmt.Fprintf(w, "  ─────────────\t\t\t\n")
+	fmt.Fprintf(w, "  TOTAL\t%d\t\t\n", total)
+	w.Flush()
+
+	if len(activeRuns) > 0 {
+		fmt.Printf("\nActive runs (%d):\n", len(activeRuns))
+		for _, r := range activeRuns {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			if len(title) > 40 {
+				title = title[:37] + "..."
+			}
+			age := ""
+			if ts := r.GetCreatedAt(); ts != nil {
+				age = "  " + relativeTime(ts.AsTime())
+			}
+			fmt.Printf("  %s  %-40s  %s%s\n", r.GetId(), title, colorPhase(phaseLabel(r.GetStatus().GetPhase())), age)
+		}
+	}
+
+	if latestRun != nil {
+		title := latestRun.GetSpec().GetDisplayName()
+		if title == "" {
+			title = latestRun.GetSpec().GetProject()
+		}
+		age := ""
+		if ts := latestRun.GetCreatedAt(); ts != nil {
+			age = " (" + relativeTime(ts.AsTime()) + ")"
+		}
+		fmt.Printf("\nMost recent: %s  %s%s  %s\n",
+			latestRun.GetId(), title, age,
+			colorPhase(phaseLabel(latestRun.GetStatus().GetPhase())))
+	}
+
 	return nil
 }
 
