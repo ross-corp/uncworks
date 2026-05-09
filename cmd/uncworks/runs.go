@@ -165,12 +165,17 @@ func runRunsList(args []string) error {
 	repoURL := fs.String("repo-url", "", "Filter runs by repository URL (substring match)")
 	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
+	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+
+	if *recent && *since == "" {
+		*since = "24h"
 	}
 
 	var sinceTime time.Time
