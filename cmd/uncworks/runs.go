@@ -238,7 +238,7 @@ func runRunsList(args []string) error {
 	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	relative := fs.Bool("relative", false, "Show relative timestamps (e.g. '5m ago') instead of ISO")
-	sortBy := fs.String("sort", "", "Sort by field: started, phase (default: server order / most-recent-first)")
+	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title (default: server order / most-recent-first)")
 	idsOnly := fs.Bool("ids-only", false, "Print only run IDs (one per line, for scripting)")
 	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
 	runningOnly := fs.Bool("running", false, "Shorthand for --phase RUNNING")
@@ -428,8 +428,27 @@ func runRunsList(args []string) error {
 			sort.Slice(runs, func(i, j int) bool {
 				return runs[i].GetStatus().GetPhase() < runs[j].GetStatus().GetPhase()
 			})
+		case "elapsed", "duration":
+			// Oldest started = longest elapsed time first.
+			sort.Slice(runs, func(i, j int) bool {
+				ti := runs[i].GetStatus().GetStartedAt()
+				tj := runs[j].GetStatus().GetStartedAt()
+				if ti == nil {
+					return false
+				}
+				if tj == nil {
+					return true
+				}
+				return ti.AsTime().Before(tj.AsTime())
+			})
+		case "title", "name":
+			sort.Slice(runs, func(i, j int) bool {
+				ti := runs[i].GetSpec().GetDisplayName()
+				tj := runs[j].GetSpec().GetDisplayName()
+				return strings.ToLower(ti) < strings.ToLower(tj)
+			})
 		default:
-			return fmt.Errorf("--sort %q: must be started or phase", *sortBy)
+			return fmt.Errorf("--sort %q: must be started, phase, elapsed, or title", *sortBy)
 		}
 	}
 	if len(runs) == 0 && !*jsonOut && !*idsOnly {
