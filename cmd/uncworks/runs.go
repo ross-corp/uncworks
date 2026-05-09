@@ -1205,15 +1205,17 @@ func runRunsRetry(args []string) error {
 	}
 
 	newSpec := &apiv1.AgentRunSpec{
-		Backend:   spec.Backend,
-		Repos:     spec.Repos,
-		Prompt:    spec.Prompt,
-		Project:   spec.Project,
-		Feature:   spec.Feature,
-		ModelTier: spec.ModelTier,
-		Tags:      spec.Tags,
-		AutoPush:  spec.AutoPush,
-		AutoPr:    spec.AutoPr,
+		Backend:     spec.Backend,
+		Repos:       spec.Repos,
+		Prompt:      spec.Prompt,
+		Project:     spec.Project,
+		Feature:     spec.Feature,
+		ModelTier:   spec.ModelTier,
+		Tags:        spec.Tags,
+		AutoPush:    spec.AutoPush,
+		AutoPr:      spec.AutoPr,
+		ParentRunId: spec.GetParentRunId(),
+		EnvVars:     spec.GetEnvVars(),
 	}
 
 	if *prompt != "" {
