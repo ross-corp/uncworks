@@ -1227,6 +1227,8 @@ func runRunsRetry(args []string) error {
 	branch := fs.String("branch", "", "Override the branch")
 	modelTier := fs.String("model-tier", "", "Override the model tier")
 	name := fs.String("name", "", "Override the display name")
+	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
+	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
 	outputID := fs.Bool("output-id", false, "Print only the new run ID (for scripting)")
 	wait := fs.Bool("wait", false, "Wait for the retried run to complete; exit 0 on success, 1 on failure")
 	follow := fs.Bool("follow", false, "Stream logs after submitting (takes precedence over --wait)")
@@ -1297,6 +1299,10 @@ func runRunsRetry(args []string) error {
 			envVars[parts[0]] = parts[1]
 		}
 		newSpec.EnvVars = envVars
+	}
+	if *autoPush || *autoPR {
+		newSpec.AutoPush = *autoPush || *autoPR
+		newSpec.AutoPr = *autoPR
 	}
 
 	createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
