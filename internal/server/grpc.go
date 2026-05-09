@@ -762,6 +762,22 @@ func isTerminalPhase(phase apiv1.AgentRunPhase) bool {
 	return false
 }
 
+// countActiveRuns counts agent runs in non-terminal phases (Pending, Running, WaitingForInput).
+func (s *AOTServiceHandler) countActiveRuns(ctx context.Context) (int, error) {
+	var list aotv1alpha1.AgentRunList
+	if err := s.K8sClient.List(ctx, &list, client.InNamespace(s.Namespace)); err != nil {
+		return 0, fmt.Errorf("list agentruns: %w", err)
+	}
+	count := 0
+	for i := range list.Items {
+		phase := crdPhaseToProto(list.Items[i].Status.Phase)
+		if !isTerminalPhase(phase) {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // generateRunName creates a random name like "ar-a1b2c3".
 func generateRunName() (string, error) {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
