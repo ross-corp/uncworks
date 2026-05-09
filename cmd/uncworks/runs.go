@@ -57,6 +57,7 @@ Subcommands:
   export            Export runs as CSV, JSON, or TSV (--format csv|json|tsv)
   multi-tail        Tail logs from multiple runs simultaneously (prefixed by run ID)
   top               Live view of active runs sorted by elapsed time (auto-refresh)
+  batch <file>      Submit multiple runs from a JSON file
 `
 
 func runRuns(args []string) error {
@@ -121,6 +122,8 @@ func runRuns(args []string) error {
 		return runRunsMultiTail(rest)
 	case "top":
 		return runRunsTop(rest)
+	case "batch":
+		return runRunsBatch(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -3253,6 +3256,189 @@ func runRunsMultiTail(args []string) error {
 		fmt.Printf("[%s] %s\n", label, ll.line)
 	}
 	return nil
+}
+
+// ── batch ─────────────────────────────────────────────────────────────────────
+
+func runRunsBatch(args []string) error {
+	fs := flag.NewFlagSet("runs batch", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	dryRun := fs.Bool("dry-run", false, "Print what would be submitted without creating runs")
+	wait := fs.Bool("wait", false, "Wait for all runs to complete before exiting")
+	outputIDs := fs.Bool("output-ids", false, "Print only run IDs (one per line) for scripting")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), `Usage: uncworks runs batch <file.json> [flags]
+
+Submit multiple runs from a JSON file. The file should contain a JSON array of run specs.
+
+Example file:
+  [
+    {"prompt": "task 1", "project": "myproj", "model_tier": "deepseek-v3.2"},
+    {"prompt": "task 2", "project": "myproj", "tags": ["ci"]}
+  ]
+
+Supported fields: prompt, repo, branch, name, project, feature, model_tier,
+  auto_push, auto_pr, parent_run_id, tags, env_vars.
+
+Flags:`)
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("JSON file argument required")
+	}
+
+	raw, err := os.ReadFile(fs.Arg(0))
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", fs.Arg(0), err)
+	}
+
+	type batchSpec struct {
+		Prompt      string            `json:"prompt"`
+		Repo        string            `json:"repo"`
+		Branch      string            `json:"branch"`
+		Name        string            `json:"name"`
+		Project     string            `json:"project"`
+		Feature     string            `json:"feature"`
+		ModelTier   string            `json:"model_tier"`
+		AutoPush    bool              `json:"auto_push"`
+		AutoPR      bool              `json:"auto_pr"`
+		ParentRunID string            `json:"parent_run_id"`
+		Tags        []string          `json:"tags"`
+		EnvVars     map[string]string `json:"env_vars"`
+	}
+
+	var specs []batchSpec
+	if err := json.Unmarshal(raw, &specs); err != nil {
+		return fmt.Errorf("parsing %s: %w", fs.Arg(0), err)
+	}
+	if len(specs) == 0 {
+		return fmt.Errorf("no run specs found in %s", fs.Arg(0))
+	}
+
+	// Auto-detect repo from git if not specified in any spec.
+	defaultRepo := ""
+	if out, gitErr := exec.Command("git", "remote", "get-url", "origin").Output(); gitErr == nil {
+		defaultRepo = strings.TrimSpace(string(out))
+	}
+	defaultBranch := "main"
+	if out, gitErr := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output(); gitErr == nil {
+		b := strings.TrimSpace(string(out))
+		if b != "" && b != "HEAD" {
+			defaultBranch = b
+		}
+	}
+
+	if *dryRun {
+		fmt.Printf("Dry run — would submit %d run(s):\n", len(specs))
+		for i, s := range specs {
+			repo := s.Repo
+			if repo == "" {
+				repo = defaultRepo
+			}
+			branch := s.Branch
+			if branch == "" {
+				branch = defaultBranch
+			}
+			prompt := s.Prompt
+			if len(prompt) > 80 {
+				prompt = prompt[:77] + "..."
+			}
+			fmt.Printf("  %d. [%s@%s] %s\n", i+1, repo, branch, prompt)
+		}
+		return nil
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	var createdIDs []string
+	for i, s := range specs {
+		repo := s.Repo
+		if repo == "" {
+			repo = defaultRepo
+		}
+		if repo == "" {
+			return fmt.Errorf("spec %d: repo is required (no git remote detected)", i+1)
+		}
+		if s.Prompt == "" {
+			return fmt.Errorf("spec %d: prompt is required", i+1)
+		}
+		branch := s.Branch
+		if branch == "" {
+			branch = defaultBranch
+		}
+
+		spec := &apiv1.AgentRunSpec{
+			Backend:     apiv1.Backend_BACKEND_POD,
+			Repos:       []*apiv1.Repository{{Url: repo, Branch: branch}},
+			Prompt:      s.Prompt,
+			DisplayName: s.Name,
+			Project:     s.Project,
+			Feature:     s.Feature,
+			ModelTier:   s.ModelTier,
+			AutoPush:    s.AutoPush || s.AutoPR,
+			AutoPr:      s.AutoPR,
+			Tags:        s.Tags,
+			ParentRunId: s.ParentRunID,
+			EnvVars:     s.EnvVars,
+		}
+
+		resp, createErr := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: spec}))
+		if createErr != nil {
+			fmt.Fprintf(os.Stderr, "  spec %d: %s\n", i+1, humanizeErr(createErr))
+			continue
+		}
+		id := resp.Msg.GetAgentRun().GetId()
+		createdIDs = append(createdIDs, id)
+		if *outputIDs {
+			fmt.Println(id)
+		} else {
+			fmt.Printf("  created: %s  (%s)\n", id, s.Prompt[:min(len(s.Prompt), 60)])
+		}
+	}
+
+	if !*outputIDs {
+		fmt.Printf("Submitted %d/%d run(s).\n", len(createdIDs), len(specs))
+	}
+
+	if *wait && len(createdIDs) > 0 {
+		fmt.Printf("Waiting for %d run(s) to complete...\n", len(createdIDs))
+		var wg sync.WaitGroup
+		results := make([]error, len(createdIDs))
+		for i, id := range createdIDs {
+			wg.Add(1)
+			go func(idx int, runID string) {
+				defer wg.Done()
+				results[idx] = runRunsWait([]string{runID, "--quiet", "--server=" + *server})
+			}(i, id)
+		}
+		wg.Wait()
+		failed := 0
+		for _, e := range results {
+			if e != nil {
+				failed++
+			}
+		}
+		if failed > 0 {
+			return fmt.Errorf("%d/%d run(s) failed", failed, len(createdIDs))
+		}
+		fmt.Printf("All %d run(s) completed successfully.\n", len(createdIDs))
+	}
+
+	return nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func parseSinceDuration(s string) (time.Duration, error) {
