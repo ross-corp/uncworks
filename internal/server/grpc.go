@@ -53,6 +53,9 @@ type AOTServiceHandler struct {
 	createAgentRunRateLimiter *RateLimiter
 	// Rate limiting for CancelAgentRun
 	cancelAgentRunRateLimiter *RateLimiter
+	// maxConcurrentRuns is the maximum number of active (non-terminal) runs allowed.
+	// 0 means unlimited. Configured via MAX_CONCURRENT_RUNS env var.
+	maxConcurrentRuns int
 }
 
 var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
@@ -102,6 +105,8 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		})
 	}
 	
+	maxConcurrent := parseEnvInt("MAX_CONCURRENT_RUNS", 10)
+	
 	return &AOTServiceHandler{
 		K8sClient:                 k8sClient,
 		EventBus:                  bus,
@@ -109,6 +114,7 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		LiteLLMBaseURL:            litellmURL,
 		createAgentRunRateLimiter: createAgentRunRateLimiter,
 		cancelAgentRunRateLimiter: cancelAgentRunRateLimiter,
+		maxConcurrentRuns:         maxConcurrent,
 	}
 }
 
@@ -154,6 +160,17 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 			slog.Warn("CreateAgentRun rate limit exceeded", "ip", ip)
 			return nil, connect.NewError(connect.CodeResourceExhausted, 
 				fmt.Errorf("rate limit exceeded for CreateAgentRun"))
+		}
+	}
+	
+	if s.maxConcurrentRuns > 0 {
+		active, err := s.countActiveRuns(ctx)
+		if err != nil {
+			slog.Warn("CreateAgentRun: failed to count active runs", "error", err)
+		} else if active >= s.maxConcurrentRuns {
+			slog.Warn("CreateAgentRun: concurrent run limit reached", "active", active, "max", s.maxConcurrentRuns)
+			return nil, connect.NewError(connect.CodeResourceExhausted,
+				fmt.Errorf("concurrent run limit reached (%d/%d active); try again later", active, s.maxConcurrentRuns))
 		}
 	}
 	
@@ -755,6 +772,22 @@ func isTerminalPhase(phase apiv1.AgentRunPhase) bool {
 		return true
 	}
 	return false
+}
+
+// countActiveRuns counts agent runs in non-terminal phases (Pending, Running, WaitingForInput).
+func (s *AOTServiceHandler) countActiveRuns(ctx context.Context) (int, error) {
+	var list aotv1alpha1.AgentRunList
+	if err := s.K8sClient.List(ctx, &list, client.InNamespace(s.Namespace)); err != nil {
+		return 0, fmt.Errorf("list agentruns: %w", err)
+	}
+	count := 0
+	for i := range list.Items {
+		phase := crdPhaseToProto(list.Items[i].Status.Phase)
+		if !isTerminalPhase(phase) {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // generateRunName creates a random name like "ar-a1b2c3".
