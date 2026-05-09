@@ -1070,6 +1070,7 @@ func runRunsLogs(args []string) error {
 	head := fs.Int("head", 0, "Show only the first N lines of output (0 = all; --no-follow only)")
 	timestamps := fs.Bool("timestamps", false, "Prefix each line with a timestamp")
 	grep := fs.String("grep", "", "Only show lines matching this substring (case-insensitive; works in both streaming and --no-follow mode)")
+	save := fs.String("save", "", "Save log output to a file (in addition to stdout)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1082,6 +1083,11 @@ func runRunsLogs(args []string) error {
 		return fmt.Errorf("run ID argument required")
 	}
 	id := fs.Arg(0)
+
+	// --save only works in --no-follow mode.
+	if *save != "" && !*noFollow {
+		fmt.Fprintf(os.Stderr, "note: --save only works with --no-follow; output will not be saved in streaming mode\n")
+	}
 
 	client, err := newClient(*server)
 	if err != nil {
@@ -1117,17 +1123,27 @@ func runRunsLogs(args []string) error {
 		} else if *lines > 0 && len(allLines) > *lines {
 			allLines = allLines[len(allLines)-*lines:]
 		}
+		var outputLines []string
 		if *timestamps {
 			ts := time.Now().Format("15:04:05")
 			for _, line := range allLines {
 				if line != "" {
-					fmt.Printf("[%s] %s\n", ts, line)
+					outputLines = append(outputLines, fmt.Sprintf("[%s] %s", ts, line))
 				}
 			}
 		} else {
-			fmt.Print(strings.Join(allLines, "\n"))
-			if len(allLines) > 0 && !strings.HasSuffix(allLines[len(allLines)-1], "\n") {
-				fmt.Println()
+			outputLines = allLines
+		}
+		output := strings.Join(outputLines, "\n")
+		fmt.Print(output)
+		if len(output) > 0 && !strings.HasSuffix(output, "\n") {
+			fmt.Println()
+		}
+		if *save != "" {
+			if saveErr := os.WriteFile(*save, []byte(output+"\n"), 0o644); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to save log to %q: %v\n", *save, saveErr)
+			} else {
+				fmt.Fprintf(os.Stderr, "log saved to %s\n", *save)
 			}
 		}
 		return nil
