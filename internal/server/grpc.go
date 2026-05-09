@@ -14,6 +14,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +48,9 @@ type AOTServiceHandler struct {
 	// Knowledge system (optional — nil means search is unavailable)
 	BrainSearcher *brain.Searcher
 	Embedder      *embeddings.Embedder
+
+	// Rate limiting for CreateAgentRun
+	createAgentRunRateLimiter *RateLimiter
 }
 
 var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
@@ -64,15 +68,77 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 	if litellmURL == "" {
 		litellmURL = "http://litellm:4000"
 	}
+	
+	// Create rate limiter for CreateAgentRun
+	// Default: 5 RPS, burst 3 (more restrictive than global defaults)
+	rps := parseEnvFloat("RATE_LIMIT_CREATE_AGENT_RUN_RPS", 5.0)
+	burst := parseEnvInt("RATE_LIMIT_CREATE_AGENT_RUN_BURST", 3)
+	
+	var createAgentRunRateLimiter *RateLimiter
+	if rps > 0 && burst > 0 {
+		createAgentRunRateLimiter = NewRateLimiter(RateLimiterConfig{
+			Enabled:    true,
+			RPS:        rps,
+			Burst:      burst,
+			TTLMinutes: 10,
+			TrustProxy: os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true",
+		})
+	}
+	
 	return &AOTServiceHandler{
-		K8sClient:      k8sClient,
-		EventBus:       bus,
-		Namespace:      namespace,
-		LiteLLMBaseURL: litellmURL,
+		K8sClient:                 k8sClient,
+		EventBus:                  bus,
+		Namespace:                 namespace,
+		LiteLLMBaseURL:            litellmURL,
+		createAgentRunRateLimiter: createAgentRunRateLimiter,
 	}
 }
 
+// parseEnvInt parses an integer environment variable, returning default if not set or invalid.
+func parseEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			slog.Warn("invalid integer env var, using default", "key", key, "value", v, "default", def)
+			return def
+		}
+		return n
+	}
+	return def
+}
+
+// parseEnvFloat parses a float environment variable, returning default if not set or invalid.
+func parseEnvFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			slog.Warn("invalid float env var, using default", "key", key, "value", v, "default", def)
+			return def
+		}
+		return f
+	}
+	return def
+}
+
 func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Request[apiv1.CreateAgentRunRequest]) (*connect.Response[apiv1.CreateAgentRunResponse], error) {
+	// Check rate limiting if enabled
+	if s.createAgentRunRateLimiter != nil {
+		// Extract client IP from peer information
+		peer := req.Peer()
+		ip := ""
+		if peer.Addr != "" {
+			// Extract IP from address (e.g., "192.168.1.1:12345" -> "192.168.1.1")
+			// Use the same logic as stripPort in ratelimit.go
+			ip = stripPort(peer.Addr)
+		}
+		
+		if ip != "" && !s.createAgentRunRateLimiter.Allow(ip) {
+			slog.Warn("CreateAgentRun rate limit exceeded", "ip", ip)
+			return nil, connect.NewError(connect.CodeResourceExhausted, 
+				fmt.Errorf("rate limit exceeded for CreateAgentRun"))
+		}
+	}
+	
 	if req.Msg.Spec == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
 	}
