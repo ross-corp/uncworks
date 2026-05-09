@@ -93,6 +93,32 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 	}
 }
 
+// parseEnvInt parses an integer environment variable, returning default if not set or invalid.
+func parseEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			slog.Warn("invalid integer env var, using default", "key", key, "value", v, "default", def)
+			return def
+		}
+		return n
+	}
+	return def
+}
+
+// parseEnvFloat parses a float environment variable, returning default if not set or invalid.
+func parseEnvFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			slog.Warn("invalid float env var, using default", "key", key, "value", v, "default", def)
+			return def
+		}
+		return f
+	}
+	return def
+}
+
 func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Request[apiv1.CreateAgentRunRequest]) (*connect.Response[apiv1.CreateAgentRunResponse], error) {
 	if req.Msg.Spec == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
