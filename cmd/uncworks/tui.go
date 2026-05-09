@@ -106,14 +106,24 @@ func runDuration(r *apiv1.AgentRun) string {
 	} else {
 		end = time.Now()
 	}
-	d := end.Sub(start).Round(time.Second)
+	return formatDuration(end.Sub(start))
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return "<1s"
+	}
+	d = d.Round(time.Second)
 	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
+		return fmt.Sprintf("%ds", d/time.Second)
 	}
 	if d < time.Hour {
-		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+		return fmt.Sprintf("%dm%02ds", d/time.Minute, (d%time.Minute)/time.Second)
 	}
-	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh%02dm", d/time.Hour, (d%time.Hour)/time.Minute)
+	}
+	return fmt.Sprintf("%dd%02dh", d/(24*time.Hour), (d%(24*time.Hour))/time.Hour)
 }
 
 // ── Model ─────────────────────────────────────────────────────────────────────
@@ -498,7 +508,7 @@ func humanizeErr(err error) string {
 		case connect.CodeNotFound:
 			return "resource not found"
 		case connect.CodeUnimplemented:
-			return "this operation is not supported by the server version"
+			return "feature not available in this server version"
 		case connect.CodeResourceExhausted:
 			return fmt.Sprintf("request rejected: %s", connectErr.Message())
 		default:

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"golang.org/x/term"
 
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 )
@@ -183,6 +184,9 @@ func runRunsList(args []string) error {
 		if model == "" {
 			model = "default"
 		}
+		if len(model) > 15 {
+			model = model[:12] + "..."
+		}
 		started := "-"
 		if r.GetStatus().GetStartedAt() != nil {
 			started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
@@ -238,7 +242,16 @@ func runRunsGet(args []string) error {
 	}
 	fmt.Printf("Phase:    %s\n", phaseLabel(r.GetStatus().GetPhase()))
 	if r.GetStatus().GetMessage() != "" {
-		fmt.Printf("Message:  %s\n", r.GetStatus().GetMessage())
+		msg := r.GetStatus().GetMessage()
+		if r.GetStatus().GetPhase() == apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED {
+			if term.IsTerminal(int(os.Stdout.Fd())) {
+				fmt.Printf("Message:  \033[1;31m%s\033[0m\n", msg)
+			} else {
+				fmt.Printf("ERROR:    %s\n", msg)
+			}
+		} else {
+			fmt.Printf("Message:  %s\n", msg)
+		}
 	}
 	if r.GetSpec().GetProject() != "" {
 		fmt.Printf("Project:  %s\n", r.GetSpec().GetProject())
@@ -264,8 +277,8 @@ func runRunsGet(args []string) error {
 	if r.GetStatus().GetCompletedAt() != nil {
 		fmt.Printf("Completed:%s\n", r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339))
 		if r.GetStatus().GetStartedAt() != nil {
-			dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime()).Round(time.Second)
-			fmt.Printf("Duration: %s\n", dur)
+			dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime())
+			fmt.Printf("Duration: %s\n", formatDuration(dur))
 		}
 	}
 	if r.GetStatus().GetPodName() != "" {
