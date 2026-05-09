@@ -1330,6 +1330,8 @@ func runRunsRetry(args []string) error {
 	follow := fs.Bool("follow", false, "Stream logs after submitting (takes precedence over --wait)")
 	var envFlags multiFlag
 	fs.Var(&envFlags, "env", "Override environment variables (repeatable, KEY=VALUE); replaces all env vars if any are provided")
+	var tagFlags multiFlag
+	fs.Var(&tagFlags, "tag", "Override tags (repeatable); replaces all tags if any are provided")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run. Use flags to override specific fields.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1399,6 +1401,9 @@ func runRunsRetry(args []string) error {
 	if *autoPush || *autoPR {
 		newSpec.AutoPush = *autoPush || *autoPR
 		newSpec.AutoPr = *autoPR
+	}
+	if len(tagFlags) > 0 {
+		newSpec.Tags = []string(tagFlags)
 	}
 
 	createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
