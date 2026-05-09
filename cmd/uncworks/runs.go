@@ -226,6 +226,7 @@ func runRunsList(args []string) error {
 	cancelledOnly := fs.Bool("cancelled", false, "Shorthand for --phase CANCELLED")
 	noHeader := fs.Bool("no-header", false, "Omit the column header row (useful for scripting)")
 	titleWidth := fs.Int("title-width", 32, "Max characters to show in the title column (min: 10)")
+	showTags := fs.Bool("show-tags", false, "Add a tags column to the output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -469,7 +470,13 @@ func runRunsList(args []string) error {
 	w := tabwriter.NewWriter(&listBuf, 0, 0, 2, ' ', 0)
 	if !*noHeader {
 		if *verbose {
-			fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT")
+			if *showTags {
+				fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT\tTAGS")
+			} else {
+				fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT")
+			}
+		} else if *showTags {
+			fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tTAGS")
 		} else {
 			fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED")
 		}
@@ -514,6 +521,7 @@ func runRunsList(args []string) error {
 			}
 		}
 		duration := runDuration(r)
+		tags := strings.Join(r.GetSpec().GetTags(), ",")
 		if *verbose {
 			repo := "—"
 			if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
@@ -526,7 +534,13 @@ func runRunsList(args []string) error {
 			if project == "" {
 				project = "—"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started, repo, project)
+			if *showTags {
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started, repo, project, tags)
+			} else {
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started, repo, project)
+			}
+		} else if *showTags {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started, tags)
 		} else {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started)
 		}
