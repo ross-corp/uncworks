@@ -47,6 +47,7 @@ Subcommands:
   latest            Show the most recent run in detail
   count             Print a count of runs (by phase or total)
   export            Export runs as CSV
+  diff <id>         Show git commands to inspect a run's diff
 `
 
 func runRuns(args []string) error {
@@ -95,6 +96,8 @@ func runRuns(args []string) error {
 		return runRunsCount(rest)
 	case "export":
 		return runRunsExport(rest)
+	case "diff":
+		return runRunsDiff(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -1333,6 +1336,84 @@ func runRunsOpen(args []string) error {
 		return fmt.Errorf("failed to open browser: %w", err)
 	}
 
+	return nil
+}
+
+// ── diff ──────────────────────────────────────────────────────────────────────
+
+func runRunsDiff(args []string) error {
+	fs := flag.NewFlagSet("runs diff", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	stat := fs.Bool("stat", false, "Show git diff --stat instead of full diff")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs diff <id> [flags]\n\nShow the git commands to inspect the diff for a completed run.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	req := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id})
+	resp, err := client.GetAgentRun(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+	r := resp.Msg
+
+	repos := r.GetSpec().GetRepos()
+	if len(repos) == 0 {
+		return fmt.Errorf("run %s has no repository configured", id)
+	}
+	repoURL := repos[0].GetUrl()
+	baseBranch := repos[0].GetBranch()
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+
+	prURL := r.GetStatus().GetPrUrl()
+	if prURL == "" && !r.GetSpec().GetAutoPush() {
+		return fmt.Errorf("run %s has no PR and --auto-push was not set", id)
+	}
+
+	agentBranch := fmt.Sprintf("agent/%s", id)
+	if prURL != "" {
+		// GitHub PR URL: extract branch from link (not always available directly)
+		// Show instructions using the PR URL
+		fmt.Printf("Run:       %s\n", id)
+		fmt.Printf("Repo:      %s\n", repoURL)
+		fmt.Printf("Base:      %s\n", baseBranch)
+		fmt.Printf("PR:        %s\n", prURL)
+		fmt.Println()
+		diffFlag := ""
+		if *stat {
+			diffFlag = " --stat"
+		}
+		fmt.Printf("To view the diff:\n")
+		fmt.Printf("  git fetch origin %s\n", agentBranch)
+		fmt.Printf("  git diff%s origin/%s...origin/%s\n", diffFlag, baseBranch, agentBranch)
+	} else {
+		fmt.Printf("Run:       %s\n", id)
+		fmt.Printf("Repo:      %s\n", repoURL)
+		fmt.Printf("Branch:    %s\n", agentBranch)
+		fmt.Println()
+		diffFlag := ""
+		if *stat {
+			diffFlag = " --stat"
+		}
+		fmt.Printf("To view the diff:\n")
+		fmt.Printf("  git fetch origin %s\n", agentBranch)
+		fmt.Printf("  git diff%s origin/%s...origin/%s\n", diffFlag, baseBranch, agentBranch)
+	}
 	return nil
 }
 
