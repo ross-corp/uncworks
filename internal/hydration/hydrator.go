@@ -306,10 +306,12 @@ func (h *Hydrator) composeDevbox(ctx context.Context) error {
 		return fmt.Errorf("write root devbox.json: %w", err)
 	}
 
-	// Run devbox install from workspace root.
-	// If devbox/nix aren't fully available, log warning but don't fail —
-	// the agent can still work, it just won't have devbox-managed deps.
-	_, err = h.runner.Run(ctx, h.config.WorkspaceDir, "devbox", "install")
+	// Run devbox install from workspace root with an explicit timeout so a
+	// stalled Nix download never blocks hydration indefinitely. 15 minutes
+	// covers a cold-cache first run; warm-cache runs complete in seconds.
+	devboxCtx, devboxCancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer devboxCancel()
+	_, err = h.runner.Run(devboxCtx, h.config.WorkspaceDir, "devbox", "install")
 	if err != nil {
 		slog.Warn("devbox install failed, agent will work without devbox deps", "err", err)
 	}
