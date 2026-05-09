@@ -82,16 +82,16 @@ func TestContract_GetAgentRun_EmptyID(t *testing.T) {
 	client, cleanup := startAOTServer(t, false)
 	defer cleanup()
 
-	// An empty ID is a degenerate key — the fake client returns NotFound.
+	// An empty ID fails format validation before hitting the store.
 	_, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{
 		Id: "",
 	}))
 	if err == nil {
 		t.Fatal("expected error for empty ID")
 	}
-	// Handler translates any k8s Get error to CodeNotFound.
-	if connect.CodeOf(err) != connect.CodeNotFound {
-		t.Errorf("expected NotFound for empty ID, got %v", connect.CodeOf(err))
+	// Empty ID violates the ar-[a-z0-9]{4,10} format constraint → InvalidArgument.
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("expected InvalidArgument for empty ID, got %v", connect.CodeOf(err))
 	}
 }
 
@@ -159,7 +159,7 @@ func TestContract_ListAgentRuns_ParentRunIdFilter(t *testing.T) {
 	mustCreateRun(t, client, "parent filter test")
 
 	resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
-		ParentRunId: "nonexistent-parent",
+		ParentRunId: "ar-notfound",
 	}))
 	if err != nil {
 		t.Fatalf("ListAgentRuns with ParentRunId: %v", err)
@@ -204,8 +204,9 @@ func TestContract_CancelAgentRun_EmptyID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty cancel ID")
 	}
-	if connect.CodeOf(err) != connect.CodeNotFound {
-		t.Errorf("expected NotFound for empty cancel ID, got %v", connect.CodeOf(err))
+	// Empty ID violates the ar-[a-z0-9]{4,10} format constraint → InvalidArgument.
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("expected InvalidArgument for empty cancel ID, got %v", connect.CodeOf(err))
 	}
 }
 

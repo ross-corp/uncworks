@@ -177,7 +177,7 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 	if req.Msg.Spec == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
 	}
-	if req.Msg.Spec.Prompt == "" {
+	if req.Msg.Spec.Prompt == "" && req.Msg.Spec.SpecContent == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("prompt is required"))
 	}
 	if len(req.Msg.Spec.Prompt) > 32*1024 {

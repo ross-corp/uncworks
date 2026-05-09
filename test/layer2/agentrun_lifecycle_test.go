@@ -136,7 +136,7 @@ func TestAgentRunLifecycle_GetNotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := c.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{
-		Id: "nonexistent-run-id",
+		Id: "ar-notfound",
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))

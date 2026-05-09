@@ -235,7 +235,7 @@ func TestTraceGeneration_GetRunGraph_NotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := c.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{
-		Id: "nonexistent-run-id",
+		Id: "ar-notfound",
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))

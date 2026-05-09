@@ -68,6 +68,7 @@ func (m *MockRunner) LastCommand() RecordedCommand {
 }
 
 func TestHydrator_CloneAndWorktree(t *testing.T) {
+	t.Setenv("AOT_AGENT_RUN_ID", "ar-testrun")
 	runner := NewMockRunner()
 	config := &Config{
 		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
@@ -99,8 +100,8 @@ func TestHydrator_CloneAndWorktree(t *testing.T) {
 	if wt.Args[0] != "worktree" || wt.Args[1] != "add" {
 		t.Errorf("expected worktree add, got %v", wt.Args)
 	}
-	if wt.Args[2] != "-b" || wt.Args[3] != "aot/main" {
-		t.Errorf("expected branch aot/main, got %v", wt.Args)
+	if wt.Args[2] != "-b" || wt.Args[3] != "aot/ar-testrun" {
+		t.Errorf("expected branch aot/ar-testrun, got %v", wt.Args)
 	}
 }
 
@@ -129,6 +130,7 @@ func TestHydrator_DefaultBranch(t *testing.T) {
 }
 
 func TestHydrator_DefaultBranchFromHEAD(t *testing.T) {
+	t.Setenv("AOT_AGENT_RUN_ID", "ar-testrun")
 	runner := NewMockRunner()
 	// Mock git symbolic-ref to return "master"
 	runner.On("git symbolic-ref --short HEAD", MockResult{Output: "master"})
@@ -146,8 +148,8 @@ func TestHydrator_DefaultBranchFromHEAD(t *testing.T) {
 	if wt.Args[5] != "master" {
 		t.Errorf("expected branch master from HEAD, got %s", wt.Args[5])
 	}
-	if wt.Args[3] != "aot/master" {
-		t.Errorf("expected worktree branch aot/master, got %s", wt.Args[3])
+	if wt.Args[3] != "aot/ar-testrun" {
+		t.Errorf("expected worktree branch aot/ar-testrun, got %s", wt.Args[3])
 	}
 }
 

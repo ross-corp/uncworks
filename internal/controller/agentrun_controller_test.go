@@ -129,7 +129,14 @@ func TestBuildAgentPod_DefaultImage(t *testing.T) {
 		t.Error("expected sidecar grpc port 50052")
 	}
 
-	if len(pod.Spec.Volumes) != 1 || pod.Spec.Volumes[0].Name != "workspace" {
+	hasWorkspace := false
+	for _, v := range pod.Spec.Volumes {
+		if v.Name == "workspace" {
+			hasWorkspace = true
+			break
+		}
+	}
+	if !hasWorkspace {
 		t.Error("expected workspace volume")
 	}
 }

@@ -31,8 +31,9 @@ func setupEnv(t *testing.T) *testsuite.TestWorkflowEnvironment {
 	t.Helper()
 	suite := &testsuite.WorkflowTestSuite{}
 	env := suite.NewTestWorkflowEnvironment()
-	// Register the activities struct so method names are known
+	// Register both activity structs so all method names are known
 	env.RegisterActivity(&aottemporal.Activities{})
+	env.RegisterActivity(&aottemporal.KnowledgeActivities{})
 	// Mock lifecycle activities that ALL workflow paths call
 	mockLifecycleActivities(env)
 	return env
@@ -47,8 +48,12 @@ func mockLifecycleActivities(env *testsuite.TestWorkflowEnvironment) {
 	env.OnActivity((*aottemporal.Activities).RevokeLLMKey, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	env.OnActivity((*aottemporal.Activities).EnrichRunTags, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	env.OnActivity((*aottemporal.Activities).WriteTraceSpan, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	env.OnActivity((*aottemporal.Activities).CollectAgentLogs, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	env.OnActivity((*aottemporal.Activities).PushChanges, mock.Anything, mock.Anything, mock.Anything).Return(aottemporal.PushChangesOutput{}, nil).Maybe()
 	env.OnActivity((*aottemporal.Activities).CreatePR, mock.Anything, mock.Anything, mock.Anything).Return(aottemporal.CreatePROutput{}, nil).Maybe()
+	env.OnActivity((*aottemporal.KnowledgeActivities).HydrateContext, mock.Anything, mock.Anything, mock.Anything).Return(&aottemporal.HydrateContextOutput{}, nil).Maybe()
+	env.OnActivity((*aottemporal.KnowledgeActivities).PersistRunData, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	env.OnActivity((*aottemporal.KnowledgeActivities).EmbedRunData, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 }
 
 // TestWorkflow_HappyPath verifies the complete lifecycle:

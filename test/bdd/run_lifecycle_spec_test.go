@@ -149,7 +149,7 @@ var _ = Describe("Agent Run Lifecycle", func() {
 		Context("When fetching a run that does not exist", func() {
 			It("returns a NotFound error", func() {
 				_, err := env.Client.GetAgentRun(ctx, connect.NewRequest(&apiv1.GetAgentRunRequest{
-					Id: "ar-does-not-exist",
+					Id: "ar-notfound",
 				}))
 				Expect(err).To(HaveOccurred())
 				Expect(connect.CodeOf(err)).To(Equal(connect.CodeNotFound))
@@ -159,7 +159,7 @@ var _ = Describe("Agent Run Lifecycle", func() {
 		Context("When cancelling a run that does not exist", func() {
 			It("returns a NotFound error", func() {
 				_, err := env.Client.CancelAgentRun(ctx, connect.NewRequest(&apiv1.CancelAgentRunRequest{
-					Id: "ar-does-not-exist",
+					Id: "ar-notfound",
 				}))
 				Expect(err).To(HaveOccurred())
 				Expect(connect.CodeOf(err)).To(Equal(connect.CodeNotFound))
