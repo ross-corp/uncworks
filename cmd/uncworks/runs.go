@@ -699,6 +699,7 @@ func runRunsGet(args []string) error {
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	short := fs.Bool("short", false, "Print a one-line summary: ID PHASE TITLE")
 	waitFlag := fs.Bool("wait", false, "If the run is active, wait until it reaches a terminal phase then show details")
+	poll := fs.Int("poll", 0, "Auto-refresh every N seconds until the run reaches a terminal phase (0 = disabled)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -745,6 +746,47 @@ func runRunsGet(args []string) error {
 	}
 
 	id := fs.Arg(0)
+
+	// --poll mode: refresh every N seconds until terminal.
+	if *poll > 0 {
+		useColorPoll := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+		for {
+			if useColorPoll {
+				fmt.Print("\033[2J\033[H")
+			}
+			subArgs := []string{id}
+			if *server != "" {
+				subArgs = append(subArgs, "--server="+*server)
+			}
+			if *showLog {
+				subArgs = append(subArgs, "--log")
+			}
+			if *noColor {
+				subArgs = append(subArgs, "--no-color")
+			}
+			if *short {
+				subArgs = append(subArgs, "--short")
+			}
+			// Use a fresh flag set for the sub-call (no --poll to avoid recursion).
+			_ = runRunsGet(subArgs)
+
+			// Check phase to see if we should stop.
+			client2, err2 := newClient(*server)
+			if err2 == nil {
+				resp2, err2 := client2.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
+				if err2 == nil {
+					ph := resp2.Msg.GetStatus().GetPhase()
+					if ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED ||
+						ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED ||
+						ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED {
+						return nil
+					}
+				}
+			}
+			fmt.Printf("\n(refreshing every %ds — Ctrl+C to stop)\n", *poll)
+			time.Sleep(time.Duration(*poll) * time.Second)
+		}
+	}
 
 	client, err := newClient(*server)
 	if err != nil {
