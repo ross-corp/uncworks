@@ -38,6 +38,9 @@ func runRun(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	var tags multiFlag
 	fs.Var(&tags, "tag", "Freeform tag for filtering (repeatable, e.g. --tag ci --tag infra)")
+	parentRunID := fs.String("parent-run-id", "", "Parent run ID to link this run as a child")
+	var envFlags multiFlag
+	fs.Var(&envFlags, "env", "Environment variable for the agent pod (repeatable, KEY=VALUE)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
 
@@ -55,6 +58,15 @@ Flags:`)
 		return fmt.Errorf("--repo and --prompt are required")
 	}
 
+	envVars := map[string]string{}
+	for _, kv := range envFlags {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("--env %q: must be KEY=VALUE", kv)
+		}
+		envVars[parts[0]] = parts[1]
+	}
+
 	client, err := newClient(*server)
 	if err != nil {
 		return err
@@ -65,13 +77,15 @@ Flags:`)
 		Repos: []*apiv1.Repository{
 			{Url: *repo, Branch: *branch},
 		},
-		Prompt:    *prompt,
-		Project:   *project,
-		Feature:   *feature,
-		ModelTier: *modelTier,
-		AutoPush:  *autoPush || *autoPR,
-		AutoPr:    *autoPR,
-		Tags:      []string(tags),
+		Prompt:      *prompt,
+		Project:     *project,
+		Feature:     *feature,
+		ModelTier:   *modelTier,
+		AutoPush:    *autoPush || *autoPR,
+		AutoPr:      *autoPR,
+		Tags:        []string(tags),
+		ParentRunId: *parentRunID,
+		EnvVars:     envVars,
 	}
 
 	req := connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: spec})
