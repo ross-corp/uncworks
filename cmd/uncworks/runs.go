@@ -167,6 +167,7 @@ func runRunsList(args []string) error {
 	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	relative := fs.Bool("relative", false, "Show relative timestamps (e.g. '5m ago') instead of ISO")
+	sortBy := fs.String("sort", "", "Sort by field: started, phase (default: server order / most-recent-first)")
 	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
 	runningOnly := fs.Bool("running", false, "Shorthand for --phase RUNNING")
 	failedOnly := fs.Bool("failed", false, "Shorthand for --phase FAILED")
@@ -298,6 +299,28 @@ func runRunsList(args []string) error {
 			}
 		}
 		runs = filtered
+	}
+	if *sortBy != "" {
+		switch strings.ToLower(*sortBy) {
+		case "started":
+			sort.Slice(runs, func(i, j int) bool {
+				ti := runs[i].GetStatus().GetStartedAt()
+				tj := runs[j].GetStatus().GetStartedAt()
+				if ti == nil {
+					return false
+				}
+				if tj == nil {
+					return true
+				}
+				return ti.AsTime().After(tj.AsTime())
+			})
+		case "phase":
+			sort.Slice(runs, func(i, j int) bool {
+				return runs[i].GetStatus().GetPhase() < runs[j].GetStatus().GetPhase()
+			})
+		default:
+			return fmt.Errorf("--sort %q: must be started or phase", *sortBy)
+		}
 	}
 	if len(runs) == 0 && !*jsonOut {
 		fmt.Println("No runs found.")
