@@ -331,6 +331,13 @@ func runRunsLogs(args []string) error {
 	}
 
 	switch finalPhase {
+	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+		fmt.Println("Run succeeded.")
+		if getResp2 != nil {
+			if url := getResp2.Msg.GetStatus().GetPrUrl(); url != "" {
+				fmt.Printf("PR: %s\n", url)
+			}
+		}
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
 		fmt.Fprintln(os.Stderr, "Run failed.")
 		os.Exit(1)
