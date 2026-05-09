@@ -28,7 +28,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 65534
       {{- end }}
-      {{- if gt .Values.apiserver.replicas 1 }}
+      {{- if gt (int .Values.apiserver.replicas) 1 }}
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
