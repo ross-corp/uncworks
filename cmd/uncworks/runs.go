@@ -176,18 +176,34 @@ func runRunsWatch(args []string) error {
 
 	for {
 		fmt.Print("\033[H\033[2J") // clear screen + move cursor home
-		headerExtra := ""
+		var filters []string
+		if *active {
+			filters = append(filters, "active")
+		}
 		if *project != "" {
-			headerExtra += "  project:" + *project
+			filters = append(filters, "project:"+*project)
+		}
+		if *feature != "" {
+			filters = append(filters, "feature:"+*feature)
 		}
 		if *phase != "" {
-			headerExtra += "  phase:" + *phase
+			filters = append(filters, "phase:"+*phase)
 		}
-		if *active {
-			headerExtra += "  [active only]"
+		if *tag != "" {
+			filters = append(filters, "tag:"+*tag)
+		}
+		if *titleContains != "" {
+			filters = append(filters, "title:"+*titleContains)
+		}
+		if *since != "" {
+			filters = append(filters, "since:"+*since)
+		}
+		filterStr := ""
+		if len(filters) > 0 {
+			filterStr = "  [" + strings.Join(filters, " ") + "]"
 		}
 		fmt.Printf("uncworks runs watch — every %ds  %s%s  (Ctrl+C to stop)\n\n",
-			*interval, time.Now().Format("15:04:05"), headerExtra)
+			*interval, time.Now().Format("15:04:05"), filterStr)
 		_ = runRunsList(listArgs)
 		time.Sleep(time.Duration(*interval) * time.Second)
 	}
@@ -945,7 +961,8 @@ func runRunsLogs(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	noFollow := fs.Bool("no-follow", false, "Print stored log output only (don't stream live)")
 	lines := fs.Int("lines", 0, "Show only the last N lines of output (0 = all)")
-	timestamps := fs.Bool("timestamps", false, "Prefix each line with a timestamp (--no-follow only)")
+	head := fs.Int("head", 0, "Show only the first N lines of output (0 = all; --no-follow only)")
+	timestamps := fs.Bool("timestamps", false, "Prefix each line with a timestamp")
 	grep := fs.String("grep", "", "Only show lines matching this substring (case-insensitive; works in both streaming and --no-follow mode)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
@@ -989,18 +1006,23 @@ func runRunsLogs(args []string) error {
 			}
 			allLines = filtered
 		}
-		if *lines > 0 && len(allLines) > *lines {
+		if *head > 0 && len(allLines) > *head {
+			allLines = allLines[:*head]
+		} else if *lines > 0 && len(allLines) > *lines {
 			allLines = allLines[len(allLines)-*lines:]
 		}
 		if *timestamps {
-			now := time.Now().Format("15:04:05")
+			ts := time.Now().Format("15:04:05")
 			for _, line := range allLines {
 				if line != "" {
-					fmt.Printf("[%s] %s\n", now, line)
+					fmt.Printf("[%s] %s\n", ts, line)
 				}
 			}
 		} else {
 			fmt.Print(strings.Join(allLines, "\n"))
+			if len(allLines) > 0 && !strings.HasSuffix(allLines[len(allLines)-1], "\n") {
+				fmt.Println()
+			}
 		}
 		return nil
 	}
@@ -1023,28 +1045,35 @@ func runRunsLogs(args []string) error {
 	var finalPhase apiv1.AgentRunPhase
 	for stream.Receive() {
 		ev := stream.Msg()
+		tsPrefix := ""
+		if *timestamps && ev.GetTimestamp() != nil {
+			tsPrefix = "[" + ev.GetTimestamp().AsTime().Local().Format("15:04:05") + "] "
+		}
 		switch ev.GetType() {
 		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG:
 			payload := ev.GetPayload()
 			if payload != "" {
 				if grepNeedle != "" {
-					// Filter line by line.
 					for _, line := range strings.Split(payload, "\n") {
 						if strings.Contains(strings.ToLower(line), grepNeedle) {
-							fmt.Println(line)
+							fmt.Printf("%s%s\n", tsPrefix, line)
 						}
+					}
+				} else if tsPrefix != "" {
+					for _, line := range strings.Split(strings.TrimRight(payload, "\n"), "\n") {
+						fmt.Printf("%s%s\n", tsPrefix, line)
 					}
 				} else {
 					fmt.Print(payload)
 				}
 			}
 		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED:
-			fmt.Printf("[phase: %s]\n", ev.GetPayload())
+			fmt.Printf("%s[phase: %s]\n", tsPrefix, ev.GetPayload())
 		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_WAITING_FOR_INPUT:
-			fmt.Printf("[waiting for input: %s]\n", ev.GetPayload())
+			fmt.Printf("%s[waiting for input: %s]\n", tsPrefix, ev.GetPayload())
 			fmt.Println("Use 'uncworks input <id> <text>' to respond.")
 		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED:
-			fmt.Printf("[completed: %s]\n", ev.GetPayload())
+			fmt.Printf("%s[completed: %s]\n", tsPrefix, ev.GetPayload())
 		}
 	}
 	if err := stream.Err(); err != nil && err != io.EOF {
