@@ -1158,6 +1158,7 @@ func runRunsRetry(args []string) error {
 	name := fs.String("name", "", "Override the display name")
 	outputID := fs.Bool("output-id", false, "Print only the new run ID (for scripting)")
 	wait := fs.Bool("wait", false, "Wait for the retried run to complete; exit 0 on success, 1 on failure")
+	follow := fs.Bool("follow", false, "Stream logs after submitting (takes precedence over --wait)")
 	var envFlags multiFlag
 	fs.Var(&envFlags, "env", "Override environment variables (repeatable, KEY=VALUE); replaces all env vars if any are provided")
 	fs.Usage = func() {
@@ -1235,9 +1236,12 @@ func runRunsRetry(args []string) error {
 		fmt.Println(newRun.GetId())
 	} else {
 		fmt.Printf("Run created: %s\n", newRun.GetId())
-		if !*wait {
+		if !*follow && !*wait {
 			fmt.Printf("Follow progress: uncworks runs tail %s\n", newRun.GetId())
 		}
+	}
+	if *follow {
+		return runRunsTail([]string{newRun.GetId(), "--server=" + *server})
 	}
 	if *wait {
 		return runRunsTail([]string{newRun.GetId(), "--server=" + *server})
