@@ -644,11 +644,22 @@ func runRunsStats(args []string) error {
 
 	fmt.Printf("Total: %d\n\n", total)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "PHASE\tCOUNT")
+	fmt.Fprintln(w, "PHASE\tCOUNT\tPCT")
 	for _, phase := range order {
-		fmt.Fprintf(w, "%s\t%d\n", phase, counts[phase])
+		pct := 0.0
+		if total > 0 {
+			pct = float64(counts[phase]) / float64(total) * 100
+		}
+		fmt.Fprintf(w, "%s\t%d\t%.1f%%\n", phase, counts[phase], pct)
 	}
 	_ = w.Flush()
+
+	done := counts["DONE"]
+	failed := counts["FAILED"]
+	if done+failed > 0 {
+		rate := float64(done) / float64(done+failed) * 100
+		fmt.Printf("\nSuccess rate: %.1f%% (%d/%d completed runs)\n", rate, done, done+failed)
+	}
 	return nil
 }
 
