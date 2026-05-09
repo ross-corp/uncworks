@@ -624,13 +624,22 @@ func (a *Activities) CreateAgentDeployment(ctx context.Context, input CreateAgen
 	// Build the pod template
 	podTemplate := BuildAgentPod(input)
 
-	// Override: use PVC instead of emptyDir for workspace volume
+	// Override: use PVC instead of emptyDir for workspace; preserve nix-store hostPath.
 	podTemplate.Spec.Volumes = []corev1.Volume{
 		{
 			Name: "workspace",
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 					ClaimName: pvcName,
+				},
+			},
+		},
+		{
+			Name: "nix-store",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/var/aot/nix",
+					Type: hostPathDirectoryOrCreate(),
 				},
 			},
 		},
