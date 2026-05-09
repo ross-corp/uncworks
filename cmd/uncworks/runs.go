@@ -2267,6 +2267,7 @@ func runRunsRetryFailed(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "Print what would be retried without actually doing it")
 	yes := fs.Bool("yes", false, "Skip confirmation prompt")
 	modelTier := fs.String("model-tier", "", "Override model tier for all retried runs")
+	appendPrompt := fs.String("append-prompt", "", "Append this text to the original prompt of each retried run")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry-failed [flags]\n\nBulk retry all FAILED runs matching the given filters.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2374,6 +2375,9 @@ func runRunsRetryFailed(args []string) error {
 		}
 		if *modelTier != "" {
 			newSpec.ModelTier = *modelTier
+		}
+		if *appendPrompt != "" {
+			newSpec.Prompt = strings.TrimRight(newSpec.Prompt, "\n") + "\n\n" + *appendPrompt
 		}
 		createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
 		if err != nil {
