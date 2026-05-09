@@ -984,6 +984,7 @@ func runRunsRetry(args []string) error {
 	branch := fs.String("branch", "", "Override the branch")
 	modelTier := fs.String("model-tier", "", "Override the model tier")
 	outputID := fs.Bool("output-id", false, "Print only the new run ID (for scripting)")
+	wait := fs.Bool("wait", false, "Wait for the retried run to complete; exit 0 on success, 1 on failure")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run. Use flags to override specific fields.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1045,7 +1046,12 @@ func runRunsRetry(args []string) error {
 		fmt.Println(newRun.GetId())
 	} else {
 		fmt.Printf("Run created: %s\n", newRun.GetId())
-		fmt.Printf("Follow progress: uncworks runs logs %s\n", newRun.GetId())
+		if !*wait {
+			fmt.Printf("Follow progress: uncworks runs tail %s\n", newRun.GetId())
+		}
+	}
+	if *wait {
+		return runRunsTail([]string{newRun.GetId(), "--server=" + *server})
 	}
 	return nil
 }
