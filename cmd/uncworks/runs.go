@@ -157,6 +157,7 @@ func runRunsWatch(args []string) error {
 	tag := fs.String("tag", "", "Filter by tag")
 	titleContains := fs.String("title-contains", "", "Filter runs by display name substring")
 	titleShortW := fs.String("title", "", "Shorthand for --title-contains")
+	stage := fs.String("stage", "", "Filter by run stage (e.g. planning, executing, verifying)")
 	active := fs.Bool("active", false, "Show only active runs (RUNNING + PENDING + WAITING)")
 	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
@@ -196,6 +197,9 @@ func runRunsWatch(args []string) error {
 	if *titleContains != "" {
 		listArgs = append(listArgs, "--title-contains="+*titleContains)
 	}
+	if *stage != "" {
+		listArgs = append(listArgs, "--stage="+*stage)
+	}
 	if *active {
 		listArgs = append(listArgs, "--active")
 	}
@@ -230,6 +234,9 @@ func runRunsWatch(args []string) error {
 		if *titleContains != "" {
 			filters = append(filters, "title:"+*titleContains)
 		}
+		if *stage != "" {
+			filters = append(filters, "stage:"+*stage)
+		}
 		if *since != "" {
 			filters = append(filters, "since:"+*since)
 		}
@@ -256,6 +263,7 @@ func runRunsList(args []string) error {
 	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
 	tag := fs.String("tag", "", "Filter by tag")
 	parentRunID := fs.String("parent-run-id", "", "Filter by parent run ID")
+	stage := fs.String("stage", "", "Filter by run stage (e.g. planning, executing, verifying)")
 	cursor := fs.String("cursor", "", "Pagination cursor from previous response")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
@@ -368,9 +376,13 @@ func runRunsList(args []string) error {
 	if *tag != "" {
 		listReq.TagFilter = *tag
 	}
-	
+
 	if *parentRunID != "" {
 		listReq.ParentRunId = *parentRunID
+	}
+
+	if *stage != "" {
+		listReq.StageFilter = strings.ToLower(*stage)
 	}
 	
 	if *cursor != "" {
