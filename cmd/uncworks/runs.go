@@ -33,6 +33,7 @@ Subcommands:
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
   archive-done      Bulk archive all SUCCEEDED runs
+  archive-failed    Bulk archive all FAILED runs
   cancel <id>       Request cancellation of a running agent
   kill <id>         Alias for cancel
   stats             Show aggregate counts of runs by phase
@@ -72,6 +73,8 @@ func runRuns(args []string) error {
 		return runRunsArchive(rest, false)
 	case "archive-done":
 		return runRunsArchiveDone(rest)
+	case "archive-failed":
+		return runRunsArchiveFailed(rest)
 	case "cancel", "kill":
 		return runCancel(rest)
 	case "stats":
@@ -954,6 +957,99 @@ func runRunsArchiveDone(args []string) error {
 		archived++
 	}
 	fmt.Printf("Archived %d/%d run(s).\n", archived, len(doneRuns))
+	return nil
+}
+
+func runRunsArchiveFailed(args []string) error {
+	fs := flag.NewFlagSet("runs archive-failed", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	dryRun := fs.Bool("dry-run", false, "Print what would be archived without doing it")
+	minAge := fs.Duration("min-age", 0, "Only archive runs completed longer ago than this (e.g. 24h)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs archive-failed [flags]\n\nBulk archive all FAILED runs.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	var minAgeThreshold time.Time
+	if *minAge > 0 {
+		minAgeThreshold = time.Now().Add(-*minAge)
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	var failedRuns []string
+	var cursor string
+	for {
+		req := connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			PhaseFilter:   apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			Cursor:        cursor,
+		})
+		resp, err := client.ListAgentRuns(context.Background(), req)
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			if !minAgeThreshold.IsZero() {
+				completedAt := r.GetStatus().GetCompletedAt()
+				if completedAt == nil || !completedAt.AsTime().Before(minAgeThreshold) {
+					continue
+				}
+			}
+			failedRuns = append(failedRuns, r.GetId())
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	if len(failedRuns) == 0 {
+		fmt.Println("No FAILED runs to archive.")
+		return nil
+	}
+
+	if *dryRun {
+		fmt.Printf("Would archive %d run(s):\n", len(failedRuns))
+		for _, id := range failedRuns {
+			fmt.Printf("  %s\n", id)
+		}
+		return nil
+	}
+
+	archived := 0
+	archiveBody, _ := json.Marshal(map[string]bool{"archived": true})
+	for _, id := range failedRuns {
+		url := serverBaseURL(*server) + "/api/v1/runs/" + id + "/archive"
+		archReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(archiveBody))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
+			continue
+		}
+		archReq.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(archReq)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
+			continue
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
+			continue
+		}
+		archived++
+	}
+	fmt.Printf("Archived %d/%d run(s).\n", archived, len(failedRuns))
 	return nil
 }
 
