@@ -863,7 +863,7 @@ func runRunsLogs(args []string) error {
 	noFollow := fs.Bool("no-follow", false, "Print stored log output only (don't stream live)")
 	lines := fs.Int("lines", 0, "Show only the last N lines of output (0 = all)")
 	timestamps := fs.Bool("timestamps", false, "Prefix each line with a timestamp (--no-follow only)")
-	grep := fs.String("grep", "", "Only show lines matching this substring (--no-follow only; case-insensitive)")
+	grep := fs.String("grep", "", "Only show lines matching this substring (case-insensitive; works in both streaming and --no-follow mode)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
 		fs.PrintDefaults()
@@ -932,13 +932,28 @@ func runRunsLogs(args []string) error {
 		return fmt.Errorf("%s", humanizeErr(err))
 	}
 
+	grepNeedle := ""
+	if *grep != "" {
+		grepNeedle = strings.ToLower(*grep)
+	}
+
 	var finalPhase apiv1.AgentRunPhase
 	for stream.Receive() {
 		ev := stream.Msg()
 		switch ev.GetType() {
 		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG:
-			if ev.GetPayload() != "" {
-				fmt.Print(ev.GetPayload())
+			payload := ev.GetPayload()
+			if payload != "" {
+				if grepNeedle != "" {
+					// Filter line by line.
+					for _, line := range strings.Split(payload, "\n") {
+						if strings.Contains(strings.ToLower(line), grepNeedle) {
+							fmt.Println(line)
+						}
+					}
+				} else {
+					fmt.Print(payload)
+				}
 			}
 		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED:
 			fmt.Printf("[phase: %s]\n", ev.GetPayload())
