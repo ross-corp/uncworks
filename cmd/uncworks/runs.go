@@ -544,12 +544,15 @@ func runRunsGet(args []string) error {
 		fmt.Printf("Model:    %s\n", r.GetSpec().GetModelTier())
 	}
 	if r.GetStatus().GetStartedAt() != nil {
-		fmt.Printf("Started:  %s\n", r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339))
+		t := r.GetStatus().GetStartedAt().AsTime()
+		ago := time.Since(t).Round(time.Second)
+		fmt.Printf("Started:  %s (%s ago)\n", t.Format(time.RFC3339), ago)
 	}
 	if r.GetStatus().GetCompletedAt() != nil {
-		fmt.Printf("Completed: %s\n", r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339))
+		t := r.GetStatus().GetCompletedAt().AsTime()
+		fmt.Printf("Completed: %s\n", t.Format(time.RFC3339))
 		if r.GetStatus().GetStartedAt() != nil {
-			dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime())
+			dur := t.Sub(r.GetStatus().GetStartedAt().AsTime())
 			fmt.Printf("Duration: %s\n", formatDuration(dur))
 		}
 	}
