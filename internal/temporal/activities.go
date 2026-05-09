@@ -739,10 +739,29 @@ func (a *Activities) CollectAgentLogs(ctx context.Context, input CollectAgentLog
 		sidecarURL,
 	)
 
-	// Read the last 32 KB of the agent log file written by pi on the shared PVC.
-	// tail -c 32768 is equivalent to the 32 KB cap applied below.
+	// Extract the final assistant message text from agent.jsonl (pi structured log).
+	// Falls back to tail of agent.log if jsonl is absent or node is unavailable.
+	// node is available in the rpc-gateway container (via the sidecar image).
+	const extractScript = `
+node -e "
+const fs=require('fs');
+const f='/workspace/.aot/logs/agent.jsonl';
+if(!fs.existsSync(f)){process.exit(1);}
+const lines=fs.readFileSync(f,'utf8').trim().split('\n');
+let lastText='';
+for(const l of lines){
+  try{
+    const o=JSON.parse(l);
+    if(o.type==='message_end'&&o.message&&o.message.role==='assistant'){
+      const t=o.message.content.filter(c=>c.type==='text').map(c=>c.text).join('');
+      if(t.trim())lastText=t;
+    }
+  }catch(e){}
+}
+process.stdout.write(lastText.slice(-32768));
+" 2>/dev/null || tail -c 32768 /workspace/.aot/logs/agent.log 2>/dev/null || echo ''`
 	resp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
-		Command:        "tail -c 32768 /workspace/.aot/logs/agent.log 2>/dev/null || echo ''",
+		Command:        extractScript,
 		WorkingDir:     "/workspace",
 		TimeoutSeconds: 30,
 	}))
