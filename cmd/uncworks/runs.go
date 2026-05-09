@@ -974,7 +974,8 @@ func runRunsStats(args []string) error {
 		header = fmt.Sprintf("Stats (last %s)", *since)
 	}
 	fmt.Printf("%s — Total: %d\n\n", header, total)
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	var statsBuf bytes.Buffer
+	w := tabwriter.NewWriter(&statsBuf, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "PHASE\tCOUNT\tPCT")
 	for _, phase := range order {
 		pct := 0.0
@@ -984,6 +985,18 @@ func runRunsStats(args []string) error {
 		fmt.Fprintf(w, "%s\t%d\t%.1f%%\n", phase, counts[phase], pct)
 	}
 	_ = w.Flush()
+	statsOutput := statsBuf.String()
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		statsOutput = strings.NewReplacer(
+			"RUNNING  ", "\033[32mRUNNING\033[0m  ",
+			"PENDING  ", "\033[33mPENDING\033[0m  ",
+			"WAITING  ", "\033[36mWAITING\033[0m  ",
+			"FAILED   ", "\033[31mFAILED\033[0m   ",
+			"DONE     ", "\033[90mDONE\033[0m     ",
+			"CANCELLED", "\033[35mCANCELLED\033[0m",
+		).Replace(statsOutput)
+	}
+	fmt.Print(statsOutput)
 
 	if done+failed > 0 {
 		rate := float64(done) / float64(done+failed) * 100
