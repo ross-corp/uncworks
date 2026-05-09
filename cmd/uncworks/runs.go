@@ -647,6 +647,7 @@ func runRunsCancelAll(args []string) error {
 	fs := flag.NewFlagSet("runs cancel-all", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	dryRun := fs.Bool("dry-run", false, "Print what would be cancelled without actually doing it")
+	yes := fs.Bool("yes", false, "Skip confirmation prompt")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cancel-all [flags]\n\nCancel all active (non-terminal) runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -697,6 +698,22 @@ func runRunsCancelAll(args []string) error {
 			fmt.Printf("  %s\n", id)
 		}
 		return nil
+	}
+
+	if !*yes {
+		fmt.Printf("Active runs to cancel:\n")
+		for _, id := range activeRuns {
+			fmt.Printf("  %s\n", id)
+		}
+		fmt.Printf("Cancel %d run(s)? [y/N]: ", len(activeRuns))
+		var answer string
+		if _, err := fmt.Scanln(&answer); err != nil {
+			answer = ""
+		}
+		if answer != "y" && answer != "Y" && answer != "yes" {
+			fmt.Println("Aborted.")
+			return nil
+		}
 	}
 
 	cancelled := 0
