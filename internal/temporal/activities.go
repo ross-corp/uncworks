@@ -778,6 +778,10 @@ type ScaleDownDeploymentInput struct {
 // ScaleDownDeployment patches a Deployment's replicas to 0.
 // The Deployment and PVC are NOT deleted — workspace data persists.
 func (a *Activities) ScaleDownDeployment(ctx context.Context, input ScaleDownDeploymentInput) error {
+	if !strings.HasPrefix(input.DeploymentName, "agentrun-") {
+		slog.Warn("ScaleDownDeployment: refusing to scale down non-agent deployment", "deployment", input.DeploymentName)
+		return fmt.Errorf("safety check: deployment %q does not have agentrun- prefix", input.DeploymentName)
+	}
 	var deployment appsv1.Deployment
 	if err := a.K8sClient.Get(ctx, client.ObjectKey{
 		Namespace: input.Namespace,
