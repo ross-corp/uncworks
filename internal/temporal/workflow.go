@@ -669,6 +669,8 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 					RepoURL:       repoURL,
 				}).Get(ctx, &pushOutput); err != nil {
 					workflow.GetLogger(ctx).Warn("Push changes failed", "error", err)
+				} else if !pushOutput.HasChanges {
+					workflow.GetLogger(ctx).Info("No changes committed; skipping PR creation")
 				} else if input.AutoPR && len(input.Repos) > 0 {
 					owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
 					if err != nil {
