@@ -176,8 +176,18 @@ func runRunsWatch(args []string) error {
 
 	for {
 		fmt.Print("\033[H\033[2J") // clear screen + move cursor home
-		fmt.Printf("uncworks runs watch — every %ds  %s  (Ctrl+C to stop)\n\n",
-			*interval, time.Now().Format("15:04:05"))
+		headerExtra := ""
+		if *project != "" {
+			headerExtra += "  project:" + *project
+		}
+		if *phase != "" {
+			headerExtra += "  phase:" + *phase
+		}
+		if *active {
+			headerExtra += "  [active only]"
+		}
+		fmt.Printf("uncworks runs watch — every %ds  %s%s  (Ctrl+C to stop)\n\n",
+			*interval, time.Now().Format("15:04:05"), headerExtra)
 		_ = runRunsList(listArgs)
 		time.Sleep(time.Duration(*interval) * time.Second)
 	}
