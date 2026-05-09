@@ -105,7 +105,7 @@ func phaseLabel(p apiv1.AgentRunPhase) string {
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
 		return "CANCELLED"
 	default:
-		return "?"
+		return "UNKNOWN"
 	}
 }
 
