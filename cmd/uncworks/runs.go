@@ -60,6 +60,7 @@ Subcommands:
   batch <file>      Submit multiple runs from a JSON file
   histogram         Show a bar chart of run activity over a time window (--since, --buckets)
   group             Show runs organized into groups (--by project|feature|tag, --since)
+  ui <id>           Open a run in the UNCWORKS web dashboard (requires web_url in config)
 `
 
 func runRuns(args []string) error {
@@ -130,6 +131,8 @@ func runRuns(args []string) error {
 		return runRunsHistogram(rest)
 	case "group":
 		return runRunsGroup(rest)
+	case "ui":
+		return runRunsUI(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -2019,6 +2022,47 @@ func runRunsOpen(args []string) error {
 	}
 
 	return nil
+}
+
+// ── ui ────────────────────────────────────────────────────────────────────────
+
+func runRunsUI(args []string) error {
+	fs := flag.NewFlagSet("runs ui", flag.ContinueOnError)
+	webURL := fs.String("web-url", "", "Override web dashboard base URL (e.g. http://host:port)")
+	printURL := fs.Bool("print-url", false, "Print the URL instead of opening the browser")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs ui <id> [flags]\n\nOpen a run in the UNCWORKS web dashboard.\nRequires web_url in config (run: uncworks config set-web-url <url>).\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() == 0 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	base := *webURL
+	if base == "" {
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+		base = cfg.WebURL
+	}
+	if base == "" {
+		return fmt.Errorf("web_url not configured — run: uncworks config set-web-url <url>")
+	}
+	base = strings.TrimRight(base, "/")
+	url := base + "/run/" + id
+
+	if *printURL {
+		fmt.Println(url)
+		return nil
+	}
+	fmt.Printf("Opening: %s\n", url)
+	return openBrowser(url)
 }
 
 // ── inspect ──────────────────────────────────────────────────────────────────
@@ -4112,7 +4156,8 @@ func runRunsGroup(args []string) error {
 		listReq.Cursor = cursor
 		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			// On connection error mid-pagination, render with data collected so far.
+			break
 		}
 		stop := false
 		for _, r := range resp.Msg.GetAgentRuns() {
