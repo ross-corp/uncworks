@@ -150,8 +150,13 @@ Flags:`)
 				fmt.Printf("PR: %s\n", url)
 			}
 			return nil
-		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED, apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
-			return fmt.Errorf("run %s ended with phase: %s", run.GetId(), phase)
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+			if msg != "" {
+				return fmt.Errorf("run %s failed: %s", run.GetId(), msg)
+			}
+			return fmt.Errorf("run %s failed", run.GetId())
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+			return fmt.Errorf("run %s was cancelled", run.GetId())
 		}
 	}
 }
