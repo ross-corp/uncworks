@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 	"time"
+
+	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 )
 
 func TestParseSinceDuration(t *testing.T) {
@@ -44,15 +46,18 @@ func TestPhaseLabel(t *testing.T) {
 		input int32
 		want  string
 	}{
-		{0, "UNKNOWN"},  // unspecified
+		{0, "UNKNOWN"},  // UNSPECIFIED
 		{1, "PENDING"},
 		{2, "RUNNING"},
-		{3, "DONE"},
-		{4, "FAILED"},
-		{5, "CANCELLED"},
-		{6, "WAITING"},
+		{3, "WAITING"},  // WAITING_FOR_INPUT
+		{4, "DONE"},     // SUCCEEDED
+		{5, "FAILED"},
+		{6, "CANCELLED"},
 	}
 	for _, tt := range tests {
-		_ = tt // phaseLabel takes apiv1.AgentRunPhase — test structure only
+		got := phaseLabel(apiv1.AgentRunPhase(tt.input))
+		if got != tt.want {
+			t.Errorf("phaseLabel(%d) = %q, want %q", tt.input, got, tt.want)
+		}
 	}
 }
