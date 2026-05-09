@@ -178,6 +178,7 @@ func runRunsList(args []string) error {
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	relative := fs.Bool("relative", false, "Show relative timestamps (e.g. '5m ago') instead of ISO")
 	sortBy := fs.String("sort", "", "Sort by field: started, phase (default: server order / most-recent-first)")
+	idsOnly := fs.Bool("ids-only", false, "Print only run IDs (one per line, for scripting)")
 	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
 	runningOnly := fs.Bool("running", false, "Shorthand for --phase RUNNING")
 	failedOnly := fs.Bool("failed", false, "Shorthand for --phase FAILED")
@@ -332,8 +333,15 @@ func runRunsList(args []string) error {
 			return fmt.Errorf("--sort %q: must be started or phase", *sortBy)
 		}
 	}
-	if len(runs) == 0 && !*jsonOut {
+	if len(runs) == 0 && !*jsonOut && !*idsOnly {
 		fmt.Println("No runs found.")
+		return nil
+	}
+
+	if *idsOnly {
+		for _, r := range runs {
+			fmt.Println(r.GetId())
+		}
 		return nil
 	}
 
