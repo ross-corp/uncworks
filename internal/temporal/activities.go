@@ -374,6 +374,16 @@ func BuildAgentPod(input CreateAgentDeploymentInput) *corev1.Pod {
 						// devbox installs fast (cache hit) instead of re-downloading ~1 GB.
 						{Name: "nix-store", MountPath: "/nix"},
 					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("250m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1000m"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
+					},
 				},
 			},
 			Containers: []corev1.Container{
