@@ -64,6 +64,17 @@ Flags:`)
 		return err
 	}
 
+	// Warn if run is not in WAITING_FOR_INPUT phase.
+	getResp, getErr := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
+	if getErr == nil {
+		phase := getResp.Msg.GetStatus().GetPhase()
+		if phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+			fmt.Fprintf(os.Stderr, "warning: run %s is in phase %s, not WAITING — input may be ignored\n", id, phaseLabel(phase))
+		} else if prompt := getResp.Msg.GetStatus().GetMessage(); prompt != "" {
+			fmt.Printf("Agent is asking: %s\n", prompt)
+		}
+	}
+
 	req := connect.NewRequest(&apiv1.SendHumanInputRequest{
 		AgentRunId: id,
 		Input:      text,
