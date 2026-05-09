@@ -212,6 +212,8 @@ func runRunsList(args []string) error {
 	pendingOnly := fs.Bool("pending", false, "Shorthand for --phase PENDING")
 	waitingOnly := fs.Bool("waiting", false, "Shorthand for --phase WAITING")
 	activeOnly := fs.Bool("active", false, "Show only active runs (RUNNING + PENDING + WAITING)")
+	doneOnly := fs.Bool("done", false, "Shorthand for --phase DONE (successful runs)")
+	cancelledOnly := fs.Bool("cancelled", false, "Shorthand for --phase CANCELLED")
 	noHeader := fs.Bool("no-header", false, "Omit the column header row (useful for scripting)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
@@ -225,20 +227,13 @@ func runRunsList(args []string) error {
 		*since = "24h"
 	}
 	phaseShorthands := 0
-	if *runningOnly {
-		phaseShorthands++
-	}
-	if *failedOnly {
-		phaseShorthands++
-	}
-	if *pendingOnly {
-		phaseShorthands++
-	}
-	if *waitingOnly {
-		phaseShorthands++
+	for _, b := range []*bool{runningOnly, failedOnly, pendingOnly, waitingOnly, doneOnly, cancelledOnly} {
+		if *b {
+			phaseShorthands++
+		}
 	}
 	if phaseShorthands > 1 {
-		return fmt.Errorf("--running, --failed, --pending, and --waiting are mutually exclusive")
+		return fmt.Errorf("--running, --failed, --pending, --waiting, --done, and --cancelled are mutually exclusive")
 	}
 	if *runningOnly && *phase == "" {
 		*phase = "RUNNING"
@@ -251,6 +246,12 @@ func runRunsList(args []string) error {
 	}
 	if *waitingOnly && *phase == "" {
 		*phase = "WAITING"
+	}
+	if *doneOnly && *phase == "" {
+		*phase = "DONE"
+	}
+	if *cancelledOnly && *phase == "" {
+		*phase = "CANCELLED"
 	}
 
 	var sinceTime time.Time
@@ -560,7 +561,7 @@ func runRunsList(args []string) error {
 		fmt.Printf("Showing all %d run(s)%s\n", len(runs), phaseSummary())
 	} else if len(runs) > 0 {
 		isFiltered := !sinceTime.IsZero() || *repoURL != "" || *titleContains != "" ||
-			*activeOnly || *runningOnly || *failedOnly || *pendingOnly || *waitingOnly ||
+			*activeOnly || *runningOnly || *failedOnly || *pendingOnly || *waitingOnly || *doneOnly || *cancelledOnly ||
 			*project != "" || *feature != "" || *tag != "" || *phase != ""
 		suffix := ""
 		if isFiltered {
