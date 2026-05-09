@@ -266,6 +266,12 @@ func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Reques
 }
 
 func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Request[apiv1.ListAgentRunsRequest]) (*connect.Response[apiv1.ListAgentRunsResponse], error) {
+	if req.Msg.ParentRunId != "" {
+		if err := validateRunID(req.Msg.ParentRunId); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid parent_run_id: %w", err))
+		}
+	}
+
 	listOpts := []client.ListOption{client.InNamespace(s.Namespace)}
 
 	// Apply spec_run_id label filter if provided
