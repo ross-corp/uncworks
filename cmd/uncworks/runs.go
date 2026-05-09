@@ -56,6 +56,7 @@ Subcommands:
   prune             Bulk archive all terminal runs older than a given age (--failed, --done)
   export            Export runs as CSV, JSON, or TSV (--format csv|json|tsv)
   multi-tail        Tail logs from multiple runs simultaneously (prefixed by run ID)
+  top               Live view of active runs sorted by elapsed time (auto-refresh)
 `
 
 func runRuns(args []string) error {
@@ -118,6 +119,8 @@ func runRuns(args []string) error {
 		return runRunsSummary(rest)
 	case "multi-tail", "multi-logs":
 		return runRunsMultiTail(rest)
+	case "top":
+		return runRunsTop(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -2989,6 +2992,126 @@ func runRunsWait(args []string) error {
 		return fmt.Errorf("run %s was cancelled", id)
 	default:
 		return fmt.Errorf("run %s ended in unexpected phase: %s", id, phaseLabel(phase))
+	}
+}
+
+// ── top ───────────────────────────────────────────────────────────────────────
+
+func runRunsTop(args []string) error {
+	fs := flag.NewFlagSet("runs top", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	interval := fs.Int("interval", 5, "Refresh interval in seconds")
+	project := fs.String("project", "", "Filter by project name")
+	limit := fs.Int("limit", 30, "Max runs to show per refresh")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs top [flags]\n\nLive view of active runs sorted by elapsed time.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	useColor := term.IsTerminal(int(os.Stdout.Fd()))
+	colorPhase := func(label string) string {
+		if !useColor {
+			return label
+		}
+		switch label {
+		case "RUNNING":
+			return "\033[32m" + label + "\033[0m"
+		case "PENDING":
+			return "\033[33m" + label + "\033[0m"
+		case "WAITING":
+			return "\033[36m" + label + "\033[0m"
+		}
+		return label
+	}
+
+	for {
+		fmt.Print("\033[H\033[2J")
+		fmt.Printf("uncworks runs top — %s  (Ctrl+C to stop)\n\n", time.Now().Format("15:04:05"))
+
+		var allActive []*apiv1.AgentRun
+		cursor := ""
+		for {
+			req := &apiv1.ListAgentRunsRequest{
+				Limit:         100,
+				ProjectFilter: *project,
+				Cursor:        cursor,
+			}
+			resp, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(req))
+			if apiErr != nil {
+				fmt.Printf("error: %s\n", humanizeErr(apiErr))
+				break
+			}
+			for _, r := range resp.Msg.GetAgentRuns() {
+				p := r.GetStatus().GetPhase()
+				if p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
+					p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING ||
+					p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+					allActive = append(allActive, r)
+				}
+			}
+			cursor = resp.Msg.GetNextCursor()
+			if cursor == "" {
+				break
+			}
+		}
+
+		// Sort by start time (oldest first = longest running at top).
+		sort.Slice(allActive, func(i, j int) bool {
+			ti := allActive[i].GetStatus().GetStartedAt()
+			tj := allActive[j].GetStatus().GetStartedAt()
+			if ti == nil {
+				return false
+			}
+			if tj == nil {
+				return true
+			}
+			return ti.AsTime().Before(tj.AsTime())
+		})
+
+		if len(allActive) == 0 {
+			fmt.Println("No active runs.")
+		} else {
+			var buf bytes.Buffer
+			w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tELAPSED\tPHASE\tTITLE")
+			shown := allActive
+			if *limit > 0 && len(shown) > *limit {
+				shown = shown[:*limit]
+			}
+			for _, r := range shown {
+				title := r.GetSpec().GetDisplayName()
+				if title == "" {
+					title = r.GetSpec().GetProject()
+				}
+				if len(title) > 40 {
+					title = title[:37] + "..."
+				}
+				phase := phaseLabel(r.GetStatus().GetPhase())
+				elapsed := runDuration(r)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.GetId(), elapsed, phase, title)
+			}
+			_ = w.Flush()
+			output := buf.String()
+			if useColor {
+				output = strings.NewReplacer(
+					"RUNNING", "\033[32mRUNNING\033[0m",
+					"PENDING", "\033[33mPENDING\033[0m",
+					"WAITING", "\033[36mWAITING\033[0m",
+				).Replace(output)
+			}
+			fmt.Print(output)
+			fmt.Printf("\nTotal active: %d\n", len(allActive))
+		}
+		_ = colorPhase
+		time.Sleep(time.Duration(*interval) * time.Second)
 	}
 }
 
