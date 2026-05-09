@@ -429,6 +429,7 @@ func runRunsGet(args []string) error {
 	fs := flag.NewFlagSet("runs get", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	showLog := fs.Bool("log", false, "Print the persisted agent log output")
+	showLogs := fs.Bool("logs", false, "Alias for --log")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	fs.Usage = func() {
@@ -437,6 +438,9 @@ func runRunsGet(args []string) error {
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+	if *showLogs {
+		*showLog = true
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
