@@ -30,6 +30,7 @@ Commands:
   input      Send human-in-the-loop response to a paused agent
   graph      Print the run execution tree
   search     Search the knowledge base for past work
+  config     Show or edit the CLI configuration
 
 Flags:
   --version  Print the build version and exit
@@ -73,6 +74,8 @@ func main() {
 		err = runGraph(args)
 	case "search":
 		err = runSearch(args)
+	case "config":
+		err = runConfig(args)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, usage)
 	case "-v", "--version", "version":
