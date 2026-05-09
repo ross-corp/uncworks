@@ -267,7 +267,9 @@ func runRunsList(args []string) error {
 		return enc.Encode(out)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	useColor := term.IsTerminal(int(os.Stdout.Fd()))
+	var listBuf bytes.Buffer
+	w := tabwriter.NewWriter(&listBuf, 0, 0, 2, ' ', 0)
 	if *verbose {
 		fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT")
 	} else {
@@ -317,6 +319,24 @@ func runRunsList(args []string) error {
 		}
 	}
 	w.Flush()
+
+	output := listBuf.String()
+	if useColor {
+		output = strings.NewReplacer(
+			"RUNNING  ", "\033[32mRUNNING\033[0m  ",
+			"RUNNING\t", "\033[32mRUNNING\033[0m\t",
+			"PENDING  ", "\033[33mPENDING\033[0m  ",
+			"PENDING\t", "\033[33mPENDING\033[0m\t",
+			"WAITING  ", "\033[36mWAITING\033[0m  ",
+			"WAITING\t", "\033[36mWAITING\033[0m\t",
+			"FAILED   ", "\033[31mFAILED\033[0m   ",
+			"FAILED\t", "\033[31mFAILED\033[0m\t",
+			"DONE     ", "\033[90mDONE\033[0m     ",
+			"DONE\t", "\033[90mDONE\033[0m\t",
+			"CANCELLED", "\033[35mCANCELLED\033[0m",
+		).Replace(output)
+	}
+	fmt.Print(output)
 
 	if nextCursor != "" && !*all {
 		fmt.Printf("next-cursor: %s\n", nextCursor)
