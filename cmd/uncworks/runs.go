@@ -422,15 +422,23 @@ func runRunsList(args []string) error {
 
 	if *jsonOut {
 		type runJSON struct {
-			ID       string   `json:"id"`
-			Title    string   `json:"title"`
-			Phase    string   `json:"phase"`
-			Duration string   `json:"duration"`
-			Model    string   `json:"model"`
-			Started  string   `json:"started"`
-			Project  string   `json:"project,omitempty"`
-			Feature  string   `json:"feature,omitempty"`
-			Tags     []string `json:"tags,omitempty"`
+			ID          string   `json:"id"`
+			Title       string   `json:"title"`
+			Phase       string   `json:"phase"`
+			Duration    string   `json:"duration"`
+			Model       string   `json:"model"`
+			CreatedAt   string   `json:"created_at,omitempty"`
+			StartedAt   string   `json:"started_at,omitempty"`
+			CompletedAt string   `json:"completed_at,omitempty"`
+			Age         string   `json:"age,omitempty"`
+			Project     string   `json:"project,omitempty"`
+			Feature     string   `json:"feature,omitempty"`
+			Tags        []string `json:"tags,omitempty"`
+			ParentRunID string   `json:"parent_run_id,omitempty"`
+			Repo        string   `json:"repo,omitempty"`
+			Branch      string   `json:"branch,omitempty"`
+			PRUrl       string   `json:"pr_url,omitempty"`
+			Message     string   `json:"message,omitempty"`
 		}
 		out := make([]runJSON, 0, len(runs))
 		for _, r := range runs {
@@ -442,22 +450,46 @@ func runRunsList(args []string) error {
 			if model == "" {
 				model = "default"
 			}
-			started := ""
+			createdAt := ""
+			if r.GetCreatedAt() != nil {
+				createdAt = r.GetCreatedAt().AsTime().Format(time.RFC3339)
+			}
+			startedAt := ""
 			if r.GetStatus().GetStartedAt() != nil {
-				started = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
-			} else if r.GetCreatedAt() != nil {
-				started = r.GetCreatedAt().AsTime().Format(time.RFC3339)
+				startedAt = r.GetStatus().GetStartedAt().AsTime().Format(time.RFC3339)
+			}
+			completedAt := ""
+			if r.GetStatus().GetCompletedAt() != nil {
+				completedAt = r.GetStatus().GetCompletedAt().AsTime().Format(time.RFC3339)
+			}
+			age := ""
+			if r.GetCreatedAt() != nil {
+				age = relativeTime(r.GetCreatedAt().AsTime())
+			}
+			repo := ""
+			branch := ""
+			if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
+				repo = repos[0].GetUrl()
+				branch = repos[0].GetBranch()
 			}
 			out = append(out, runJSON{
-				ID:       r.GetId(),
-				Title:    title,
-				Phase:    phaseLabel(r.GetStatus().GetPhase()),
-				Duration: runDuration(r),
-				Model:    model,
-				Started:  started,
-				Project:  r.GetSpec().GetProject(),
-				Feature:  r.GetSpec().GetFeature(),
-				Tags:     r.GetSpec().GetTags(),
+				ID:          r.GetId(),
+				Title:       title,
+				Phase:       phaseLabel(r.GetStatus().GetPhase()),
+				Duration:    runDuration(r),
+				Model:       model,
+				CreatedAt:   createdAt,
+				StartedAt:   startedAt,
+				CompletedAt: completedAt,
+				Age:         age,
+				Project:     r.GetSpec().GetProject(),
+				Feature:     r.GetSpec().GetFeature(),
+				Tags:        r.GetSpec().GetTags(),
+				ParentRunID: r.GetSpec().GetParentRunId(),
+				Repo:        repo,
+				Branch:      branch,
+				PRUrl:       r.GetStatus().GetPrUrl(),
+				Message:     r.GetStatus().GetMessage(),
 			})
 		}
 		enc := json.NewEncoder(os.Stdout)
