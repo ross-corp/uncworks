@@ -31,7 +31,7 @@ func TestPrintGraphSingleNode(t *testing.T) {
 			{Name: "run-abc", Phase: apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED, Role: "orchestrator"},
 		},
 	}
-	out := captureStdout(func() { printGraph("run-abc", graph) })
+	out := captureStdout(func() { printGraph("run-abc", graph, false) })
 	if !strings.Contains(out, "▶ run-abc (orchestrator) [DONE]") {
 		t.Errorf("unexpected output for single node:\n%s", out)
 	}
@@ -53,7 +53,7 @@ func TestPrintGraphTree(t *testing.T) {
 			{Parent: "child1", Child: "grandchild"},
 		},
 	}
-	out := captureStdout(func() { printGraph("root", graph) })
+	out := captureStdout(func() { printGraph("root", graph, false) })
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 
 	wantLines := []string{
