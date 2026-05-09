@@ -191,6 +191,8 @@ func runRunsList(args []string) error {
 	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
 	runningOnly := fs.Bool("running", false, "Shorthand for --phase RUNNING")
 	failedOnly := fs.Bool("failed", false, "Shorthand for --phase FAILED")
+	pendingOnly := fs.Bool("pending", false, "Shorthand for --phase PENDING")
+	waitingOnly := fs.Bool("waiting", false, "Shorthand for --phase WAITING")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -202,14 +204,33 @@ func runRunsList(args []string) error {
 	if *recent && *since == "" {
 		*since = "24h"
 	}
-	if *runningOnly && *failedOnly {
-		return fmt.Errorf("--running and --failed are mutually exclusive")
+	phaseShorthands := 0
+	if *runningOnly {
+		phaseShorthands++
+	}
+	if *failedOnly {
+		phaseShorthands++
+	}
+	if *pendingOnly {
+		phaseShorthands++
+	}
+	if *waitingOnly {
+		phaseShorthands++
+	}
+	if phaseShorthands > 1 {
+		return fmt.Errorf("--running, --failed, --pending, and --waiting are mutually exclusive")
 	}
 	if *runningOnly && *phase == "" {
 		*phase = "RUNNING"
 	}
 	if *failedOnly && *phase == "" {
 		*phase = "FAILED"
+	}
+	if *pendingOnly && *phase == "" {
+		*phase = "PENDING"
+	}
+	if *waitingOnly && *phase == "" {
+		*phase = "WAITING"
 	}
 
 	var sinceTime time.Time
