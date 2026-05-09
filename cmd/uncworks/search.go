@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -22,6 +23,7 @@ func runSearch(args []string) error {
 	repo := fs.String("repo", "", "Filter results to a specific repository URL")
 	since := fs.String("since", "", "Filter to results created within this window (e.g. 1h, 24h, 7d)")
 	source := fs.String("source", "", "Filter by source type (code, trace, source-code; default: all)")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks search <query> [flags]
 
@@ -84,8 +86,41 @@ Flags:`)
 
 	results := resp.Msg.GetResults()
 	if len(results) == 0 {
-		fmt.Println("No results found.")
+		if *jsonOut {
+			fmt.Println("[]")
+		} else {
+			fmt.Println("No results found.")
+		}
 		return nil
+	}
+
+	if *jsonOut {
+		type resultJSON struct {
+			Rank    int     `json:"rank"`
+			Score   float64 `json:"score"`
+			RunID   string  `json:"run_id"`
+			RepoURL string  `json:"repo_url,omitempty"`
+			Snippet string  `json:"snippet"`
+			Age     string  `json:"age,omitempty"`
+		}
+		out := make([]resultJSON, 0, len(results))
+		for i, r := range results {
+			age := ""
+			if ts := r.GetCreatedAt(); ts != nil {
+				age = time.Since(ts.AsTime()).Round(time.Hour).String() + " ago"
+			}
+			out = append(out, resultJSON{
+				Rank:    i + 1,
+				Score:   float64(r.GetSimilarityScore()),
+				RunID:   r.GetRunId(),
+				RepoURL: r.GetRepoUrl(),
+				Snippet: strings.Join(strings.Fields(r.GetChunkText()), " "),
+				Age:     age,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
 	}
 
 	for i, r := range results {
