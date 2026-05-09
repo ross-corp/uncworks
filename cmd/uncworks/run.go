@@ -35,6 +35,7 @@ func runRun(args []string) error {
 	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
 	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
 	wait := fs.Bool("wait", false, "Wait for the run to complete; exit 0 on success, 1 on failure")
+	follow := fs.Bool("follow", false, "Stream logs after submitting the run (takes precedence over --wait)")
 	timeout := fs.Duration("timeout", 0, "Timeout for --wait mode (e.g. 30m, 1h); 0 means no timeout")
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	var tags multiFlag
@@ -104,15 +105,19 @@ Flags:`)
 
 	if *outputID {
 		fmt.Println(run.GetId())
-		if !*wait {
-			return nil
-		}
 	} else {
 		fmt.Printf("Run created: %s\n", run.GetId())
-		fmt.Printf("Follow progress: uncworks runs logs %s\n", run.GetId())
-		if !*wait {
-			return nil
+	}
+
+	if *follow {
+		return runRunsTail([]string{run.GetId(), "--server=" + *server})
+	}
+
+	if !*wait {
+		if !*outputID {
+			fmt.Printf("Follow progress: uncworks runs tail %s\n", run.GetId())
 		}
+		return nil
 	}
 
 	startTime := time.Now()
