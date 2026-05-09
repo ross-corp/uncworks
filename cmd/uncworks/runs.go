@@ -48,6 +48,7 @@ Subcommands:
   count             Print a count of runs (by phase or total)
   export            Export runs as CSV
   diff <id>         Show git commands to inspect a run's diff
+  inspect <id>      Diagnostic view: details, graph, and log tail
 `
 
 func runRuns(args []string) error {
@@ -98,6 +99,8 @@ func runRuns(args []string) error {
 		return runRunsExport(rest)
 	case "diff":
 		return runRunsDiff(rest)
+	case "inspect":
+		return runRunsInspect(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -1342,6 +1345,72 @@ func runRunsOpen(args []string) error {
 	fmt.Printf("Opening PR: %s\n", prURL)
 	if err := openBrowser(prURL); err != nil {
 		return fmt.Errorf("failed to open browser: %w", err)
+	}
+
+	return nil
+}
+
+// ── inspect ──────────────────────────────────────────────────────────────────
+
+func runRunsInspect(args []string) error {
+	fs := flag.NewFlagSet("runs inspect", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	logLines := fs.Int("log-lines", 20, "Number of log tail lines to show (0 = all)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs inspect <id> [flags]\n\nDiagnostic view for a run: full details, graph, and log tail.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+	r := resp.Msg
+	phase := r.GetStatus().GetPhase()
+
+	// Print full detail.
+	getArgs := []string{id}
+	if *server != "" {
+		getArgs = append(getArgs, "--server="+*server)
+	}
+	_ = runRunsGet(getArgs)
+
+	// Show execution graph if there are children or for running runs.
+	children := r.GetChildren()
+	if len(children) > 0 || phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING {
+		fmt.Println("\n─── execution graph ────────────────────────────────────────────────────────")
+		graphResp, graphErr := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{Id: id}))
+		if graphErr == nil {
+			printGraph(id, graphResp.Msg)
+		}
+	}
+
+	// Show log tail for non-pending runs.
+	logOutput := r.GetStatus().GetLogOutput()
+	if logOutput != "" {
+		fmt.Println("\n─── log tail ───────────────────────────────────────────────────────────────")
+		lines := strings.Split(logOutput, "\n")
+		if *logLines > 0 && len(lines) > *logLines {
+			lines = lines[len(lines)-*logLines:]
+			fmt.Printf("(showing last %d lines)\n", *logLines)
+		}
+		fmt.Println(strings.Join(lines, "\n"))
+	} else if phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED {
+		fmt.Println("\n─── no stored log output ───────────────────────────────────────────────────")
+		fmt.Println("Run 'uncworks runs logs " + id + " --no-follow' for stored output.")
 	}
 
 	return nil
