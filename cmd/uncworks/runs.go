@@ -3235,7 +3235,9 @@ func runRunsTop(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	interval := fs.Int("interval", 5, "Refresh interval in seconds")
 	project := fs.String("project", "", "Filter by project name")
+	tag := fs.String("tag", "", "Filter by tag")
 	limit := fs.Int("limit", 30, "Max runs to show per refresh")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs top [flags]\n\nLive view of active runs sorted by elapsed time.\n\nFlags:")
 		fs.PrintDefaults()
@@ -3249,7 +3251,7 @@ func runRunsTop(args []string) error {
 		return err
 	}
 
-	useColor := term.IsTerminal(int(os.Stdout.Fd()))
+	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
 	colorPhase := func(label string) string {
 		if !useColor {
 			return label
@@ -3266,7 +3268,9 @@ func runRunsTop(args []string) error {
 	}
 
 	for {
-		fmt.Print("\033[H\033[2J")
+		if useColor {
+			fmt.Print("\033[H\033[2J")
+		}
 		fmt.Printf("uncworks runs top — %s  (Ctrl+C to stop)\n\n", time.Now().Format("15:04:05"))
 
 		var allActive []*apiv1.AgentRun
@@ -3275,6 +3279,7 @@ func runRunsTop(args []string) error {
 			req := &apiv1.ListAgentRunsRequest{
 				Limit:         100,
 				ProjectFilter: *project,
+				TagFilter:     *tag,
 				Cursor:        cursor,
 			}
 			resp, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(req))
