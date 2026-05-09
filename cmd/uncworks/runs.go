@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -805,6 +806,7 @@ func runRunsStats(args []string) error {
 
 	cursor := ""
 	total := 0
+	var doneDurations []time.Duration
 	for {
 		pageSize := int32(100)
 		if *limit > 0 && *limit-total < 100 {
@@ -830,12 +832,33 @@ func runRunsStats(args []string) error {
 			label := phaseLabel(r.GetStatus().GetPhase())
 			counts[label]++
 			total++
+			if label == "DONE" {
+				sa := r.GetStatus().GetStartedAt()
+				ca := r.GetStatus().GetCompletedAt()
+				if sa != nil && ca != nil {
+					doneDurations = append(doneDurations, ca.AsTime().Sub(sa.AsTime()))
+				}
+			}
 		}
 		cursor = resp.Msg.GetNextCursor()
 		if cursor == "" || (*limit > 0 && total >= *limit) {
 			break
 		}
 	}
+
+	medianDuration := func() time.Duration {
+		if len(doneDurations) == 0 {
+			return -1
+		}
+		sorted := make([]time.Duration, len(doneDurations))
+		copy(sorted, doneDurations)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+		mid := len(sorted) / 2
+		if len(sorted)%2 == 0 {
+			return (sorted[mid-1] + sorted[mid]) / 2
+		}
+		return sorted[mid]
+	}()
 
 	done := counts["DONE"]
 	failed := counts["FAILED"]
@@ -849,6 +872,9 @@ func runRunsStats(args []string) error {
 			"total":        total,
 			"phases":       counts,
 			"success_rate": successRate,
+		}
+		if medianDuration >= 0 {
+			out["median_duration_seconds"] = medianDuration.Seconds()
 		}
 		if *since != "" {
 			out["window"] = *since
@@ -877,6 +903,11 @@ func runRunsStats(args []string) error {
 	if done+failed > 0 {
 		rate := float64(done) / float64(done+failed) * 100
 		fmt.Printf("\nSuccess rate: %.1f%% (%d/%d completed runs)\n", rate, done, done+failed)
+	}
+	if medianDuration >= 0 {
+		fmt.Printf("Median duration: %s\n", medianDuration.Round(time.Second))
+	} else if done > 0 {
+		fmt.Printf("Median duration: —\n")
 	}
 	return nil
 }
