@@ -1113,34 +1113,8 @@ func runRunsCancelAll(args []string) error {
 // ── graph ─────────────────────────────────────────────────────────────────────
 
 func runRunsGraph(args []string) error {
-	fs := flag.NewFlagSet("runs graph", flag.ContinueOnError)
-	server := fs.String("server", "", "gRPC server address (overrides config)")
-	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs graph <id> [flags]\n\nPrint the execution tree for a run.\n\nFlags:")
-		fs.PrintDefaults()
-	}
-	if err := fs.Parse(args); err != nil {
-		os.Exit(2)
-	}
-	if fs.NArg() != 1 {
-		fs.Usage()
-		return fmt.Errorf("run ID argument required")
-	}
-	id := fs.Arg(0)
-
-	client, err := newClient(*server)
-	if err != nil {
-		return err
-	}
-
-	req := connect.NewRequest(&apiv1.GetRunGraphRequest{Id: id})
-	resp, err := client.GetRunGraph(context.Background(), req)
-	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
-	}
-
-	printGraph(id, resp.Msg)
-	return nil
+	// Delegate to the top-level graph command which has full --json support
+	return runGraph(args)
 }
 
 func runRunsLatest(args []string) error {
