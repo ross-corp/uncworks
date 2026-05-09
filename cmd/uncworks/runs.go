@@ -205,7 +205,9 @@ func runRunsGet(args []string) error {
 
 	r := resp.Msg
 	fmt.Printf("ID:       %s\n", r.GetId())
-	fmt.Printf("Name:     %s\n", r.GetName())
+	if dn := r.GetSpec().GetDisplayName(); dn != "" {
+		fmt.Printf("Title:    %s\n", dn)
+	}
 	fmt.Printf("Phase:    %s\n", phaseLabel(r.GetStatus().GetPhase()))
 	if r.GetStatus().GetMessage() != "" {
 		fmt.Printf("Message:  %s\n", r.GetStatus().GetMessage())
