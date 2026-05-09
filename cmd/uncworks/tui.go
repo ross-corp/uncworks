@@ -465,7 +465,7 @@ func (m tuiModel) View() string {
 
 func loadRuns(client apiv1connect.AOTServiceClient) tea.Cmd {
 	return func() tea.Msg {
-		req := connect.NewRequest(&apiv1.ListAgentRunsRequest{})
+		req := connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 50})
 		resp, err := client.ListAgentRuns(context.Background(), req)
 		if err != nil {
 			return runsErrMsg{err: err}
