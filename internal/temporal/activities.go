@@ -110,6 +110,7 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			if initStatus.Name == "hydration" {
 				if initStatus.State.Terminated != nil {
 					if initStatus.State.Terminated.ExitCode == 0 {
+						slog.Info("hydration complete", "agentRun", input.AgentRunName, "podIP", pod.Status.PodIP)
 						return &WaitForHydrationOutput{PodIP: pod.Status.PodIP}, nil
 					}
 					return nil, fmt.Errorf("hydration failed with exit code %d: %s",
@@ -121,6 +122,7 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 
 		// Pod is running (past init) — hydration succeeded
 		if pod.Status.Phase == corev1.PodRunning {
+			slog.Info("hydration complete", "agentRun", input.AgentRunName, "podIP", pod.Status.PodIP, "pod", pod.Name)
 			return &WaitForHydrationOutput{PodIP: pod.Status.PodIP}, nil
 		}
 		if pod.Status.Phase == corev1.PodFailed {
@@ -742,8 +744,10 @@ func (a *Activities) ScaleDownDeployment(ctx context.Context, input ScaleDownDep
 	var replicas int32 = 0
 	deployment.Spec.Replicas = &replicas
 	if err := a.K8sClient.Update(ctx, &deployment); err != nil {
+		slog.Warn("scale down deployment failed", "deployment", input.DeploymentName, "namespace", input.Namespace, "err", err)
 		return fmt.Errorf("scale down deployment: %w", err)
 	}
+	slog.Info("deployment scaled down", "deployment", input.DeploymentName, "namespace", input.Namespace)
 	return nil
 }
 
