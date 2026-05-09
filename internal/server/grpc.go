@@ -53,6 +53,9 @@ type AOTServiceHandler struct {
 	createAgentRunRateLimiter *RateLimiter
 	// Rate limiting for CancelAgentRun
 	cancelAgentRunRateLimiter *RateLimiter
+	// maxConcurrentRuns is the maximum number of active (non-terminal) runs allowed.
+	// 0 means unlimited. Configured via MAX_CONCURRENT_RUNS env var.
+	maxConcurrentRuns int
 }
 
 var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
