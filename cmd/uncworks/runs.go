@@ -1465,18 +1465,41 @@ func runRunsStats(args []string) error {
 		}
 	}
 
+	sortedDurations := make([]time.Duration, len(doneDurations))
+	copy(sortedDurations, doneDurations)
+	sort.Slice(sortedDurations, func(i, j int) bool { return sortedDurations[i] < sortedDurations[j] })
+
 	medianDuration := func() time.Duration {
-		if len(doneDurations) == 0 {
+		if len(sortedDurations) == 0 {
 			return -1
 		}
-		sorted := make([]time.Duration, len(doneDurations))
-		copy(sorted, doneDurations)
-		sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
-		mid := len(sorted) / 2
-		if len(sorted)%2 == 0 {
-			return (sorted[mid-1] + sorted[mid]) / 2
+		mid := len(sortedDurations) / 2
+		if len(sortedDurations)%2 == 0 {
+			return (sortedDurations[mid-1] + sortedDurations[mid]) / 2
 		}
-		return sorted[mid]
+		return sortedDurations[mid]
+	}()
+
+	avgDuration := func() time.Duration {
+		if len(sortedDurations) == 0 {
+			return -1
+		}
+		var total time.Duration
+		for _, d := range sortedDurations {
+			total += d
+		}
+		return total / time.Duration(len(sortedDurations))
+	}()
+
+	p90Duration := func() time.Duration {
+		if len(sortedDurations) == 0 {
+			return -1
+		}
+		idx := int(float64(len(sortedDurations)) * 0.9)
+		if idx >= len(sortedDurations) {
+			idx = len(sortedDurations) - 1
+		}
+		return sortedDurations[idx]
 	}()
 
 	done := counts["DONE"]
@@ -1526,6 +1549,8 @@ func runRunsStats(args []string) error {
 		}
 		if medianDuration >= 0 {
 			out["median_duration_seconds"] = medianDuration.Seconds()
+			out["avg_duration_seconds"] = avgDuration.Seconds()
+			out["p90_duration_seconds"] = p90Duration.Seconds()
 		}
 		if *since != "" {
 			out["window"] = *since
@@ -1580,9 +1605,11 @@ func runRunsStats(args []string) error {
 		fmt.Printf("\nSuccess rate: %.1f%% (%d/%d completed runs)\n", rate, done, done+failed)
 	}
 	if medianDuration >= 0 {
+		fmt.Printf("Avg duration:    %s\n", avgDuration.Round(time.Second))
 		fmt.Printf("Median duration: %s\n", medianDuration.Round(time.Second))
+		fmt.Printf("P90 duration:    %s\n", p90Duration.Round(time.Second))
 	} else if done > 0 {
-		fmt.Printf("Median duration: —\n")
+		fmt.Printf("Duration: —\n")
 	}
 	if len(failureReasons) > 0 {
 		type reasonCount struct {
