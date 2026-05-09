@@ -2923,6 +2923,8 @@ func runRunsSummary(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	since := fs.String("since", "24h", "Time window for summary (e.g. 1h, 24h, 7d)")
 	project := fs.String("project", "", "Filter by project name")
+	watch := fs.Bool("watch", false, "Auto-refresh the summary every --interval seconds (Ctrl+C to stop)")
+	interval := fs.Int("interval", 10, "Refresh interval in seconds for --watch mode")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs summary [flags]\n\nShow a dashboard summary of recent run activity.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2935,12 +2937,16 @@ func runRunsSummary(args []string) error {
 	if err != nil {
 		return fmt.Errorf("--since %q: %w", *since, err)
 	}
-	sinceTime := time.Now().Add(-d)
 
 	client, err := newClient(*server)
 	if err != nil {
 		return err
 	}
+
+	useColorSum := term.IsTerminal(int(os.Stdout.Fd()))
+
+	doSummary := func() error {
+		sinceTime := time.Now().Add(-d)
 
 	phaseCounts := map[string]int{}
 	var activeRuns []*apiv1.AgentRun
@@ -2981,9 +2987,8 @@ func runRunsSummary(args []string) error {
 		}
 	}
 
-	useColor := term.IsTerminal(int(os.Stdout.Fd()))
 	colorPhase := func(label string) string {
-		if !useColor {
+		if !useColorSum {
 			return label
 		}
 		switch label {
@@ -3058,7 +3063,23 @@ func runRunsSummary(args []string) error {
 			colorPhase(phaseLabel(latestRun.GetStatus().GetPhase())))
 	}
 
-	return nil
+		return nil
+	} // end doSummary
+
+	if !*watch {
+		return doSummary()
+	}
+
+	for {
+		if useColorSum {
+			fmt.Print("\033[2J\033[H")
+		}
+		fmt.Printf("runs summary — %s  (every %ds, Ctrl+C to stop)\n\n", time.Now().Format("15:04:05"), *interval)
+		if err := doSummary(); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		}
+		time.Sleep(time.Duration(*interval) * time.Second)
+	}
 }
 
 // parseSinceDuration parses a human duration like "1h", "24h", "7d".
