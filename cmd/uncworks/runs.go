@@ -786,6 +786,7 @@ func runRunsRetry(args []string) error {
 	prompt := fs.String("prompt", "", "Override the agent prompt")
 	branch := fs.String("branch", "", "Override the branch")
 	modelTier := fs.String("model-tier", "", "Override the model tier")
+	outputID := fs.Bool("output-id", false, "Print only the new run ID (for scripting)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run. Use flags to override specific fields.\n\nFlags:")
 		fs.PrintDefaults()
@@ -843,8 +844,12 @@ func runRunsRetry(args []string) error {
 	}
 
 	newRun := createResp.Msg.GetAgentRun()
-	fmt.Printf("Run created: %s\n", newRun.GetId())
-	fmt.Printf("Follow progress: uncworks runs logs %s\n", newRun.GetId())
+	if *outputID {
+		fmt.Println(newRun.GetId())
+	} else {
+		fmt.Printf("Run created: %s\n", newRun.GetId())
+		fmt.Printf("Follow progress: uncworks runs logs %s\n", newRun.GetId())
+	}
 	return nil
 }
 
