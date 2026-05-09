@@ -440,6 +440,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			MaximumAttempts:    3,
 			InitialInterval:    5 * time.Second,
 			BackoffCoefficient: 1.0,
+			NonRetryableErrorTypes: []string{"eviction"},
 		},
 	}
 	hydrationCtx := workflow.WithActivityOptions(ctx, hydrationOpts)
