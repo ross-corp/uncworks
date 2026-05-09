@@ -1602,6 +1602,7 @@ func runRunsStats(args []string) error {
 	reasonLen := fs.Int("reason-length", 120, "Max length of failure reason messages (0 = unlimited)")
 	byProject := fs.Bool("by-project", false, "Show run count breakdown by project")
 	byModel := fs.Bool("by-model", false, "Show run count breakdown by model tier")
+	byFeatureStat := fs.Bool("by-feature", false, "Show run count breakdown by feature name")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1643,6 +1644,7 @@ func runRunsStats(args []string) error {
 	failureReasons := map[string]int{}
 	projectCounts := map[string]int{}
 	modelCounts := map[string]int{}
+	featureCounts2 := map[string]int{}
 	for {
 		pageSize := int32(100)
 		if *limit > 0 && *limit-total < 100 {
@@ -1682,6 +1684,13 @@ func runRunsStats(args []string) error {
 					model = "default"
 				}
 				modelCounts[model]++
+			}
+			if *byFeatureStat {
+				feat := r.GetSpec().GetFeature()
+				if feat == "" {
+					feat = "(none)"
+				}
+				featureCounts2[feat]++
 			}
 			if label == "DONE" {
 				sa := r.GetStatus().GetStartedAt()
@@ -1917,6 +1926,9 @@ func runRunsStats(args []string) error {
 	}
 	if *byModel {
 		printBreakdown("Model", modelCounts)
+	}
+	if *byFeatureStat {
+		printBreakdown("Feature", featureCounts2)
 	}
 
 	return nil
