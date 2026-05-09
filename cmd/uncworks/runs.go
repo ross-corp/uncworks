@@ -34,8 +34,8 @@ Subcommands:
   tail <id>         Stream logs and show summary when run completes
   watch             Auto-refresh the runs list (like watch kubectl get pods)
   wait <id>         Block until a run reaches a terminal phase (exit 0 on success, 1 on failure)
-  stats             Show aggregate counts of runs by phase (--format json|table, --since, --project)
-  count             Print a count of runs (--by-phase, --project, --since)
+  stats             Show aggregate counts of runs by phase (--format json|table, --since, --by-project, --by-tag)
+  count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since)
   summary           Show a dashboard summary of recent run activity
   latest            Show the most recent N runs (--n, --phase, --project, --tag)
   graph <id>        Show the run graph (parent/child relationships) (--watch for live refresh)
@@ -193,8 +193,11 @@ func runRunsWatch(args []string) error {
 		listArgs = append(listArgs, "--no-color")
 	}
 
+	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
 	for {
-		fmt.Print("\033[H\033[2J") // clear screen + move cursor home
+		if useColor {
+			fmt.Print("\033[H\033[2J")
+		}
 		var filters []string
 		if *active {
 			filters = append(filters, "active")
@@ -1603,6 +1606,7 @@ func runRunsStats(args []string) error {
 	byProject := fs.Bool("by-project", false, "Show run count breakdown by project")
 	byModel := fs.Bool("by-model", false, "Show run count breakdown by model tier")
 	byFeatureStat := fs.Bool("by-feature", false, "Show run count breakdown by feature name")
+	byTagStat := fs.Bool("by-tag", false, "Show run count breakdown by tag")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1645,6 +1649,7 @@ func runRunsStats(args []string) error {
 	projectCounts := map[string]int{}
 	modelCounts := map[string]int{}
 	featureCounts2 := map[string]int{}
+	tagCounts2 := map[string]int{}
 	for {
 		pageSize := int32(100)
 		if *limit > 0 && *limit-total < 100 {
@@ -1691,6 +1696,16 @@ func runRunsStats(args []string) error {
 					feat = "(none)"
 				}
 				featureCounts2[feat]++
+			}
+			if *byTagStat {
+				tags := r.GetSpec().GetTags()
+				if len(tags) == 0 {
+					tagCounts2["(untagged)"]++
+				} else {
+					for _, t := range tags {
+						tagCounts2[t]++
+					}
+				}
 			}
 			if label == "DONE" {
 				sa := r.GetStatus().GetStartedAt()
@@ -1929,6 +1944,9 @@ func runRunsStats(args []string) error {
 	}
 	if *byFeatureStat {
 		printBreakdown("Feature", featureCounts2)
+	}
+	if *byTagStat {
+		printBreakdown("Tag", tagCounts2)
 	}
 
 	return nil
@@ -2846,6 +2864,7 @@ func runRunsCount(args []string) error {
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	byPhase := fs.Bool("by-phase", false, "Show count breakdown by phase instead of total")
 	byFeature := fs.Bool("by-feature", false, "Show count breakdown by feature name")
+	byTag := fs.Bool("by-tag", false, "Show count breakdown by tag (runs with multiple tags are counted per tag)")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
@@ -2894,6 +2913,7 @@ func runRunsCount(args []string) error {
 	count := 0
 	phaseCounts := map[string]int{}
 	featureCounts := map[string]int{}
+	tagCounts := map[string]int{}
 	cursor := ""
 	for {
 		listReq := &apiv1.ListAgentRunsRequest{
@@ -2928,6 +2948,16 @@ func runRunsCount(args []string) error {
 				}
 				featureCounts[feat]++
 			}
+			if *byTag {
+				tags := r.GetSpec().GetTags()
+				if len(tags) == 0 {
+					tagCounts["(untagged)"]++
+				} else {
+					for _, t := range tags {
+						tagCounts[t]++
+					}
+				}
+			}
 		}
 		cursor = resp.Msg.GetNextCursor()
 		if cursor == "" {
@@ -2943,7 +2973,10 @@ func runRunsCount(args []string) error {
 		if *byFeature {
 			out["by_feature"] = featureCounts
 		}
-		if *byPhase {
+		if *byTag {
+			out["by_tag"] = tagCounts
+		}
+		if *byPhase || *byFeature || *byTag {
 			out["total"] = count
 		}
 		enc := json.NewEncoder(os.Stdout)
@@ -2962,7 +2995,6 @@ func runRunsCount(args []string) error {
 		w.Flush()
 		fmt.Printf("Total: %d\n", count)
 	} else if *byFeature {
-		// Sort features by count descending.
 		type pair struct {
 			k string
 			v int
@@ -2979,6 +3011,28 @@ func runRunsCount(args []string) error {
 		})
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "FEATURE\tCOUNT")
+		for _, p := range pairs {
+			fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
+		}
+		w.Flush()
+		fmt.Printf("Total: %d\n", count)
+	} else if *byTag {
+		type pair struct {
+			k string
+			v int
+		}
+		var pairs []pair
+		for k, v := range tagCounts {
+			pairs = append(pairs, pair{k, v})
+		}
+		sort.Slice(pairs, func(i, j int) bool {
+			if pairs[i].v != pairs[j].v {
+				return pairs[i].v > pairs[j].v
+			}
+			return pairs[i].k < pairs[j].k
+		})
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "TAG\tCOUNT")
 		for _, p := range pairs {
 			fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
 		}
