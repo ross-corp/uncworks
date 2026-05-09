@@ -562,11 +562,29 @@ func runRunsGet(args []string) error {
 		return enc.Encode(out)
 	}
 
+	useColorGet := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
 	fmt.Printf("ID:       %s\n", r.GetId())
 	if dn := r.GetSpec().GetDisplayName(); dn != "" {
 		fmt.Printf("Title:    %s\n", dn)
 	}
-	fmt.Printf("Phase:    %s\n", phaseLabel(r.GetStatus().GetPhase()))
+	pl := phaseLabel(r.GetStatus().GetPhase())
+	if useColorGet {
+		switch r.GetStatus().GetPhase() {
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING:
+			pl = "\033[32m" + pl + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING:
+			pl = "\033[33m" + pl + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
+			pl = "\033[36m" + pl + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+			pl = "\033[31m" + pl + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+			pl = "\033[90m" + pl + "\033[0m"
+		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+			pl = "\033[35m" + pl + "\033[0m"
+		}
+	}
+	fmt.Printf("Phase:    %s\n", pl)
 	if r.GetStatus().GetMessage() != "" {
 		msg := r.GetStatus().GetMessage()
 		if r.GetStatus().GetPhase() == apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED {
