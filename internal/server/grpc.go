@@ -451,6 +451,14 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 }
 
 func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Request[apiv1.CancelAgentRunRequest]) (*connect.Response[apiv1.CancelAgentRunResponse], error) {
+	// Check rate limiting if enabled
+	if s.cancelAgentRunRateLimiter != nil {
+		ip := stripPort(req.Peer().Addr)
+		if ip != "" && !s.cancelAgentRunRateLimiter.Allow(ip) {
+			return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("rate limit exceeded"))
+		}
+	}
+	
 	if err := validateRunID(req.Msg.Id); err != nil {
 		return nil, err
 	}
