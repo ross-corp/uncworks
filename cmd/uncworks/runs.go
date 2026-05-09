@@ -1363,6 +1363,7 @@ func runRunsPrune(args []string) error {
 	olderThan := fs.Duration("older-than", 7*24*time.Hour, "Archive runs completed longer ago than this (e.g. 24h, 7d)")
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Only prune runs with this tag")
 	dryRun := fs.Bool("dry-run", false, "Print what would be archived without doing it")
 	yes := fs.Bool("yes", false, "Skip confirmation prompt")
 	failedOnly := fs.Bool("failed", false, "Only prune FAILED runs (exclude DONE and CANCELLED)")
@@ -1404,6 +1405,7 @@ func runRunsPrune(args []string) error {
 				PhaseFilter:   phase,
 				ProjectFilter: *project,
 				FeatureFilter: *feature,
+				TagFilter:     *tag,
 				Cursor:        cursor,
 			})
 			resp, err := client.ListAgentRuns(context.Background(), req)
