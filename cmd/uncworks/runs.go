@@ -1853,6 +1853,18 @@ func runRunsStats(args []string) error {
 		if *since != "" {
 			out["window"] = *since
 		}
+		if *byProject {
+			out["by_project"] = projectCounts
+		}
+		if *byModel {
+			out["by_model"] = modelCounts
+		}
+		if *byFeatureStat {
+			out["by_feature"] = featureCounts2
+		}
+		if *byTagStat {
+			out["by_tag"] = tagCounts2
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
