@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -2857,6 +2858,8 @@ func runRunsWait(args []string) error {
 	timeout := fs.Duration("timeout", 0, "Max time to wait (e.g. 10m, 1h); 0 = no limit")
 	quiet := fs.Bool("quiet", false, "Suppress all output; use exit code only")
 	log := fs.Bool("log", false, "Stream log lines while waiting (like logs --follow)")
+	onSuccess := fs.String("on-success", "", "Shell command to run on success (run ID is passed as $RUN_ID)")
+	onFailure := fs.String("on-failure", "", "Shell command to run on failure (run ID is passed as $RUN_ID, message as $RUN_MESSAGE)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs wait <id> [flags]\n\nBlock until the run reaches a terminal phase.\nExits 0 on success, 1 on failure or cancellation.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2930,6 +2933,19 @@ func runRunsWait(args []string) error {
 		finalPayload = msg
 	}
 
+	runHook := func(shellCmd string, extraEnv ...string) {
+		if shellCmd == "" {
+			return
+		}
+		cmd := exec.Command("sh", "-c", shellCmd)
+		cmd.Env = append(os.Environ(), append([]string{"RUN_ID=" + id}, extraEnv...)...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil && !*quiet {
+			fmt.Fprintf(os.Stderr, "hook error: %v\n", err)
+		}
+	}
+
 	switch phase {
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
 		if !*quiet {
@@ -2938,13 +2954,16 @@ func runRunsWait(args []string) error {
 				fmt.Printf("PR: %s\n", url)
 			}
 		}
+		runHook(*onSuccess)
 		return nil
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+		runHook(*onFailure, "RUN_MESSAGE="+msg)
 		if finalPayload != "" {
 			return fmt.Errorf("run %s failed: %s", id, finalPayload)
 		}
 		return fmt.Errorf("run %s failed", id)
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+		runHook(*onFailure, "RUN_MESSAGE=cancelled")
 		return fmt.Errorf("run %s was cancelled", id)
 	default:
 		return fmt.Errorf("run %s ended in unexpected phase: %s", id, phaseLabel(phase))
