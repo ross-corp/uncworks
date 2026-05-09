@@ -1014,10 +1014,16 @@ func runRunsOpen(args []string) error {
 	r := resp.Msg
 	prURL := r.GetStatus().GetPrUrl()
 	if prURL == "" {
-		return fmt.Errorf("no PR URL for run %s", id)
+		// No PR URL — show branch info if available
+		if repos := r.GetSpec().GetRepos(); len(repos) > 0 && r.GetSpec().GetAutoPush() {
+			fmt.Printf("Run %s: no PR created — branch was pushed from %s\n", id, repos[0].GetUrl())
+		} else {
+			return fmt.Errorf("run %s has no PR — was --auto-pr used?", id)
+		}
+		return nil
 	}
 
-	fmt.Printf("Opening PR URL: %s\n", prURL)
+	fmt.Printf("Opening PR: %s\n", prURL)
 	if err := openBrowser(prURL); err != nil {
 		return fmt.Errorf("failed to open browser: %w", err)
 	}
@@ -1033,8 +1039,11 @@ func runRunsRetry(args []string) error {
 	prompt := fs.String("prompt", "", "Override the agent prompt")
 	branch := fs.String("branch", "", "Override the branch")
 	modelTier := fs.String("model-tier", "", "Override the model tier")
+	name := fs.String("name", "", "Override the display name")
 	outputID := fs.Bool("output-id", false, "Print only the new run ID (for scripting)")
 	wait := fs.Bool("wait", false, "Wait for the retried run to complete; exit 0 on success, 1 on failure")
+	var envFlags multiFlag
+	fs.Var(&envFlags, "env", "Override environment variables (repeatable, KEY=VALUE); replaces all env vars if any are provided")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run. Use flags to override specific fields.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1084,6 +1093,20 @@ func runRunsRetry(args []string) error {
 	}
 	if *modelTier != "" {
 		newSpec.ModelTier = *modelTier
+	}
+	if *name != "" {
+		newSpec.DisplayName = *name
+	}
+	if len(envFlags) > 0 {
+		envVars := map[string]string{}
+		for _, kv := range envFlags {
+			parts := strings.SplitN(kv, "=", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("--env %q: must be KEY=VALUE", kv)
+			}
+			envVars[parts[0]] = parts[1]
+		}
+		newSpec.EnvVars = envVars
 	}
 
 	createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
