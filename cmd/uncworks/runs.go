@@ -684,7 +684,7 @@ func runRunsOpen(args []string) error {
 	r := resp.Msg
 	prURL := r.GetStatus().GetPrUrl()
 	if prURL == "" {
-		return fmt.Errorf("run %s has no PR URL", id)
+		return fmt.Errorf("no PR URL for run %s", id)
 	}
 
 	fmt.Printf("Opening PR URL: %s\n", prURL)
