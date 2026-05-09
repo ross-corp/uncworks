@@ -6,8 +6,11 @@ import (
 	"os"
 )
 
-// Version is set at build time via -ldflags "-X main.Version=x.y.z".
-var Version = "dev"
+// Version and Commit are set at build time via -ldflags.
+var (
+	Version = "dev"
+	Commit  = "unknown"
+)
 
 const usage = `uncworks — manage UNCWORKS deployments
 
@@ -73,7 +76,7 @@ func main() {
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, usage)
 	case "-v", "--version", "version":
-		fmt.Printf("uncworks %s\n", Version)
+		fmt.Printf("uncworks %s (commit %s)\n", Version, Commit)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %q\n\n%s", cmd, usage)
 		os.Exit(1)
