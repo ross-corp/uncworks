@@ -51,6 +51,8 @@ type AOTServiceHandler struct {
 
 	// Rate limiting for CreateAgentRun
 	createAgentRunRateLimiter *RateLimiter
+	// Rate limiting for CancelAgentRun
+	cancelAgentRunRateLimiter *RateLimiter
 }
 
 var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
