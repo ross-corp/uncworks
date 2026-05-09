@@ -130,88 +130,71 @@ Flags:`)
 		return nil
 	}
 
-	startTime := time.Now()
 	waitCtx := context.Background()
 	var waitCancel context.CancelFunc
 	if *timeout > 0 {
 		waitCtx, waitCancel = context.WithTimeout(waitCtx, *timeout)
 		defer waitCancel()
 	}
-	var lastPhase apiv1.AgentRunPhase
-	var lastStage, lastMsg string
-	var needNewline bool
-	var dotCount int
 
 	if !*outputID {
-		fmt.Printf("Waiting for run %s ", run.GetId())
+		fmt.Printf("Waiting for run %s\n", run.GetId())
 	}
 
-	for {
-		select {
-		case <-waitCtx.Done():
-			if !*outputID && dotCount > 0 {
-				fmt.Println()
-			}
-			return fmt.Errorf("timed out after %s waiting for run %s", *timeout, run.GetId())
-		case <-time.After(10 * time.Second):
-		}
-		getReq := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: run.GetId()})
-		getResp, err := client.GetAgentRun(waitCtx, getReq)
-		if err != nil {
-			if !*outputID && needNewline {
-				fmt.Println()
-				needNewline = false
-			}
-			fmt.Fprintf(os.Stderr, "warn: poll error: %s\n", humanizeErr(err))
-			continue
-		}
-		phase := getResp.Msg.GetStatus().GetPhase()
-		msg := getResp.Msg.GetStatus().GetMessage()
-		stage := getResp.Msg.GetStatus().GetStage()
+	stream, err := client.WatchAgentRun(waitCtx, connect.NewRequest(&apiv1.WatchAgentRunRequest{Id: run.GetId()}))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+
+	startTime := time.Now()
+	for stream.Receive() {
+		ev := stream.Msg()
 		elapsed := int(time.Since(startTime).Seconds())
+		switch ev.GetType() {
+		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED:
+			if !*outputID {
+				fmt.Printf("  [%ds] phase: %s\n", elapsed, ev.GetPayload())
+			}
+		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_WAITING_FOR_INPUT:
+			if !*outputID {
+				fmt.Printf("  [%ds] waiting for input: %s\n", elapsed, ev.GetPayload())
+				fmt.Printf("  Use 'uncworks input %s <text>' to respond.\n", run.GetId())
+			}
+		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED:
+			// Stream will close; fall through to terminal check below.
+		}
+	}
+	if err := stream.Err(); err != nil {
+		if waitCtx.Err() != nil {
+			return fmt.Errorf("timed out after %s waiting for run %s", *timeout, run.GetId())
+		}
+		return fmt.Errorf("stream error: %s", humanizeErr(err))
+	}
 
+	getResp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: run.GetId()}))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+	phase := getResp.Msg.GetStatus().GetPhase()
+	msg := getResp.Msg.GetStatus().GetMessage()
+
+	switch phase {
+	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
 		if !*outputID {
-			fmt.Print(".")
-			dotCount++
-			needNewline = true
-		}
-
-		if phase != lastPhase || stage != lastStage || msg != lastMsg {
-			lastPhase = phase
-			lastStage = stage
-			lastMsg = msg
-			if !*outputID && needNewline {
-				fmt.Println()
-				needNewline = false
-			}
-			if stage != "" {
-				fmt.Printf("  [%s | %ds | stage:%s] %s\n", phaseLabel(phase), elapsed, stage, msg)
-			} else {
-				fmt.Printf("  [%s | %ds] %s\n", phaseLabel(phase), elapsed, msg)
-			}
-		}
-		switch phase {
-		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
-			if !*outputID && needNewline {
-				fmt.Println()
-			}
+			fmt.Printf("run %s done\n", run.GetId())
 			if url := getResp.Msg.GetStatus().GetPrUrl(); url != "" {
 				fmt.Printf("PR: %s\n", url)
 			}
-			return nil
-		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
-			if !*outputID && needNewline {
-				fmt.Println()
-			}
-			if msg != "" {
-				return fmt.Errorf("run %s failed: %s", run.GetId(), msg)
-			}
-			return fmt.Errorf("run %s failed", run.GetId())
-		case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
-			if !*outputID && needNewline {
-				fmt.Println()
-			}
-			return fmt.Errorf("run %s was cancelled", run.GetId())
 		}
+		return nil
+	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+		if msg != "" {
+			return fmt.Errorf("run %s failed: %s", run.GetId(), msg)
+		}
+		return fmt.Errorf("run %s failed", run.GetId())
+	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+		return fmt.Errorf("run %s was cancelled", run.GetId())
+	default:
+		return fmt.Errorf("run %s ended in unexpected phase: %s", run.GetId(), phaseLabel(phase))
 	}
 }
