@@ -2,21 +2,30 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+
+	"connectrpc.com/connect"
+
+	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 )
 
 func runConnect(args []string) error {
 	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
+	test := fs.Bool("test", false, "Verify connectivity after saving the address")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks connect <address>
+		fmt.Fprintln(fs.Output(), `Usage: uncworks connect <address> [flags]
 
 Store a gRPC server address for use by 'uncworks tui'.
 Pass "local" to reset to the default local port-forward.
 
 Examples:
-  uncworks connect grpc.example.com:50055
-  uncworks connect local`)
+  uncworks connect http://100.81.3.110:30055 --test
+  uncworks connect local
+
+Flags:`)
+		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -44,6 +53,16 @@ Examples:
 		fmt.Printf("Server address reset to local port-forward (config: %s)\n", path)
 	} else {
 		fmt.Printf("Server address set to %s (config: %s)\n", addr, path)
+	}
+
+	if *test {
+		client, _ := newClient(addr)
+		_, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if apiErr != nil {
+			fmt.Printf("Connection test failed: %s\n", humanizeErr(apiErr))
+		} else {
+			fmt.Println("Connection OK")
+		}
 	}
 	return nil
 }
