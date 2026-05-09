@@ -1516,6 +1516,8 @@ func runRunsStats(args []string) error {
 	limit := fs.Int("limit", 0, "Count only the N most recent runs (0 = all)")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	reasonLen := fs.Int("reason-length", 120, "Max length of failure reason messages (0 = unlimited)")
+	byProject := fs.Bool("by-project", false, "Show run count breakdown by project")
+	byModel := fs.Bool("by-model", false, "Show run count breakdown by model tier")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1555,6 +1557,8 @@ func runRunsStats(args []string) error {
 	total := 0
 	var doneDurations []time.Duration
 	failureReasons := map[string]int{}
+	projectCounts := map[string]int{}
+	modelCounts := map[string]int{}
 	for {
 		pageSize := int32(100)
 		if *limit > 0 && *limit-total < 100 {
@@ -1581,6 +1585,20 @@ func runRunsStats(args []string) error {
 			label := phaseLabel(r.GetStatus().GetPhase())
 			counts[label]++
 			total++
+			if *byProject {
+				proj := r.GetSpec().GetProject()
+				if proj == "" {
+					proj = "(none)"
+				}
+				projectCounts[proj]++
+			}
+			if *byModel {
+				model := r.GetSpec().GetModelTier()
+				if model == "" {
+					model = "default"
+				}
+				modelCounts[model]++
+			}
 			if label == "DONE" {
 				sa := r.GetStatus().GetStartedAt()
 				ca := r.GetStatus().GetCompletedAt()
@@ -1779,6 +1797,44 @@ func runRunsStats(args []string) error {
 			fmt.Println(")")
 		}
 	}
+
+	printBreakdown := func(label string, m map[string]int) {
+		if len(m) == 0 {
+			return
+		}
+		type kv struct {
+			key   string
+			count int
+		}
+		var pairs []kv
+		for k, v := range m {
+			pairs = append(pairs, kv{k, v})
+		}
+		sort.Slice(pairs, func(i, j int) bool {
+			if pairs[i].count != pairs[j].count {
+				return pairs[i].count > pairs[j].count
+			}
+			return pairs[i].key < pairs[j].key
+		})
+		fmt.Printf("\n%s breakdown:\n", label)
+		bw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		for _, p := range pairs {
+			pct := 0.0
+			if total > 0 {
+				pct = float64(p.count) / float64(total) * 100
+			}
+			fmt.Fprintf(bw, "  %s\t%d\t(%.1f%%)\n", p.key, p.count, pct)
+		}
+		_ = bw.Flush()
+	}
+
+	if *byProject {
+		printBreakdown("Project", projectCounts)
+	}
+	if *byModel {
+		printBreakdown("Model", modelCounts)
+	}
+
 	return nil
 }
 
