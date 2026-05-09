@@ -262,6 +262,7 @@ func runRunsList(args []string) error {
 	noHeader := fs.Bool("no-header", false, "Omit the column header row (useful for scripting)")
 	titleWidth := fs.Int("title-width", 32, "Max characters to show in the title column (min: 10)")
 	showTags := fs.Bool("show-tags", false, "Add a tags column to the output")
+	showPR := fs.Bool("show-pr", false, "Add a PR URL column to the output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -555,17 +556,17 @@ func runRunsList(args []string) error {
 	var listBuf bytes.Buffer
 	w := tabwriter.NewWriter(&listBuf, 0, 0, 2, ' ', 0)
 	if !*noHeader {
+		hdr := "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED"
 		if *verbose {
-			if *showTags {
-				fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT\tTAGS")
-			} else {
-				fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT")
-			}
-		} else if *showTags {
-			fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tTAGS")
-		} else {
-			fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED")
+			hdr += "\tREPO\tPROJECT"
 		}
+		if *showTags {
+			hdr += "\tTAGS"
+		}
+		if *showPR {
+			hdr += "\tPR"
+		}
+		fmt.Fprintln(w, hdr)
 	}
 	for _, r := range runs {
 		title := r.GetSpec().GetDisplayName()
@@ -608,6 +609,9 @@ func runRunsList(args []string) error {
 		}
 		duration := runDuration(r)
 		tags := strings.Join(r.GetSpec().GetTags(), ",")
+		prURL := r.GetStatus().GetPrUrl()
+
+		row := r.GetId() + "\t" + title + "\t" + phase + "\t" + duration + "\t" + model + "\t" + started
 		if *verbose {
 			repo := "—"
 			if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
@@ -620,16 +624,18 @@ func runRunsList(args []string) error {
 			if project == "" {
 				project = "—"
 			}
-			if *showTags {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started, repo, project, tags)
-			} else {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started, repo, project)
-			}
-		} else if *showTags {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started, tags)
-		} else {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started)
+			row += "\t" + repo + "\t" + project
 		}
+		if *showTags {
+			row += "\t" + tags
+		}
+		if *showPR {
+			if prURL == "" {
+				prURL = "—"
+			}
+			row += "\t" + prURL
+		}
+		fmt.Fprintln(w, row)
 	}
 	w.Flush()
 
