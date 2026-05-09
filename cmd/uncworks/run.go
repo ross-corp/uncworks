@@ -27,6 +27,7 @@ func runRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	repo := fs.String("repo", "", "Git repository URL (required)")
 	branch := fs.String("branch", "main", "Branch to check out")
+	name := fs.String("name", "", "Display name for the run (auto-generated from prompt if omitted)")
 	prompt := fs.String("prompt", "", "Agent prompt describing the task (required)")
 	project := fs.String("project", "", "Project name this run belongs to")
 	feature := fs.String("feature", "", "Feature/unit-of-work this run contributes to")
@@ -79,6 +80,7 @@ Flags:`)
 			{Url: *repo, Branch: *branch},
 		},
 		Prompt:      *prompt,
+		DisplayName: *name,
 		Project:     *project,
 		Feature:     *feature,
 		ModelTier:   *modelTier,
