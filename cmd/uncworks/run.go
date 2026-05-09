@@ -41,6 +41,7 @@ func runRun(args []string) error {
 	parentRunID := fs.String("parent-run-id", "", "Parent run ID to link this run as a child")
 	var envFlags multiFlag
 	fs.Var(&envFlags, "env", "Environment variable for the agent pod (repeatable, KEY=VALUE)")
+	outputID := fs.Bool("output-id", false, "Print only the run ID (for scripting)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
 
@@ -99,11 +100,17 @@ Flags:`)
 		return fmt.Errorf("server returned empty run")
 	}
 
-	fmt.Printf("Run created: %s\n", run.GetId())
-	fmt.Printf("Follow progress: uncworks runs logs %s\n", run.GetId())
-
-	if !*wait {
-		return nil
+	if *outputID {
+		fmt.Println(run.GetId())
+		if !*wait {
+			return nil
+		}
+	} else {
+		fmt.Printf("Run created: %s\n", run.GetId())
+		fmt.Printf("Follow progress: uncworks runs logs %s\n", run.GetId())
+		if !*wait {
+			return nil
+		}
 	}
 
 	fmt.Printf("Waiting for run %s to complete...\n", run.GetId())
