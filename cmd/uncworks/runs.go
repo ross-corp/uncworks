@@ -856,41 +856,51 @@ func runRunsArchive(args []string, archived bool) error {
 	fs := flag.NewFlagSet("runs "+verb, flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: uncworks runs %s <id> [flags]\n\nFlags:\n", verb)
+		fmt.Fprintf(fs.Output(), "Usage: uncworks runs %s <id> [<id> ...] [flags]\n\nFlags:\n", verb)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() != 1 {
+	if fs.NArg() == 0 {
 		fs.Usage()
 		return fmt.Errorf("run ID argument required")
 	}
-	id := fs.Arg(0)
 
 	body, _ := json.Marshal(map[string]bool{"archived": archived})
-	url := serverBaseURL(*server) + "/api/v1/runs/" + id + "/archive"
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+	baseURL := serverBaseURL(*server)
+	var errs []string
+	for _, id := range fs.Args() {
+		url := baseURL + "/api/v1/runs/" + id + "/archive"
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: build request: %v", id, err))
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: request failed: %v", id, err))
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+			_ = resp.Body.Close()
+			errs = append(errs, fmt.Sprintf("%s: server returned %d: %s", id, resp.StatusCode, string(b)))
+			continue
+		}
+		_ = resp.Body.Close()
+		if archived {
+			fmt.Printf("Run %s archived\n", id)
+		} else {
+			fmt.Printf("Run %s unarchived\n", id)
+		}
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(b))
-	}
-
-	if archived {
-		fmt.Printf("Run %s archived\n", id)
-	} else {
-		fmt.Printf("Run %s unarchived\n", id)
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintf(os.Stderr, "error: %s\n", e)
+		}
+		return fmt.Errorf("%d operation(s) failed", len(errs))
 	}
 	return nil
 }
