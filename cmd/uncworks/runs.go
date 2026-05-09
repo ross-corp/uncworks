@@ -598,6 +598,7 @@ func runRunsGet(args []string) error {
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	short := fs.Bool("short", false, "Print a one-line summary: ID PHASE TITLE")
+	waitFlag := fs.Bool("wait", false, "If the run is active, wait until it reaches a terminal phase then show details")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -654,6 +655,27 @@ func runRunsGet(args []string) error {
 	resp, err := client.GetAgentRun(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("%s", humanizeErr(err))
+	}
+
+	// If --wait and run is active, wait for it to complete.
+	if *waitFlag {
+		phase := resp.Msg.GetStatus().GetPhase()
+		isActive := phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
+			phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING ||
+			phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+		if isActive {
+			waitArgs := []string{id}
+			if *server != "" {
+				waitArgs = append(waitArgs, "--server="+*server)
+			}
+			// Ignore the error from wait (non-zero exit if failed); re-fetch for display.
+			_ = runRunsWait(append(waitArgs, "--quiet"))
+			resp2, err2 := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
+			if err2 != nil {
+				return fmt.Errorf("%s", humanizeErr(err2))
+			}
+			resp = resp2
+		}
 	}
 
 	r := resp.Msg
