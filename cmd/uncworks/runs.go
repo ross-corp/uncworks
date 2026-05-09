@@ -59,6 +59,7 @@ Subcommands:
   top               Live view of active runs sorted by elapsed time (auto-refresh)
   batch <file>      Submit multiple runs from a JSON file
   histogram         Show a bar chart of run activity over a time window (--since, --buckets)
+  group             Show runs organized into groups (--by project|feature|tag, --since)
 `
 
 func runRuns(args []string) error {
@@ -127,6 +128,8 @@ func runRuns(args []string) error {
 		return runRunsBatch(rest)
 	case "histogram":
 		return runRunsHistogram(rest)
+	case "group":
+		return runRunsGroup(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -4033,6 +4036,201 @@ Flags:`)
 		fmt.Printf("All %d run(s) completed successfully.\n", len(createdIDs))
 	}
 
+	return nil
+}
+
+// ── group ─────────────────────────────────────────────────────────────────────
+
+func runRunsGroup(args []string) error {
+	fs := flag.NewFlagSet("runs group", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	by := fs.String("by", "project", "Group dimension: project, feature, or tag")
+	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
+	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, etc.)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	limit := fs.Int("limit", 200, "Max total runs to fetch (0 = no limit)")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	titleWidth := fs.Int("title-width", 36, "Max characters for title column")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs group [flags]\n\nShow runs organized into groups.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	switch *by {
+	case "project", "feature", "tag":
+	default:
+		return fmt.Errorf("--by must be one of: project, feature, tag")
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	listReq := &apiv1.ListAgentRunsRequest{
+		Limit:         100,
+		ProjectFilter: *project,
+		FeatureFilter: *feature,
+		TagFilter:     *tag,
+	}
+	if *phase != "" {
+		switch strings.ToUpper(*phase) {
+		case "RUNNING":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+		case "DONE":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+		case "FAILED":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+		case "PENDING":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+		case "WAITING":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+		case "CANCELLED":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+		}
+	}
+
+	// group key → list of runs (preserve insertion order via separate keys slice)
+	groups := map[string][]*apiv1.AgentRun{}
+	var groupOrder []string
+	total := 0
+	cursor := ""
+	for {
+		listReq.Cursor = cursor
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		stop := false
+		for _, r := range resp.Msg.GetAgentRuns() {
+			if !sinceTime.IsZero() {
+				ts := r.GetCreatedAt()
+				if ts == nil || !ts.AsTime().After(sinceTime) {
+					stop = true
+					break
+				}
+			}
+			if *limit > 0 && total >= *limit {
+				stop = true
+				break
+			}
+			var keys []string
+			switch *by {
+			case "project":
+				k := r.GetSpec().GetProject()
+				if k == "" {
+					k = "(no project)"
+				}
+				keys = []string{k}
+			case "feature":
+				k := r.GetSpec().GetFeature()
+				if k == "" {
+					k = "(no feature)"
+				}
+				keys = []string{k}
+			case "tag":
+				tags := r.GetSpec().GetTags()
+				if len(tags) == 0 {
+					keys = []string{"(untagged)"}
+				} else {
+					keys = tags
+				}
+			}
+			for _, k := range keys {
+				if _, ok := groups[k]; !ok {
+					groupOrder = append(groupOrder, k)
+				}
+				groups[k] = append(groups[k], r)
+			}
+			total++
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" || stop {
+			break
+		}
+	}
+
+	if len(groups) == 0 {
+		fmt.Println("No runs found.")
+		return nil
+	}
+
+	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+	tw := *titleWidth
+	if tw < 10 {
+		tw = 10
+	}
+
+	phaseColor := func(label string) string {
+		if !useColor {
+			return label
+		}
+		switch label {
+		case "RUNNING":
+			return "\033[32m" + label + "\033[0m"
+		case "PENDING":
+			return "\033[33m" + label + "\033[0m"
+		case "WAITING":
+			return "\033[36m" + label + "\033[0m"
+		case "FAILED":
+			return "\033[31m" + label + "\033[0m"
+		case "DONE":
+			return "\033[90m" + label + "\033[0m"
+		case "CANCELLED":
+			return "\033[35m" + label + "\033[0m"
+		}
+		return label
+	}
+
+	for i, key := range groupOrder {
+		runs := groups[key]
+		if i > 0 {
+			fmt.Println()
+		}
+		header := fmt.Sprintf("── %s (%d run", key, len(runs))
+		if len(runs) != 1 {
+			header += "s"
+		}
+		header += ")"
+		if useColor {
+			fmt.Printf("\033[1m%s\033[0m\n", header)
+		} else {
+			fmt.Println(header)
+		}
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		for _, r := range runs {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			if len(title) > tw {
+				title = title[:tw-3] + "..."
+			}
+			ph := phaseLabel(r.GetStatus().GetPhase())
+			dur := runDuration(r)
+			age := ""
+			if ts := r.GetCreatedAt(); ts != nil {
+				age = relativeTime(ts.AsTime())
+			}
+			fmt.Fprintf(w, "  %s\t%-*s\t%s\t%s\t%s\n",
+				r.GetId(), tw, title, phaseColor(ph), dur, age)
+		}
+		w.Flush()
+	}
+	fmt.Printf("\nTotal: %d run(s) in %d group(s)\n", total, len(groupOrder))
 	return nil
 }
 
