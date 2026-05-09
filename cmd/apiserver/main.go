@@ -105,7 +105,7 @@ func main() {
 	svc := server.NewAOTServiceHandler(k8sClient, bus, namespace)
 
 	// Build rate limiter instances from env-var config.
-	globalRLCfg, llmRLCfg, webhookRLCfg := rateLimitConfigs()
+	globalRLCfg, llmRLCfg, webhookRLCfg, createAgentRunRPS, createAgentRunBurst := rateLimitConfigs()
 	globalRL := server.NewRateLimiter(globalRLCfg)
 	llmRL := server.NewRateLimiter(llmRLCfg)
 	webhookRL := server.NewRateLimiter(webhookRLCfg)
@@ -113,7 +113,8 @@ func main() {
 	webhookMiddleware := server.RateLimitMiddleware(webhookRL)
 	if globalRLCfg.Enabled {
 		slog.Info("rate limiting enabled",
-			"globalRPS", globalRLCfg.RPS, "llmRPS", llmRLCfg.RPS, "webhookRPS", webhookRLCfg.RPS)
+			"globalRPS", globalRLCfg.RPS, "llmRPS", llmRLCfg.RPS, "webhookRPS", webhookRLCfg.RPS,
+			"createAgentRunRPS", createAgentRunRPS, "createAgentRunBurst", createAgentRunBurst)
 	}
 
 	// Connect to Temporal (required for production)
