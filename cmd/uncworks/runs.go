@@ -2765,6 +2765,7 @@ func runRunsCount(args []string) error {
 	tag := fs.String("tag", "", "Filter by tag")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	byPhase := fs.Bool("by-phase", false, "Show count breakdown by phase instead of total")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2843,6 +2844,18 @@ func runRunsCount(args []string) error {
 		if cursor == "" {
 			break
 		}
+	}
+
+	if *jsonOut {
+		var out interface{}
+		if *byPhase {
+			out = map[string]interface{}{"total": count, "by_phase": phaseCounts}
+		} else {
+			out = map[string]interface{}{"count": count}
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
 	}
 
 	if *byPhase {
