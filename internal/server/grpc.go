@@ -121,6 +121,28 @@ func parseEnvFloat(key string, def float64) float64 {
 }
 
 func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Request[apiv1.CreateAgentRunRequest]) (*connect.Response[apiv1.CreateAgentRunResponse], error) {
+	// Check rate limiting if enabled
+	if s.createAgentRunRateLimiter != nil {
+		// Extract client IP from peer information
+		peer := req.Peer()
+		ip := ""
+		if peer.Addr != "" {
+			// Extract IP from address (e.g., "192.168.1.1:12345" -> "192.168.1.1")
+			if host, _, err := net.SplitHostPort(peer.Addr); err == nil {
+				ip = host
+			} else {
+				// If SplitHostPort fails, try to use the address as-is
+				ip = peer.Addr
+			}
+		}
+		
+		if ip != "" && !s.createAgentRunRateLimiter.Allow(ip) {
+			slog.Warn("CreateAgentRun rate limit exceeded", "ip", ip)
+			return nil, connect.NewError(connect.CodeResourceExhausted, 
+				fmt.Errorf("rate limit exceeded for CreateAgentRun"))
+		}
+	}
+	
 	if req.Msg.Spec == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
 	}
