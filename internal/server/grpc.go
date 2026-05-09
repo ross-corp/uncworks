@@ -307,6 +307,24 @@ func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Reques
 }
 
 func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Request[apiv1.ListAgentRunsRequest]) (*connect.Response[apiv1.ListAgentRunsResponse], error) {
+	// Validate Limit: must be between 0 and 100
+	if req.Msg.Limit > 100 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be between 0 and 100, got %d", req.Msg.Limit))
+	}
+
+	// Validate TagFilter: max 64 characters
+	if len(req.Msg.TagFilter) > 64 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("tag_filter must be at most 64 characters, got %d", len(req.Msg.TagFilter)))
+	}
+
+	// Validate FeatureFilter and ProjectFilter: max 128 characters each
+	if len(req.Msg.FeatureFilter) > 128 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("feature_filter must be at most 128 characters, got %d", len(req.Msg.FeatureFilter)))
+	}
+	if len(req.Msg.ProjectFilter) > 128 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("project_filter must be at most 128 characters, got %d", len(req.Msg.ProjectFilter)))
+	}
+
 	if req.Msg.ParentRunId != "" {
 		if err := validateRunID(req.Msg.ParentRunId); err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid parent_run_id: %w", err))
