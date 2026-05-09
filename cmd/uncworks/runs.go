@@ -1196,10 +1196,42 @@ func runRunsStats(args []string) error {
 		if done+failed > 0 {
 			successRate = float64(done) / float64(done+failed) * 100
 		}
+		type reasonJSON struct {
+			Reason string `json:"reason"`
+			Count  int    `json:"count"`
+		}
+		var topReasons []reasonJSON
+		if len(failureReasons) > 0 {
+			type rc struct {
+				reason string
+				count  int
+			}
+			var rcs []rc
+			for r, c := range failureReasons {
+				rcs = append(rcs, rc{r, c})
+			}
+			sort.Slice(rcs, func(i, j int) bool {
+				if rcs[i].count != rcs[j].count {
+					return rcs[i].count > rcs[j].count
+				}
+				return rcs[i].reason < rcs[j].reason
+			})
+			if len(rcs) > 5 {
+				rcs = rcs[:5]
+			}
+			for _, r := range rcs {
+				reason := r.reason
+				if *reasonLen > 0 && len(reason) > *reasonLen {
+					reason = reason[:*reasonLen] + "..."
+				}
+				topReasons = append(topReasons, reasonJSON{Reason: reason, Count: r.count})
+			}
+		}
 		out := map[string]interface{}{
-			"total":        total,
-			"phases":       counts,
-			"success_rate": successRate,
+			"total":               total,
+			"phases":              counts,
+			"success_rate":        successRate,
+			"top_failure_reasons": topReasons,
 		}
 		if medianDuration >= 0 {
 			out["median_duration_seconds"] = medianDuration.Seconds()
