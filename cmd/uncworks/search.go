@@ -23,8 +23,10 @@ func runSearch(args []string) error {
 	repo := fs.String("repo", "", "Filter results to a specific repository URL")
 	since := fs.String("since", "", "Filter to results created within this window (e.g. 1h, 24h, 7d)")
 	source := fs.String("source", "", "Filter by source type (code, trace, source-code; default: all)")
-	jsonOut := fs.Bool("json", false, "Output as JSON")
-	snippetLen := fs.Int("snippet-length", 200, "Maximum length of result snippets")
+	jsonOut := fs.Bool("json", false, "Output as JSON (same as --format json)")
+	format := fs.String("format", "text", "Output format: text or json")
+	ctxLines := fs.Int("context", 0, "Show at most N lines of the snippet (0 = no limit)")
+	snippetLen := fs.Int("snippet-length", 200, "Maximum character length of result snippets")
 	minScore := fs.Float64("min-score", 0, "Minimum similarity score threshold (0.0-1.0; 0 = no filter)")
 	idsOnly := fs.Bool("ids-only", false, "Print only matching run IDs (one per line)")
 	fs.Usage = func() {
@@ -117,7 +119,9 @@ Flags:`)
 		return nil
 	}
 
-	if *jsonOut {
+	useJSON := *jsonOut || *format == "json"
+
+	if useJSON {
 		type resultJSON struct {
 			Rank    int     `json:"rank"`
 			Score   float64 `json:"score"`
@@ -147,29 +151,46 @@ Flags:`)
 	}
 
 	for i, r := range results {
-		// Header line: rank, score, run ID, and age if available.
+		// Header line: rank, score (ar-XXXXX (score: X.XX)), and age if available.
 		age := ""
 		if ts := r.GetCreatedAt(); ts != nil {
 			age = " · " + time.Since(ts.AsTime()).Round(time.Hour).String() + " ago"
 		}
-		fmt.Printf("%d. [%.3f] %s%s\n", i+1, r.GetSimilarityScore(), r.GetRunId(), age)
+		fmt.Printf("%d. %s (score: %.3f)%s\n", i+1, r.GetRunId(), r.GetSimilarityScore(), age)
 
 		// Repo URL on its own line when present.
 		if u := r.GetRepoUrl(); u != "" {
 			fmt.Printf("   repo: %s\n", u)
 		}
 
-		// Snippet: collapse whitespace, then truncate at word boundary.
-		snippet := strings.Join(strings.Fields(r.GetChunkText()), " ")
-		max := *snippetLen
-		if len(snippet) > max {
-			cutAt := strings.LastIndex(snippet[:max], " ")
-			if cutAt < max/2 {
-				cutAt = max
+		// Snippet: preserve lines, optionally limit to --context N lines, then truncate by char.
+		snippet := r.GetChunkText()
+		if *ctxLines > 0 {
+			lines := strings.Split(snippet, "\n")
+			if len(lines) > *ctxLines {
+				lines = lines[:*ctxLines]
 			}
-			snippet = snippet[:cutAt] + "..."
+			snippet = strings.Join(lines, "\n")
 		}
-		fmt.Printf("   %s\n\n", snippet)
+		// Collapse runs of whitespace for single-line display when context lines not set.
+		if *ctxLines == 0 {
+			snippet = strings.Join(strings.Fields(snippet), " ")
+			max := *snippetLen
+			if len(snippet) > max {
+				cutAt := strings.LastIndex(snippet[:max], " ")
+				if cutAt < max/2 {
+					cutAt = max
+				}
+				snippet = snippet[:cutAt] + "..."
+			}
+			fmt.Printf("   %s\n\n", snippet)
+		} else {
+			// Multi-line: indent each line.
+			for _, line := range strings.Split(snippet, "\n") {
+				fmt.Printf("   %s\n", line)
+			}
+			fmt.Println()
+		}
 	}
 	return nil
 }
