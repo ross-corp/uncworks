@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,25 @@ func TestParseSinceDuration(t *testing.T) {
 		}
 		if d != tt.want {
 			t.Errorf("parseSinceDuration(%q) = %v, want %v", tt.input, d, tt.want)
+		}
+	}
+}
+
+func TestRelativeTime(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		t      time.Time
+		suffix string
+	}{
+		{now.Add(-30 * time.Second), "s ago"},
+		{now.Add(-5 * time.Minute), "m ago"},
+		{now.Add(-3 * time.Hour), "h ago"},
+		{now.Add(-2 * 24 * time.Hour), "d ago"},
+	}
+	for _, tt := range tests {
+		got := relativeTime(tt.t)
+		if !strings.HasSuffix(got, tt.suffix) {
+			t.Errorf("relativeTime(%v) = %q, want suffix %q", tt.t, got, tt.suffix)
 		}
 	}
 }
