@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/activity"
+	temporalsdk "go.temporal.io/sdk/temporal"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -112,7 +113,10 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 
 		// Check for eviction specifically
 		if pod.Status.Reason == "Evicted" {
-			return nil, fmt.Errorf("pod was evicted before hydration completed: %s", pod.Status.Message)
+			return nil, temporalsdk.NewApplicationError(
+				fmt.Sprintf("pod was evicted before hydration completed: %s", pod.Status.Message),
+				"eviction",
+			)
 		}
 
 		for _, initStatus := range pod.Status.InitContainerStatuses {
@@ -137,7 +141,10 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 		if pod.Status.Phase == corev1.PodFailed {
 			// Check if pod failed due to eviction
 			if pod.Status.Reason == "Evicted" {
-				return nil, fmt.Errorf("pod was evicted before hydration completed: %s", pod.Status.Message)
+				return nil, temporalsdk.NewApplicationError(
+					fmt.Sprintf("pod was evicted before hydration completed: %s", pod.Status.Message),
+					"eviction",
+				)
 			}
 			return nil, fmt.Errorf("pod failed before hydration completed: %s", pod.Status.Message)
 		}

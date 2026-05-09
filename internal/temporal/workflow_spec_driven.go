@@ -366,6 +366,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 				MaximumAttempts:    3,
 				InitialInterval:    5 * time.Second,
 				BackoffCoefficient: 1.0,
+				NonRetryableErrorTypes: []string{"eviction"},
 			},
 		}),
 		ActivityWaitForHydration, WaitForHydrationInput{
