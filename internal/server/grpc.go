@@ -149,6 +149,12 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("prompt exceeds 32KB limit"))
 	}
 
+	// Validate model_tier
+	validTiers := map[string]bool{"": true, "default": true, "default-cloud": true, "premium": true, "deepseek-v3.2": true}
+	if !validTiers[req.Msg.Spec.ModelTier] {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown model_tier %q: valid values are default, default-cloud, premium, deepseek-v3.2", req.Msg.Spec.ModelTier))
+	}
+
 	name, err := generateRunName()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("generate name: %w", err))
