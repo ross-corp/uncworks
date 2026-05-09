@@ -804,6 +804,7 @@ func runRunsLogs(args []string) error {
 	noFollow := fs.Bool("no-follow", false, "Print stored log output only (don't stream live)")
 	lines := fs.Int("lines", 0, "Show only the last N lines of output (0 = all)")
 	timestamps := fs.Bool("timestamps", false, "Prefix each line with a timestamp (--no-follow only)")
+	grep := fs.String("grep", "", "Only show lines matching this substring (--no-follow only; case-insensitive)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
 		fs.PrintDefaults()
@@ -836,6 +837,16 @@ func runRunsLogs(args []string) error {
 			return nil
 		}
 		allLines := strings.Split(logOutput, "\n")
+		if *grep != "" {
+			needle := strings.ToLower(*grep)
+			filtered := allLines[:0]
+			for _, l := range allLines {
+				if strings.Contains(strings.ToLower(l), needle) {
+					filtered = append(filtered, l)
+				}
+			}
+			allLines = filtered
+		}
 		if *lines > 0 && len(allLines) > *lines {
 			allLines = allLines[len(allLines)-*lines:]
 		}
