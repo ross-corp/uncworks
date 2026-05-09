@@ -40,6 +40,7 @@ Subcommands:
   rerun <id>        Alias for retry
   cancel-all        Cancel all active (non-terminal) runs
   graph <id>        Show the run graph (parent/child relationships)
+  latest            Show the most recent run in detail
 `
 
 func runRuns(args []string) error {
@@ -80,6 +81,8 @@ func runRuns(args []string) error {
 		return runRunsCancelAll(rest)
 	case "graph":
 		return runRunsGraph(rest)
+	case "latest":
+		return runRunsLatest(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -1138,6 +1141,64 @@ func runRunsGraph(args []string) error {
 
 	printGraph(id, resp.Msg)
 	return nil
+}
+
+func runRunsLatest(args []string) error {
+	fs := flag.NewFlagSet("runs latest", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, etc.)")
+	project := fs.String("project", "", "Filter by project name")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs latest [flags]\n\nShow the most recent agent run in detail.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	listReq := &apiv1.ListAgentRunsRequest{
+		Limit:         1,
+		ProjectFilter: *project,
+	}
+	if *phase != "" {
+		switch strings.ToUpper(*phase) {
+		case "RUNNING":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+		case "DONE":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+		case "FAILED":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+		case "PENDING":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+		case "CANCELLED":
+			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+		}
+	}
+
+	resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+	runs := resp.Msg.GetAgentRuns()
+	if len(runs) == 0 {
+		fmt.Println("No runs found.")
+		return nil
+	}
+
+	getArgs := []string{runs[0].GetId()}
+	if *server != "" {
+		getArgs = append(getArgs, "--server="+*server)
+	}
+	if *jsonOut {
+		getArgs = append(getArgs, "--json")
+	}
+	return runRunsGet(getArgs)
 }
 
 // parseSinceDuration parses a human duration like "1h", "24h", "7d".
