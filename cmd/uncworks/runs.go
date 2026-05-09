@@ -103,6 +103,7 @@ func runRunsList(args []string) error {
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	all := fs.Bool("all", false, "Fetch all pages (overrides --limit)")
+	repoURL := fs.String("repo-url", "", "Filter runs by repository URL (substring match)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -192,6 +193,18 @@ func runRunsList(args []string) error {
 			ts := r.GetCreatedAt()
 			if ts != nil && ts.AsTime().After(sinceTime) {
 				filtered = append(filtered, r)
+			}
+		}
+		runs = filtered
+	}
+	if *repoURL != "" {
+		filtered := runs[:0]
+		for _, r := range runs {
+			for _, repo := range r.GetSpec().GetRepos() {
+				if strings.Contains(repo.GetUrl(), *repoURL) {
+					filtered = append(filtered, r)
+					break
+				}
 			}
 		}
 		runs = filtered
@@ -286,6 +299,7 @@ func runRunsGet(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	showLog := fs.Bool("log", false, "Print the persisted agent log output")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -367,7 +381,7 @@ func runRunsGet(args []string) error {
 	if r.GetStatus().GetMessage() != "" {
 		msg := r.GetStatus().GetMessage()
 		if r.GetStatus().GetPhase() == apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED {
-			if term.IsTerminal(int(os.Stdout.Fd())) {
+			if !*noColor && term.IsTerminal(int(os.Stdout.Fd())) {
 				fmt.Printf("Message:  \033[1;31m%s\033[0m\n", msg)
 			} else {
 				fmt.Printf("ERROR:    %s\n", msg)
