@@ -423,6 +423,7 @@ func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *
 	case enums.WORKFLOW_EXECUTION_STATUS_CANCELED:
 		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseCancelled
 		agentRun.Status.Message = "Workflow cancelled"
+		server.RunsCancelledTotal.Add(1)
 	case enums.WORKFLOW_EXECUTION_STATUS_TERMINATED:
 		agentRun.Status.Phase = aotv1alpha1.AgentRunPhaseFailed
 		agentRun.Status.Message = "Workflow terminated"
