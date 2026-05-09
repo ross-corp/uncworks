@@ -253,7 +253,7 @@ func main() {
 
 	// Register AOTService handler
 	path, handler := apiv1connect.NewAOTServiceHandler(svc,
-		connect.WithInterceptors(validateInterceptor),
+		connect.WithInterceptors(validateInterceptor, createAgentRunRateLimiter),
 	)
 	mux.Handle(path, handler)
 
