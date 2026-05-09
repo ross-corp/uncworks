@@ -120,7 +120,7 @@ func runRunsWatch(args []string) error {
 		return fmt.Errorf("--interval must be >= 1")
 	}
 
-	listArgs := []string{"--limit", fmt.Sprintf("%d", *limit)}
+	listArgs := []string{"--limit", fmt.Sprintf("%d", *limit), "--relative"}
 	if *server != "" {
 		listArgs = append(listArgs, "--server="+*server)
 	}
