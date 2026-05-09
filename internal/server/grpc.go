@@ -51,6 +51,8 @@ type AOTServiceHandler struct {
 
 	// Rate limiting for CreateAgentRun
 	createAgentRunRateLimiter *RateLimiter
+	// Rate limiting for CancelAgentRun
+	cancelAgentRunRateLimiter *RateLimiter
 }
 
 var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
@@ -85,12 +87,28 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		})
 	}
 	
+	// Create rate limiter for CancelAgentRun
+	// Default: 1 RPS, burst 5
+	cancelRPS := parseEnvFloat("RATE_LIMIT_CANCEL_AGENT_RUN_RPS", 1.0)
+	cancelBurst := parseEnvInt("RATE_LIMIT_CANCEL_AGENT_RUN_BURST", 5)
+	var cancelAgentRunRateLimiter *RateLimiter
+	if cancelRPS > 0 && cancelBurst > 0 {
+		cancelAgentRunRateLimiter = NewRateLimiter(RateLimiterConfig{
+			Enabled:    true,
+			RPS:        cancelRPS,
+			Burst:      cancelBurst,
+			TTLMinutes: 10,
+			TrustProxy: os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true",
+		})
+	}
+	
 	return &AOTServiceHandler{
 		K8sClient:                 k8sClient,
 		EventBus:                  bus,
 		Namespace:                 namespace,
 		LiteLLMBaseURL:            litellmURL,
 		createAgentRunRateLimiter: createAgentRunRateLimiter,
+		cancelAgentRunRateLimiter: cancelAgentRunRateLimiter,
 	}
 }
 
@@ -433,6 +451,14 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 }
 
 func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Request[apiv1.CancelAgentRunRequest]) (*connect.Response[apiv1.CancelAgentRunResponse], error) {
+	// Check rate limiting if enabled
+	if s.cancelAgentRunRateLimiter != nil {
+		ip := stripPort(req.Peer().Addr)
+		if ip != "" && !s.cancelAgentRunRateLimiter.Allow(ip) {
+			return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("rate limit exceeded"))
+		}
+	}
+	
 	if err := validateRunID(req.Msg.Id); err != nil {
 		return nil, err
 	}
