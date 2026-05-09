@@ -477,17 +477,35 @@ func runRunsList(args []string) error {
 	}
 	fmt.Print(output)
 
+	// Build phase summary for footer.
+	phaseSummary := func() string {
+		phaseCounts := map[string]int{}
+		for _, r := range runs {
+			phaseCounts[phaseLabel(r.GetStatus().GetPhase())]++
+		}
+		var parts []string
+		for _, ph := range []string{"RUNNING", "PENDING", "WAITING", "FAILED", "DONE", "CANCELLED"} {
+			if n := phaseCounts[ph]; n > 0 {
+				parts = append(parts, fmt.Sprintf("%d %s", n, strings.ToLower(ph)))
+			}
+		}
+		if len(parts) == 0 {
+			return ""
+		}
+		return " (" + strings.Join(parts, ", ") + ")"
+	}
+
 	if nextCursor != "" && !*all {
 		fmt.Printf("next-cursor: %s\n", nextCursor)
 		fmt.Printf("Showing %d run(s) — use --all or --limit to see more\n", len(runs))
 	} else if *all {
-		fmt.Printf("Showing all %d run(s)\n", len(runs))
+		fmt.Printf("Showing all %d run(s)%s\n", len(runs), phaseSummary())
 	} else if len(runs) > 0 {
 		suffix := ""
 		if !sinceTime.IsZero() || *repoURL != "" || *titleContains != "" {
 			suffix = " (filtered)"
 		}
-		fmt.Printf("Showing %d run(s)%s\n", len(runs), suffix)
+		fmt.Printf("Showing %d run(s)%s%s\n", len(runs), suffix, phaseSummary())
 	}
 
 	return nil
