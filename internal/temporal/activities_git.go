@@ -37,6 +37,7 @@ type PushChangesOutput struct {
 	CommitSHA       string
 	DiffStat        string // output of `git diff --stat HEAD~1`
 	ProposalContent string // contents of openspec/changes/{changeName}/proposal.md
+	HasChanges      bool   // true when an actual commit was made (branch differs from origin/main)
 }
 
 // conventionalCommitRE validates the conventional commits specification.
@@ -135,6 +136,11 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		return nil, fmt.Errorf("get commit sha: %w", err)
 	}
 
+	// Determine whether HEAD is ahead of origin/main (i.e., agent actually committed something).
+	aheadOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
+		"git log --oneline origin/main..HEAD")
+	hasChanges := strings.TrimSpace(aheadOut) != ""
+
 	// Capture diff stats for PR body
 	diffStat, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath, "git diff --stat HEAD~1")
 
@@ -175,6 +181,7 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		CommitSHA:       strings.TrimSpace(sha),
 		DiffStat:        strings.TrimSpace(diffStat),
 		ProposalContent: strings.TrimSpace(proposalContent),
+		HasChanges:      hasChanges,
 	}, nil
 }
 

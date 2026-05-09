@@ -845,6 +845,11 @@ func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *Workf
 		return fmt.Errorf("push changes: %w", err)
 	}
 
+	if !pushOutput.HasChanges {
+		workflow.GetLogger(ctx).Info("No changes committed; skipping PR creation")
+		return nil
+	}
+
 	if !input.AutoPR {
 		return nil
 	}
