@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 )
@@ -19,6 +20,8 @@ func runSearch(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	limit := fs.Int("limit", 10, "Maximum number of results to return")
 	repo := fs.String("repo", "", "Filter results to a specific repository URL")
+	since := fs.String("since", "", "Filter to results created within this window (e.g. 1h, 24h, 7d)")
+	source := fs.String("source", "", "Filter by source type (code, trace, source-code; default: all)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `Usage: uncworks search <query> [flags]
 
@@ -44,11 +47,36 @@ Flags:`)
 		return err
 	}
 
-	req := connect.NewRequest(&apiv1.SearchPastWorkRequest{
+	searchReq := &apiv1.SearchPastWorkRequest{
 		Query:   query,
 		Limit:   int32(*limit),
 		RepoUrl: *repo,
-	})
+	}
+
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		searchReq.CreatedAfter = timestamppb.New(time.Now().Add(-d))
+	}
+
+	if *source != "" {
+		switch strings.ToLower(*source) {
+		case "code":
+			searchReq.SourceFilter = apiv1.SourceFilter_SOURCE_FILTER_CODE
+		case "trace":
+			searchReq.SourceFilter = apiv1.SourceFilter_SOURCE_FILTER_TRACE
+		case "source-code":
+			searchReq.SourceFilter = apiv1.SourceFilter_SOURCE_FILTER_SOURCE_CODE
+		case "all":
+			searchReq.SourceFilter = apiv1.SourceFilter_SOURCE_FILTER_ALL
+		default:
+			return fmt.Errorf("--source %q: must be code, trace, source-code, or all", *source)
+		}
+	}
+
+	req := connect.NewRequest(searchReq)
 	resp, err := client.SearchPastWork(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("%s", humanizeErr(err))
