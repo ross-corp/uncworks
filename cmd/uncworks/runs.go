@@ -1004,12 +1004,22 @@ func runRunsCancelAll(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "Print what would be cancelled without actually doing it")
 	yes := fs.Bool("yes", false, "Skip confirmation prompt")
 	limit := fs.Int("limit", 0, "Cancel at most N runs (0 = no limit)")
+	since := fs.String("since", "", "Only cancel runs created within this window (e.g. 1h, 24h, 7d)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cancel-all [flags]\n\nCancel all active (non-terminal) runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
 	}
 
 	client, err := newClient(*server)
@@ -1031,11 +1041,18 @@ func runRunsCancelAll(args []string) error {
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			phase := r.GetStatus().GetPhase()
-			if phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
-				phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING ||
-				phase == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
-				activeRuns = append(activeRuns, r.GetId())
+			if phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING &&
+				phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING &&
+				phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+				continue
 			}
+			if !sinceTime.IsZero() {
+				ts := r.GetCreatedAt()
+				if ts == nil || !ts.AsTime().After(sinceTime) {
+					continue
+				}
+			}
+			activeRuns = append(activeRuns, r.GetId())
 		}
 		cursor = resp.Msg.GetNextCursor()
 		if cursor == "" {
