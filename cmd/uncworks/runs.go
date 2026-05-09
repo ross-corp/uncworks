@@ -102,6 +102,7 @@ func runRunsList(args []string) error {
 	cursor := fs.String("cursor", "", "Pagination cursor from previous response")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
+	all := fs.Bool("all", false, "Fetch all pages (overrides --limit)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -164,16 +165,27 @@ func runRunsList(args []string) error {
 		listReq.Cursor = *cursor
 	}
 
-	req := connect.NewRequest(listReq)
-	if *includeArchived {
-		req.Header().Set("X-Include-Archived", "true")
-	}
-	resp, err := client.ListAgentRuns(context.Background(), req)
-	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+	var runs []*apiv1.AgentRun
+	var nextCursor string
+	fetchCursor := *cursor
+	for {
+		listReq.Cursor = fetchCursor
+		req := connect.NewRequest(listReq)
+		if *includeArchived {
+			req.Header().Set("X-Include-Archived", "true")
+		}
+		resp, err := client.ListAgentRuns(context.Background(), req)
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		runs = append(runs, resp.Msg.GetAgentRuns()...)
+		nextCursor = resp.Msg.GetNextCursor()
+		if !*all || nextCursor == "" {
+			break
+		}
+		fetchCursor = nextCursor
 	}
 
-	runs := resp.Msg.GetAgentRuns()
 	if !sinceTime.IsZero() {
 		filtered := runs[:0]
 		for _, r := range runs {
@@ -260,8 +272,8 @@ func runRunsList(args []string) error {
 	}
 	w.Flush()
 
-	if resp.Msg.GetNextCursor() != "" {
-		fmt.Printf("next-cursor: %s\n", resp.Msg.GetNextCursor())
+	if nextCursor != "" && !*all {
+		fmt.Printf("next-cursor: %s\n", nextCursor)
 	}
 
 	return nil
