@@ -475,34 +475,38 @@ func runRunsGet(args []string) error {
 
 	if *jsonOut {
 		type runGetJSON struct {
-			ID          string   `json:"id"`
-			Title       string   `json:"title,omitempty"`
-			Phase       string   `json:"phase"`
-			Message     string   `json:"message,omitempty"`
-			Project     string   `json:"project,omitempty"`
-			Feature     string   `json:"feature,omitempty"`
-			Prompt      string   `json:"prompt,omitempty"`
-			Repo        string   `json:"repo,omitempty"`
-			Branch      string   `json:"branch,omitempty"`
-			Model       string   `json:"model,omitempty"`
-			Tags        []string `json:"tags,omitempty"`
-			ParentRunID string   `json:"parent_run_id,omitempty"`
-			Started     string   `json:"started,omitempty"`
-			Completed   string   `json:"completed,omitempty"`
-			Duration    string   `json:"duration,omitempty"`
-			PrURL       string   `json:"pr_url,omitempty"`
+			ID          string            `json:"id"`
+			Title       string            `json:"title,omitempty"`
+			Phase       string            `json:"phase"`
+			Message     string            `json:"message,omitempty"`
+			Project     string            `json:"project,omitempty"`
+			Feature     string            `json:"feature,omitempty"`
+			Prompt      string            `json:"prompt,omitempty"`
+			Repo        string            `json:"repo,omitempty"`
+			Branch      string            `json:"branch,omitempty"`
+			Model       string            `json:"model,omitempty"`
+			Tags        []string          `json:"tags,omitempty"`
+			EnvVars     map[string]string `json:"env_vars,omitempty"`
+			ParentRunID string            `json:"parent_run_id,omitempty"`
+			Children    []string          `json:"children,omitempty"`
+			Started     string            `json:"started,omitempty"`
+			Completed   string            `json:"completed,omitempty"`
+			Duration    string            `json:"duration,omitempty"`
+			PrURL       string            `json:"pr_url,omitempty"`
 		}
 		out := runGetJSON{
-			ID:      r.GetId(),
-			Title:   r.GetSpec().GetDisplayName(),
-			Phase:   phaseLabel(r.GetStatus().GetPhase()),
-			Message: r.GetStatus().GetMessage(),
-			Project: r.GetSpec().GetProject(),
-			Feature: r.GetSpec().GetFeature(),
-			Prompt:  r.GetSpec().GetPrompt(),
-			Model:   r.GetSpec().GetModelTier(),
-			Tags:    r.GetSpec().GetTags(),
-			PrURL:   r.GetStatus().GetPrUrl(),
+			ID:       r.GetId(),
+			Title:    r.GetSpec().GetDisplayName(),
+			Phase:    phaseLabel(r.GetStatus().GetPhase()),
+			Message:  r.GetStatus().GetMessage(),
+			Project:  r.GetSpec().GetProject(),
+			Feature:  r.GetSpec().GetFeature(),
+			Prompt:   r.GetSpec().GetPrompt(),
+			Model:    r.GetSpec().GetModelTier(),
+			Tags:     r.GetSpec().GetTags(),
+			EnvVars:  r.GetSpec().GetEnvVars(),
+			Children: r.GetChildren(),
+			PrURL:    r.GetStatus().GetPrUrl(),
 		}
 		if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
 			out.Repo = repos[0].GetUrl()
@@ -558,6 +562,16 @@ func runRunsGet(args []string) error {
 	}
 	if r.GetSpec().GetModelTier() != "" {
 		fmt.Printf("Model:    %s\n", r.GetSpec().GetModelTier())
+	}
+	if envVars := r.GetSpec().GetEnvVars(); len(envVars) > 0 {
+		keys := make([]string, 0, len(envVars))
+		for k := range envVars {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Printf("Env:      %s=%s\n", k, envVars[k])
+		}
 	}
 	if r.GetStatus().GetStartedAt() != nil {
 		t := r.GetStatus().GetStartedAt().AsTime()
