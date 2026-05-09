@@ -111,6 +111,10 @@ func main() {
 	webhookRL := server.NewRateLimiter(webhookRLCfg)
 	llmMiddleware := server.RateLimitMiddleware(llmRL)
 	webhookMiddleware := server.RateLimitMiddleware(webhookRL)
+	
+	// CreateAgentRun specific rate limiter interceptor
+	createAgentRunRateLimiter := server.NewCreateAgentRunRateLimiter(createAgentRunRPS, createAgentRunBurst)
+	
 	if globalRLCfg.Enabled {
 		slog.Info("rate limiting enabled",
 			"globalRPS", globalRLCfg.RPS, "llmRPS", llmRLCfg.RPS, "webhookRPS", webhookRLCfg.RPS,
