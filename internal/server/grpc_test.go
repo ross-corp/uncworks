@@ -110,7 +110,7 @@ func TestGetAgentRun_NotFound(t *testing.T) {
 	client, cleanup := startTestServer(t)
 	defer cleanup()
 
-	_, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: "nonexistent"}))
+	_, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: "ar-notfound"}))
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -146,6 +146,8 @@ func TestListAgentRuns(t *testing.T) {
 }
 
 func TestListAgentRuns_WithLimit(t *testing.T) {
+	t.Setenv("RATE_LIMIT_CREATE_AGENT_RUN_RPS", "100")
+	t.Setenv("RATE_LIMIT_CREATE_AGENT_RUN_BURST", "100")
 	client, cleanup := startTestServer(t)
 	defer cleanup()
 
@@ -204,7 +206,7 @@ func TestCancelAgentRun_NotFound(t *testing.T) {
 	client, cleanup := startTestServer(t)
 	defer cleanup()
 
-	_, err := client.CancelAgentRun(context.Background(), connect.NewRequest(&apiv1.CancelAgentRunRequest{Id: "nonexistent"}))
+	_, err := client.CancelAgentRun(context.Background(), connect.NewRequest(&apiv1.CancelAgentRunRequest{Id: "ar-notfound"}))
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -245,7 +247,7 @@ func TestSendHumanInput_NotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := client.SendHumanInput(context.Background(), connect.NewRequest(&apiv1.SendHumanInputRequest{
-		AgentRunId: "nonexistent",
+		AgentRunId: "ar-notfound",
 		Input:      "hello",
 	}))
 	if err == nil {
@@ -384,7 +386,7 @@ func TestWatchAgentRun_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	stream, err := client.WatchAgentRun(ctx, connect.NewRequest(&apiv1.WatchAgentRunRequest{
-		Id: "nonexistent",
+		Id: "ar-notfound",
 	}))
 	if err != nil {
 		// Some Connect implementations return error immediately
@@ -411,7 +413,7 @@ func TestGetRunGraph_NotFound(t *testing.T) {
 	client, _, _, cleanup := startTestServerWithBus(t)
 	defer cleanup()
 
-	_, err := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{Id: "nonexistent"}))
+	_, err := client.GetRunGraph(context.Background(), connect.NewRequest(&apiv1.GetRunGraphRequest{Id: "ar-notfound"}))
 	if err == nil {
 		t.Fatal("expected error")
 	}
