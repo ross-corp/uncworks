@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -54,6 +55,15 @@ Flags:`)
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+
+	// Allow reading prompt from stdin when --prompt is "-" or omitted with stdin piped.
+	if *prompt == "-" {
+		raw, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("reading prompt from stdin: %w", err)
+		}
+		*prompt = strings.TrimRight(string(raw), "\n")
 	}
 
 	if *repo == "" || *prompt == "" {
