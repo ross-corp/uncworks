@@ -35,6 +35,7 @@ Subcommands:
   open <id>         Open the PR URL for a completed run in browser
   retry <id>        Create a new run with the same spec as an existing run
   cancel-all        Cancel all active (non-terminal) runs
+  graph <id>        Show the run graph (parent/child relationships)
 `
 
 func runRuns(args []string) error {
@@ -71,6 +72,8 @@ func runRuns(args []string) error {
 		return runRunsRetry(rest)
 	case "cancel-all":
 		return runRunsCancelAll(rest)
+	case "graph":
+		return runRunsGraph(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -691,5 +694,38 @@ func runRunsCancelAll(args []string) error {
 		}
 	}
 	fmt.Printf("Cancelled %d/%d run(s).\n", cancelled, len(activeRuns))
+	return nil
+}
+
+// ── graph ─────────────────────────────────────────────────────────────────────
+
+func runRunsGraph(args []string) error {
+	fs := flag.NewFlagSet("runs graph", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs graph <id> [flags]\n\nPrint the execution tree for a run.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	req := connect.NewRequest(&apiv1.GetRunGraphRequest{Id: id})
+	resp, err := client.GetRunGraph(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+
+	printGraph(id, resp.Msg)
 	return nil
 }
