@@ -394,7 +394,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	// failures. The HeartbeatTimeout ensures the activity is detected as dead
 	// quickly if the worker crashes, and the activity will be re-dispatched once.
 	hydrationOpts := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
+		StartToCloseTimeout: 20 * time.Minute,
 		HeartbeatTimeout:    30 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
 			MaximumAttempts: 1,
