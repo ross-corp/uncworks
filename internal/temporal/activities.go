@@ -86,6 +86,7 @@ type WaitForHydrationInput struct {
 // WaitForHydrationOutput contains the result of waiting for hydration.
 type WaitForHydrationOutput struct {
 	PodIP         string
+	PodName       string
 	WorkspacePath string
 }
 
