@@ -1230,12 +1230,17 @@ func runRunsPrune(args []string) error {
 	feature := fs.String("feature", "", "Filter by feature name")
 	dryRun := fs.Bool("dry-run", false, "Print what would be archived without doing it")
 	yes := fs.Bool("yes", false, "Skip confirmation prompt")
+	failedOnly := fs.Bool("failed", false, "Only prune FAILED runs (exclude DONE and CANCELLED)")
+	doneOnly := fs.Bool("done", false, "Only prune DONE/SUCCEEDED runs (exclude FAILED and CANCELLED)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs prune [flags]\n\nBulk archive all terminal (DONE, FAILED, CANCELLED) runs older than the given age.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+	if *failedOnly && *doneOnly {
+		return fmt.Errorf("--failed and --done are mutually exclusive")
 	}
 
 	threshold := time.Now().Add(-*olderThan)
@@ -1248,6 +1253,11 @@ func runRunsPrune(args []string) error {
 		apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED,
 		apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED,
 		apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED,
+	}
+	if *failedOnly {
+		terminalPhases = []apiv1.AgentRunPhase{apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED}
+	} else if *doneOnly {
+		terminalPhases = []apiv1.AgentRunPhase{apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED}
 	}
 
 	var toArchive []string
