@@ -24,6 +24,7 @@ const runsUsage = `Usage: uncworks runs <subcommand> [flags]
 Subcommands:
   list              List recent agent runs
   get <id>          Show full detail for a run
+  describe <id>     Show rich detail including full spec and backend config
   logs <id>         Stream log output until the run completes
   watch <id>        Alias for 'logs' (stream live output)
   archive <id>      Mark a run as archived
@@ -47,6 +48,8 @@ func runRuns(args []string) error {
 		return runRunsList(rest)
 	case "get":
 		return runRunsGet(rest)
+	case "describe":
+		return runRunsDescribe(rest)
 	case "logs":
 		return runRunsLogs(rest)
 	case "watch":
@@ -274,6 +277,10 @@ func runRunsGet(args []string) error {
 		fmt.Printf("\n--- agent log ---\n%s\n", r.GetStatus().GetLogOutput())
 	}
 	return nil
+}
+
+func runRunsDescribe(args []string) error {
+	return runRunsGet(append(args, "--log"))
 }
 
 // ── logs ──────────────────────────────────────────────────────────────────────
