@@ -581,6 +581,7 @@ func runRunsGet(args []string) error {
 	showLogs := fs.Bool("logs", false, "Alias for --log")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
+	short := fs.Bool("short", false, "Print a one-line summary: ID PHASE TITLE")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -665,6 +666,14 @@ func runRunsGet(args []string) error {
 		return enc.Encode(out)
 	}
 
+	if *short {
+		title := r.GetSpec().GetDisplayName()
+		if title == "" {
+			title = r.GetSpec().GetProject()
+		}
+		fmt.Printf("%s  %s  %s\n", r.GetId(), phaseLabel(r.GetStatus().GetPhase()), title)
+		return nil
+	}
 	useColorGet := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
 	fmt.Printf("ID:       %s\n", r.GetId())
 	if dn := r.GetSpec().GetDisplayName(); dn != "" {
