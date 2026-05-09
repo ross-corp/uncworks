@@ -145,6 +145,8 @@ func runRunsWatch(args []string) error {
 	tag := fs.String("tag", "", "Filter by tag")
 	titleContains := fs.String("title-contains", "", "Filter runs by display name substring")
 	active := fs.Bool("active", false, "Show only active runs (RUNNING + PENDING + WAITING)")
+	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs watch [flags]\n\nAuto-refresh the runs list every N seconds. Press Ctrl+C to stop.\n\nFlags:")
 		fs.PrintDefaults()
@@ -180,6 +182,12 @@ func runRunsWatch(args []string) error {
 	}
 	if *active {
 		listArgs = append(listArgs, "--active")
+	}
+	if *sortBy != "" {
+		listArgs = append(listArgs, "--sort="+*sortBy)
+	}
+	if *noColor {
+		listArgs = append(listArgs, "--no-color")
 	}
 
 	for {
