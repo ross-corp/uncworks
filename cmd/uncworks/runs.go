@@ -1192,15 +1192,26 @@ func runRunsStats(args []string) error {
 		header = fmt.Sprintf("Stats (last %s)", *since)
 	}
 	fmt.Printf("%s — Total: %d\n\n", header, total)
+	maxCount := 0
+	for _, phase := range order {
+		if counts[phase] > maxCount {
+			maxCount = counts[phase]
+		}
+	}
 	var statsBuf bytes.Buffer
 	w := tabwriter.NewWriter(&statsBuf, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "PHASE\tCOUNT\tPCT")
+	fmt.Fprintln(w, "PHASE\tCOUNT\tPCT\tBAR")
 	for _, phase := range order {
 		pct := 0.0
 		if total > 0 {
 			pct = float64(counts[phase]) / float64(total) * 100
 		}
-		fmt.Fprintf(w, "%s\t%d\t%.1f%%\n", phase, counts[phase], pct)
+		barLen := 0
+		if maxCount > 0 {
+			barLen = int(float64(counts[phase]) / float64(maxCount) * 20)
+		}
+		bar := strings.Repeat("█", barLen)
+		fmt.Fprintf(w, "%s\t%d\t%.1f%%\t%s\n", phase, counts[phase], pct, bar)
 	}
 	_ = w.Flush()
 	statsOutput := statsBuf.String()
