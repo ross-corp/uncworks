@@ -883,6 +883,14 @@ type ArchiveAndCleanupInput struct {
 // ArchiveAndCleanup deletes the Deployment and PVC for a completed run.
 // This is called after the archive retention period expires.
 func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndCleanupInput) error {
+	if !strings.HasPrefix(input.DeploymentName, "agentrun-") {
+		slog.Warn("ArchiveAndCleanup: refusing to delete non-agent deployment", "deployment", input.DeploymentName)
+		return fmt.Errorf("safety check: deployment %q does not have agentrun- prefix", input.DeploymentName)
+	}
+	if input.PVCName != "" && !strings.HasPrefix(input.PVCName, "aot-ws-") {
+		slog.Warn("ArchiveAndCleanup: refusing to delete non-agent PVC", "pvc", input.PVCName)
+		return fmt.Errorf("safety check: PVC %q does not have aot-ws- prefix", input.PVCName)
+	}
 	slog.Info("cleanup started", "agentRunName", input.DeploymentName, "deploymentName", input.DeploymentName)
 
 	// Delete Deployment
