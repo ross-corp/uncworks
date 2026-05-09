@@ -648,12 +648,18 @@ func runRunsArchiveDone(args []string) error {
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
 	dryRun := fs.Bool("dry-run", false, "Print what would be archived without doing it")
+	minAge := fs.Duration("min-age", 0, "Only archive runs completed longer ago than this (e.g. 24h, 7d)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs archive-done [flags]\n\nBulk archive all SUCCEEDED runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+
+	var minAgeThreshold time.Time
+	if *minAge > 0 {
+		minAgeThreshold = time.Now().Add(-*minAge)
 	}
 
 	client, err := newClient(*server)
@@ -676,6 +682,12 @@ func runRunsArchiveDone(args []string) error {
 			return fmt.Errorf("%s", humanizeErr(err))
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
+			if !minAgeThreshold.IsZero() {
+				completedAt := r.GetStatus().GetCompletedAt()
+				if completedAt == nil || !completedAt.AsTime().Before(minAgeThreshold) {
+					continue
+				}
+			}
 			doneRuns = append(doneRuns, r.GetId())
 		}
 		cursor = resp.Msg.GetNextCursor()
