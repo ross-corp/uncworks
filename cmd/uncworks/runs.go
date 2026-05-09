@@ -3537,12 +3537,21 @@ Flags:`)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("JSON file argument required")
+		return fmt.Errorf("JSON file argument required (use '-' to read from stdin)")
 	}
 
-	raw, err := os.ReadFile(fs.Arg(0))
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", fs.Arg(0), err)
+	var raw []byte
+	var err error
+	if fs.Arg(0) == "-" {
+		raw, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("reading stdin: %w", err)
+		}
+	} else {
+		raw, err = os.ReadFile(fs.Arg(0))
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", fs.Arg(0), err)
+		}
 	}
 
 	type batchSpec struct {
