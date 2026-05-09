@@ -334,6 +334,26 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	state.PodName = podName
 	state.DeploymentName = deploymentName
 
+	// --- Check pod status for eviction early ---
+	state.Message = "Checking pod status"
+	var podStatusOutput CheckPodStatusOutput
+	if err := workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, executeOpts),
+		ActivityCheckPodStatus, CheckPodStatusInput{
+			PodName:   podName,
+			Namespace: input.Namespace,
+		},
+	).Get(ctx, &podStatusOutput); err != nil {
+		// If we can't check pod status, continue anyway - WaitForHydration will catch eviction
+		workflow.GetLogger(ctx).Warn("Failed to check pod status, continuing", "error", err)
+	}
+	// Check for eviction specifically
+	if podStatusOutput.Reason == "Evicted" {
+		state.Phase = "Failed"
+		state.Message = fmt.Sprintf("Pod was evicted immediately after creation: %s", podStatusOutput.Message)
+		return fmt.Errorf("pod evicted: %s", podStatusOutput.Message)
+	}
+
 	// --- Wait for hydration ---
 	state.Message = "Waiting for workspace hydration"
 
