@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -54,6 +55,7 @@ Subcommands:
   archive-failed    Bulk archive all FAILED runs
   prune             Bulk archive all terminal runs older than a given age (--failed, --done)
   export            Export runs as CSV, JSON, or TSV (--format csv|json|tsv)
+  multi-tail        Tail logs from multiple runs simultaneously (prefixed by run ID)
 `
 
 func runRuns(args []string) error {
@@ -114,6 +116,8 @@ func runRuns(args []string) error {
 		return runRunsRetryFailed(rest)
 	case "summary":
 		return runRunsSummary(rest)
+	case "multi-tail", "multi-logs":
+		return runRunsMultiTail(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -2986,6 +2990,92 @@ func runRunsWait(args []string) error {
 	default:
 		return fmt.Errorf("run %s ended in unexpected phase: %s", id, phaseLabel(phase))
 	}
+}
+
+// ── multi-tail ────────────────────────────────────────────────────────────────
+
+func runRunsMultiTail(args []string) error {
+	fs := flag.NewFlagSet("runs multi-tail", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	grep := fs.String("grep", "", "Only show lines matching this substring (case-insensitive)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs multi-tail <id> [<id> ...] [flags]\n\nTail logs from multiple runs simultaneously.\nEach log line is prefixed with the run ID.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() == 0 {
+		fs.Usage()
+		return fmt.Errorf("at least one run ID required")
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	grepNeedle := strings.ToLower(*grep)
+
+	type logLine struct {
+		id   string
+		line string
+	}
+	ch := make(chan logLine, 256)
+
+	var wg sync.WaitGroup
+	for _, id := range fs.Args() {
+		wg.Add(1)
+		go func(runID string) {
+			defer wg.Done()
+			stream, streamErr := client.WatchAgentRun(context.Background(), connect.NewRequest(&apiv1.WatchAgentRunRequest{Id: runID}))
+			if streamErr != nil {
+				ch <- logLine{id: runID, line: fmt.Sprintf("[error: %s]", humanizeErr(streamErr))}
+				return
+			}
+			for stream.Receive() {
+				ev := stream.Msg()
+				switch ev.GetType() {
+				case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG:
+					payload := ev.GetPayload()
+					if payload == "" {
+						continue
+					}
+					for _, line := range strings.Split(strings.TrimRight(payload, "\n"), "\n") {
+						if grepNeedle != "" && !strings.Contains(strings.ToLower(line), grepNeedle) {
+							continue
+						}
+						ch <- logLine{id: runID, line: line}
+					}
+				case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED:
+					ch <- logLine{id: runID, line: fmt.Sprintf("[phase: %s]", ev.GetPayload())}
+				case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED:
+					ch <- logLine{id: runID, line: fmt.Sprintf("[completed: %s]", ev.GetPayload())}
+				}
+			}
+		}(id)
+	}
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	// Assign a short label (last 6 chars of ID) per run for compact output.
+	labels := make(map[string]string, len(fs.Args()))
+	for _, id := range fs.Args() {
+		if len(id) > 6 {
+			labels[id] = id[len(id)-6:]
+		} else {
+			labels[id] = id
+		}
+	}
+
+	for ll := range ch {
+		label := labels[ll.id]
+		fmt.Printf("[%s] %s\n", label, ll.line)
+	}
+	return nil
 }
 
 func parseSinceDuration(s string) (time.Duration, error) {
