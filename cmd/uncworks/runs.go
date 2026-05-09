@@ -1639,6 +1639,7 @@ func runRunsCount(args []string) error {
 	phaseFilter := fs.String("phase", "", "Count only runs in this phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
@@ -1691,6 +1692,7 @@ func runRunsCount(args []string) error {
 			Limit:         100,
 			ProjectFilter: *project,
 			FeatureFilter: *feature,
+			TagFilter:     *tag,
 			Cursor:        cursor,
 		}
 		if phaseFiltered {
