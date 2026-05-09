@@ -1948,6 +1948,7 @@ func runRunsRetry(args []string) error {
 	fs := flag.NewFlagSet("runs retry", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	prompt := fs.String("prompt", "", "Override the agent prompt")
+	appendPrompt := fs.String("append-prompt", "", "Append additional context to the original prompt")
 	branch := fs.String("branch", "", "Override the branch")
 	modelTier := fs.String("model-tier", "", "Override the model tier")
 	name := fs.String("name", "", "Override the display name")
@@ -1958,6 +1959,8 @@ func runRunsRetry(args []string) error {
 	follow := fs.Bool("follow", false, "Stream logs after submitting (takes precedence over --wait)")
 	var envFlags multiFlag
 	fs.Var(&envFlags, "env", "Override environment variables (repeatable, KEY=VALUE); replaces all env vars if any are provided")
+	var addEnvFlags multiFlag
+	fs.Var(&addEnvFlags, "add-env", "Add or override individual environment variables (repeatable, KEY=VALUE); merged with existing env vars")
 	var tagFlags multiFlag
 	fs.Var(&tagFlags, "tag", "Override tags (repeatable); replaces all tags if any are provided")
 	fs.Usage = func() {
@@ -2006,6 +2009,9 @@ func runRunsRetry(args []string) error {
 	if *prompt != "" {
 		newSpec.Prompt = *prompt
 	}
+	if *appendPrompt != "" {
+		newSpec.Prompt = strings.TrimRight(newSpec.Prompt, "\n") + "\n\n" + *appendPrompt
+	}
 	if *branch != "" && len(newSpec.Repos) > 0 {
 		newSpec.Repos[0].Branch = *branch
 	}
@@ -2025,6 +2031,18 @@ func runRunsRetry(args []string) error {
 			envVars[parts[0]] = parts[1]
 		}
 		newSpec.EnvVars = envVars
+	}
+	if len(addEnvFlags) > 0 {
+		if newSpec.EnvVars == nil {
+			newSpec.EnvVars = map[string]string{}
+		}
+		for _, kv := range addEnvFlags {
+			parts := strings.SplitN(kv, "=", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("--add-env %q: must be KEY=VALUE", kv)
+			}
+			newSpec.EnvVars[parts[0]] = parts[1]
+		}
 	}
 	if *autoPush || *autoPR {
 		newSpec.AutoPush = *autoPush || *autoPR
@@ -2052,7 +2070,7 @@ func runRunsRetry(args []string) error {
 		return runRunsTail([]string{newRun.GetId(), "--server=" + *server})
 	}
 	if *wait {
-		return runRunsTail([]string{newRun.GetId(), "--server=" + *server})
+		return runRunsWait([]string{newRun.GetId(), "--server=" + *server})
 	}
 	return nil
 }
