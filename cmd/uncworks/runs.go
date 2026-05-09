@@ -134,6 +134,9 @@ func runRunsWatch(args []string) error {
 	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	titleContains := fs.String("title-contains", "", "Filter runs by display name substring")
+	active := fs.Bool("active", false, "Show only active runs (RUNNING + PENDING + WAITING)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs watch [flags]\n\nAuto-refresh the runs list every N seconds. Press Ctrl+C to stop.\n\nFlags:")
 		fs.PrintDefaults()
@@ -160,6 +163,15 @@ func runRunsWatch(args []string) error {
 	}
 	if *feature != "" {
 		listArgs = append(listArgs, "--feature="+*feature)
+	}
+	if *tag != "" {
+		listArgs = append(listArgs, "--tag="+*tag)
+	}
+	if *titleContains != "" {
+		listArgs = append(listArgs, "--title-contains="+*titleContains)
+	}
+	if *active {
+		listArgs = append(listArgs, "--active")
 	}
 
 	for {
