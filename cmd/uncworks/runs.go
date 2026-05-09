@@ -24,8 +24,9 @@ const runsUsage = `Usage: uncworks runs <subcommand> [flags]
 Subcommands:
   list              List recent agent runs
   get <id>          Show full detail for a run
-  describe <id>     Show rich detail including full spec and backend config
+  describe <id>     Show full detail including persisted log output
   logs <id>         Stream log output until the run completes
+  tail <id>         Stream logs and show summary when run completes
   watch <id>        Alias for 'logs' (stream live output)
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
@@ -52,6 +53,8 @@ func runRuns(args []string) error {
 		return runRunsDescribe(rest)
 	case "logs":
 		return runRunsLogs(rest)
+	case "tail":
+		return runRunsTail(rest)
 	case "watch":
 		return runRunsLogs(rest)
 	case "archive":
@@ -281,6 +284,47 @@ func runRunsGet(args []string) error {
 
 func runRunsDescribe(args []string) error {
 	return runRunsGet(append(args, "--log"))
+}
+
+func runRunsTail(args []string) error {
+	fs := flag.NewFlagSet("runs tail", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs tail <id> [flags]\n\nStream logs and show a summary when the run completes.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	if err := runRunsLogs([]string{id, "--server=" + *server}); err != nil {
+		return err
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+	resp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+	r := resp.Msg
+	fmt.Printf("\n─── summary ───────────────────────────────────────────────────────────────\n")
+	fmt.Printf("Phase:    %s\n", phaseLabel(r.GetStatus().GetPhase()))
+	if r.GetStatus().GetStartedAt() != nil && r.GetStatus().GetCompletedAt() != nil {
+		dur := r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime()).Round(time.Second)
+		fmt.Printf("Duration: %s\n", dur)
+	}
+	if r.GetStatus().GetPrUrl() != "" {
+		fmt.Printf("PR:       %s\n", r.GetStatus().GetPrUrl())
+	}
+	return nil
 }
 
 // ── logs ──────────────────────────────────────────────────────────────────────
