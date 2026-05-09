@@ -472,6 +472,7 @@ func runRunsTail(args []string) error {
 func runRunsLogs(args []string) error {
 	fs := flag.NewFlagSet("runs logs", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
+	noFollow := fs.Bool("no-follow", false, "Print stored log output only (don't stream live)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
 		fs.PrintDefaults()
@@ -496,6 +497,17 @@ func runRunsLogs(args []string) error {
 	if err != nil {
 		return fmt.Errorf("%s", humanizeErr(err))
 	}
+
+	if *noFollow {
+		logOutput := getResp.Msg.GetStatus().GetLogOutput()
+		if logOutput == "" {
+			fmt.Fprintf(os.Stderr, "No stored log output for run %s\n", id)
+			return nil
+		}
+		fmt.Print(logOutput)
+		return nil
+	}
+
 	if getResp.Msg.GetStatus().GetPhase() == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING {
 		fmt.Println("waiting for run to start...")
 	}
