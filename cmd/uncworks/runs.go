@@ -28,6 +28,7 @@ Subcommands:
   archive <id>      Mark a run as archived
   unarchive <id>    Remove the archived flag from a run
   cancel <id>       Request cancellation of a running agent
+  stats             Show aggregate counts of runs by phase
 `
 
 func runRuns(args []string) error {
@@ -50,6 +51,8 @@ func runRuns(args []string) error {
 		return runRunsArchive(rest, false)
 	case "cancel":
 		return runCancel(rest)
+	case "stats":
+		return runRunsStats(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -369,5 +372,67 @@ func runRunsArchive(args []string, archived bool) error {
 	} else {
 		fmt.Printf("Run %s unarchived\n", id)
 	}
+	return nil
+}
+
+// ── stats ─────────────────────────────────────────────────────────────────────
+
+func runRunsStats(args []string) error {
+	fs := flag.NewFlagSet("runs stats", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	counts := map[string]int{
+		"PENDING":   0,
+		"RUNNING":   0,
+		"WAITING":   0,
+		"DONE":      0,
+		"FAILED":    0,
+		"CANCELLED": 0,
+	}
+	order := []string{"RUNNING", "PENDING", "WAITING", "DONE", "FAILED", "CANCELLED"}
+
+	cursor := ""
+	total := 0
+	for {
+		listReq := &apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			Cursor:        cursor,
+		}
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			label := phaseLabel(r.GetStatus().GetPhase())
+			counts[label]++
+			total++
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" || len(resp.Msg.GetAgentRuns()) == 0 {
+			break
+		}
+	}
+
+	fmt.Printf("Total: %d\n\n", total)
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "PHASE\tCOUNT")
+	for _, phase := range order {
+		fmt.Fprintf(w, "%s\t%d\n", phase, counts[phase])
+	}
+	_ = w.Flush()
 	return nil
 }
