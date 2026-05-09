@@ -107,6 +107,7 @@ func runRunsList(args []string) error {
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	all := fs.Bool("all", false, "Fetch all pages (overrides --limit)")
 	repoURL := fs.String("repo-url", "", "Filter runs by repository URL (substring match)")
+	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -263,7 +264,11 @@ func runRunsList(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED")
+	if *verbose {
+		fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED\tREPO\tPROJECT")
+	} else {
+		fmt.Fprintln(w, "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED")
+	}
 	for _, r := range runs {
 		title := r.GetSpec().GetDisplayName()
 		if title == "" {
@@ -290,7 +295,22 @@ func runRunsList(args []string) error {
 			started = r.GetCreatedAt().AsTime().Format(time.RFC3339)
 		}
 		duration := runDuration(r)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started)
+		if *verbose {
+			repo := "—"
+			if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
+				repo = repos[0].GetUrl()
+				if len(repo) > 40 {
+					repo = repo[:37] + "..."
+				}
+			}
+			project := r.GetSpec().GetProject()
+			if project == "" {
+				project = "—"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started, repo, project)
+		} else {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), title, phase, duration, model, started)
+		}
 	}
 	w.Flush()
 
