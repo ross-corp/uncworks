@@ -949,6 +949,7 @@ func runRunsStats(args []string) error {
 	format := fs.String("format", "table", "Output format (table|json)")
 	limit := fs.Int("limit", 0, "Count only the N most recent runs (0 = all)")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
+	reasonLen := fs.Int("reason-length", 120, "Max length of failure reason messages (0 = unlimited)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1130,7 +1131,11 @@ func runRunsStats(args []string) error {
 		}
 		fmt.Printf("\nTop failure reasons:\n")
 		for i, rc := range reasons {
-			fmt.Printf("  %d. %s (%d run", i+1, rc.reason, rc.count)
+			reason := rc.reason
+			if *reasonLen > 0 && len(reason) > *reasonLen {
+				reason = reason[:*reasonLen] + "..."
+			}
+			fmt.Printf("  %d. %s (%d run", i+1, reason, rc.count)
 			if rc.count != 1 {
 				fmt.Print("s")
 			}
