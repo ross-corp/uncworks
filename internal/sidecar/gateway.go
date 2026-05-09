@@ -440,7 +440,12 @@ Steps:
 8. Run any test/build commands referenced in the specs
 
 The repo is at /workspace/<reponame>/. OpenSpec artifacts are at /workspace/openspec/.
-Verification checks openspec list for task completion — tasks not marked [x] will fail verification.`
+Verification checks openspec list for task completion — tasks not marked [x] will fail verification.
+
+When all tasks are complete, write your commit message to /workspace/.aot/commit_message.txt:
+  echo "type(scope): short description" > /workspace/.aot/commit_message.txt
+
+Use conventional commits format (feat/fix/refactor/docs/test/chore/perf). Max 72 chars.`
 
 	case "verify":
 		return `You are a manage agent (unc) performing verification.

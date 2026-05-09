@@ -320,6 +320,11 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 			StartToCloseTimeout: 20 * time.Minute,
 			HeartbeatTimeout:    30 * time.Second,
+			RetryPolicy: &temporal.RetryPolicy{
+				MaximumAttempts:    3,
+				InitialInterval:    5 * time.Second,
+				BackoffCoefficient: 1.0,
+			},
 		}),
 		ActivityWaitForHydration, WaitForHydrationInput{
 			PodName:      podName,
