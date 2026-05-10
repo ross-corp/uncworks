@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { trace, SpanStatusCode, type Tracer } from "@opentelemetry/api";
 import { createClient, type Client } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
@@ -8,6 +9,10 @@ import {
   NotifyEventRequestSchema,
   EventType,
 } from "../../../gen/ts/aot/agent/v1/agent_pb";
+
+/** Default path where the sidecar writes the human's response (matches agentInputResponsePath in gateway.go). */
+const DEFAULT_RESPONSE_FILE_PATH = "/workspace/.aot/input/response.txt";
+const RESPONSE_FILE_POLL_INTERVAL_MS = 500;
 
 /** Configuration for the AOT extension. */
 export interface AOTExtensionConfig {
@@ -19,6 +24,8 @@ export interface AOTExtensionConfig {
   stdin?: NodeJS.ReadableStream;
   /** Disable the sidecar notification client (for testing). */
   disableNotifications?: boolean;
+  /** Path to the response file written by the sidecar's SendInput RPC. Defaults to /workspace/.aot/input/response.txt. */
+  responseFilePath?: string;
 }
 
 /** Definition for a tool available to the agent. */
@@ -49,6 +56,7 @@ export class AOTExtension {
   private inputResolve: ((input: string) => void) | null = null;
   private stdinBuffer: string[] = [];
   private notifClient: Client<typeof AgentNotificationService> | null = null;
+  private responseFilePollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private config: AOTExtensionConfig) {
     this.tracer = trace.getTracer("aot-extension", "0.1.0");
@@ -216,19 +224,53 @@ export class AOTExtension {
     // Notify sidecar we're waiting (fire-and-forget, don't block on it)
     this.notifyWaitingForInput(question);
 
+    const responsePath =
+      this.config.responseFilePath ?? DEFAULT_RESPONSE_FILE_PATH;
+
     return new Promise<string>((resolve) => {
-      this.inputResolve = resolve;
+      this.inputResolve = (input: string) => {
+        if (this.responseFilePollTimer !== null) {
+          clearInterval(this.responseFilePollTimer);
+          this.responseFilePollTimer = null;
+        }
+        resolve(input);
+      };
+
+      // Poll for the response file written by the sidecar's SendInput RPC.
+      // This is the primary delivery path: stdin is redirected from /dev/null
+      // at agent startup, so stdin-based delivery never fires in production.
+      this.responseFilePollTimer = setInterval(() => {
+        try {
+          if (existsSync(responsePath)) {
+            const content = readFileSync(responsePath, "utf8");
+            try {
+              unlinkSync(responsePath);
+            } catch {
+              // ignore delete errors — the sidecar may race us
+            }
+            const r = this.inputResolve;
+            this.inputResolve = null;
+            this.paused = false;
+            this.waitingForInput = false;
+            this.notifyStarted();
+            if (r) r(content.trim());
+          }
+        } catch {
+          // Transient read errors are ignored; keep polling
+        }
+      }, RESPONSE_FILE_POLL_INTERVAL_MS);
     });
   }
 
   /** Provide human input to resume the execution loop. */
   provideHumanInput(input: string): void {
     if (this.inputResolve) {
-      this.inputResolve(input);
+      const r = this.inputResolve;
       this.inputResolve = null;
       this.paused = false;
       this.waitingForInput = false;
       this.notifyStarted();
+      r(input);
     }
   }
 
