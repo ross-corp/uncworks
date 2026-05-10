@@ -3912,6 +3912,9 @@ func runRunsMultiTail(args []string) error {
 	grep := fs.String("grep", "", "Only show lines matching this substring (case-insensitive)")
 	noColor := fs.Bool("no-color", false, "Disable per-run ANSI color coding")
 	allActive := fs.Bool("active", false, "Automatically discover and tail all active runs")
+	project := fs.String("project", "", "Filter auto-discovered active runs by project (requires --active)")
+	feature := fs.String("feature", "", "Filter auto-discovered active runs by feature (requires --active)")
+	tag := fs.String("tag", "", "Filter auto-discovered active runs by tag (requires --active)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs multi-tail <id> [<id> ...] [flags]\n\nTail logs from multiple runs simultaneously.\nEach log line is prefixed with the run ID.\n\nFlags:")
 		fs.PrintDefaults()
@@ -3931,7 +3934,13 @@ func runRunsMultiTail(args []string) error {
 	if *allActive {
 		var cursor string
 		for {
-			listReq := connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 100, Cursor: cursor})
+			listReq := connect.NewRequest(&apiv1.ListAgentRunsRequest{
+				Limit:         100,
+				Cursor:        cursor,
+				ProjectFilter: *project,
+				FeatureFilter: *feature,
+				TagFilter:     *tag,
+			})
 			listResp, listErr := client.ListAgentRuns(context.Background(), listReq)
 			if listErr != nil {
 				return fmt.Errorf("%s", humanizeErr(listErr))
