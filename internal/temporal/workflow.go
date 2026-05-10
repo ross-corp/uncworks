@@ -679,7 +679,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 			// Enrich tags from git diff before cleanup
 			enrichCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-				StartToCloseTimeout: 30 * time.Second,
+				StartToCloseTimeout: 60 * time.Second,
 				RetryPolicy: &temporal.RetryPolicy{
 					MaximumAttempts: 2,
 				},
