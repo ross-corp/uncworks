@@ -2,14 +2,19 @@ package temporal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"connectrpc.com/connect"
 	"go.temporal.io/sdk/activity"
+	"k8s.io/apimachinery/pkg/types"
 
+	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 
@@ -57,13 +62,30 @@ func (a *Activities) EnrichRunTags(ctx context.Context, input EnrichRunTagsInput
 		return nil
 	}
 
-	// 2. Derive tags from diff stat
+	// 2. Parse additions/deletions and patch status before tag work
+	additions, deletions := parseDiffStatSummary(diffStat)
+	if additions > 0 || deletions > 0 {
+		statusPatch, _ := json.Marshal(map[string]interface{}{
+			"status": map[string]interface{}{
+				"totalAdditions": additions,
+				"totalDeletions": deletions,
+			},
+		})
+		crd := &aotv1alpha1.AgentRun{}
+		crd.Name = input.AgentRunName
+		crd.Namespace = input.Namespace
+		if err := a.K8sClient.Status().Patch(ctx, crd, client.RawPatch(types.MergePatchType, statusPatch)); err != nil {
+			activity.GetLogger(ctx).Warn("EnrichRunTags: failed to patch diff stats", "error", err)
+		}
+	}
+
+	// 3. Derive tags from diff stat
 	newTags := deriveTagsFromDiff(diffStat)
 	if len(newTags) == 0 {
 		return nil
 	}
 
-	// 3. Get existing CRD and merge tags
+	// 4. Get existing CRD and merge tags
 	gvr := schema.GroupVersionResource{
 		Group:    "aot.uncworks.io",
 		Version:  "v1alpha1",
@@ -85,7 +107,7 @@ func (a *Activities) EnrichRunTags(ctx context.Context, input EnrichRunTagsInput
 		return nil
 	}
 
-	// 4. Merge new tags with existing tags label
+	// 5. Merge new tags with existing tags label
 	labels := obj.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
@@ -131,7 +153,7 @@ func (a *Activities) EnrichRunTags(ctx context.Context, input EnrichRunTagsInput
 	labels["aot.uncworks.io/tags"] = tagValue
 	obj.SetLabels(labels)
 
-	// 5. Update CRD
+	// 6. Update CRD
 	if err := a.K8sClient.Update(ctx, obj); err != nil {
 		activity.GetLogger(ctx).Warn("EnrichRunTags: failed to update AgentRun CRD", "error", err)
 		return nil
@@ -233,4 +255,32 @@ func deriveTagsFromDiff(diffStat string) []string {
 	}
 
 	return tags
+}
+
+var diffStatSummaryRe = regexp.MustCompile(`(\d+) insertion|(\d+) deletion`)
+
+// parseDiffStatSummary extracts additions and deletions from the git diff --stat summary line.
+// Example: "3 files changed, 42 insertions(+), 8 deletions(-)"
+func parseDiffStatSummary(diffStat string) (additions, deletions int32) {
+	for _, line := range strings.Split(diffStat, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, "changed") {
+			continue
+		}
+		matches := diffStatSummaryRe.FindAllStringSubmatch(line, -1)
+		for _, m := range matches {
+			if m[1] != "" {
+				if n, err := strconv.ParseInt(m[1], 10, 32); err == nil {
+					additions = int32(n)
+				}
+			}
+			if m[2] != "" {
+				if n, err := strconv.ParseInt(m[2], 10, 32); err == nil {
+					deletions = int32(n)
+				}
+			}
+		}
+		break
+	}
+	return additions, deletions
 }
