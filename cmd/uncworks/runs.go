@@ -3393,6 +3393,7 @@ func runRunsSummary(args []string) error {
 		sinceTime := time.Now().Add(-d)
 
 	phaseCounts := map[string]int{}
+	projectCounts := map[string]int{}
 	var activeRuns []*apiv1.AgentRun
 	var latestRun *apiv1.AgentRun
 	total := 0
@@ -3405,7 +3406,7 @@ func runRunsSummary(args []string) error {
 		}
 		resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			break
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			ts := r.GetCreatedAt()
@@ -3415,6 +3416,9 @@ func runRunsSummary(args []string) error {
 			total++
 			label := phaseLabel(r.GetStatus().GetPhase())
 			phaseCounts[label]++
+			if proj := r.GetSpec().GetProject(); proj != "" {
+				projectCounts[proj]++
+			}
 			switch r.GetStatus().GetPhase() {
 			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING,
 				apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
@@ -3474,6 +3478,34 @@ func runRunsSummary(args []string) error {
 	fmt.Fprintf(w, "  ─────────────\t\t\t\n")
 	fmt.Fprintf(w, "  TOTAL\t%d\t\t\n", total)
 	w.Flush()
+
+	if len(projectCounts) > 0 && *project == "" {
+		type projEntry struct {
+			name  string
+			count int
+		}
+		var projs []projEntry
+		for k, v := range projectCounts {
+			projs = append(projs, projEntry{k, v})
+		}
+		sort.Slice(projs, func(i, j int) bool {
+			if projs[i].count != projs[j].count {
+				return projs[i].count > projs[j].count
+			}
+			return projs[i].name < projs[j].name
+		})
+		maxProj := 5
+		if len(projs) < maxProj {
+			maxProj = len(projs)
+		}
+		fmt.Printf("\nTop projects:\n")
+		wProj := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		for _, p := range projs[:maxProj] {
+			pct := p.count * 100 / total
+			fmt.Fprintf(wProj, "  %s\t%d\t(%d%%)\n", p.name, p.count, pct)
+		}
+		wProj.Flush()
+	}
 
 	if len(activeRuns) > 0 {
 		fmt.Printf("\nActive runs (%d):\n", len(activeRuns))
@@ -3716,6 +3748,7 @@ func runRunsTop(args []string) error {
 	interval := fs.Int("interval", 5, "Refresh interval in seconds")
 	project := fs.String("project", "", "Filter by project name")
 	tag := fs.String("tag", "", "Filter by tag")
+	phase := fs.String("phase", "", "Filter by phase: running, pending, waiting (default: all active)")
 	limit := fs.Int("limit", 30, "Max runs to show per refresh")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	fs.Usage = func() {
@@ -3730,6 +3763,8 @@ func runRunsTop(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	phaseFilter := strings.ToUpper(*phase)
 
 	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
 	colorPhase := func(label string) string {
@@ -3751,7 +3786,11 @@ func runRunsTop(args []string) error {
 		if useColor {
 			fmt.Print("\033[H\033[2J")
 		}
-		fmt.Printf("uncworks runs top — %s  (Ctrl+C to stop)\n\n", time.Now().Format("15:04:05"))
+		header := fmt.Sprintf("uncworks runs top — %s  (Ctrl+C to stop)", time.Now().Format("15:04:05"))
+		if phaseFilter != "" {
+			header += "  [phase:" + phaseFilter + "]"
+		}
+		fmt.Println(header + "\n")
 
 		var allActive []*apiv1.AgentRun
 		cursor := ""
@@ -3769,11 +3808,19 @@ func runRunsTop(args []string) error {
 			}
 			for _, r := range resp.Msg.GetAgentRuns() {
 				p := r.GetStatus().GetPhase()
-				if p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
+				active := p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
 					p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING ||
-					p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
-					allActive = append(allActive, r)
+					p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT
+				if !active {
+					continue
 				}
+				if phaseFilter != "" {
+					label := phaseLabel(p)
+					if !strings.EqualFold(label, phaseFilter) && !strings.HasPrefix(strings.ToUpper(label), phaseFilter) {
+						continue
+					}
+				}
+				allActive = append(allActive, r)
 			}
 			cursor = resp.Msg.GetNextCursor()
 			if cursor == "" {
