@@ -27,7 +27,7 @@ import (
 const runsUsage = `Usage: uncworks runs <subcommand> [flags]
 
 Subcommands:
-  list              List recent agent runs (--json, --active, --phase, --project, --since, --show-tags, --model)
+  list              List recent agent runs (--json, --active, --phase, --project, --since, --show-tags, --show-diff, --model)
   get <id>          Show full detail for a run (--json, --short, --wait, --poll N, --prompt-only, multiple IDs)
   show <id>         Alias for get
   describe <id>     Show full detail including persisted log output
@@ -478,6 +478,7 @@ func runRunsList(args []string) error {
 	showPR := fs.Bool("show-pr", false, "Add a PR URL column to the output")
 	showFeature := fs.Bool("show-feature", false, "Add a feature column to the output")
 	showMessage := fs.Bool("show-message", false, "Add a STATUS MESSAGE column (truncated to 60 chars)")
+	showDiff := fs.Bool("show-diff", false, "Add a DIFF column showing +additions/-deletions line counts")
 	noModel := fs.Bool("no-model", false, "Hide the MODEL column")
 	titleShort := fs.String("title", "", "Shorthand for --title-contains")
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
@@ -866,6 +867,9 @@ func runRunsList(args []string) error {
 		if *showMessage {
 			hdr += "\tMESSAGE"
 		}
+		if *showDiff {
+			hdr += "\tDIFF"
+		}
 		if *showApproval {
 			hdr += "\tAPPROVAL"
 		}
@@ -961,6 +965,15 @@ func runRunsList(args []string) error {
 				msg = msg[:57] + "..."
 			}
 			row += "\t" + msg
+		}
+		if *showDiff {
+			add := r.GetStatus().GetTotalAdditions()
+			del := r.GetStatus().GetTotalDeletions()
+			if add > 0 || del > 0 {
+				row += fmt.Sprintf("\t+%d/-%d", add, del)
+			} else {
+				row += "\t—"
+			}
 		}
 		if *showApproval {
 			approval := r.GetSpec().GetApprovalMode()
