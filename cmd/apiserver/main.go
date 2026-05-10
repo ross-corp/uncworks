@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"expvar"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,6 +27,9 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	temporalclient "go.temporal.io/sdk/client"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
@@ -174,13 +175,14 @@ func main() {
 		_ = writeJSONResponse(w, map[string]interface{}{"status": status, "checks": checks})
 	})
 
-	// Metrics endpoint (exposes expvar metrics)
-	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		expvar.Do(func(kv expvar.KeyValue) {
-			fmt.Fprintf(w, "%s %s\n", kv.Key, kv.Value)
-		})
-	})
+	// Metrics endpoint — Prometheus format with live AgentRun phase counts.
+	metricsReg := prometheus.NewRegistry()
+	metricsReg.MustRegister(
+		server.NewMetricsCollector(k8sClient, namespace),
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+	)
+	mux.Handle("GET /metrics", promhttp.HandlerFor(metricsReg, promhttp.HandlerOpts{}))
 
 	// Create GitHub token provider from environment
 	ghProvider := aotgithub.NewPATProvider(os.Getenv("GITHUB_TOKEN"))
