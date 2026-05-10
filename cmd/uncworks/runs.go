@@ -6669,7 +6669,10 @@ func runRunsScore(args []string) error {
 		passedCutoff := false
 		for _, r := range resp.Msg.GetAgentRuns() {
 			ts := r.GetCreatedAt()
-			if ts == nil || !ts.AsTime().After(longestCutoff) {
+			if ts == nil {
+				continue
+			}
+			if !ts.AsTime().After(longestCutoff) {
 				passedCutoff = true
 				continue
 			}
