@@ -456,7 +456,24 @@ export default function RunDetailView() {
         {/* Main content area */}
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
           {tab === "logs" && (
-            <ActivityFeed runId={run.id} phase={run.status.phase} />
+            <div className="h-full flex flex-col">
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ActivityFeed runId={run.id} phase={run.status.phase} />
+              </div>
+              {run.status.logOutput && (
+                <div className="border-t">
+                  <details className="group">
+                    <summary className="cursor-pointer px-4 py-2 bg-muted/50 hover:bg-muted/80 transition-colors flex items-center justify-between list-none">
+                      <span className="font-medium text-sm">Stored Log Output</span>
+                      <span className="text-xs text-muted-foreground transition-transform">▼</span>
+                    </summary>
+                    <pre className="m-0 p-4 bg-black text-gray-200 font-mono text-xs whitespace-pre-wrap overflow-auto max-h-96">
+                      {run.status.logOutput}
+                    </pre>
+                  </details>
+                </div>
+              )}
+            </div>
           )}
           {tab === "traces" && (
             <TraceTimeline
