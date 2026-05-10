@@ -756,6 +756,7 @@ func runRunsGet(args []string) error {
 	short := fs.Bool("short", false, "Print a one-line summary: ID PHASE TITLE")
 	waitFlag := fs.Bool("wait", false, "If the run is active, wait until it reaches a terminal phase then show details")
 	poll := fs.Int("poll", 0, "Auto-refresh every N seconds until the run reaches a terminal phase (0 = disabled)")
+	promptOnly := fs.Bool("prompt-only", false, "Print only the agent prompt text (useful for piping or editing)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -877,6 +878,11 @@ func runRunsGet(args []string) error {
 	}
 
 	r := resp.Msg
+
+	if *promptOnly {
+		fmt.Println(r.GetSpec().GetPrompt())
+		return nil
+	}
 
 	if *jsonOut {
 		type runGetJSON struct {
@@ -3551,6 +3557,7 @@ func runRunsSummary(args []string) error {
 	projectCounts := map[string]int{}
 	var activeRuns []*apiv1.AgentRun
 	var recentCompleted []*apiv1.AgentRun
+	var recentFailed []*apiv1.AgentRun
 	var latestRun *apiv1.AgentRun
 	total := 0
 	cursor := ""
@@ -3580,8 +3587,14 @@ func runRunsSummary(args []string) error {
 				apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
 				apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
 				activeRuns = append(activeRuns, r)
+			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+				if len(recentFailed) < 5 {
+					recentFailed = append(recentFailed, r)
+				}
+				if len(recentCompleted) < 5 {
+					recentCompleted = append(recentCompleted, r)
+				}
 			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED,
-				apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED,
 				apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
 				if len(recentCompleted) < 5 {
 					recentCompleted = append(recentCompleted, r)
@@ -3703,6 +3716,30 @@ func runRunsSummary(args []string) error {
 			}
 			fmt.Printf("  %s  %-40s  %s%s\n", r.GetId(), title, colorPhase(phaseLabel(r.GetStatus().GetPhase())), age)
 		}
+	}
+
+	if len(recentFailed) > 0 {
+		fmt.Printf("\nRecent failures:\n")
+		wf := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		for _, r := range recentFailed {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			if len(title) > 30 {
+				title = title[:27] + "..."
+			}
+			msg := r.GetStatus().GetMessage()
+			if len(msg) > 60 {
+				msg = msg[:57] + "..."
+			}
+			age := ""
+			if ts := r.GetStatus().GetCompletedAt(); ts != nil {
+				age = relativeTime(ts.AsTime())
+			}
+			fmt.Fprintf(wf, "  %s\t%-30s\t%s\t%s\n", r.GetId(), title, age, msg)
+		}
+		wf.Flush()
 	}
 
 		return nil
