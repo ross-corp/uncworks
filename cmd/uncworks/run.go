@@ -228,6 +228,9 @@ Flags:`)
 		if *modelTier != "" {
 			fmt.Printf("  model:   %s\n", *modelTier)
 		}
+		if cfg, err := loadConfig(); err == nil && cfg.WebURL != "" {
+			fmt.Printf("  ui:      %s/runs/%s\n", strings.TrimRight(cfg.WebURL, "/"), run.GetId())
+		}
 	}
 
 	if *follow {

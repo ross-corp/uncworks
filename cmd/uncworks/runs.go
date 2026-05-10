@@ -99,7 +99,7 @@ func runRuns(args []string) error {
 		return runCancel(rest)
 	case "stats":
 		return runRunsStats(rest)
-	case "open":
+	case "open", "open-pr", "pr":
 		return runRunsOpen(rest)
 	case "retry", "rerun", "copy", "duplicate":
 		return runRunsRetry(rest)
