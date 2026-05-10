@@ -27,25 +27,33 @@ import (
 const runsUsage = `Usage: uncworks runs <subcommand> [flags]
 
 Subcommands:
-  list              List recent agent runs (--json, --active, --phase, --project, --since, --show-tags)
-  get <id>          Show full detail for a run (--json, --short, --wait, --poll N, multiple IDs supported)
+  list              List recent agent runs (--json, --active, --phase, --project, --since, --show-tags, --model)
+  get <id>          Show full detail for a run (--json, --short, --wait, --poll N, --prompt-only, multiple IDs)
+  show <id>         Alias for get
   describe <id>     Show full detail including persisted log output
-  logs <id>         Stream log output until the run completes (--no-follow, --grep, --lines, --head, --timestamps)
+  logs <id>         Stream log output until the run completes (--no-follow, --grep, --lines, --last)
   tail <id>         Stream logs and show summary when run completes
-  watch             Auto-refresh the runs list (like watch kubectl get pods)
-  wait <id>         Block until a run reaches a terminal phase (exit 0 on success, 1 on failure)
-  stats             Show aggregate counts of runs by phase (--format json|table, --since, --by-project, --by-tag)
-  count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since)
+  watch             Auto-refresh the runs list (--interval, --active, --phase, --project)
+  wait <id>         Block until a run reaches a terminal phase (--last, --timeout, --log, --on-success)
+  stats             Show aggregate counts of runs by phase (--format, --since, --by-project, --model)
+  count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since, --model)
+  score             Show success rate across 1h/24h/7d/30d windows (--project, --feature, --json)
+  rate              Alias for score
   summary           Show a dashboard summary of recent run activity
-  latest            Show the most recent N runs (--n, --phase, --project, --tag)
+  latest            Show the most recent N runs (--n, --phase, --project, --tag, --ids-only)
   graph <id>        Show the run graph (parent/child relationships) (--watch for live refresh)
-  inspect <id>      Diagnostic view: details, graph, and log tail
-  diff <id>         Show git commands to inspect a run's diff
-  open <id>         Open the PR URL for a completed run in browser
-  retry <id>        Re-run with same spec; override with --prompt, --branch, --model-tier, --append-prompt, --add-env
+  inspect <id>      Diagnostic view: details, graph, and log tail (--last, --log-lines)
+  diff <id>         Show git commands to inspect a run's diff (--last, --stat, --exec)
+  compare <a> <b>   Side-by-side comparison of two runs (--json)
+  open <id>         Open the PR URL for a completed run in browser (--last, --print-url)
+  open-pr <id>      Alias for open
+  ui <id>           Open a run in the UNCWORKS web dashboard (--last, --print-url)
+  env <id>          Show env vars for a run (--export for shell export statements)
+  retry <id>        Re-run with same spec; override with --prompt, --branch, --model, --append-prompt (--last)
   rerun <id>        Alias for retry
   copy <id>         Alias for retry
-  retry-failed      Bulk retry all FAILED runs matching filters (--project, --since, --dry-run)
+  retry-last        Retry the most recent run (alias for retry --last)
+  retry-failed      Bulk retry all FAILED runs matching filters (--project, --since, --dry-run, --list)
   cancel <id>       Request cancellation of a running agent (multiple IDs supported)
   kill <id>         Alias for cancel
   cancel-all        Cancel all active runs (--project, --tag, --title-contains)
@@ -53,16 +61,33 @@ Subcommands:
   unarchive <id>    Remove the archived flag from a run
   archive-done      Bulk archive all SUCCEEDED runs
   archive-failed    Bulk archive all FAILED runs
-  prune             Bulk archive all terminal runs older than a given age (--failed, --done)
-  export            Export runs as CSV, JSON, or TSV (--format csv|json|tsv)
-  multi-tail        Tail logs from multiple runs simultaneously (prefixed by run ID)
-  top               Live view of active runs sorted by elapsed time (auto-refresh)
-  batch <file>      Submit multiple runs from a JSON file
-  histogram         Show a bar chart of run activity over a time window (--since, --buckets)
-  group             Show runs organized into groups (--by project|feature|tag, --since)
-  ui <id>           Open a run in the UNCWORKS web dashboard (requires web_url in config)
+  prune             Bulk archive terminal runs older than a given age (--older-than, --failed, --done)
+  export            Export runs as CSV, JSON, TSV, or markdown (--format, --since, --project, --out)
+  multi-tail        Tail logs from multiple runs simultaneously (--active for auto-discover)
+  top               Live view of active runs sorted by elapsed time (--feature, --title-contains)
+  batch <file>      Submit multiple runs from a JSON file (--dry-run, --wait, --output-ids)
+  histogram         Show a bar chart of run activity over a time window (--since, --buckets, --sparkline)
+  group             Show runs organized into groups (--by project|feature|tag|model, --count-only, --json)
   search <term>     Search runs by prompt text, title, or project (--phase, --since, --project)
   timeline          Show a chronological view of completed runs (--since, --project)
+  slow              Show slowest completed runs sorted by duration (--limit, --since, --project)
+  alias             Show all available subcommand aliases
+
+Shorthand subcommands:
+  today             Runs from the last 24h (alias for list --since 24h --all)
+  week              Runs from the last 7d (alias for list --since 7d --all)
+  recent            Alias for today
+  failed            Show FAILED runs (alias for list --failed)
+  done              Show DONE runs (alias for list --done)
+  succeeded         Alias for done
+  pending           Show PENDING runs (alias for list --pending)
+  running           Show RUNNING runs (alias for list --running)
+  waiting           Show WAITING runs (alias for list --waiting)
+  cancelled         Show CANCELLED runs (alias for list --cancelled)
+  queue             Show all pending runs (alias for list --pending --all)
+  by-project        Group by project (alias for group --by project)
+  by-feature        Group by feature (alias for group --by feature)
+  by-model          Group by model tier (alias for group --by model)
 `
 
 func runRuns(args []string) error {
