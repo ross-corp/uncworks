@@ -146,17 +146,17 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		ready := true
 		checks := map[string]string{"k8s": "ok"}
+		temporalOK := true
 
 		if svc.TemporalClient == nil {
-			ready = false
+			temporalOK = false
 			checks["temporal"] = "not configured"
 		} else {
 			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 			defer cancel()
 			if _, err := svc.TemporalClient.CheckHealth(ctx, &temporalclient.CheckHealthRequest{}); err != nil {
-				ready = false
+				temporalOK = false
 				checks["temporal"] = "unreachable"
 			} else {
 				checks["temporal"] = "ok"
@@ -164,13 +164,11 @@ func main() {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		if !ready {
-			w.WriteHeader(http.StatusServiceUnavailable)
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
+		// Return 200 even when Temporal is degraded — the API server can still
+		// serve read requests (list, get). Only run submission needs Temporal.
+		w.WriteHeader(http.StatusOK)
 		status := "ok"
-		if !ready {
+		if !temporalOK {
 			status = "degraded"
 		}
 		_ = writeJSONResponse(w, map[string]interface{}{"status": status, "checks": checks})
