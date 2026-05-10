@@ -502,9 +502,18 @@ func runRunsList(args []string) error {
 		if err != nil {
 			return fmt.Errorf("%s", humanizeErr(err))
 		}
-		runs = append(runs, resp.Msg.GetAgentRuns()...)
+		page := resp.Msg.GetAgentRuns()
+		runs = append(runs, page...)
 		nextCursor = resp.Msg.GetNextCursor()
-		if (!*all && !*activeOnly) || nextCursor == "" {
+		// When using --since, auto-paginate until we pass the time window.
+		passedSince := false
+		if !sinceTime.IsZero() && len(page) > 0 {
+			last := page[len(page)-1].GetCreatedAt()
+			if last != nil && !last.AsTime().After(sinceTime) {
+				passedSince = true
+			}
+		}
+		if (!*all && !*activeOnly && (sinceTime.IsZero() || passedSince)) || nextCursor == "" {
 			break
 		}
 		fetchCursor = nextCursor
