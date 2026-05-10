@@ -599,7 +599,7 @@ func runRunsList(args []string) error {
 	if !*noHeader {
 		hdr := "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED"
 		if *verbose {
-			hdr += "\tREPO\tPROJECT"
+			hdr += "\tREPO\tPROJECT\tSTAGE"
 		}
 		if *showTags {
 			hdr += "\tTAGS"
@@ -665,7 +665,11 @@ func runRunsList(args []string) error {
 			if project == "" {
 				project = "—"
 			}
-			row += "\t" + repo + "\t" + project
+			stageCol := r.GetStatus().GetStage()
+			if stageCol == "" {
+				stageCol = "—"
+			}
+			row += "\t" + repo + "\t" + project + "\t" + stageCol
 		}
 		if *showTags {
 			row += "\t" + tags
@@ -3766,6 +3770,7 @@ func runRunsTop(args []string) error {
 	phase := fs.String("phase", "", "Filter by phase: running, pending, waiting (default: all active)")
 	limit := fs.Int("limit", 30, "Max runs to show per refresh")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
+	oneShot := fs.Bool("one-shot", false, "Print once and exit (useful for scripting)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs top [flags]\n\nLive view of active runs sorted by elapsed time.\n\nFlags:")
 		fs.PrintDefaults()
@@ -3892,6 +3897,9 @@ func runRunsTop(args []string) error {
 			fmt.Printf("\nTotal active: %d\n", len(allActive))
 		}
 		_ = colorPhase
+		if *oneShot {
+			return nil
+		}
 		time.Sleep(time.Duration(*interval) * time.Second)
 	}
 }
