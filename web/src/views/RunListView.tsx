@@ -514,6 +514,15 @@ export default function RunListView() {
             </span>
           )}
 
+          {run.status.phase === "succeeded" && !hasDiff && (
+            <span
+              className="text-xs text-amber-500/70 font-mono"
+              title={run.status.message || "Succeeded with no code changes"}
+            >
+              ∅
+            </span>
+          )}
+
           <span className="text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
             {run.spec.modelTier || "default"}
           </span>
