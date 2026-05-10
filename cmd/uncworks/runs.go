@@ -297,6 +297,7 @@ func runRunsList(args []string) error {
 	showPR := fs.Bool("show-pr", false, "Add a PR URL column to the output")
 	titleShort := fs.String("title", "", "Shorthand for --title-contains")
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
+	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive, e.g. deepseek, claude)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -446,6 +447,16 @@ func runRunsList(args []string) error {
 		for _, r := range runs {
 			title := strings.ToLower(r.GetSpec().GetDisplayName())
 			if strings.Contains(title, needle) {
+				filtered = append(filtered, r)
+			}
+		}
+		runs = filtered
+	}
+	if *modelFilter != "" {
+		needle := strings.ToLower(*modelFilter)
+		filtered := runs[:0]
+		for _, r := range runs {
+			if strings.Contains(strings.ToLower(r.GetSpec().GetModelTier()), needle) {
 				filtered = append(filtered, r)
 			}
 		}
@@ -4420,7 +4431,7 @@ Flags:`)
 func runRunsGroup(args []string) error {
 	fs := flag.NewFlagSet("runs group", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
-	by := fs.String("by", "project", "Group dimension: project, feature, or tag")
+	by := fs.String("by", "project", "Group dimension: project, feature, tag, or model")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, etc.)")
 	project := fs.String("project", "", "Filter by project name")
@@ -4439,9 +4450,9 @@ func runRunsGroup(args []string) error {
 		return err
 	}
 	switch *by {
-	case "project", "feature", "tag":
+	case "project", "feature", "tag", "model":
 	default:
-		return fmt.Errorf("--by must be one of: project, feature, tag")
+		return fmt.Errorf("--by must be one of: project, feature, tag, model")
 	}
 
 	var sinceTime time.Time
@@ -4527,6 +4538,12 @@ func runRunsGroup(args []string) error {
 				} else {
 					keys = tags
 				}
+			case "model":
+				k := r.GetSpec().GetModelTier()
+				if k == "" {
+					k = "(no model)"
+				}
+				keys = []string{k}
 			}
 			for _, k := range keys {
 				if _, ok := groups[k]; !ok {
