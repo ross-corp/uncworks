@@ -202,9 +202,11 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		"claude-sonnet-4": true,
 		"claude-haiku":    true,
 		"claude-sonnet-4.6": true,
-		"gpt-4.1-mini":   true,
-		"gemini-flash":    true,
-		"gemini-3-flash":  true,
+		"gpt-4.1-mini":      true,
+		"gemini-flash":       true,
+		"gemini-3-flash":     true,
+		"gpt-oss-120b-free":  true,
+		"qwen3-coder-free":   true,
 	}
 	if !validTiers[req.Msg.Spec.ModelTier] {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown model_tier %q", req.Msg.Spec.ModelTier))
