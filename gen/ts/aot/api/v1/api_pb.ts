@@ -493,6 +493,21 @@ export type AgentRunStatus = Message<"aot.api.v1.AgentRunStatus"> & {
    * @generated from field: string pr_url = 15;
    */
   prUrl: string;
+
+  /**
+   * @generated from field: string total_cost = 16;
+   */
+  totalCost: string;
+
+  /**
+   * @generated from field: int32 total_additions = 17;
+   */
+  totalAdditions: number;
+
+  /**
+   * @generated from field: int32 total_deletions = 18;
+   */
+  totalDeletions: number;
 };
 
 /**
