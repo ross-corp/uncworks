@@ -714,12 +714,18 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 					repoURL = input.Repos[0].URL
 				}
 
+				baseBranchForPush := input.PRBaseBranch
+				if baseBranchForPush == "" && len(input.Repos) > 0 {
+					baseBranchForPush = input.Repos[0].Branch
+				}
+
 				var pushOutput PushChangesOutput
 				if err := workflow.ExecuteActivity(gitCtx, ActivityPushChanges, PushChangesInput{
 					AgentRunName:  input.AgentRunName,
 					PodIP:         podIP,
 					RepoPath:      repoPath,
 					BranchName:    branchName,
+					BaseBranch:    baseBranchForPush,
 					CommitMessage: commitMsg,
 					RepoURL:       repoURL,
 				}).Get(ctx, &pushOutput); err != nil {

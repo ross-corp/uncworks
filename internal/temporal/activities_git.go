@@ -26,6 +26,7 @@ type PushChangesInput struct {
 	PodIP         string
 	RepoPath      string
 	BranchName    string // e.g., "aot/ar-xxxxx"
+	BaseBranch    string // base branch to compare against; defaults to "main"
 	CommitMessage string
 	RepoURL       string // e.g., "https://github.com/org/repo.git" — used for authenticated push
 	ChangeName    string // e.g., "git-push-and-pr" — used to locate proposal.md
@@ -59,6 +60,21 @@ func readAgentCommitMessage(ctx context.Context, sc agentv1connect.AgentSidecarS
 	return msg
 }
 
+// resolveBaseRef returns the best available git ref for the base branch.
+// Bare repo clones (used by agent worktrees) have refs/heads/main but NOT
+// refs/remotes/origin/main. Regular clones have both. We prefer the remote
+// tracking ref when it exists, and fall back to the local branch name.
+func resolveBaseRef(ctx context.Context, sc agentv1connect.AgentSidecarServiceClient, runID, repoPath, baseBranch string) string {
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	originRef := "origin/" + baseBranch
+	if out, err := gitExec(ctx, sc, runID, repoPath, "git rev-parse --verify "+originRef); err == nil && strings.TrimSpace(out) != "" {
+		return originRef
+	}
+	return baseBranch
+}
+
 // PushChanges commits all workspace changes and pushes to a feature branch via the sidecar.
 // It injects the GitHub token into the remote URL for authentication, then restores the
 // original URL after the push to avoid persisting credentials.
@@ -67,6 +83,9 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 
 	sidecarURL := fmt.Sprintf("http://%s:%d", input.PodIP, sidecarPort)
 	sc := agentv1connect.NewAgentSidecarServiceClient(a.httpClient(), sidecarURL)
+
+	// Resolve the base ref once — works for both bare and regular clones.
+	baseRef := resolveBaseRef(ctx, sc, input.AgentRunName, input.RepoPath, input.BaseBranch)
 
 	// Configure git user (needed for commit)
 	if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
@@ -80,15 +99,15 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		return nil, fmt.Errorf("create branch %s: %w", input.BranchName, err)
 	}
 
-	// Check if HEAD is ahead of origin/main (has commits to squash)
+	// Check if HEAD is ahead of the base branch (has commits to squash)
 	logOut, logErr := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
-		"git log --oneline origin/main..HEAD")
+		"git log --oneline "+baseRef+"..HEAD")
 	var hasSquashed bool
 	if logErr == nil && strings.TrimSpace(logOut) != "" {
 		// There are commits to squash
 		// Soft reset to merge base, keeping changes staged
 		if _, err := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
-			"git reset --soft $(git merge-base HEAD origin/main)"); err != nil {
+			"git reset --soft $(git merge-base HEAD "+baseRef+")"); err != nil {
 			return nil, fmt.Errorf("git reset --soft for squash: %w", err)
 		}
 		// Check if there are any changes (staged or unstaged) after reset
@@ -137,9 +156,9 @@ func (a *Activities) PushChanges(ctx context.Context, input PushChangesInput) (*
 		return nil, fmt.Errorf("get commit sha: %w", err)
 	}
 
-	// Determine whether HEAD is ahead of origin/main (i.e., agent actually committed something).
+	// Determine whether HEAD is ahead of the base branch (i.e., agent actually committed something).
 	aheadOut, _ := gitExec(ctx, sc, input.AgentRunName, input.RepoPath,
-		"git log --oneline origin/main..HEAD")
+		"git log --oneline "+baseRef+"..HEAD")
 	hasChanges := strings.TrimSpace(aheadOut) != ""
 
 	// Capture the commit subject for use as PR title.
