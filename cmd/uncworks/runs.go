@@ -171,6 +171,8 @@ func runRuns(args []string) error {
 		return runRunsEnv(rest)
 	case "slow":
 		return runRunsSlow(rest)
+	case "score", "rate":
+		return runRunsScore(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -2930,6 +2932,7 @@ func runRunsLatest(args []string) error {
 	n := fs.Int("n", 1, "Number of latest runs to show")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	showLog := fs.Bool("log", false, "Also print the stored agent log output")
+	idsOnly := fs.Bool("ids-only", false, "Print only run IDs (one per line, for scripting)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs latest [flags]\n\nShow the most recent agent run in detail.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2974,6 +2977,13 @@ func runRunsLatest(args []string) error {
 	runs := resp.Msg.GetAgentRuns()
 	if len(runs) == 0 {
 		fmt.Println("No runs found.")
+		return nil
+	}
+
+	if *idsOnly {
+		for _, r := range runs {
+			fmt.Println(r.GetId())
+		}
 		return nil
 	}
 
@@ -4143,7 +4153,9 @@ func runRunsTop(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	interval := fs.Int("interval", 5, "Refresh interval in seconds")
 	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
 	tag := fs.String("tag", "", "Filter by tag")
+	titleContains := fs.String("title-contains", "", "Filter runs by display name substring (case-insensitive)")
 	phase := fs.String("phase", "", "Filter by phase: running, pending, waiting (default: all active)")
 	limit := fs.Int("limit", 30, "Max runs to show per refresh")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
@@ -4195,6 +4207,7 @@ func runRunsTop(args []string) error {
 			req := &apiv1.ListAgentRunsRequest{
 				Limit:         100,
 				ProjectFilter: *project,
+				FeatureFilter: *feature,
 				TagFilter:     *tag,
 				Cursor:        cursor,
 			}
@@ -4203,6 +4216,7 @@ func runRunsTop(args []string) error {
 				fmt.Printf("error: %s\n", humanizeErr(apiErr))
 				break
 			}
+			titleNeedle := strings.ToLower(*titleContains)
 			for _, r := range resp.Msg.GetAgentRuns() {
 				p := r.GetStatus().GetPhase()
 				active := p == apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING ||
@@ -4216,6 +4230,9 @@ func runRunsTop(args []string) error {
 					if !strings.EqualFold(label, phaseFilter) && !strings.HasPrefix(strings.ToUpper(label), phaseFilter) {
 						continue
 					}
+				}
+				if titleNeedle != "" && !strings.Contains(strings.ToLower(r.GetSpec().GetDisplayName()), titleNeedle) {
+					continue
 				}
 				allActive = append(allActive, r)
 			}
@@ -5534,4 +5551,115 @@ func runRunsSlow(args []string) error {
 	}
 	w.Flush()
 	return nil
+}
+
+// ── score ─────────────────────────────────────────────────────────────────────
+
+func runRunsScore(args []string) error {
+	fs := flag.NewFlagSet("runs score", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs score [flags]\n\nShow success rate across multiple time windows (1h, 24h, 7d, 30d).\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	type windowResult struct {
+		Window  string  `json:"window"`
+		Total   int     `json:"total"`
+		Done    int     `json:"done"`
+		Failed  int     `json:"failed"`
+		Rate    float64 `json:"success_rate"`
+	}
+
+	windows := []struct {
+		label string
+		dur   time.Duration
+	}{
+		{"1h", time.Hour},
+		{"24h", 24 * time.Hour},
+		{"7d", 7 * 24 * time.Hour},
+		{"30d", 30 * 24 * time.Hour},
+	}
+
+	var results []windowResult
+	for _, win := range windows {
+		cutoff := time.Now().Add(-win.dur)
+		done, failed, total := 0, 0, 0
+		cursor := ""
+		for {
+			resp, err2 := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+				Limit:         100,
+				ProjectFilter: *project,
+				FeatureFilter: *feature,
+				TagFilter:     *tag,
+				Cursor:        cursor,
+			}))
+			if err2 != nil {
+				break
+			}
+			stop := false
+			for _, r := range resp.Msg.GetAgentRuns() {
+				ts := r.GetCreatedAt()
+				if ts == nil || !ts.AsTime().After(cutoff) {
+					stop = true
+					break
+				}
+				total++
+				switch r.GetStatus().GetPhase() {
+				case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+					done++
+				case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+					failed++
+				}
+			}
+			cursor = resp.Msg.GetNextCursor()
+			if cursor == "" || stop {
+				break
+			}
+		}
+		rate := 0.0
+		if done+failed > 0 {
+			rate = float64(done) / float64(done+failed) * 100
+		}
+		results = append(results, windowResult{Window: win.label, Total: total, Done: done, Failed: failed, Rate: rate})
+	}
+
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(results)
+	}
+
+	useColor := term.IsTerminal(int(os.Stdout.Fd()))
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "WINDOW\tTOTAL\tDONE\tFAILED\tSUCCESS RATE")
+	for _, r := range results {
+		rateStr := "—"
+		if r.Done+r.Failed > 0 {
+			rateStr = fmt.Sprintf("%.1f%%", r.Rate)
+			if useColor {
+				if r.Rate >= 80 {
+					rateStr = "\033[32m" + rateStr + "\033[0m"
+				} else if r.Rate >= 50 {
+					rateStr = "\033[33m" + rateStr + "\033[0m"
+				} else {
+					rateStr = "\033[31m" + rateStr + "\033[0m"
+				}
+			}
+		}
+		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", r.Window, r.Total, r.Done, r.Failed, rateStr)
+	}
+	return w.Flush()
 }
