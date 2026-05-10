@@ -4844,6 +4844,14 @@ Flags:`)
 		}
 	}
 
+	// Apply config defaults to fields not set in each spec.
+	defaultModelTier, defaultProject, defaultFeature := "", "", ""
+	if cfg, cfgErr := loadConfig(); cfgErr == nil {
+		defaultModelTier = cfg.DefaultModelTier
+		defaultProject = cfg.DefaultProject
+		defaultFeature = cfg.DefaultFeature
+	}
+
 	if *dryRun {
 		fmt.Printf("Dry run — would submit %d run(s):\n", len(specs))
 		for i, s := range specs {
@@ -4886,14 +4894,26 @@ Flags:`)
 			branch = defaultBranch
 		}
 
+		model := s.ModelTier
+		if model == "" {
+			model = defaultModelTier
+		}
+		proj := s.Project
+		if proj == "" {
+			proj = defaultProject
+		}
+		feat := s.Feature
+		if feat == "" {
+			feat = defaultFeature
+		}
 		spec := &apiv1.AgentRunSpec{
 			Backend:     apiv1.Backend_BACKEND_POD,
 			Repos:       []*apiv1.Repository{{Url: repo, Branch: branch}},
 			Prompt:      s.Prompt,
 			DisplayName: s.Name,
-			Project:     s.Project,
-			Feature:     s.Feature,
-			ModelTier:   s.ModelTier,
+			Project:     proj,
+			Feature:     feat,
+			ModelTier:   model,
 			AutoPush:    s.AutoPush || s.AutoPR,
 			AutoPr:      s.AutoPR,
 			Tags:        s.Tags,
