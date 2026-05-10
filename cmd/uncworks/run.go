@@ -32,6 +32,7 @@ func runRun(args []string) error {
 	name := fs.String("name", "", "Display name for the run (auto-generated from prompt if omitted)")
 	prompt := fs.String("prompt", "", "Agent prompt describing the task (required; use '-' to read from stdin)")
 	promptFile := fs.String("prompt-file", "", "Read the agent prompt from a file")
+	editPrompt := fs.Bool("editor", false, "Open $EDITOR to compose the agent prompt interactively")
 	project := fs.String("project", "", "Project name this run belongs to")
 	feature := fs.String("feature", "", "Feature/unit-of-work this run contributes to")
 	modelTier := fs.String("model-tier", "", "LLM model tier (e.g. deepseek-v3.2, default-cloud, premium)")
@@ -97,6 +98,39 @@ Flags:`)
 			return fmt.Errorf("reading prompt from stdin: %w", err)
 		}
 		*prompt = strings.TrimRight(string(raw), "\n")
+	}
+
+	// Open $EDITOR to compose the prompt interactively.
+	if *editPrompt && *prompt == "" {
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = os.Getenv("VISUAL")
+		}
+		if editor == "" {
+			editor = "vi"
+		}
+		tmpf, tmpErr := os.CreateTemp("", "uncworks-prompt-*.txt")
+		if tmpErr != nil {
+			return fmt.Errorf("creating temp file for editor: %w", tmpErr)
+		}
+		tmpPath := tmpf.Name()
+		_ = tmpf.Close()
+		defer os.Remove(tmpPath)
+		editorCmd := exec.Command(editor, tmpPath)
+		editorCmd.Stdin = os.Stdin
+		editorCmd.Stdout = os.Stdout
+		editorCmd.Stderr = os.Stderr
+		if err := editorCmd.Run(); err != nil {
+			return fmt.Errorf("editor exited with error: %w", err)
+		}
+		raw, err := os.ReadFile(tmpPath)
+		if err != nil {
+			return fmt.Errorf("reading editor output: %w", err)
+		}
+		*prompt = strings.TrimSpace(string(raw))
+		if *prompt == "" {
+			return fmt.Errorf("prompt is empty (editor produced no content)")
+		}
 	}
 
 	// Auto-detect repo from git origin if not specified.
