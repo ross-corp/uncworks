@@ -30,6 +30,8 @@ const (
 	SignalHumanInput = "human-input"
 	// SignalCancel is the Temporal signal name for requesting graceful workflow cancellation.
 	SignalCancel = "cancel"
+	// SignalApprovalDecision is the Temporal signal name for human approval decisions.
+	SignalApprovalDecision = "approval-decision"
 
 	// QueryGetState is the Temporal query name that returns the current WorkflowState.
 	QueryGetState = "get-state"
@@ -119,6 +121,7 @@ type WorkflowInput struct {
 	Tags                  []string
 	Backend               string
 	SpecSource            string
+	ApprovalMode          string
 }
 
 // PipelineConfigInput contains per-stage configuration for spec-driven runs.
@@ -148,6 +151,13 @@ type WorkflowState struct {
 // HumanInputSignal is the payload for the human-input signal.
 type HumanInputSignal struct {
 	Input string
+}
+
+// ApprovalDecisionSignal is the payload for the approval-decision signal.
+// Approved=false with a non-empty Reason marks the run as Failed.
+type ApprovalDecisionSignal struct {
+	Approved bool
+	Reason   string
 }
 
 // Activity name constants — must match the method names registered on the Activities struct.
@@ -637,6 +647,53 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		// Check terminal states
 		switch state.Phase {
 		case "Succeeded":
+			// ── Approval gate ────────────────────────────────────────────────
+			// If approvalMode requires human approval, pause and wait for a
+			// human-input signal before proceeding to git push / PR creation.
+			mode := strings.ToLower(strings.TrimSpace(input.ApprovalMode))
+			if mode == "hitl" || mode == "hybrid" {
+				state.Phase = "WaitingForInput"
+				state.Message = "Agent completed — awaiting human approval. Use: uncworks input <id> <approve|reject>"
+				approvalCh := workflow.GetSignalChannel(ctx, SignalApprovalDecision)
+				approved := false
+				rejectionReason := ""
+
+				approvalSelector := workflow.NewSelector(ctx)
+				// Primary path: explicit ApprovalDecisionSignal
+				approvalSelector.AddReceive(approvalCh, func(ch workflow.ReceiveChannel, _ bool) {
+					var sig ApprovalDecisionSignal
+					ch.Receive(ctx, &sig)
+					approved = sig.Approved
+					rejectionReason = sig.Reason
+				})
+				// Fallback path: use the human-input channel (treat "reject" prefix as rejection)
+				approvalSelector.AddReceive(humanInputCh, func(ch workflow.ReceiveChannel, _ bool) {
+					var sig HumanInputSignal
+					ch.Receive(ctx, &sig)
+					lower := strings.ToLower(strings.TrimSpace(sig.Input))
+					if strings.HasPrefix(lower, "reject") || strings.HasPrefix(lower, "deny") || strings.HasPrefix(lower, "no") {
+						approved = false
+						rejectionReason = sig.Input
+					} else {
+						approved = true
+					}
+				})
+				approvalSelector.Select(ctx)
+
+				if !approved {
+					reason := rejectionReason
+					if reason == "" {
+						reason = "rejected by human reviewer"
+					}
+					state.Phase = "Failed"
+					state.Message = "Rejected: " + reason
+					return fmt.Errorf("run rejected by human reviewer: %s", reason)
+				}
+				state.Phase = "Succeeded"
+				state.Message = "Approved by human reviewer"
+			}
+			// ── End approval gate ─────────────────────────────────────────────
+
 			// Enrich tags from git diff before cleanup
 			enrichCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 				StartToCloseTimeout: 30 * time.Second,
