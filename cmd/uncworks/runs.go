@@ -143,6 +143,12 @@ func runRuns(args []string) error {
 		return runRunsCompare(rest)
 	case "alias", "aliases":
 		return runRunsAlias(rest)
+	case "today":
+		return runRunsList(append([]string{"--since", "24h", "--all"}, rest...))
+	case "week":
+		return runRunsList(append([]string{"--since", "7d", "--all"}, rest...))
+	case "slow":
+		return runRunsSlow(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -5265,5 +5271,101 @@ func runRunsAlias(args []string) error {
 		fmt.Fprintf(w2, "  %s\t→  %s\n", a.alias, a.expandsTo)
 	}
 	w2.Flush()
+	return nil
+}
+
+// ── slow ─────────────────────────────────────────────────────────────────────
+
+func runRunsSlow(args []string) error {
+	fs := flag.NewFlagSet("runs slow", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	limit := fs.Int("limit", 10, "Number of slowest runs to show")
+	since := fs.String("since", "7d", "Time window to search (e.g. 1h, 24h, 7d)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs slow [flags]\n\nShow the slowest completed runs sorted by duration.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	d, err := parseSinceDuration(*since)
+	if err != nil {
+		return fmt.Errorf("--since %q: %w", *since, err)
+	}
+	sinceTime := time.Now().Add(-d)
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	var runs []*apiv1.AgentRun
+	cursor := ""
+	for {
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			TagFilter:     *tag,
+			Cursor:        cursor,
+		}))
+		if err != nil {
+			break
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			ts := r.GetCreatedAt()
+			if ts == nil || !ts.AsTime().After(sinceTime) {
+				continue
+			}
+			if r.GetStatus().GetStartedAt() == nil || r.GetStatus().GetCompletedAt() == nil {
+				continue
+			}
+			runs = append(runs, r)
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	getDurationSecs := func(r *apiv1.AgentRun) float64 {
+		return r.GetStatus().GetCompletedAt().AsTime().Sub(r.GetStatus().GetStartedAt().AsTime()).Seconds()
+	}
+
+	sort.Slice(runs, func(i, j int) bool {
+		return getDurationSecs(runs[i]) > getDurationSecs(runs[j])
+	})
+
+	if *limit > 0 && len(runs) > *limit {
+		runs = runs[:*limit]
+	}
+
+	if len(runs) == 0 {
+		fmt.Println("No completed runs found.")
+		return nil
+	}
+
+	_ = !*noColor && term.IsTerminal(int(os.Stdout.Fd())) // reserved for future coloring
+	fmt.Printf("Slowest %d run(s) in the last %s:\n\n", len(runs), *since)
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "DURATION\tID\tPHASE\tPROJECT\tTITLE")
+	for _, r := range runs {
+		dur := runDuration(r)
+		title := r.GetSpec().GetDisplayName()
+		if title == "" {
+			title = r.GetSpec().GetProject()
+		}
+		if len(title) > 40 {
+			title = title[:37] + "..."
+		}
+		ph := phaseLabel(r.GetStatus().GetPhase())
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", dur, r.GetId(), ph, r.GetSpec().GetProject(), title)
+	}
+	w.Flush()
 	return nil
 }
