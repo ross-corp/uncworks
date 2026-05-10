@@ -3799,7 +3799,7 @@ func runRunsTop(args []string) error {
 		} else {
 			var buf bytes.Buffer
 			w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tELAPSED\tPHASE\tTITLE")
+			fmt.Fprintln(w, "ID\tELAPSED\tPHASE\tSTAGE\tTITLE")
 			shown := allActive
 			if *limit > 0 && len(shown) > *limit {
 				shown = shown[:*limit]
@@ -3814,7 +3814,8 @@ func runRunsTop(args []string) error {
 				}
 				phase := phaseLabel(r.GetStatus().GetPhase())
 				elapsed := runDuration(r)
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.GetId(), elapsed, phase, title)
+				stage := r.GetStatus().GetStage()
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), elapsed, phase, stage, title)
 			}
 			_ = w.Flush()
 			output := buf.String()
