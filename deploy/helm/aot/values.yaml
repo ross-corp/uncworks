@@ -1,3 +1,16 @@
+# -- Prometheus metrics configuration
+metrics:
+  serviceMonitor:
+    # -- Create a Prometheus Operator ServiceMonitor for the apiserver /metrics endpoint.
+    # Requires prometheus-operator (or kube-prometheus-stack) to be installed.
+    enabled: false
+    # -- Additional labels to add to the ServiceMonitor (e.g. for Prometheus instance selector).
+    labels: {}
+    # -- Scrape interval.
+    interval: 30s
+    # -- Scrape timeout.
+    scrapeTimeout: 10s
+
 # -- NetworkPolicy — set enabled: true only if your CNI enforces policies
 networkPolicy:
   enabled: false
