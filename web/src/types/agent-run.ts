@@ -94,6 +94,7 @@ export interface AgentRunSpec {
   autoPush?: boolean;
   autoPR?: boolean;
   prBaseBranch?: string;
+  approvalMode?: string;
 }
 
 export interface AgentRunStatus {

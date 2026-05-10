@@ -21,6 +21,7 @@ export interface RunFormState {
   project: string;
   feature: string;
   tags: string;
+  approvalMode: string;
 }
 
 const DEFAULT_FORM: RunFormState = {
@@ -38,6 +39,7 @@ const DEFAULT_FORM: RunFormState = {
   project: "",
   feature: "",
   tags: "",
+  approvalMode: "",
 };
 
 type SetField = {

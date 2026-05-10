@@ -45,7 +45,7 @@ export default function NewRunView() {
     prompt, mode, specContent,
     modelTier, ttlMinutes, orchestrationMode, implementModelTier,
     projectRef, specRef, customLabelMode,
-    project, feature, tags,
+    project, feature, tags, approvalMode,
   } = form;
 
   // Auxiliary UI state (not part of the run creation payload)
@@ -266,6 +266,7 @@ export default function NewRunView() {
         ...(orchestrationMode === "spec-driven" && implementModelTier
           ? { pipelineConfig: { execute: { model: implementModelTier } } }
           : {}),
+        ...(approvalMode ? { approvalMode } : {}),
       });
       toast.success("Run created");
       reset();
@@ -523,6 +524,22 @@ export default function NewRunView() {
                       </Select>
                     </div>
                   )}
+
+                  {/* Approval mode */}
+                  <div className="flex gap-2 items-center mt-2">
+                    <span className="text-xs text-muted-foreground shrink-0">Approval</span>
+                    <Select value={approvalMode || "__none__"} onValueChange={(v) => set.approvalMode(v === "__none__" ? "" : v)}>
+                      <SelectTrigger size="sm" className="h-8 flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None (auto-succeed)</SelectItem>
+                        <SelectItem value="hitl">Human approval (HITL)</SelectItem>
+                        <SelectItem value="llm-judge">LLM judge</SelectItem>
+                        <SelectItem value="hybrid">Both (LLM + human)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </section>
 
                 {/* Classification — feature, tags */}
