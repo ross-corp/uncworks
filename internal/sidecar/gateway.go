@@ -103,6 +103,10 @@ type AgentProcess struct {
 	jsonlFile *os.File
 	state     agentv1.AgentProcessState
 	exitError string
+	// llmError is set when Pi emits a message_end with stopReason:"error".
+	// Pi exits with code 0 even on LLM errors, so we capture it here to
+	// propagate a failure through waitForSingleProcess.
+	llmError  string
 	startedAt time.Time
 	outputs   []chan *agentv1.AgentOutput
 	mu        sync.Mutex
@@ -560,6 +564,35 @@ func isOverloadedError(s string) bool {
 		strings.Contains(lower, "overload")
 }
 
+// detectLLMError inspects a Pi JSONL line for a message_end event with
+// stopReason:"error". Pi exits cleanly (code 0) even when the LLM API fails,
+// so we capture the error in proc.llmError for waitForSingleProcess to surface.
+func detectLLMError(proc *AgentProcess, line string) {
+	var evt struct {
+		Type    string `json:"type"`
+		Message *struct {
+			StopReason   string `json:"stopReason"`
+			ErrorMessage string `json:"errorMessage"`
+		} `json:"message,omitempty"`
+	}
+	if json.Unmarshal([]byte(line), &evt) != nil {
+		return
+	}
+	if evt.Type != "message_end" || evt.Message == nil || evt.Message.StopReason != "error" {
+		return
+	}
+	errMsg := evt.Message.ErrorMessage
+	if errMsg == "" {
+		errMsg = "LLM returned stopReason:error with no message"
+	}
+	slog.Error("LLM API error in agent run", "error", errMsg)
+	proc.mu.Lock()
+	if proc.llmError == "" {
+		proc.llmError = errMsg
+	}
+	proc.mu.Unlock()
+}
+
 // maxRepeatedToolCalls is the number of identical consecutive tool calls before
 // the agent is killed to prevent infinite loops (e.g., rewriting the same file).
 const maxRepeatedToolCalls = 5
@@ -621,6 +654,11 @@ func (proc *AgentProcess) startReaders() {
 
 				// Detect tool call lines and record trace spans
 				maybeCaptureStdoutSpan(string(line))
+
+				// Detect LLM errors: Pi emits message_end with stopReason:"error"
+				// and exits cleanly (code 0). Capture the error so waitForSingleProcess
+				// can surface it as a process failure.
+				detectLLMError(proc, string(line))
 			} else if proc.logFile != nil {
 				// Stderr: write as-is to log file with timestamp
 				ts := time.Now().Format("15:04:05")
@@ -846,6 +884,20 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 		proc.mu.Lock()
 		proc.exitError = err.Error()
 		proc.mu.Unlock()
+	}
+
+	// If the process exited cleanly but Pi reported an LLM error (stopReason:"error"),
+	// surface it so the run is marked FAILED rather than COMPLETED with no commits.
+	if err == nil {
+		proc.mu.Lock()
+		llmErr := proc.llmError
+		proc.mu.Unlock()
+		if llmErr != "" {
+			proc.mu.Lock()
+			proc.exitError = llmErr
+			proc.mu.Unlock()
+			return fmt.Errorf("LLM error: %s", llmErr)
+		}
 	}
 
 	return err
