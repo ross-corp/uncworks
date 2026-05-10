@@ -45,6 +45,8 @@ Subcommands:
   graph <id>        Show the run graph (parent/child relationships) (--watch for live refresh)
   inspect <id>      Diagnostic view: details, graph, and log tail (--last, --log-lines)
   diff <id>         Fetch and show git diff for a run's branch; auto-executes on TTY (--last, --stat, --print-cmd)
+  commits <id>      Show git log (commits made by the agent) for a run's branch; auto-executes on TTY (--last, --oneline)
+  log <id>          Alias for commits
   compare <a> <b>   Side-by-side comparison of two runs (--json)
   open <id>         Open the PR URL for a completed run in browser (--last, --print-url)
   open-pr <id>      Alias for open
@@ -76,6 +78,15 @@ Subcommands:
   alias             Show all available subcommand aliases
   prompt <id>       Print only the prompt of a run (alias for get --field prompt)
   id <id>           Print only the ID of a run (alias for get --field id)
+  phase <id>        Print only the phase of a run (alias for get --field phase)
+  status <id>       Alias for phase
+  message <id>      Print only the status message (alias for get --field message)
+  model <id>        Print only the model tier (alias for get --field model)
+  branch <id>       Print only the branch (alias for get --field branch)
+  pr-url <id>       Print only the PR URL (alias for get --field pr-url)
+  duration <id>     Print only the run duration (alias for get --field duration)
+  age <id>          Print only the run age (alias for get --field age)
+  tags <id>         Print only the tags (alias for get --field tags)
   children <id>     List child runs of a parent run ID
   notify <id>       Wait for a run and send macOS notification when done (alias for wait --notify)
 
@@ -90,6 +101,8 @@ Shorthand subcommands:
   running           Show RUNNING runs (alias for list --running)
   waiting           Show WAITING runs (alias for list --waiting)
   cancelled         Show CANCELLED runs (alias for list --cancelled)
+  active            Show all active runs — RUNNING, PENDING, WAITING (alias for list --active --all)
+  last-failed       Show the most recent FAILED run
   queue             Show all pending runs (alias for list --pending --all)
   by-project        Group by project (alias for group --by project)
   by-feature        Group by feature (alias for group --by feature)
@@ -220,10 +233,32 @@ func runRuns(args []string) error {
 			return fmt.Errorf("parent run ID required")
 		}
 		return runRunsList(append([]string{"--parent-run-id", rest[0], "--all"}, rest[1:]...))
+	case "commits", "log":
+		return runRunsCommits(rest)
 	case "prompt":
 		return runRunsGetField(rest, "prompt")
 	case "id":
 		return runRunsGetField(rest, "id")
+	case "phase", "status":
+		return runRunsGetField(rest, "phase")
+	case "message", "msg":
+		return runRunsGetField(rest, "message")
+	case "pr-url", "pr-link":
+		return runRunsGetField(rest, "pr-url")
+	case "branch":
+		return runRunsGetField(rest, "branch")
+	case "model":
+		return runRunsGetField(rest, "model")
+	case "duration":
+		return runRunsGetField(rest, "duration")
+	case "age":
+		return runRunsGetField(rest, "age")
+	case "tags":
+		return runRunsGetField(rest, "tags")
+	case "active":
+		return runRunsList(append([]string{"--active", "--all"}, rest...))
+	case "last-failed":
+		return runRunsList(append([]string{"--failed", "--limit=1"}, rest...))
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -2777,6 +2812,99 @@ func runRunsDiff(args []string) error {
 	fmt.Printf("To view the diff:\n")
 	fmt.Printf("  git fetch origin %s\n", agentBranch)
 	fmt.Printf("  git diff%s origin/%s...origin/%s\n", statFlagStr, baseBranch, agentBranch)
+	return nil
+}
+
+// ── commits ──────────────────────────────────────────────────────────────────
+
+func runRunsCommits(args []string) error {
+	args = normalizeRunArgs(args)
+	fs := flag.NewFlagSet("runs commits", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	oneline := fs.Bool("oneline", false, "Show one-line log output (default: full log)")
+	execFlag := fs.Bool("exec", false, "Run git fetch + log (default when stdout is a TTY)")
+	printCmd := fs.Bool("print-cmd", false, "Print git commands instead of executing them")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs commits <id> [flags]\n\nShow git commits made by a run on its feature branch.\nWhen stdout is a TTY, runs git automatically; otherwise prints the git commands.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	var id string
+	if *lastRun {
+		c0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		resp0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(resp0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		id = resp0.Msg.GetAgentRuns()[0].GetId()
+	} else {
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
+	}
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	req := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id})
+	resp, err := client.GetAgentRun(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+	r := resp.Msg
+
+	repos := r.GetSpec().GetRepos()
+	if len(repos) == 0 {
+		return fmt.Errorf("run %s has no repository configured", id)
+	}
+	baseBranch := repos[0].GetBranch()
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	agentBranch := fmt.Sprintf("aot/%s", id)
+
+	fmt.Printf("Run:   %s\n", id)
+	fmt.Printf("Base:  %s\n", baseBranch)
+	fmt.Printf("Agent: %s\n\n", agentBranch)
+
+	logArgs := []string{"log", fmt.Sprintf("origin/%s..origin/%s", baseBranch, agentBranch)}
+	if *oneline {
+		logArgs = append(logArgs, "--oneline")
+	}
+
+	shouldExec := *execFlag || (!*printCmd && term.IsTerminal(int(os.Stdout.Fd())))
+	if shouldExec {
+		fmt.Printf("$ git fetch origin %s\n", agentBranch)
+		fetchCmd := exec.Command("git", "fetch", "origin", agentBranch)
+		fetchCmd.Stdout = os.Stdout
+		fetchCmd.Stderr = os.Stderr
+		if err := fetchCmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "git fetch failed: %v\n", err)
+		}
+		fmt.Printf("$ git %s\n\n", strings.Join(logArgs, " "))
+		logCmd := exec.Command("git", logArgs...)
+		logCmd.Stdout = os.Stdout
+		logCmd.Stderr = os.Stderr
+		return logCmd.Run()
+	}
+
+	fmt.Printf("To view commits:\n")
+	fmt.Printf("  git fetch origin %s\n", agentBranch)
+	fmt.Printf("  git log origin/%s..origin/%s\n", baseBranch, agentBranch)
 	return nil
 }
 
