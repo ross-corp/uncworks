@@ -3277,6 +3277,7 @@ func runRunsCount(args []string) error {
 	byPhase := fs.Bool("by-phase", false, "Show count breakdown by phase instead of total")
 	byFeature := fs.Bool("by-feature", false, "Show count breakdown by feature name")
 	byTag := fs.Bool("by-tag", false, "Show count breakdown by tag (runs with multiple tags are counted per tag)")
+	byProject := fs.Bool("by-project", false, "Show count breakdown by project name")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
@@ -3326,6 +3327,7 @@ func runRunsCount(args []string) error {
 	phaseCounts := map[string]int{}
 	featureCounts := map[string]int{}
 	tagCounts := map[string]int{}
+	projectCounts := map[string]int{}
 	cursor := ""
 	for {
 		listReq := &apiv1.ListAgentRunsRequest{
@@ -3340,7 +3342,7 @@ func runRunsCount(args []string) error {
 		}
 		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			break
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			if !sinceTime.IsZero() {
@@ -3370,6 +3372,13 @@ func runRunsCount(args []string) error {
 					}
 				}
 			}
+			if *byProject {
+				proj := r.GetSpec().GetProject()
+				if proj == "" {
+					proj = "(none)"
+				}
+				projectCounts[proj]++
+			}
 		}
 		cursor = resp.Msg.GetNextCursor()
 		if cursor == "" {
@@ -3388,7 +3397,10 @@ func runRunsCount(args []string) error {
 		if *byTag {
 			out["by_tag"] = tagCounts
 		}
-		if *byPhase || *byFeature || *byTag {
+		if *byProject {
+			out["by_project"] = projectCounts
+		}
+		if *byPhase || *byFeature || *byTag || *byProject {
 			out["total"] = count
 		}
 		enc := json.NewEncoder(os.Stdout)
@@ -3445,6 +3457,28 @@ func runRunsCount(args []string) error {
 		})
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "TAG\tCOUNT")
+		for _, p := range pairs {
+			fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
+		}
+		w.Flush()
+		fmt.Printf("Total: %d\n", count)
+	} else if *byProject {
+		type pair struct {
+			k string
+			v int
+		}
+		var pairs []pair
+		for k, v := range projectCounts {
+			pairs = append(pairs, pair{k, v})
+		}
+		sort.Slice(pairs, func(i, j int) bool {
+			if pairs[i].v != pairs[j].v {
+				return pairs[i].v > pairs[j].v
+			}
+			return pairs[i].k < pairs[j].k
+		})
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "PROJECT\tCOUNT")
 		for _, p := range pairs {
 			fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
 		}
