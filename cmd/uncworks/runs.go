@@ -5646,6 +5646,8 @@ func runRunsEnv(args []string) error {
 	fs := flag.NewFlagSet("runs env", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	export := fs.Bool("export", false, "Output as shell export statements (eval-friendly)")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
+	jsonOut := fs.Bool("json", false, "Output as JSON object")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs env <id> [flags]\n\nShow environment variables configured for a run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -5653,15 +5655,28 @@ func runRunsEnv(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
-		fs.Usage()
-		return fmt.Errorf("run ID argument required")
-	}
-	id := fs.Arg(0)
 
 	c, err := newClient(*server)
 	if err != nil {
 		return err
+	}
+
+	var id string
+	if *lastRun {
+		resp0, err0 := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(resp0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		id = resp0.Msg.GetAgentRuns()[0].GetId()
+	} else {
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
 	}
 
 	resp, err := c.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
@@ -5670,6 +5685,14 @@ func runRunsEnv(args []string) error {
 	}
 
 	envVars := resp.Msg.GetSpec().GetEnvVars()
+	if *jsonOut {
+		if envVars == nil {
+			envVars = map[string]string{}
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(envVars)
+	}
 	if len(envVars) == 0 {
 		fmt.Println("(no env vars set)")
 		return nil
@@ -5702,6 +5725,7 @@ func runRunsSlow(args []string) error {
 	feature := fs.String("feature", "", "Filter by feature name")
 	tag := fs.String("tag", "", "Filter by tag")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	jsonOut := fs.Bool("json", false, "Output as JSON array")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs slow [flags]\n\nShow the slowest completed runs sorted by duration.\n\nFlags:")
 		fs.PrintDefaults()
@@ -5763,8 +5787,43 @@ func runRunsSlow(args []string) error {
 	}
 
 	if len(runs) == 0 {
+		if *jsonOut {
+			fmt.Println("[]")
+			return nil
+		}
 		fmt.Println("No completed runs found.")
 		return nil
+	}
+
+	if *jsonOut {
+		type slowRun struct {
+			ID       string  `json:"id"`
+			Phase    string  `json:"phase"`
+			Duration string  `json:"duration"`
+			Seconds  float64 `json:"duration_seconds"`
+			Project  string  `json:"project"`
+			Feature  string  `json:"feature"`
+			Title    string  `json:"title"`
+		}
+		var out []slowRun
+		for _, r := range runs {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			out = append(out, slowRun{
+				ID:       r.GetId(),
+				Phase:    phaseLabel(r.GetStatus().GetPhase()),
+				Duration: runDuration(r),
+				Seconds:  getDurationSecs(r),
+				Project:  r.GetSpec().GetProject(),
+				Feature:  r.GetSpec().GetFeature(),
+				Title:    title,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
 	}
 
 	_ = !*noColor && term.IsTerminal(int(os.Stdout.Fd())) // reserved for future coloring
