@@ -141,6 +141,8 @@ func runRuns(args []string) error {
 		return runRunsTimeline(rest)
 	case "compare":
 		return runRunsCompare(rest)
+	case "alias", "aliases":
+		return runRunsAlias(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -3158,6 +3160,7 @@ func runRunsHistogram(args []string) error {
 	buckets := fs.Int("buckets", 0, "Number of time buckets (0 = auto: 24 for <=24h windows, 7 for <=7d, else 30)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
 	jsonOut := fs.Bool("json", false, "Output as JSON array of bucket objects")
+	sparkline := fs.Bool("sparkline", false, "Output a compact single-line sparkline using Unicode block chars")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs histogram [flags]\n\nShow a bar chart of run starts bucketed over a time window.\n\nFlags:")
 		fs.PrintDefaults()
@@ -3279,6 +3282,34 @@ func runRunsHistogram(args []string) error {
 	}
 
 	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+
+	if *sparkline {
+		const blocks = "▁▂▃▄▅▆▇█"
+		runeBlocks := []rune(blocks)
+		nBlocks := len(runeBlocks)
+		var sb strings.Builder
+		for _, n := range counts {
+			if n == 0 {
+				sb.WriteRune(' ')
+			} else if maxCount == 0 {
+				sb.WriteRune(runeBlocks[0])
+			} else {
+				idx := int(float64(n)/float64(maxCount)*float64(nBlocks-1) + 0.5)
+				if idx >= nBlocks {
+					idx = nBlocks - 1
+				}
+				sb.WriteRune(runeBlocks[idx])
+			}
+		}
+		total := 0
+		for _, n := range counts {
+			total += n
+		}
+		from := sinceTime.Format("01/02 15:04")
+		to := time.Now().Format("01/02 15:04")
+		fmt.Printf("%s  (%s to %s, %d runs)\n", sb.String(), from, to, total)
+		return nil
+	}
 
 	const barWidth = 30
 	fmt.Printf("Run activity — last %s  (bucket size: %s)\n\n", *since, bucketDur.Round(time.Minute))
@@ -5183,5 +5214,56 @@ func runRunsCompare(args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", r.field, a, b)
 	}
 	w.Flush()
+	return nil
+}
+
+// ── alias ────────────────────────────────────────────────────────────────────
+
+func runRunsAlias(args []string) error {
+	type aliasEntry struct{ alias, expandsTo string }
+	flagAliases := []aliasEntry{
+		{"runs list --running", "runs list --phase RUNNING"},
+		{"runs list --failed", "runs list --phase FAILED"},
+		{"runs list --pending", "runs list --phase PENDING"},
+		{"runs list --waiting", "runs list --phase WAITING"},
+		{"runs list --done", "runs list --phase DONE"},
+		{"runs list --cancelled", "runs list --phase CANCELLED"},
+		{"runs list --active", "runs list (RUNNING + PENDING + WAITING)"},
+		{"runs list --recent", "runs list --since 24h"},
+		{"runs list --all", "runs list (all pages, no limit)"},
+		{"runs list --title <text>", "runs list --title-contains <text>"},
+		{"run --model <tier>", "run --model-tier <tier>"},
+		{"runs retry --model <tier>", "runs retry --model-tier <tier>"},
+	}
+	cmdAliases := []aliasEntry{
+		{"uncworks jobs", "uncworks runs list --active"},
+		{"uncworks top", "uncworks runs top"},
+		{"uncworks watch", "uncworks runs watch"},
+		{"uncworks kill <id>", "uncworks cancel <id>"},
+		{"runs show <id>", "runs get <id>"},
+		{"runs rerun <id>", "runs retry <id>"},
+		{"runs copy <id>", "runs retry <id>"},
+		{"runs duplicate <id>", "runs retry <id>"},
+		{"runs open-pr <id>", "runs open <id>"},
+		{"runs pr <id>", "runs open <id>"},
+		{"runs kill <id>", "runs cancel <id>"},
+		{"runs kill-all", "runs cancel-all"},
+		{"runs multi-logs", "runs multi-tail"},
+		{"runs aliases", "runs alias"},
+	}
+
+	fmt.Println("Flag aliases:")
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	for _, a := range flagAliases {
+		fmt.Fprintf(w, "  %s\t→  %s\n", a.alias, a.expandsTo)
+	}
+	w.Flush()
+
+	fmt.Println("\nCommand aliases:")
+	w2 := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	for _, a := range cmdAliases {
+		fmt.Fprintf(w2, "  %s\t→  %s\n", a.alias, a.expandsTo)
+	}
+	w2.Flush()
 	return nil
 }
