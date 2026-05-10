@@ -151,6 +151,8 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--failed"}, rest...))
 	case "done", "succeeded":
 		return runRunsList(append([]string{"--done"}, rest...))
+	case "env":
+		return runRunsEnv(rest)
 	case "slow":
 		return runRunsSlow(rest)
 	case "-h", "--help", "help":
@@ -5295,6 +5297,57 @@ func runRunsAlias(args []string) error {
 		fmt.Fprintf(w2, "  %s\t→  %s\n", a.alias, a.expandsTo)
 	}
 	w2.Flush()
+	return nil
+}
+
+// ── env ──────────────────────────────────────────────────────────────────────
+
+func runRunsEnv(args []string) error {
+	fs := flag.NewFlagSet("runs env", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	export := fs.Bool("export", false, "Output as shell export statements (eval-friendly)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs env <id> [flags]\n\nShow environment variables configured for a run.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("run ID argument required")
+	}
+	id := fs.Arg(0)
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
+	if err != nil {
+		return fmt.Errorf("%s", humanizeErr(err))
+	}
+
+	envVars := resp.Msg.GetSpec().GetEnvVars()
+	if len(envVars) == 0 {
+		fmt.Println("(no env vars set)")
+		return nil
+	}
+
+	keys := make([]string, 0, len(envVars))
+	for k := range envVars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		if *export {
+			fmt.Printf("export %s=%q\n", k, envVars[k])
+		} else {
+			fmt.Printf("%s=%s\n", k, envVars[k])
+		}
+	}
 	return nil
 }
 
