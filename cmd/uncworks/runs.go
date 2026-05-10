@@ -831,6 +831,7 @@ func runRunsGet(args []string) error {
 	waitFlag := fs.Bool("wait", false, "If the run is active, wait until it reaches a terminal phase then show details")
 	poll := fs.Int("poll", 0, "Auto-refresh every N seconds until the run reaches a terminal phase (0 = disabled)")
 	promptOnly := fs.Bool("prompt-only", false, "Print only the agent prompt text (useful for piping or editing)")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -840,6 +841,28 @@ func runRunsGet(args []string) error {
 	}
 	if *showLogs {
 		*showLog = true
+	}
+	if *lastRun && fs.NArg() == 0 {
+		c0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(r0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		latestID := r0.Msg.GetAgentRuns()[0].GetId()
+		var filtered []string
+		for _, a := range args {
+			if a != "--last" && a != "-last" {
+				filtered = append(filtered, a)
+			}
+		}
+		filtered = append(filtered, latestID) // ID must come after flags
+		return runRunsGet(filtered)
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
@@ -2548,14 +2571,14 @@ func runRunsRetry(args []string) error {
 		if len(r0.Msg.GetAgentRuns()) == 0 {
 			return fmt.Errorf("no runs found")
 		}
-		newArgs := append([]string{r0.Msg.GetAgentRuns()[0].GetId()}, args...)
-		// Remove --last from forwarded args.
+		latestRetryID := r0.Msg.GetAgentRuns()[0].GetId()
 		var filtered []string
-		for _, a := range newArgs {
+		for _, a := range args {
 			if a != "--last" && a != "-last" {
 				filtered = append(filtered, a)
 			}
 		}
+		filtered = append(filtered, latestRetryID)
 		return runRunsRetry(filtered)
 	}
 	if fs.NArg() == 0 {
