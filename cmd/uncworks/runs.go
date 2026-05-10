@@ -1409,6 +1409,17 @@ func runRunsLogs(args []string) error {
 		return fmt.Errorf("%s", humanizeErr(err))
 	}
 
+	// Automatically use stored logs for terminal runs (no need to stream).
+	terminalPhase := func() bool {
+		ph := getResp.Msg.GetStatus().GetPhase()
+		return ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED ||
+			ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED ||
+			ph == apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+	}
+	if !*noFollow && terminalPhase() {
+		*noFollow = true
+	}
+
 	if *noFollow {
 		logOutput := getResp.Msg.GetStatus().GetLogOutput()
 		if logOutput == "" {
