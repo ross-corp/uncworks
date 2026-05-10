@@ -2781,6 +2781,7 @@ func runRunsRetry(args []string) error {
 	outputID := fs.Bool("output-id", false, "Print only the new run ID (for scripting)")
 	wait := fs.Bool("wait", false, "Wait for the retried run to complete; exit 0 on success, 1 on failure")
 	follow := fs.Bool("follow", false, "Stream logs after submitting (takes precedence over --wait)")
+	diffFlag := fs.Bool("diff", false, "Show git diff commands for the original run (before waiting)")
 	var envFlags multiFlag
 	fs.Var(&envFlags, "env", "Override environment variables (repeatable, KEY=VALUE); replaces all env vars if any are provided")
 	var addEnvFlags multiFlag
@@ -2857,6 +2858,9 @@ func runRunsRetry(args []string) error {
 			}
 			if *outputID {
 				subArgs = append(subArgs, "--output-id")
+			}
+			if *diffFlag {
+				subArgs = append(subArgs, "--diff")
 			}
 			for _, t := range tagFlags {
 				subArgs = append(subArgs, "--tag="+t)
@@ -2972,6 +2976,25 @@ func runRunsRetry(args []string) error {
 			fmt.Printf("Follow progress: uncworks runs tail %s\n", newRun.GetId())
 		}
 	}
+
+	if *diffFlag && !*outputID {
+		repos := orig.GetSpec().GetRepos()
+		if len(repos) > 0 && (orig.GetSpec().GetAutoPush() || orig.GetStatus().GetPrUrl() != "") {
+			baseBranch := repos[0].GetBranch()
+			if baseBranch == "" {
+				baseBranch = "main"
+			}
+			agentBranch := fmt.Sprintf("aot/%s", id)
+			fmt.Println()
+			fmt.Printf("Original run diff (%s):\n", id)
+			if prURL := orig.GetStatus().GetPrUrl(); prURL != "" {
+				fmt.Printf("  PR: %s\n", prURL)
+			}
+			fmt.Printf("  git fetch origin %s\n", agentBranch)
+			fmt.Printf("  git diff origin/%s...origin/%s\n", baseBranch, agentBranch)
+		}
+	}
+
 	if *follow {
 		return runRunsTail([]string{newRun.GetId(), "--server=" + *server})
 	}
