@@ -21,6 +21,10 @@ type Config struct {
 	WebURL string `yaml:"web_url,omitempty"`
 	// DefaultModelTier is the LLM model tier used when --model-tier is not specified.
 	DefaultModelTier string `yaml:"default_model_tier,omitempty"`
+	// DefaultProject is the project name used when --project is not specified.
+	DefaultProject string `yaml:"default_project,omitempty"`
+	// DefaultFeature is the feature name used when --feature is not specified.
+	DefaultFeature string `yaml:"default_feature,omitempty"`
 }
 
 // configDir returns the XDG config directory for uncworks.

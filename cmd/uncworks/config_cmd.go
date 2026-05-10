@@ -12,7 +12,7 @@ import (
 func runConfig(args []string) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show           Print the current CLI configuration\n  set-server     Set the gRPC server address\n  set-web-url    Set the web dashboard URL (used by 'runs ui')\n  set-model      Set the default model tier (used when --model-tier is not specified)\n  edit           Open the config file in $EDITOR\n  reset          Reset the config to defaults\n\nFlags:")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show             Print the current CLI configuration\n  set-server       Set the gRPC server address\n  set-web-url      Set the web dashboard URL (used by 'runs ui')\n  set-model        Set the default model tier (used when --model-tier is not specified)\n  set-project      Set the default project name (used when --project is not specified)\n  set-feature      Set the default feature name (used when --feature is not specified)\n  edit             Open the config file in $EDITOR\n  reset            Reset the config to defaults\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -31,6 +31,10 @@ func runConfig(args []string) error {
 		return runConfigSetWebURL(fs.Args()[1:])
 	case "set-model":
 		return runConfigSetModel(fs.Args()[1:])
+	case "set-project":
+		return runConfigSetStringField(fs.Args()[1:], "set-project", "default_project", func(cfg *Config, v string) { cfg.DefaultProject = v }, "default project name")
+	case "set-feature":
+		return runConfigSetStringField(fs.Args()[1:], "set-feature", "default_feature", func(cfg *Config, v string) { cfg.DefaultFeature = v }, "default feature name")
 	case "edit":
 		return runConfigEdit(fs.Args()[1:])
 	case "reset":
@@ -137,6 +141,40 @@ func runConfigSetModel(args []string) error {
 	return nil
 }
 
+func runConfigSetStringField(args []string, cmd, field string, setter func(*Config, string), label string) error {
+	fs := flag.NewFlagSet("config "+cmd, flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(fs.Output(), "Usage: uncworks config %s <value>\n\nSet the %s. Use 'none' to clear.\n", cmd, label)
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("value argument required")
+	}
+	val := fs.Arg(0)
+	if val == "none" || val == "default" {
+		val = ""
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	setter(&cfg, val)
+	if err := saveConfig(cfg); err != nil {
+		return err
+	}
+	path, _ := configPath()
+	if val == "" {
+		fmt.Printf("%s cleared (config: %s)\n", field, path)
+	} else {
+		fmt.Printf("%s set to %s (config: %s)\n", field, val, path)
+	}
+	return nil
+}
+
 func runConfigEdit(args []string) error {
 	path, err := configPath()
 	if err != nil {
@@ -193,6 +231,8 @@ func runConfigShow(args []string) error {
 			"server_address":     cfg.Server.Address,
 			"web_url":            cfg.WebURL,
 			"default_model_tier": cfg.DefaultModelTier,
+			"default_project":    cfg.DefaultProject,
+			"default_feature":    cfg.DefaultFeature,
 			"config_file":        path,
 		}
 		enc := json.NewEncoder(os.Stdout)
@@ -200,21 +240,34 @@ func runConfigShow(args []string) error {
 		return enc.Encode(out)
 	}
 
+	notSet := func(key, hint string) string {
+		return fmt.Sprintf("(not set — use 'config %s')", hint)
+	}
 	addr := cfg.Server.Address
 	if addr == "" {
-		addr = "(not set — using local port-forward)"
+		addr = notSet("server.address", "set-server <addr>")
 	}
 	fmt.Printf("server.address:      %s\n", addr)
 	webURL := cfg.WebURL
 	if webURL == "" {
-		webURL = "(not set — use 'config set-web-url <url>')"
+		webURL = notSet("web_url", "set-web-url <url>")
 	}
 	fmt.Printf("web_url:             %s\n", webURL)
 	model := cfg.DefaultModelTier
 	if model == "" {
-		model = "(not set — use 'config set-model <tier>')"
+		model = notSet("default_model_tier", "set-model <tier>")
 	}
 	fmt.Printf("default_model_tier:  %s\n", model)
+	proj := cfg.DefaultProject
+	if proj == "" {
+		proj = notSet("default_project", "set-project <name>")
+	}
+	fmt.Printf("default_project:     %s\n", proj)
+	feat := cfg.DefaultFeature
+	if feat == "" {
+		feat = notSet("default_feature", "set-feature <name>")
+	}
+	fmt.Printf("default_feature:     %s\n", feat)
 	fmt.Printf("config file:         %s\n", path)
 	return nil
 }

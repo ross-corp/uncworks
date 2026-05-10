@@ -66,9 +66,15 @@ Flags:`)
 	if *modelShort != "" && *modelTier == "" {
 		*modelTier = *modelShort
 	}
-	if *modelTier == "" {
-		if cfg, err := loadConfig(); err == nil && cfg.DefaultModelTier != "" {
+	if cfg, cfgErr := loadConfig(); cfgErr == nil {
+		if *modelTier == "" && cfg.DefaultModelTier != "" {
 			*modelTier = cfg.DefaultModelTier
+		}
+		if *project == "" && cfg.DefaultProject != "" {
+			*project = cfg.DefaultProject
+		}
+		if *feature == "" && cfg.DefaultFeature != "" {
+			*feature = cfg.DefaultFeature
 		}
 	}
 
