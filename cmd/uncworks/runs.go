@@ -204,6 +204,8 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--pending", "--all"}, rest...))
 	case "retry-last":
 		return runRunsRetry(append([]string{"--last"}, rest...))
+	case "notify":
+		return runRunsWait(append([]string{"--notify"}, rest...))
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -1472,6 +1474,7 @@ func runRunsArchive(args []string, archived bool) error {
 	}
 	fs := flag.NewFlagSet("runs "+verb, flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "Usage: uncworks runs %s <id> [<id> ...] [flags]\n\nFlags:\n", verb)
 		fs.PrintDefaults()
@@ -1479,7 +1482,22 @@ func runRunsArchive(args []string, archived bool) error {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() == 0 {
+
+	ids := fs.Args()
+	if *lastRun {
+		c, err := newClient(*server)
+		if err != nil {
+			return err
+		}
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		if len(resp.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		ids = []string{resp.Msg.GetAgentRuns()[0].GetId()}
+	} else if len(ids) == 0 {
 		fs.Usage()
 		return fmt.Errorf("run ID argument required")
 	}
@@ -1487,7 +1505,7 @@ func runRunsArchive(args []string, archived bool) error {
 	body, _ := json.Marshal(map[string]bool{"archived": archived})
 	baseURL := serverBaseURL(*server)
 	var errs []string
-	for _, id := range fs.Args() {
+	for _, id := range ids {
 		url := baseURL + "/api/v1/runs/" + id + "/archive"
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
 		if err != nil {
@@ -5318,6 +5336,7 @@ func runRunsTimeline(args []string) error {
 	limit := fs.Int("limit", 100, "Max runs to show")
 	phase := fs.String("phase", "", "Filter by phase (DONE, FAILED, CANCELLED; default: all terminal)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	jsonOut := fs.Bool("json", false, "Output as JSON array")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs timeline [flags]\n\nShow a chronological view of completed runs with durations.\n\nFlags:")
 		fs.PrintDefaults()
@@ -5409,8 +5428,47 @@ func runRunsTimeline(args []string) error {
 	})
 
 	if len(runs) == 0 {
+		if *jsonOut {
+			fmt.Println("[]")
+			return nil
+		}
 		fmt.Printf("No completed runs in the last %s.\n", *since)
 		return nil
+	}
+
+	if *jsonOut {
+		type timelineRun struct {
+			ID          string `json:"id"`
+			Phase       string `json:"phase"`
+			Duration    string `json:"duration"`
+			Project     string `json:"project"`
+			Feature     string `json:"feature"`
+			Title       string `json:"title"`
+			CompletedAt string `json:"completed_at,omitempty"`
+		}
+		var out []timelineRun
+		for _, r := range runs {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			completedStr := ""
+			if ts := r.GetStatus().GetCompletedAt(); ts != nil {
+				completedStr = ts.AsTime().Format(time.RFC3339)
+			}
+			out = append(out, timelineRun{
+				ID:          r.GetId(),
+				Phase:       phaseLabel(r.GetStatus().GetPhase()),
+				Duration:    runDuration(r),
+				Project:     r.GetSpec().GetProject(),
+				Feature:     r.GetSpec().GetFeature(),
+				Title:       title,
+				CompletedAt: completedStr,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
 	}
 
 	colorPhase := func(label string) string {
