@@ -4367,6 +4367,8 @@ func runRunsGroup(args []string) error {
 	limit := fs.Int("limit", 200, "Max total runs to fetch (0 = no limit)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
 	titleWidth := fs.Int("title-width", 36, "Max characters for title column")
+	jsonOut := fs.Bool("json", false, "Output grouped runs as JSON object")
+	countOnly := fs.Bool("count-only", false, "Show only group names and run counts (no individual runs)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs group [flags]\n\nShow runs organized into groups.\n\nFlags:")
 		fs.PrintDefaults()
@@ -4479,7 +4481,65 @@ func runRunsGroup(args []string) error {
 	}
 
 	if len(groups) == 0 {
+		if *jsonOut {
+			fmt.Println(`{"groups":[]}`)
+			return nil
+		}
 		fmt.Println("No runs found.")
+		return nil
+	}
+
+	if *jsonOut {
+		type jsonRun struct {
+			ID       string `json:"id"`
+			Title    string `json:"title"`
+			Phase    string `json:"phase"`
+			Duration string `json:"duration"`
+			Age      string `json:"age"`
+		}
+		type jsonGroup struct {
+			Key  string    `json:"key"`
+			Runs []jsonRun `json:"runs"`
+		}
+		type groupsOutput struct {
+			Groups []jsonGroup `json:"groups"`
+			Total  int         `json:"total"`
+		}
+		out := groupsOutput{Total: total}
+		for _, key := range groupOrder {
+			g := jsonGroup{Key: key}
+			for _, r := range groups[key] {
+				title := r.GetSpec().GetDisplayName()
+				if title == "" {
+					title = r.GetSpec().GetProject()
+				}
+				age := ""
+				if ts := r.GetCreatedAt(); ts != nil {
+					age = relativeTime(ts.AsTime())
+				}
+				g.Runs = append(g.Runs, jsonRun{
+					ID:       r.GetId(),
+					Title:    title,
+					Phase:    phaseLabel(r.GetStatus().GetPhase()),
+					Duration: runDuration(r),
+					Age:      age,
+				})
+			}
+			out.Groups = append(out.Groups, g)
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+
+	if *countOnly {
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "GROUP\tCOUNT\n")
+		for _, key := range groupOrder {
+			fmt.Fprintf(w, "%s\t%d\n", key, len(groups[key]))
+		}
+		w.Flush()
+		fmt.Printf("\nTotal: %d run(s) in %d group(s)\n", total, len(groupOrder))
 		return nil
 	}
 
