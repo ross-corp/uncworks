@@ -105,6 +105,7 @@ Shorthand subcommands:
   active            Show all active runs — RUNNING, PENDING, WAITING (alias for list --active --all)
   last-failed       Show the most recent FAILED run
   zero-commits      Show succeeded runs that made no code changes (alias for list --zero-commits --done --all)
+  approvals         Show runs waiting for approval (alias for list --phase WAITING --approval-mode hitl --all)
   queue             Show all pending runs (alias for list --pending --all)
   by-project        Group by project (alias for group --by project)
   by-feature        Group by feature (alias for group --by feature)
@@ -267,6 +268,8 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--failed", "--limit=1"}, rest...))
 	case "zero-commits":
 		return runRunsList(append([]string{"--zero-commits", "--done", "--all"}, rest...))
+	case "approvals":
+		return runRunsList(append([]string{"--phase", "WAITING", "--approval-mode", "hitl", "--all"}, rest...))
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -480,6 +483,8 @@ func runRunsList(args []string) error {
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
 	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive, e.g. deepseek, claude)")
 	zeroCommits := fs.Bool("zero-commits", false, "Filter for succeeded runs that made no code changes")
+	approvalModeFilter := fs.String("approval-mode", "", "Filter by approval mode (hitl, llm-judge, hybrid, or none for runs without approval)")
+	showApproval := fs.Bool("show-approval", false, "Add an APPROVAL column to the output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -678,6 +683,21 @@ func runRunsList(args []string) error {
 		}
 		runs = filtered
 	}
+	if *approvalModeFilter != "" {
+		needle := strings.ToLower(*approvalModeFilter)
+		filtered := runs[:0]
+		for _, r := range runs {
+			mode := strings.ToLower(r.GetSpec().GetApprovalMode())
+			if needle == "none" {
+				if mode == "" {
+					filtered = append(filtered, r)
+				}
+			} else if mode == needle {
+				filtered = append(filtered, r)
+			}
+		}
+		runs = filtered
+	}
 	if *sortBy != "" {
 		switch strings.ToLower(*sortBy) {
 		case "started":
@@ -846,6 +866,9 @@ func runRunsList(args []string) error {
 		if *showMessage {
 			hdr += "\tMESSAGE"
 		}
+		if *showApproval {
+			hdr += "\tAPPROVAL"
+		}
 		fmt.Fprintln(w, hdr)
 	}
 	for _, r := range runs {
@@ -938,6 +961,13 @@ func runRunsList(args []string) error {
 				msg = msg[:57] + "..."
 			}
 			row += "\t" + msg
+		}
+		if *showApproval {
+			approval := r.GetSpec().GetApprovalMode()
+			if approval == "" {
+				approval = "—"
+			}
+			row += "\t" + approval
 		}
 		fmt.Fprintln(w, row)
 	}
