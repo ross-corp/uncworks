@@ -1,0 +1,72 @@
+- generic [ref=e2]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - button "Collapse sidebar" [ref=e7]:
+          - img "ROSS CORP" [ref=e8]
+        - generic [ref=e9]: UNCWORKS
+        - button "Collapse sidebar" [ref=e10]:
+          - img [ref=e11]
+      - navigation [ref=e13]:
+        - generic [ref=e14]:
+          - generic [ref=e15]: Activity
+          - link "Runs" [ref=e16] [cursor=pointer]:
+            - /url: /
+            - img [ref=e17]
+            - generic [ref=e19]: Runs
+        - generic [ref=e20]:
+          - generic [ref=e21]: Library
+          - link "Projects" [ref=e22] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e23]
+            - generic [ref=e25]: Projects
+          - link "Templates" [ref=e26] [cursor=pointer]:
+            - /url: /templates
+            - img [ref=e27]
+            - generic [ref=e31]: Templates
+        - generic [ref=e32]:
+          - generic [ref=e33]: Automation
+          - link "Chains" [ref=e34] [cursor=pointer]:
+            - /url: /chains
+            - img [ref=e35]
+            - generic [ref=e38]: Chains
+          - link "Schedules" [ref=e39] [cursor=pointer]:
+            - /url: /schedules
+            - img [ref=e40]
+            - generic [ref=e43]: Schedules
+      - link "Configuration incomplete Settings" [ref=e45] [cursor=pointer]:
+        - /url: /settings
+        - generic [ref=e46]:
+          - img [ref=e47]
+          - generic "Configuration incomplete" [ref=e50]
+        - generic [ref=e51]: Settings
+    - main [ref=e53]:
+      - generic [ref=e54]:
+        - generic [ref=e55]:
+          - generic [ref=e57]:
+            - generic [ref=e58]: Runs
+            - generic [ref=e59]: "0"
+            - generic [ref=e60]:
+              - button "unified" [ref=e61]
+              - button "features" [ref=e62]
+              - button "all" [ref=e63]
+          - generic [ref=e64]:
+            - generic [ref=e65]:
+              - button "all" [ref=e66]
+              - button "running" [ref=e67]
+              - button "waiting" [ref=e68]
+              - button "failed" [ref=e69]
+              - button "succeeded" [ref=e70]
+            - button "show archived" [ref=e71]
+            - button "select" [ref=e72]
+          - generic [ref=e73]:
+            - group [ref=e74]:
+              - generic "Field..." [ref=e75] [cursor=pointer]:
+                - generic [ref=e76]: Field...
+                - img [ref=e77]
+            - textbox "filter runs..." [ref=e80]
+        - generic [ref=e82]: Loading...
+        - generic [ref=e83]:
+          - generic [ref=e84]: j/k nav · enter open · n new · d delete · c clone · x select · p project
+          - generic [ref=e85]: / name · ? state · ' stage · " model
+  - region "Notifications"

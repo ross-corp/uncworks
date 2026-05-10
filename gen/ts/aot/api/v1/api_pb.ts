@@ -272,6 +272,11 @@ export type AgentRunSpec = Message<"aot.api.v1.AgentRunSpec"> & {
    * @generated from field: string spec_ref = 31;
    */
   specRef: string;
+
+  /**
+   * @generated from field: string approval_mode = 32;
+   */
+  approvalMode: string;
 };
 
 /**

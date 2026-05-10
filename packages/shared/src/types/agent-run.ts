@@ -64,6 +64,7 @@ export interface AgentRunSpec {
   autoPush?: boolean;
   autoPR?: boolean;
   prBaseBranch?: string;
+  approvalMode?: string;
 }
 
 /** Status of an AgentRun. */
