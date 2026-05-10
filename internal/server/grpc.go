@@ -44,6 +44,7 @@ type AOTServiceHandler struct {
 	EventBus       eventbus.EventBus
 	Namespace      string
 	LiteLLMBaseURL string
+	LiteLLMMasterKey string
 
 	// Knowledge system (optional — nil means search is unavailable)
 	BrainSearcher *brain.Searcher
@@ -73,6 +74,7 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 	if litellmURL == "" {
 		litellmURL = "http://litellm:4000"
 	}
+	litellmKey := os.Getenv("LITELLM_MASTER_KEY")
 	
 	// Create rate limiter for CreateAgentRun
 	// Default: 5 RPS, burst 3 (more restrictive than global defaults)
@@ -112,6 +114,7 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		EventBus:                  bus,
 		Namespace:                 namespace,
 		LiteLLMBaseURL:            litellmURL,
+		LiteLLMMasterKey:          litellmKey,
 		createAgentRunRateLimiter: createAgentRunRateLimiter,
 		cancelAgentRunRateLimiter: cancelAgentRunRateLimiter,
 		maxConcurrentRuns:         maxConcurrent,
@@ -896,6 +899,9 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 		return deriveNameFromPrompt(prompt)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if s.LiteLLMMasterKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+s.LiteLLMMasterKey)
+	}
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
