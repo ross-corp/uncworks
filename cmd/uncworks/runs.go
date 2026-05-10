@@ -2919,7 +2919,7 @@ func runRunsExport(args []string) error {
 	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED)")
 	since := fs.String("since", "", "Filter to runs created within this window (e.g. 1h, 24h, 7d)")
 	outFile := fs.String("out", "", "Write output to file instead of stdout")
-	format := fs.String("format", "csv", "Output format: csv, tsv, or json")
+	format := fs.String("format", "csv", "Output format: csv, tsv, json, or markdown")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs export [flags]\n\nExport runs as CSV (stdout by default).\n\nFlags:")
 		fs.PrintDefaults()
@@ -3057,6 +3057,32 @@ func runRunsExport(args []string) error {
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(rows); err != nil {
 			return fmt.Errorf("json encode: %w", err)
+		}
+		if *outFile != "" {
+			fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
+		}
+		return nil
+	}
+
+	if *format == "markdown" {
+		fmt.Fprintln(out, "| ID | Title | Phase | Project | Feature | Model | Duration | Started | PR |")
+		fmt.Fprintln(out, "|---|---|---|---|---|---|---|---|---|")
+		for _, r := range allRuns {
+			title := r.GetSpec().GetDisplayName()
+			started := ""
+			if ts := r.GetStatus().GetStartedAt(); ts != nil {
+				started = ts.AsTime().Format("2006-01-02 15:04")
+			}
+			dur := runDuration(r)
+			prURL := r.GetStatus().GetPrUrl()
+			prCell := ""
+			if prURL != "" {
+				prCell = "[PR](" + prURL + ")"
+			}
+			fmt.Fprintf(out, "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+				r.GetId(), title, phaseLabel(r.GetStatus().GetPhase()),
+				r.GetSpec().GetProject(), r.GetSpec().GetFeature(),
+				r.GetSpec().GetModelTier(), dur, started, prCell)
 		}
 		if *outFile != "" {
 			fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
