@@ -43,7 +43,12 @@ const (
 	activityTimeout = 5 * time.Minute
 
 	// Heartbeat interval for long-running activities.
+	// Activities heartbeat every ~10s but the timeout is 90s to survive worker restarts.
 	heartbeatInterval = 10 * time.Second
+
+	// workerRestartHeartbeatTimeout is the heartbeat timeout for short activities that
+	// must survive a worker pod restart during a rolling deploy (typically 60-90s).
+	workerRestartHeartbeatTimeout = 90 * time.Second
 
 	// Maximum consecutive GetAgentStatus failures before failing the workflow.
 	maxConsecutiveStatusErrors = 5
@@ -243,12 +248,14 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 	activityOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: activityTimeout,
-		HeartbeatTimeout:    heartbeatInterval * 3,
+		// 90-second heartbeat timeout is enough for a rolling-update worker restart
+		// (old pod terminates, new pod starts, activity re-dispatches within ~60s).
+		HeartbeatTimeout: workerRestartHeartbeatTimeout,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    30 * time.Second,
-			MaximumAttempts:    3,
+			MaximumAttempts:    6,
 		},
 	}
 	actCtx := workflow.WithActivityOptions(ctx, activityOpts)
