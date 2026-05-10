@@ -4,7 +4,7 @@ import { useCopilotContext } from "../hooks/useCopilotContext";
 import { ScrollTextIcon, GitBranchIcon, FolderIcon, TerminalIcon, NetworkIcon } from "lucide-react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
-import type { AgentRun } from "../types/agent-run";
+import type { AgentRun, AgentRunPhase } from "../types/agent-run";
 import { useClient, mapRun } from "../hooks/useClient";
 import { apiFetch } from "../hooks/apiFetch";
 import { Button } from "../components/ui/button";
@@ -16,8 +16,9 @@ import ShellTerminal from "../components/ShellTerminal";
 import TraceTimeline, { SpanDetail } from "../components/TraceTimeline";
 import FailureDiagnosisPanel from "../components/FailureDiagnosisPanel";
 import HitlModal from "../components/HitlModal";
+import RunDagViz from "../components/RunDagViz";
 import { useTraces } from "../hooks/useTraces";
-import type { TraceSpan } from "../types/agent-run";
+import type { TraceSpan, RunGraph } from "../types/agent-run";
 import {
   Sheet,
   SheetContent,
@@ -129,7 +130,7 @@ export default function RunDetailView() {
   const [elapsed, setElapsed] = useState(0);
   const [pendingArchive, setPendingArchive] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [runGraph, setRunGraph] = useState<{ nodes: Array<{name: string; phase: string; role: string; startedAt?: string; completedAt?: string}>; edges: Array<{parent: string; child: string}> } | null>(null);
+  const [runGraph, setRunGraph] = useState<RunGraph | null>(null);
   const prevPhaseRef = useRef<string | undefined>(undefined);
   const retriesRef = useRef(0);
   const { spans, loading: tracesLoading } = useTraces(id || "", run?.status.phase);
@@ -163,11 +164,15 @@ export default function RunDetailView() {
     if (!id || !run) return;
     const hasRelated = (run.children && run.children.length > 0) || !!run.spec.parentRunId;
     if (!hasRelated) return;
+    const graphPhaseMap: Record<string, AgentRunPhase> = {
+      Pending: "pending", Running: "running", WaitingForInput: "waiting_for_input",
+      Succeeded: "succeeded", Failed: "failed", Cancelled: "cancelled",
+    };
     client.getRunGraph(id).then((g) => {
       setRunGraph({
         nodes: (g.nodes ?? []).map((n) => ({
           name: n.name,
-          phase: String(n.phase ?? ""),
+          phase: graphPhaseMap[String(n.phase ?? "")] ?? "pending",
           role: n.role ?? "",
           startedAt: n.startedAt ? String(n.startedAt) : undefined,
           completedAt: n.completedAt ? String(n.completedAt) : undefined,
@@ -734,57 +739,18 @@ export default function RunDetailView() {
 
             {/* Run graph (parent/child DAG) */}
             {runGraph && runGraph.nodes.length > 1 && (
-              <div className="border-t pt-3 space-y-1">
+              <div className="border-t pt-3">
                 <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground mb-2">
                   <NetworkIcon className="w-3 h-3" />
                   Run Graph ({runGraph.nodes.length} runs)
                 </div>
-                {(() => {
-                  const graph = runGraph!;
-                  // Build parent-first ordering: roots first, then children
-                  const childIds = new Set(graph.edges.map((e) => e.child));
-                  const roots = graph.nodes.filter((n) => !childIds.has(n.name));
-                  const phaseColor: Record<string, string> = {
-                    succeeded: "text-green-600 dark:text-green-400",
-                    failed: "text-red-500",
-                    running: "text-blue-500",
-                    pending: "text-muted-foreground",
-                    waiting_for_input: "text-amber-500",
-                    cancelled: "text-muted-foreground",
-                  };
-                  const phaseLabel: Record<string, string> = {
-                    succeeded: "✓", failed: "✗", running: "⟳",
-                    pending: "○", waiting_for_input: "?", cancelled: "⊘",
-                  };
-                  function NodeRow({ node, depth }: { node: typeof graph.nodes[0]; depth: number }) {
-                    const isCurrent = node.name === id;
-                    const children = graph.edges.filter((e) => e.parent === node.name)
-                      .map((e) => graph.nodes.find((n) => n.name === e.child))
-                      .filter(Boolean) as typeof graph.nodes;
-                    const clr = phaseColor[node.phase] ?? "text-muted-foreground";
-                    const lbl = phaseLabel[node.phase] ?? "○";
-                    return (
-                      <>
-                        <div
-                          className={`flex items-center gap-1 text-xs py-0.5 ${isCurrent ? "font-semibold" : ""}`}
-                          style={{ paddingLeft: depth * 14 }}
-                        >
-                          <span className={clr}>{lbl}</span>
-                          {isCurrent ? (
-                            <span className="font-mono">{node.name}</span>
-                          ) : (
-                            <a href={`/run/${node.name}`} className="font-mono hover:underline text-blue-500">
-                              {node.name}
-                            </a>
-                          )}
-                          {node.role && <span className="text-muted-foreground">({node.role})</span>}
-                        </div>
-                        {children.map((c) => <NodeRow key={c.name} node={c} depth={depth + 1} />)}
-                      </>
-                    );
-                  }
-                  return roots.map((r) => <NodeRow key={r.name} node={r} depth={0} />);
-                })()}
+                <div style={{ height: Math.max(200, runGraph.nodes.length * 90) }}>
+                  <RunDagViz
+                    nodes={runGraph.nodes}
+                    edges={runGraph.edges}
+                    currentRunName={id ?? ""}
+                  />
+                </div>
               </div>
             )}
           </div>
