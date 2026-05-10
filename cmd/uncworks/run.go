@@ -39,6 +39,7 @@ func runRun(args []string) error {
 	modelShort := fs.String("model", "", "Shorthand for --model-tier")
 	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
 	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
+	approvalMode := fs.String("approval-mode", "", "Approval required before run is marked Succeeded: hitl, llm-judge, hybrid, or empty for none")
 	wait := fs.Bool("wait", false, "Wait for the run to complete; exit 0 on success, 1 on failure")
 	follow := fs.Bool("follow", false, "Stream logs after submitting the run (takes precedence over --wait)")
 	timeout := fs.Duration("timeout", 0, "Timeout for --wait mode (e.g. 30m, 1h); 0 means no timeout")
@@ -238,11 +239,12 @@ Flags:`)
 		Project:     *project,
 		Feature:     *feature,
 		ModelTier:   *modelTier,
-		AutoPush:    *autoPush || *autoPR,
-		AutoPr:      *autoPR,
-		Tags:        []string(tags),
-		ParentRunId: *parentRunID,
-		EnvVars:     envVars,
+		AutoPush:     *autoPush || *autoPR,
+		AutoPr:       *autoPR,
+		Tags:         []string(tags),
+		ParentRunId:  *parentRunID,
+		EnvVars:      envVars,
+		ApprovalMode: *approvalMode,
 	}
 
 	req := connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: spec})

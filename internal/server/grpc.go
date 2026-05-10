@@ -976,6 +976,7 @@ func specProtoToCRD(spec *apiv1.AgentRunSpec) aotv1alpha1.AgentRunSpec {
 		Tags:              spec.Tags,
 		ProjectRef:        spec.ProjectRef,
 		SpecRef:           spec.SpecRef,
+		ApprovalMode:      spec.GetApprovalMode(),
 	}
 	if spec.PipelineConfig != nil {
 		crdSpec.PipelineConfig = &aotv1alpha1.PipelineConfig{
@@ -1077,9 +1078,10 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		AutoPush:          crd.Spec.AutoPush,
 		AutoPr:            crd.Spec.AutoPR,
 		PrBaseBranch:      crd.Spec.PRBaseBranch,
-		Project:           crdFieldOrLabel(crd, crd.Spec.Project, "aot.uncworks.io/project"),
-		Feature:           crdFieldOrLabel(crd, crd.Spec.Feature, "aot.uncworks.io/feature"),
-		Tags:              crdTagsOrLabel(crd),
+		Project:      crdFieldOrLabel(crd, crd.Spec.Project, "aot.uncworks.io/project"),
+		Feature:      crdFieldOrLabel(crd, crd.Spec.Feature, "aot.uncworks.io/feature"),
+		Tags:         crdTagsOrLabel(crd),
+		ApprovalMode: crd.Spec.ApprovalMode,
 	}
 	if crd.Spec.PipelineConfig != nil {
 		protoSpec.PipelineConfig = &apiv1.PipelineConfig{
