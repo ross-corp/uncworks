@@ -359,6 +359,7 @@ func runRunsList(args []string) error {
 	showTags := fs.Bool("show-tags", false, "Add a tags column to the output")
 	showPR := fs.Bool("show-pr", false, "Add a PR URL column to the output")
 	showFeature := fs.Bool("show-feature", false, "Add a feature column to the output")
+	showMessage := fs.Bool("show-message", false, "Add a STATUS MESSAGE column (truncated to 60 chars)")
 	titleShort := fs.String("title", "", "Shorthand for --title-contains")
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
 	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive, e.g. deepseek, claude)")
@@ -690,6 +691,9 @@ func runRunsList(args []string) error {
 		if *showPR {
 			hdr += "\tPR"
 		}
+		if *showMessage {
+			hdr += "\tMESSAGE"
+		}
 		fmt.Fprintln(w, hdr)
 	}
 	for _, r := range runs {
@@ -769,6 +773,15 @@ func runRunsList(args []string) error {
 				prURL = "—"
 			}
 			row += "\t" + prURL
+		}
+		if *showMessage {
+			msg := r.GetStatus().GetMessage()
+			if msg == "" {
+				msg = "—"
+			} else if len(msg) > 60 {
+				msg = msg[:57] + "..."
+			}
+			row += "\t" + msg
 		}
 		fmt.Fprintln(w, row)
 	}
