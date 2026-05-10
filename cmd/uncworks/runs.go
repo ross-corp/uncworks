@@ -2504,6 +2504,7 @@ func runRunsRetryFailed(args []string) error {
 	tag := fs.String("tag", "", "Only retry runs with this tag")
 	since := fs.String("since", "", "Only retry runs created within this window (e.g. 1h, 24h, 7d)")
 	limit := fs.Int("limit", 0, "Retry at most N runs (0 = no limit)")
+	listOnly := fs.Bool("list", false, "Print a table of runs that would be retried, then exit (implies --dry-run)")
 	dryRun := fs.Bool("dry-run", false, "Print what would be retried without actually doing it")
 	yes := fs.Bool("yes", false, "Skip confirmation prompt")
 	verbose := fs.Bool("verbose", false, "Show a prompt preview for each run before confirming")
@@ -2568,6 +2569,28 @@ func runRunsRetryFailed(args []string) error {
 
 	if len(failedRuns) == 0 {
 		fmt.Println("No failed runs found matching the given filters.")
+		return nil
+	}
+
+	if *listOnly {
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "ID\tSTARTED\tTITLE\n")
+		for _, r := range failedRuns {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			if len(title) > 50 {
+				title = title[:47] + "..."
+			}
+			started := ""
+			if ts := r.GetCreatedAt(); ts != nil {
+				started = relativeTime(ts.AsTime())
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\n", r.GetId(), started, title)
+		}
+		w.Flush()
+		fmt.Printf("\n%d run(s) would be retried.\n", len(failedRuns))
 		return nil
 	}
 
