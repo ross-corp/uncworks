@@ -479,6 +479,7 @@ func runRunsList(args []string) error {
 	showFeature := fs.Bool("show-feature", false, "Add a feature column to the output")
 	showMessage := fs.Bool("show-message", false, "Add a STATUS MESSAGE column (truncated to 60 chars)")
 	showDiff := fs.Bool("show-diff", false, "Add a DIFF column showing +additions/-deletions line counts")
+	showCost := fs.Bool("show-cost", false, "Add a COST column showing estimated run cost")
 	noModel := fs.Bool("no-model", false, "Hide the MODEL column")
 	titleShort := fs.String("title", "", "Shorthand for --title-contains")
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
@@ -870,6 +871,9 @@ func runRunsList(args []string) error {
 		if *showDiff {
 			hdr += "\tDIFF"
 		}
+		if *showCost {
+			hdr += "\tCOST"
+		}
 		if *showApproval {
 			hdr += "\tAPPROVAL"
 		}
@@ -971,6 +975,13 @@ func runRunsList(args []string) error {
 			del := r.GetStatus().GetTotalDeletions()
 			if add > 0 || del > 0 {
 				row += fmt.Sprintf("\t+%d/-%d", add, del)
+			} else {
+				row += "\t—"
+			}
+		}
+		if *showCost {
+			if cost := r.GetStatus().GetTotalCost(); cost != "" {
+				row += "\t" + cost
 			} else {
 				row += "\t—"
 			}
