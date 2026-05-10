@@ -448,11 +448,15 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	// quickly if the worker crashes, and the activity will be re-dispatched once.
 	hydrationOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 20 * time.Minute,
-		HeartbeatTimeout:    30 * time.Second,
+		// 90-second heartbeat timeout gives the worker more time to restart during deploys
+		// before Temporal declares the activity dead and triggers a retry.
+		HeartbeatTimeout: 90 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts:    3,
+			// Increase retries — heartbeat timeouts during worker restarts are transient.
+			MaximumAttempts:    6,
 			InitialInterval:    5 * time.Second,
-			BackoffCoefficient: 1.0,
+			BackoffCoefficient: 1.5,
+			MaximumInterval:    30 * time.Second,
 			NonRetryableErrorTypes: []string{"eviction"},
 		},
 	}
