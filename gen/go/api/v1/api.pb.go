@@ -507,7 +507,8 @@ type AgentRunSpec struct {
 	ProjectRef string `protobuf:"bytes,30,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
 	// SpecRef is the name of a spec in the project's config repo (e.g., "add-comments").
 	// Requires project_ref to be set. The controller fetches spec content from soft-serve.
-	SpecRef       string `protobuf:"bytes,31,opt,name=spec_ref,json=specRef,proto3" json:"spec_ref,omitempty"`
+	SpecRef      string `protobuf:"bytes,31,opt,name=spec_ref,json=specRef,proto3" json:"spec_ref,omitempty"`
+	ApprovalMode string `protobuf:"bytes,32,opt,name=approval_mode,json=approvalMode,proto3" json:"approval_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -720,6 +721,13 @@ func (x *AgentRunSpec) GetProjectRef() string {
 func (x *AgentRunSpec) GetSpecRef() string {
 	if x != nil {
 		return x.SpecRef
+	}
+	return ""
+}
+
+func (x *AgentRunSpec) GetApprovalMode() string {
+	if x != nil {
+		return x.ApprovalMode
 	}
 	return ""
 }
