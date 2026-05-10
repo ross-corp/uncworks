@@ -826,7 +826,7 @@ func runRunsList(args []string) error {
 	}
 
 	if nextCursor != "" && !*all {
-		fmt.Printf("next-cursor: %s\n", nextCursor)
+		fmt.Fprintf(os.Stderr, "next-cursor: %s\n", nextCursor)
 		fmt.Printf("Showing %d run(s) — use --all or --limit to see more\n", len(runs))
 	} else if *all {
 		fmt.Printf("Showing all %d run(s)%s\n", len(runs), phaseSummary())
