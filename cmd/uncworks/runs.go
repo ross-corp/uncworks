@@ -235,6 +235,8 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--parent-run-id", rest[0], "--all"}, rest[1:]...))
 	case "commits", "log":
 		return runRunsCommits(rest)
+	case "question":
+		return runRunsGetField(rest, "question")
 	case "prompt":
 		return runRunsGetField(rest, "prompt")
 	case "id":
@@ -1208,8 +1210,12 @@ func runRunsGet(args []string) error {
 			if ts := r.GetStatus().GetCompletedAt(); ts != nil {
 				val = ts.AsTime().Format(time.RFC3339)
 			}
+		case "question", "pending-question":
+			if r.GetStatus().GetPhase() == apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
+				val = r.GetStatus().GetMessage()
+			}
 		default:
-			return fmt.Errorf("unknown field %q: must be id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt, message, stage, age, created-at, created-at-iso, started-at, started-at-iso, completed-at, completed-at-iso, parent, or tags", *field)
+			return fmt.Errorf("unknown field %q: must be id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt, message, stage, age, created-at, created-at-iso, started-at, started-at-iso, completed-at, completed-at-iso, parent, tags, or question", *field)
 		}
 		fmt.Println(val)
 		return nil

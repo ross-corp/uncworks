@@ -620,7 +620,11 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 					state.Message = fmt.Sprintf("Agent failed: %s", statusOutput.Error)
 				case "AGENT_PROCESS_STATE_WAITING_FOR_INPUT":
 					state.Phase = "WaitingForInput"
-					state.Message = "Agent waiting for human input"
+					if statusOutput.Error != "" {
+						state.Message = statusOutput.Error
+					} else {
+						state.Message = "Agent waiting for human input"
+					}
 				}
 			}
 
