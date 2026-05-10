@@ -47,6 +47,7 @@ Subcommands:
   diff <id>         Fetch and show git diff for a run's branch; auto-executes on TTY (--last, --stat, --print-cmd)
   commits <id>      Show git log (commits made by the agent) for a run's branch; auto-executes on TTY (--last, --oneline)
   log <id>          Alias for commits
+  verify <id>       Show the verification result for a spec-driven run (--json, --last)
   compare <a> <b>   Side-by-side comparison of two runs (--json)
   open <id>         Open the PR URL for a completed run in browser (--last, --print-url)
   open-pr <id>      Alias for open
@@ -157,6 +158,8 @@ func runRuns(args []string) error {
 		return runRunsCount(rest)
 	case "export":
 		return runRunsExport(rest)
+	case "verify":
+		return runRunsVerify(rest)
 	case "diff":
 		return runRunsDiff(rest)
 	case "inspect":
@@ -2706,6 +2709,147 @@ func runRunsInspect(args []string) error {
 		fmt.Println("Run 'uncworks runs logs " + id + " --no-follow' for stored output.")
 	}
 
+	return nil
+}
+
+// ── verify ────────────────────────────────────────────────────────────────────
+
+func runRunsVerify(args []string) error {
+	args = normalizeRunArgs(args)
+	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	jsonOut := fs.Bool("json", false, "Print raw JSON output")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs verify <id> [flags]\n\nFetch and display the verification result for a spec-driven run.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	var id string
+	if *lastRun && fs.NArg() == 0 {
+		c0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(r0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		id = r0.Msg.GetAgentRuns()[0].GetId()
+	} else {
+		if fs.NArg() == 0 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
+	}
+
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	base := strings.TrimRight(cfg.WebURL, "/")
+	if base == "" {
+		return fmt.Errorf("web_url not configured — run: uncworks config set-web-url <url>")
+	}
+	url := base + "/api/v1/runs/" + id + "/verification"
+
+	resp, err := http.Get(url) //nolint:gosec
+	if err != nil {
+		return fmt.Errorf("fetch verification: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response: %w", err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("no verification result found for run %s (not a spec-driven run, or not yet completed)", id)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	if *jsonOut {
+		fmt.Println(string(body))
+		return nil
+	}
+
+	type AutomatedCheck struct {
+		Name    string `json:"name"`
+		Pass    bool   `json:"pass"`
+		Output  string `json:"output,omitempty"`
+		Command string `json:"command,omitempty"`
+	}
+	type LLMVerdict struct {
+		Pass          bool   `json:"pass"`
+		Confidence    string `json:"confidence,omitempty"`
+		Summary       string `json:"summary,omitempty"`
+		FailureReason string `json:"failureReason,omitempty"`
+	}
+	type VerificationResult struct {
+		Pass            bool             `json:"pass"`
+		TasksCompleted  int              `json:"tasksCompleted"`
+		TasksTotal      int              `json:"tasksTotal"`
+		AutomatedChecks []AutomatedCheck `json:"automatedChecks"`
+		LLMVerdict      *LLMVerdict      `json:"llmVerdict,omitempty"`
+		FailureReport   string           `json:"failureReport,omitempty"`
+		ExecutionTimeMs int64            `json:"executionTimeMs"`
+	}
+
+	var vr VerificationResult
+	if err := json.Unmarshal(body, &vr); err != nil {
+		return fmt.Errorf("parsing verification result: %w", err)
+	}
+
+	passStr := "PASSED"
+	if !vr.Pass {
+		passStr = "FAILED"
+	}
+	fmt.Printf("Verification: %s\n", passStr)
+	if vr.TasksTotal > 0 {
+		fmt.Printf("Tasks:        %d/%d completed\n", vr.TasksCompleted, vr.TasksTotal)
+	}
+	if vr.ExecutionTimeMs > 0 {
+		fmt.Printf("Duration:     %s\n", (time.Duration(vr.ExecutionTimeMs) * time.Millisecond).Round(time.Second))
+	}
+	if len(vr.AutomatedChecks) > 0 {
+		fmt.Println("\nChecks:")
+		for _, c := range vr.AutomatedChecks {
+			mark := "✓"
+			if !c.Pass {
+				mark = "✗"
+			}
+			out := c.Output
+			if len(out) > 120 {
+				out = out[:120] + "…"
+			}
+			if out != "" {
+				fmt.Printf("  %s %s: %s\n", mark, c.Name, out)
+			} else {
+				fmt.Printf("  %s %s\n", mark, c.Name)
+			}
+		}
+	}
+	if vr.LLMVerdict != nil {
+		fmt.Printf("\nLLM Verdict:  %s", map[bool]string{true: "pass", false: "fail"}[vr.LLMVerdict.Pass])
+		if vr.LLMVerdict.Confidence != "" {
+			fmt.Printf(" (confidence: %s)", vr.LLMVerdict.Confidence)
+		}
+		fmt.Println()
+		if vr.LLMVerdict.Summary != "" {
+			fmt.Printf("Summary:      %s\n", vr.LLMVerdict.Summary)
+		}
+	}
+	if vr.FailureReport != "" {
+		fmt.Printf("\nFailure:\n  %s\n", vr.FailureReport)
+	}
 	return nil
 }
 
