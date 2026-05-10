@@ -192,6 +192,9 @@ const (
 
 	// Trace span writing
 	ActivityWriteTraceSpan = "WriteTraceSpan"
+
+	// LLM judge
+	ActivityLLMJudgeChanges = "LLMJudgeChanges"
 )
 
 // AgentRunWorkflow orchestrates the full lifecycle of an agent run.
@@ -644,13 +647,57 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 
 		selector.Select(ctx)
 
+		// Compute repoPath once — used by both the approval gate and git operations below.
+		repoPath := workspacePath
+		if len(input.Repos) > 0 {
+			rp := input.Repos[0].Path
+			if rp == "" {
+				rp = repoNameFromURL(input.Repos[0].URL)
+			}
+			repoPath = "/workspace/" + rp
+		}
+
 		// Check terminal states
 		switch state.Phase {
 		case "Succeeded":
 			// ── Approval gate ────────────────────────────────────────────────
-			// If approvalMode requires human approval, pause and wait for a
-			// human-input signal before proceeding to git push / PR creation.
 			mode := strings.ToLower(strings.TrimSpace(input.ApprovalMode))
+
+			// LLM judge: runs for "llm-judge" and "hybrid" modes.
+			if mode == "llm-judge" || mode == "hybrid" {
+				state.Message = "Agent completed — running LLM judge review"
+				judgeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+					StartToCloseTimeout: 3 * time.Minute,
+					HeartbeatTimeout:    30 * time.Second,
+					RetryPolicy: &temporal.RetryPolicy{
+						MaximumAttempts: 2,
+					},
+				})
+				var judgeOut LLMJudgeOutput
+				if err := workflow.ExecuteActivity(judgeCtx, ActivityLLMJudgeChanges, LLMJudgeInput{
+					AgentRunName:   input.AgentRunName,
+					PodIP:          podIP,
+					RepoPath:       repoPath,
+					Prompt:         input.Prompt,
+					LiteLLMBaseURL: input.LiteLLMBaseURL,
+					LLMKey:         llmKey,
+					ModelTier:      input.ModelTier,
+				}).Get(ctx, &judgeOut); err != nil {
+					workflow.GetLogger(ctx).Warn("LLM judge activity failed", "error", err)
+					// Fail-safe: treat activity errors as rejection
+					state.Phase = "Failed"
+					state.Message = fmt.Sprintf("LLM judge failed: %v", err)
+					return fmt.Errorf("LLM judge activity error: %w", err)
+				}
+				if !judgeOut.Approved {
+					state.Phase = "Failed"
+					state.Message = "Rejected by LLM judge: " + judgeOut.Reason
+					return fmt.Errorf("run rejected by LLM judge: %s", judgeOut.Reason)
+				}
+				state.Message = "LLM judge approved: " + judgeOut.Reason
+			}
+
+			// HITL: runs for "hitl" and "hybrid" modes (after LLM judge for hybrid).
 			if mode == "hitl" || mode == "hybrid" {
 				state.Phase = "WaitingForInput"
 				state.Message = "Agent completed — awaiting human approval. Use: uncworks input <id> <approve|reject>"
@@ -701,14 +748,6 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 					MaximumAttempts: 2,
 				},
 			})
-			repoPath := workspacePath
-			if len(input.Repos) > 0 {
-				rp := input.Repos[0].Path
-				if rp == "" {
-					rp = repoNameFromURL(input.Repos[0].URL)
-				}
-				repoPath = "/workspace/" + rp
-			}
 			if err := workflow.ExecuteActivity(enrichCtx, ActivityEnrichRunTags, EnrichRunTagsInput{
 				AgentRunName: input.AgentRunName,
 				Namespace:    input.Namespace,
