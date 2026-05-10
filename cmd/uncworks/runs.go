@@ -2238,6 +2238,7 @@ func runRunsDiff(args []string) error {
 	fs := flag.NewFlagSet("runs diff", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	stat := fs.Bool("stat", false, "Show git diff --stat instead of full diff")
+	execFlag := fs.Bool("exec", false, "Actually run the git fetch and diff commands (instead of printing them)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs diff <id> [flags]\n\nShow the git commands to inspect the diff for a completed run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2279,34 +2280,46 @@ func runRunsDiff(args []string) error {
 	}
 
 	agentBranch := fmt.Sprintf("agent/%s", id)
+	diffArgs := []string{"diff", fmt.Sprintf("origin/%s...origin/%s", baseBranch, agentBranch)}
+	if *stat {
+		diffArgs = []string{"diff", "--stat", fmt.Sprintf("origin/%s...origin/%s", baseBranch, agentBranch)}
+	}
+
 	if prURL != "" {
-		// GitHub PR URL: extract branch from link (not always available directly)
-		// Show instructions using the PR URL
 		fmt.Printf("Run:       %s\n", id)
 		fmt.Printf("Repo:      %s\n", repoURL)
 		fmt.Printf("Base:      %s\n", baseBranch)
 		fmt.Printf("PR:        %s\n", prURL)
 		fmt.Println()
-		diffFlag := ""
-		if *stat {
-			diffFlag = " --stat"
-		}
-		fmt.Printf("To view the diff:\n")
-		fmt.Printf("  git fetch origin %s\n", agentBranch)
-		fmt.Printf("  git diff%s origin/%s...origin/%s\n", diffFlag, baseBranch, agentBranch)
 	} else {
 		fmt.Printf("Run:       %s\n", id)
 		fmt.Printf("Repo:      %s\n", repoURL)
 		fmt.Printf("Branch:    %s\n", agentBranch)
 		fmt.Println()
-		diffFlag := ""
-		if *stat {
-			diffFlag = " --stat"
-		}
-		fmt.Printf("To view the diff:\n")
-		fmt.Printf("  git fetch origin %s\n", agentBranch)
-		fmt.Printf("  git diff%s origin/%s...origin/%s\n", diffFlag, baseBranch, agentBranch)
 	}
+
+	if *execFlag {
+		fmt.Printf("$ git fetch origin %s\n", agentBranch)
+		fetchCmd := exec.Command("git", "fetch", "origin", agentBranch)
+		fetchCmd.Stdout = os.Stdout
+		fetchCmd.Stderr = os.Stderr
+		if err := fetchCmd.Run(); err != nil {
+			return fmt.Errorf("git fetch failed: %w", err)
+		}
+		fmt.Printf("$ git %s\n\n", strings.Join(diffArgs, " "))
+		diffCmd := exec.Command("git", diffArgs...)
+		diffCmd.Stdout = os.Stdout
+		diffCmd.Stderr = os.Stderr
+		return diffCmd.Run()
+	}
+
+	statFlagStr := ""
+	if *stat {
+		statFlagStr = " --stat"
+	}
+	fmt.Printf("To view the diff:\n")
+	fmt.Printf("  git fetch origin %s\n", agentBranch)
+	fmt.Printf("  git diff%s origin/%s...origin/%s\n", statFlagStr, baseBranch, agentBranch)
 	return nil
 }
 
