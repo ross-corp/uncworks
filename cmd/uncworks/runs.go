@@ -4348,12 +4348,16 @@ func runRunsTop(args []string) error {
 	limit := fs.Int("limit", 30, "Max runs to show per refresh")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	oneShot := fs.Bool("one-shot", false, "Print once and exit (useful for scripting)")
+	jsonOut := fs.Bool("json", false, "Output active runs as JSON (implies --one-shot)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs top [flags]\n\nLive view of active runs sorted by elapsed time.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *jsonOut {
+		*oneShot = true
 	}
 
 	client, err := newClient(*server)
@@ -4380,14 +4384,16 @@ func runRunsTop(args []string) error {
 	}
 
 	for {
-		if useColor {
-			fmt.Print("\033[H\033[2J")
+		if !*jsonOut {
+			if useColor {
+				fmt.Print("\033[H\033[2J")
+			}
+			header := fmt.Sprintf("uncworks runs top — %s  (Ctrl+C to stop)", time.Now().Format("15:04:05"))
+			if phaseFilter != "" {
+				header += "  [phase:" + phaseFilter + "]"
+			}
+			fmt.Println(header + "\n")
 		}
-		header := fmt.Sprintf("uncworks runs top — %s  (Ctrl+C to stop)", time.Now().Format("15:04:05"))
-		if phaseFilter != "" {
-			header += "  [phase:" + phaseFilter + "]"
-		}
-		fmt.Println(header + "\n")
 
 		var allActive []*apiv1.AgentRun
 		cursor := ""
@@ -4442,6 +4448,46 @@ func runRunsTop(args []string) error {
 			}
 			return ti.AsTime().Before(tj.AsTime())
 		})
+
+		if *jsonOut {
+			type topRun struct {
+				ID      string `json:"id"`
+				Phase   string `json:"phase"`
+				Elapsed string `json:"elapsed"`
+				Stage   string `json:"stage"`
+				Title   string `json:"title"`
+				Project string `json:"project"`
+				Feature string `json:"feature"`
+				Model   string `json:"model_tier"`
+			}
+			shown := allActive
+			if *limit > 0 && len(shown) > *limit {
+				shown = shown[:*limit]
+			}
+			var out []topRun
+			for _, r := range shown {
+				title := r.GetSpec().GetDisplayName()
+				if title == "" {
+					title = r.GetSpec().GetProject()
+				}
+				out = append(out, topRun{
+					ID:      r.GetId(),
+					Phase:   phaseLabel(r.GetStatus().GetPhase()),
+					Elapsed: runDuration(r),
+					Stage:   r.GetStatus().GetStage(),
+					Title:   title,
+					Project: r.GetSpec().GetProject(),
+					Feature: r.GetSpec().GetFeature(),
+					Model:   r.GetSpec().GetModelTier(),
+				})
+			}
+			if out == nil {
+				out = []topRun{}
+			}
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(out)
+		}
 
 		if len(allActive) == 0 {
 			fmt.Println("No active runs.")
