@@ -12,7 +12,7 @@ import (
 func runConfig(args []string) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show             Print the current CLI configuration\n  set-server       Set the gRPC server address\n  set-web-url      Set the web dashboard URL (used by 'runs ui')\n  set-model        Set the default model tier (used when --model-tier is not specified)\n  set-project      Set the default project name (used when --project is not specified)\n  set-feature      Set the default feature name (used when --feature is not specified)\n  edit             Open the config file in $EDITOR\n  reset            Reset the config to defaults\n\nFlags:")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show             Print the current CLI configuration\n  set-server       Set the gRPC server address\n  set-web-url      Set the web dashboard URL (used by 'runs ui')\n  set-model        Set the default model tier (used when --model-tier is not specified)\n  set-project      Set the default project name (used when --project is not specified)\n  set-feature      Set the default feature name (used when --feature is not specified)\n  unset <field>    Clear a config field (server, web-url, model, project, feature)\n  path             Print the config file path\n  edit             Open the config file in $EDITOR\n  reset            Reset the config to defaults\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -35,6 +35,15 @@ func runConfig(args []string) error {
 		return runConfigSetStringField(fs.Args()[1:], "set-project", "default_project", func(cfg *Config, v string) { cfg.DefaultProject = v }, "default project name")
 	case "set-feature":
 		return runConfigSetStringField(fs.Args()[1:], "set-feature", "default_feature", func(cfg *Config, v string) { cfg.DefaultFeature = v }, "default feature name")
+	case "unset":
+		return runConfigUnset(fs.Args()[1:])
+	case "path":
+		p, err := configPath()
+		if err != nil {
+			return err
+		}
+		fmt.Println(p)
+		return nil
 	case "edit":
 		return runConfigEdit(fs.Args()[1:])
 	case "reset":
@@ -172,6 +181,46 @@ func runConfigSetStringField(args []string, cmd, field string, setter func(*Conf
 	} else {
 		fmt.Printf("%s set to %s (config: %s)\n", field, val, path)
 	}
+	return nil
+}
+
+func runConfigUnset(args []string) error {
+	fs := flag.NewFlagSet("config unset", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config unset <field>\n\nClear a config field. Valid fields: server, web-url, model, project, feature\n")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("field argument required")
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	field := fs.Arg(0)
+	switch field {
+	case "server", "server-address":
+		cfg.Server.Address = ""
+	case "web-url", "web_url":
+		cfg.WebURL = ""
+	case "model", "model-tier", "default-model":
+		cfg.DefaultModelTier = ""
+	case "project", "default-project":
+		cfg.DefaultProject = ""
+	case "feature", "default-feature":
+		cfg.DefaultFeature = ""
+	default:
+		return fmt.Errorf("unknown field %q: must be server, web-url, model, project, or feature", field)
+	}
+	if err := saveConfig(cfg); err != nil {
+		return err
+	}
+	path, _ := configPath()
+	fmt.Printf("%s cleared (config: %s)\n", field, path)
 	return nil
 }
 
