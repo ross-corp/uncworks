@@ -104,6 +104,7 @@ Shorthand subcommands:
   cancelled         Show CANCELLED runs (alias for list --cancelled)
   active            Show all active runs — RUNNING, PENDING, WAITING (alias for list --active --all)
   last-failed       Show the most recent FAILED run
+  zero-commits      Show succeeded runs that made no code changes (alias for list --zero-commits --done --all)
   queue             Show all pending runs (alias for list --pending --all)
   by-project        Group by project (alias for group --by project)
   by-feature        Group by feature (alias for group --by feature)
@@ -264,6 +265,8 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--active", "--all"}, rest...))
 	case "last-failed":
 		return runRunsList(append([]string{"--failed", "--limit=1"}, rest...))
+	case "zero-commits":
+		return runRunsList(append([]string{"--zero-commits", "--done", "--all"}, rest...))
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -476,6 +479,7 @@ func runRunsList(args []string) error {
 	titleShort := fs.String("title", "", "Shorthand for --title-contains")
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
 	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive, e.g. deepseek, claude)")
+	zeroCommits := fs.Bool("zero-commits", false, "Filter for succeeded runs that made no code changes")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -659,6 +663,16 @@ func runRunsList(args []string) error {
 			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING,
 				apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
 				apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
+				filtered = append(filtered, r)
+			}
+		}
+		runs = filtered
+	}
+	if *zeroCommits {
+		filtered := runs[:0]
+		for _, r := range runs {
+			if r.GetStatus().GetPhase() == apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED &&
+				strings.Contains(r.GetStatus().GetMessage(), "no changes committed") {
 				filtered = append(filtered, r)
 			}
 		}
