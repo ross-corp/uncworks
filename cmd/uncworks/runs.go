@@ -5448,9 +5448,11 @@ func runRunsSearch(args []string) error {
 		if apiErr != nil {
 			break
 		}
+		passedSince := false
 		for _, r := range resp.Msg.GetAgentRuns() {
 			ts := r.GetCreatedAt()
 			if ts != nil && !ts.AsTime().After(sinceTime) {
+				passedSince = true
 				continue
 			}
 			prompt := strings.ToLower(r.GetSpec().GetPrompt())
@@ -5465,7 +5467,7 @@ func runRunsSearch(args []string) error {
 			break
 		}
 		cursor = resp.Msg.GetNextCursor()
-		if cursor == "" {
+		if cursor == "" || passedSince {
 			break
 		}
 	}
@@ -6047,9 +6049,14 @@ func runRunsSlow(args []string) error {
 		if err != nil {
 			break
 		}
+		passedSince := false
 		for _, r := range resp.Msg.GetAgentRuns() {
 			ts := r.GetCreatedAt()
-			if ts == nil || !ts.AsTime().After(sinceTime) {
+			if ts == nil {
+				continue
+			}
+			if !ts.AsTime().After(sinceTime) {
+				passedSince = true
 				continue
 			}
 			if r.GetStatus().GetStartedAt() == nil || r.GetStatus().GetCompletedAt() == nil {
@@ -6058,7 +6065,7 @@ func runRunsSlow(args []string) error {
 			runs = append(runs, r)
 		}
 		cursor = resp.Msg.GetNextCursor()
-		if cursor == "" {
+		if cursor == "" || passedSince {
 			break
 		}
 	}
