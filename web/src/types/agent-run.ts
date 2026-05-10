@@ -105,6 +105,7 @@ export interface AgentRunStatus {
   traceID: string;
   startedAt: string;
   completedAt: string;
+  retainUntil?: string;
   logOutput?: string;
   deploymentName?: string;
   debugActive?: boolean;
