@@ -80,6 +80,7 @@ Subcommands:
   search <term>     Search runs by prompt text, title, or project (--phase, --since, --project)
   timeline          Show a chronological view of completed runs (--since, --project)
   slow              Show slowest completed runs sorted by duration (--limit, --since, --project)
+  credits           Check OpenRouter API key balance and usage
   alias             Show all available subcommand aliases
   prompt <id>       Print only the prompt of a run (alias for get --field prompt)
   id <id>           Print only the ID of a run (alias for get --field id)
@@ -203,6 +204,8 @@ func runRuns(args []string) error {
 		return runRunsTimeline(rest)
 	case "compare":
 		return runRunsCompare(rest)
+	case "credits":
+		return runRunsCredits(rest)
 	case "alias", "aliases":
 		return runRunsAlias(rest)
 	case "today":
@@ -7305,5 +7308,88 @@ func runRunsAnomalies(args []string) error {
 	}
 	fmt.Printf("\n%d anomal%s (>%.1fx p75=%s, cutoff=%s)\n",
 		len(anomalies), plural, *threshold, formatDuration(p75), formatDuration(cutoff))
+	return nil
+}
+
+func runRunsCredits(args []string) error {
+	fs := flag.NewFlagSet("credits", flag.ContinueOnError)
+	jsonOut := fs.Bool("json", false, "Output raw JSON response")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), `Usage: uncworks runs credits [--json]
+
+Check OpenRouter API key balance and credit usage.
+Reads key from OPENROUTER_API_KEY environment variable.`)
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("OPENROUTER_API_KEY environment variable is not set")
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"https://openrouter.ai/api/v1/auth/key", nil)
+	if err != nil {
+		return fmt.Errorf("building request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("calling OpenRouter API: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("OpenRouter API error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	if *jsonOut {
+		fmt.Println(string(body))
+		return nil
+	}
+
+	var result struct {
+		Data struct {
+			Label          string   `json:"label"`
+			Usage          float64  `json:"usage"`
+			UsageDaily     float64  `json:"usage_daily"`
+			UsageWeekly    float64  `json:"usage_weekly"`
+			UsageMonthly   float64  `json:"usage_monthly"`
+			Limit          *float64 `json:"limit"`
+			LimitRemaining *float64 `json:"limit_remaining"`
+			IsFreeTier     bool     `json:"is_free_tier"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("parsing response: %w", err)
+	}
+	d := result.Data
+	fmt.Printf("OpenRouter API Key\n")
+	if d.Label != "" {
+		fmt.Printf("  label:     %s\n", d.Label)
+	}
+	if d.IsFreeTier {
+		fmt.Printf("  tier:      free\n")
+	} else {
+		fmt.Printf("  tier:      paid\n")
+	}
+	if d.Limit != nil {
+		fmt.Printf("  limit:     $%.4f\n", *d.Limit)
+		if d.LimitRemaining != nil {
+			fmt.Printf("  remaining: $%.4f\n", *d.LimitRemaining)
+		}
+	} else {
+		fmt.Printf("  limit:     none (account-level balance applies)\n")
+	}
+	fmt.Printf("  used:      $%.4f total  /  $%.4f today  /  $%.4f this week\n",
+		d.Usage, d.UsageDaily, d.UsageWeekly)
 	return nil
 }

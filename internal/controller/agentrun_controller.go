@@ -362,6 +362,15 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 		updated = true
 	}
 
+	// startWorkflow sets StartedAt before Status().Update(), but a concurrent reconcile
+	// triggered by the annotation update can cause that update to conflict and be lost.
+	// Recover by setting StartedAt here when it's missing and the workflow is running.
+	if agentRun.Status.StartedAt == nil && (newPhase == aotv1alpha1.AgentRunPhaseRunning || isTerminal(newPhase)) {
+		now := metav1.Now()
+		agentRun.Status.StartedAt = &now
+		updated = true
+	}
+
 	// Set CompletedAt and Completed condition for terminal states
 	if isTerminal(newPhase) && agentRun.Status.CompletedAt == nil {
 		now := metav1.Now()
