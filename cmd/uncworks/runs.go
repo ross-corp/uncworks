@@ -1728,6 +1728,7 @@ func runRunsStats(args []string) error {
 	byFeatureStat := fs.Bool("by-feature", false, "Show run count breakdown by feature name")
 	byTagStat := fs.Bool("by-tag", false, "Show run count breakdown by tag")
 	trend := fs.Bool("trend", false, "Compare current --since window to the previous equal window (requires --since)")
+	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1787,12 +1788,16 @@ func runRunsStats(args []string) error {
 		if err != nil {
 			return fmt.Errorf("%s", humanizeErr(err))
 		}
+		modelNeedle := strings.ToLower(*modelFilter)
 		for _, r := range resp.Msg.GetAgentRuns() {
 			if !sinceTime.IsZero() {
 				ts := r.GetStatus().GetStartedAt()
 				if ts == nil || !ts.AsTime().After(sinceTime) {
 					continue
 				}
+			}
+			if modelNeedle != "" && !strings.Contains(strings.ToLower(r.GetSpec().GetModelTier()), modelNeedle) {
+				continue
 			}
 			label := phaseLabel(r.GetStatus().GetPhase())
 			counts[label]++
@@ -3540,6 +3545,7 @@ func runRunsCount(args []string) error {
 	byTag := fs.Bool("by-tag", false, "Show count breakdown by tag (runs with multiple tags are counted per tag)")
 	byProject := fs.Bool("by-project", false, "Show count breakdown by project name")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
+	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
 		fs.PrintDefaults()
@@ -3605,12 +3611,16 @@ func runRunsCount(args []string) error {
 		if err != nil {
 			break
 		}
+		countModelNeedle := strings.ToLower(*modelFilter)
 		for _, r := range resp.Msg.GetAgentRuns() {
 			if !sinceTime.IsZero() {
 				ts := r.GetStatus().GetStartedAt()
 				if ts == nil || !ts.AsTime().After(sinceTime) {
 					continue
 				}
+			}
+			if countModelNeedle != "" && !strings.Contains(strings.ToLower(r.GetSpec().GetModelTier()), countModelNeedle) {
+				continue
 			}
 			count++
 			if *byPhase {
