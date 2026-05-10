@@ -9,6 +9,7 @@ export const mockRuns: AgentRun[] = [
     id: "run-abc-123",
     name: "fix-auth-middleware",
     createdAt: fiveMinAgo,
+    updatedAt: fiveMinAgo,
     spec: {
       backend: "pod",
       repos: [{ url: "https://github.com/acme/backend.git", branch: "fix/auth" }],
@@ -31,6 +32,7 @@ export const mockRuns: AgentRun[] = [
     id: "run-def-456",
     name: "add-user-search",
     createdAt: oneHourAgo,
+    updatedAt: oneHourAgo,
     spec: {
       backend: "pod",
       repos: [{ url: "https://github.com/acme/frontend.git", branch: "feat/search" }],
@@ -53,6 +55,7 @@ export const mockRuns: AgentRun[] = [
     id: "run-ghi-789",
     name: "refactor-db-layer",
     createdAt: oneHourAgo,
+    updatedAt: oneHourAgo,
     spec: {
       backend: "pod",
       repos: [{ url: "https://github.com/acme/backend.git", branch: "main" }],
@@ -75,6 +78,7 @@ export const mockRuns: AgentRun[] = [
     id: "run-jkl-012",
     name: "update-ci-pipeline",
     createdAt: now,
+    updatedAt: now,
     spec: {
       backend: "pod",
       repos: [{ url: "https://github.com/acme/infra.git", branch: "main" }],
@@ -97,6 +101,7 @@ export const mockRuns: AgentRun[] = [
     id: "run-mno-345",
     name: "fix-memory-leak",
     createdAt: oneHourAgo,
+    updatedAt: oneHourAgo,
     spec: {
       backend: "pod",
       repos: [{ url: "https://github.com/acme/backend.git", branch: "fix/memory" }],

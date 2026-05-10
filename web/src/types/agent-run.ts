@@ -22,6 +22,7 @@ export interface AgentRun {
   spec: AgentRunSpec;
   status: AgentRunStatus;
   createdAt: string;
+  updatedAt: string;
   children?: string[];
 }
 

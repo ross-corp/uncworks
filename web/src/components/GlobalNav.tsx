@@ -46,7 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Automation",
     items: [
-      { label: "Chains",    path: "/chains",    Icon: Link2,  countKey: "chains"    },
+      { label: "Workflows",  path: "/chains",    Icon: Link2,  countKey: "chains"    },
       { label: "Schedules", path: "/schedules", Icon: Clock,  countKey: "schedules" },
     ],
   },
