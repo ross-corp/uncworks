@@ -151,6 +151,22 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--failed"}, rest...))
 	case "done", "succeeded":
 		return runRunsList(append([]string{"--done"}, rest...))
+	case "pending":
+		return runRunsList(append([]string{"--pending"}, rest...))
+	case "running":
+		return runRunsList(append([]string{"--running"}, rest...))
+	case "waiting":
+		return runRunsList(append([]string{"--waiting"}, rest...))
+	case "cancelled":
+		return runRunsList(append([]string{"--cancelled"}, rest...))
+	case "recent":
+		return runRunsList(append([]string{"--since", "24h", "--all"}, rest...))
+	case "by-project":
+		return runRunsGroup(append([]string{"--by", "project"}, rest...))
+	case "by-feature":
+		return runRunsGroup(append([]string{"--by", "feature"}, rest...))
+	case "by-model":
+		return runRunsGroup(append([]string{"--by", "model"}, rest...))
 	case "env":
 		return runRunsEnv(rest)
 	case "slow":
@@ -2225,6 +2241,7 @@ func runRunsInspect(args []string) error {
 	fs := flag.NewFlagSet("runs inspect", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	logLines := fs.Int("log-lines", 20, "Number of log tail lines to show (0 = all)")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs inspect <id> [flags]\n\nDiagnostic view for a run: full details, graph, and log tail.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2232,11 +2249,28 @@ func runRunsInspect(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() != 1 {
-		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+
+	var id string
+	if *lastRun {
+		client0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		resp0, err0 := client0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(resp0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		id = resp0.Msg.GetAgentRuns()[0].GetId()
+	} else {
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
 	}
-	id := fs.Arg(0)
 
 	client, err := newClient(*server)
 	if err != nil {
@@ -2292,6 +2326,7 @@ func runRunsDiff(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	stat := fs.Bool("stat", false, "Show git diff --stat instead of full diff")
 	execFlag := fs.Bool("exec", false, "Actually run the git fetch and diff commands (instead of printing them)")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs diff <id> [flags]\n\nShow the git commands to inspect the diff for a completed run.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2299,11 +2334,28 @@ func runRunsDiff(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() != 1 {
-		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+
+	var id string
+	if *lastRun {
+		client0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		resp0, err0 := client0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(resp0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		id = resp0.Msg.GetAgentRuns()[0].GetId()
+	} else {
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
 	}
-	id := fs.Arg(0)
 
 	client, err := newClient(*server)
 	if err != nil {
@@ -3879,6 +3931,7 @@ func runRunsWait(args []string) error {
 	onFailure := fs.String("on-failure", "", "Shell command to run on failure (run ID is passed as $RUN_ID, message as $RUN_MESSAGE)")
 	notify := fs.Bool("notify", false, "Send a macOS desktop notification when the run completes")
 	anyFlag := fs.Bool("any", false, "Return as soon as any one run completes (default: wait for all)")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs wait <id> [<id2> ...] [flags]\n\nBlock until run(s) reach a terminal phase.\nExits 0 if all succeed, 1 if any fail or are cancelled.\n\nFlags:")
 		fs.PrintDefaults()
@@ -3886,6 +3939,42 @@ func runRunsWait(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	if *lastRun && fs.NArg() == 0 {
+		client0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		resp0, err0 := client0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(resp0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		latestID := resp0.Msg.GetAgentRuns()[0].GetId()
+		newArgs := []string{latestID, "--server=" + *server}
+		if *timeout > 0 {
+			newArgs = append(newArgs, "--timeout="+timeout.String())
+		}
+		if *quiet {
+			newArgs = append(newArgs, "--quiet")
+		}
+		if *log {
+			newArgs = append(newArgs, "--log")
+		}
+		if *onSuccess != "" {
+			newArgs = append(newArgs, "--on-success="+*onSuccess)
+		}
+		if *onFailure != "" {
+			newArgs = append(newArgs, "--on-failure="+*onFailure)
+		}
+		if *notify {
+			newArgs = append(newArgs, "--notify")
+		}
+		return runRunsWait(newArgs)
+	}
+
 	if fs.NArg() == 0 {
 		fs.Usage()
 		return fmt.Errorf("run ID argument required")
