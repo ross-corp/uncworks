@@ -348,7 +348,8 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			}
 
 			// Wait for retention window then delete deployment and PVC.
-			retainDuration := 24 * time.Hour
+			// Default to 2h so completed runs don't accumulate disk pressure.
+			retainDuration := 2 * time.Hour
 			if input.TTLSeconds > 0 && time.Duration(input.TTLSeconds)*time.Second < retainDuration {
 				retainDuration = time.Duration(input.TTLSeconds) * time.Second
 			}
@@ -714,12 +715,18 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 					repoURL = input.Repos[0].URL
 				}
 
+				baseBranchForPush := input.PRBaseBranch
+				if baseBranchForPush == "" && len(input.Repos) > 0 {
+					baseBranchForPush = input.Repos[0].Branch
+				}
+
 				var pushOutput PushChangesOutput
 				if err := workflow.ExecuteActivity(gitCtx, ActivityPushChanges, PushChangesInput{
 					AgentRunName:  input.AgentRunName,
 					PodIP:         podIP,
 					RepoPath:      repoPath,
 					BranchName:    branchName,
+					BaseBranch:    baseBranchForPush,
 					CommitMessage: commitMsg,
 					RepoURL:       repoURL,
 				}).Get(ctx, &pushOutput); err != nil {

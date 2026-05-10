@@ -863,11 +863,16 @@ func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *Workf
 	if len(input.Repos) > 0 {
 		repoURL = input.Repos[0].URL
 	}
+	specBaseBranch := ""
+	if len(input.Repos) > 0 {
+		specBaseBranch = input.Repos[0].Branch
+	}
 	if err := workflow.ExecuteActivity(gitCtx, ActivityPushChanges, PushChangesInput{
 		AgentRunName:  input.AgentRunName,
 		PodIP:         podIP,
 		RepoPath:      repoPath,
 		BranchName:    branchName,
+		BaseBranch:    specBaseBranch,
 		CommitMessage: commitMsg,
 		RepoURL:       repoURL,
 		ChangeName:    changeName,
