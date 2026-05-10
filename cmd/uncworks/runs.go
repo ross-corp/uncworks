@@ -147,6 +147,10 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--since", "24h", "--all"}, rest...))
 	case "week":
 		return runRunsList(append([]string{"--since", "7d", "--all"}, rest...))
+	case "failed":
+		return runRunsList(append([]string{"--failed"}, rest...))
+	case "done", "succeeded":
+		return runRunsList(append([]string{"--done"}, rest...))
 	case "slow":
 		return runRunsSlow(rest)
 	case "-h", "--help", "help":
