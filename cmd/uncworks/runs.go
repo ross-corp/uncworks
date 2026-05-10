@@ -1033,11 +1033,22 @@ func runRunsList(args []string) error {
 		return " (" + strings.Join(parts, ", ") + ")"
 	}
 
+	// Aggregate diff stats for footer
+	var totalAdd, totalDel int32
+	for _, r := range runs {
+		totalAdd += r.GetStatus().GetTotalAdditions()
+		totalDel += r.GetStatus().GetTotalDeletions()
+	}
+	diffFooter := ""
+	if totalAdd > 0 || totalDel > 0 {
+		diffFooter = fmt.Sprintf("  ·  +%d -%d lines", totalAdd, totalDel)
+	}
+
 	if nextCursor != "" && !*all {
 		fmt.Fprintf(os.Stderr, "next-cursor: %s\n", nextCursor)
-		fmt.Printf("Showing %d run(s)%s — use --all or --limit to see more\n", len(runs), phaseSummary())
+		fmt.Printf("Showing %d run(s)%s%s — use --all or --limit to see more\n", len(runs), phaseSummary(), diffFooter)
 	} else if *all {
-		fmt.Printf("Showing all %d run(s)%s\n", len(runs), phaseSummary())
+		fmt.Printf("Showing all %d run(s)%s%s\n", len(runs), phaseSummary(), diffFooter)
 	} else if len(runs) > 0 {
 		isFiltered := !sinceTime.IsZero() || *repoURL != "" || *titleContains != "" ||
 			*activeOnly || *runningOnly || *failedOnly || *pendingOnly || *waitingOnly || *doneOnly || *cancelledOnly ||
@@ -1046,7 +1057,7 @@ func runRunsList(args []string) error {
 		if isFiltered {
 			suffix = " (filtered)"
 		}
-		fmt.Printf("Showing %d run(s)%s%s\n", len(runs), suffix, phaseSummary())
+		fmt.Printf("Showing %d run(s)%s%s%s\n", len(runs), suffix, phaseSummary(), diffFooter)
 	}
 
 	return nil
