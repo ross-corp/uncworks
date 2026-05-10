@@ -19,6 +19,8 @@ type Config struct {
 	// WebURL is the base URL of the UNCWORKS web dashboard (e.g. "http://192.168.1.10:30080").
 	// Used by 'uncworks runs ui' to open run detail pages.
 	WebURL string `yaml:"web_url,omitempty"`
+	// DefaultModelTier is the LLM model tier used when --model-tier is not specified.
+	DefaultModelTier string `yaml:"default_model_tier,omitempty"`
 }
 
 // configDir returns the XDG config directory for uncworks.
