@@ -5720,6 +5720,13 @@ func runRunsAlias(args []string) error {
 		{"uncworks jobs", "uncworks runs list --active"},
 		{"uncworks top", "uncworks runs top"},
 		{"uncworks watch", "uncworks runs watch"},
+		{"uncworks last", "uncworks runs get --last"},
+		{"uncworks tail", "uncworks runs tail --last"},
+		{"uncworks wait", "uncworks runs wait --last"},
+		{"uncworks summary", "uncworks runs summary"},
+		{"uncworks score", "uncworks runs score"},
+		{"uncworks tally", "uncworks runs tally"},
+		{"uncworks stats", "uncworks runs stats"},
 		{"uncworks kill <id>", "uncworks cancel <id>"},
 		{"runs show <id>", "runs get <id>"},
 		{"runs rerun <id>", "runs retry <id>"},
@@ -5731,6 +5738,8 @@ func runRunsAlias(args []string) error {
 		{"runs kill-all", "runs cancel-all"},
 		{"runs multi-logs", "runs multi-tail"},
 		{"runs aliases", "runs alias"},
+		{"runs retry-last", "runs retry --last"},
+		{"runs tail-last", "runs tail --last"},
 	}
 
 	fmt.Println("Flag aliases:")
