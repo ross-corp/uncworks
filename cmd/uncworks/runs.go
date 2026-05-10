@@ -62,6 +62,7 @@ Subcommands:
   group             Show runs organized into groups (--by project|feature|tag, --since)
   ui <id>           Open a run in the UNCWORKS web dashboard (requires web_url in config)
   search <term>     Search runs by prompt text, title, or project (--phase, --since, --project)
+  timeline          Show a chronological view of completed runs (--since, --project)
 `
 
 func runRuns(args []string) error {
@@ -136,6 +137,8 @@ func runRuns(args []string) error {
 		return runRunsUI(rest)
 	case "search":
 		return runRunsSearch(rest)
+	case "timeline":
+		return runRunsTimeline(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -4607,6 +4610,152 @@ func runRunsSearch(args []string) error {
 		phase := colorPhase(phaseLabel(r.GetStatus().GetPhase()))
 		proj := r.GetSpec().GetProject()
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), phase, proj, age, title)
+	}
+	w.Flush()
+	return nil
+}
+
+// ── timeline ──────────────────────────────────────────────────────────────────
+
+func runRunsTimeline(args []string) error {
+	fs := flag.NewFlagSet("runs timeline", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	since := fs.String("since", "24h", "Time window to show (e.g. 1h, 24h, 7d)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	limit := fs.Int("limit", 100, "Max runs to show")
+	phase := fs.String("phase", "", "Filter by phase (DONE, FAILED, CANCELLED; default: all terminal)")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs timeline [flags]\n\nShow a chronological view of completed runs with durations.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	d, err := parseSinceDuration(*since)
+	if err != nil {
+		return fmt.Errorf("--since %q: %w", *since, err)
+	}
+	sinceTime := time.Now().Add(-d)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+
+	var phaseF apiv1.AgentRunPhase
+	terminalOnly := true
+	if *phase != "" {
+		switch strings.ToUpper(*phase) {
+		case "DONE", "SUCCEEDED":
+			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+		case "FAILED":
+			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+		case "CANCELLED":
+			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+		default:
+			return fmt.Errorf("--phase must be DONE, FAILED, or CANCELLED")
+		}
+		terminalOnly = false
+	}
+
+	var runs []*apiv1.AgentRun
+	cursor := ""
+	for {
+		req := &apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			PhaseFilter:   phaseF,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			TagFilter:     *tag,
+			Cursor:        cursor,
+		}
+		resp, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(req))
+		if apiErr != nil {
+			break
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			completedAt := r.GetStatus().GetCompletedAt()
+			if completedAt == nil || !completedAt.AsTime().After(sinceTime) {
+				continue
+			}
+			ph := r.GetStatus().GetPhase()
+			if terminalOnly {
+				if ph != apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED &&
+					ph != apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED &&
+					ph != apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED {
+					continue
+				}
+			}
+			runs = append(runs, r)
+		}
+		if len(runs) >= *limit {
+			runs = runs[:*limit]
+			break
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	// Sort by completion time ascending (oldest first = chronological).
+	sort.Slice(runs, func(i, j int) bool {
+		ti := runs[i].GetStatus().GetCompletedAt()
+		tj := runs[j].GetStatus().GetCompletedAt()
+		if ti == nil {
+			return true
+		}
+		if tj == nil {
+			return false
+		}
+		return ti.AsTime().Before(tj.AsTime())
+	})
+
+	if len(runs) == 0 {
+		fmt.Printf("No completed runs in the last %s.\n", *since)
+		return nil
+	}
+
+	colorPhase := func(label string) string {
+		if !useColor {
+			return label
+		}
+		switch label {
+		case "DONE":
+			return "\033[32m" + label + "\033[0m"
+		case "FAILED":
+			return "\033[31m" + label + "\033[0m"
+		case "CANCELLED":
+			return "\033[35m" + label + "\033[0m"
+		}
+		return label
+	}
+
+	fmt.Printf("Timeline: %d completed run(s) in the last %s\n\n", len(runs), *since)
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "COMPLETED\tID\tPHASE\tDURATION\tPROJECT\tTITLE")
+	for _, r := range runs {
+		title := r.GetSpec().GetDisplayName()
+		if title == "" {
+			title = r.GetSpec().GetProject()
+		}
+		if len(title) > 40 {
+			title = title[:37] + "..."
+		}
+		completedStr := "—"
+		if ts := r.GetStatus().GetCompletedAt(); ts != nil {
+			completedStr = relativeTime(ts.AsTime())
+		}
+		ph := colorPhase(phaseLabel(r.GetStatus().GetPhase()))
+		dur := runDuration(r)
+		proj := r.GetSpec().GetProject()
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", completedStr, r.GetId(), ph, dur, proj, title)
 	}
 	w.Flush()
 	return nil
