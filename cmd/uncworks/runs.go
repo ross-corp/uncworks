@@ -551,9 +551,12 @@ func runRunsList(args []string) error {
 		page := resp.Msg.GetAgentRuns()
 		runs = append(runs, page...)
 		nextCursor = resp.Msg.GetNextCursor()
-		// When using --since, auto-paginate until we pass the time window.
+		// When using --since without --include-archived, auto-paginate until we
+		// pass the time window (archived runs are returned after non-archived in
+		// a separate segment, so the early-exit heuristic doesn't work reliably
+		// when --include-archived is set — in that case we must fetch all pages).
 		passedSince := false
-		if !sinceTime.IsZero() && len(page) > 0 {
+		if !sinceTime.IsZero() && !*includeArchived && len(page) > 0 {
 			last := page[len(page)-1].GetCreatedAt()
 			if last != nil && !last.AsTime().After(sinceTime) {
 				passedSince = true
