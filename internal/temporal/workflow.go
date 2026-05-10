@@ -693,6 +693,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 				}).Get(ctx, &pushOutput); err != nil {
 					workflow.GetLogger(ctx).Warn("Push changes failed", "error", err)
 				} else if !pushOutput.HasChanges {
+					state.Message = "Agent completed: no changes committed"
 					workflow.GetLogger(ctx).Info("No changes committed; skipping PR creation")
 				} else if input.AutoPR && len(input.Repos) > 0 {
 					owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
@@ -740,8 +741,11 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 							workflow.GetLogger(ctx).Warn("Create PR failed", "error", err)
 						} else {
 							state.PRUrl = prOutput.PRUrl
+							state.Message = fmt.Sprintf("Agent completed: PR created at %s", prOutput.PRUrl)
 						}
 					}
+				} else if pushOutput.HasChanges {
+					state.Message = fmt.Sprintf("Agent completed: changes pushed to %s", pushOutput.BranchName)
 				}
 			}
 			return nil
