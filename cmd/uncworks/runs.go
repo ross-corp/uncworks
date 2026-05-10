@@ -1652,6 +1652,7 @@ func runRunsStats(args []string) error {
 	byModel := fs.Bool("by-model", false, "Show run count breakdown by model tier")
 	byFeatureStat := fs.Bool("by-feature", false, "Show run count breakdown by feature name")
 	byTagStat := fs.Bool("by-tag", false, "Show run count breakdown by tag")
+	trend := fs.Bool("trend", false, "Compare current --since window to the previous equal window (requires --since)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2004,6 +2005,66 @@ func runRunsStats(args []string) error {
 	}
 	if *byTagStat {
 		printBreakdown("Tag", tagCounts2)
+	}
+
+	if *trend && *since != "" {
+		d, _ := parseSinceDuration(*since)
+		prevStart := sinceTime.Add(-d)
+		// Fetch the previous period for comparison.
+		prevTotal, prevDone, prevFailed := 0, 0, 0
+		prevCursor := ""
+		prevClient, _ := newClient(*server)
+		for {
+			lr := &apiv1.ListAgentRunsRequest{
+				Limit:         100,
+				ProjectFilter: *project,
+				FeatureFilter: *feature,
+				TagFilter:     *tag,
+				Cursor:        prevCursor,
+			}
+			prevResp, prevErr := prevClient.ListAgentRuns(context.Background(), connect.NewRequest(lr))
+			if prevErr != nil {
+				break
+			}
+			for _, r := range prevResp.Msg.GetAgentRuns() {
+				ts := r.GetCreatedAt()
+				if ts == nil {
+					continue
+				}
+				t := ts.AsTime()
+				if !t.After(prevStart) || !t.Before(sinceTime) {
+					continue
+				}
+				prevTotal++
+				ph := phaseLabel(r.GetStatus().GetPhase())
+				if ph == "DONE" {
+					prevDone++
+				} else if ph == "FAILED" {
+					prevFailed++
+				}
+			}
+			prevCursor = prevResp.Msg.GetNextCursor()
+			if prevCursor == "" {
+				break
+			}
+		}
+		trendArrow := func(cur, prev int) string {
+			if cur > prev {
+				return "↑"
+			} else if cur < prev {
+				return "↓"
+			}
+			return "→"
+		}
+		fmt.Printf("\nTrend vs previous %s:\n", *since)
+		fmt.Printf("  Total:   %d %s %d\n", total, trendArrow(total, prevTotal), prevTotal)
+		fmt.Printf("  Done:    %d %s %d\n", done, trendArrow(done, prevDone), prevDone)
+		fmt.Printf("  Failed:  %d %s %d\n", failed, trendArrow(failed, prevFailed), prevFailed)
+		if done+failed > 0 && prevDone+prevFailed > 0 {
+			curRate := float64(done) / float64(done+failed) * 100
+			prevRate := float64(prevDone) / float64(prevDone+prevFailed) * 100
+			fmt.Printf("  Success: %.1f%% %s %.1f%%\n", curRate, trendArrow(int(curRate), int(prevRate)), prevRate)
+		}
 	}
 
 	return nil
