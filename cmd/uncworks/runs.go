@@ -198,6 +198,8 @@ func runRuns(args []string) error {
 		return runRunsSlow(rest)
 	case "score", "rate":
 		return runRunsScore(rest)
+	case "tally":
+		return runRunsTally(rest)
 	case "queue":
 		return runRunsList(append([]string{"--pending", "--all"}, rest...))
 	case "retry-last":
@@ -5759,6 +5761,139 @@ func runRunsScore(args []string) error {
 			}
 		}
 		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", r.Window, r.Total, r.Done, r.Failed, rateStr)
+	}
+	return w.Flush()
+}
+
+// ── tally ─────────────────────────────────────────────────────────────────────
+
+func runRunsTally(args []string) error {
+	fs := flag.NewFlagSet("runs tally", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	days := fs.Int("days", 14, "Number of past days to show")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	jsonOut := fs.Bool("json", false, "Output as JSON array")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs tally [flags]\n\nShow daily run counts for the past N days.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *days < 1 {
+		return fmt.Errorf("--days must be >= 1")
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -*days)
+	type dayBucket struct {
+		Date   string `json:"date"`
+		Total  int    `json:"total"`
+		Done   int    `json:"done"`
+		Failed int    `json:"failed"`
+	}
+
+	// Build a map keyed by YYYY-MM-DD in local time.
+	buckets := map[string]*dayBucket{}
+	now := time.Now()
+	for i := 0; i < *days; i++ {
+		d := now.AddDate(0, 0, -i).Format("2006-01-02")
+		buckets[d] = &dayBucket{Date: d}
+	}
+
+	cursor := ""
+	for {
+		resp, err2 := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			TagFilter:     *tag,
+			Cursor:        cursor,
+		}))
+		if err2 != nil {
+			break
+		}
+		stop := false
+		for _, r := range resp.Msg.GetAgentRuns() {
+			ts := r.GetCreatedAt()
+			if ts == nil {
+				continue
+			}
+			t := ts.AsTime().Local()
+			if t.Before(cutoff) {
+				stop = true
+				break
+			}
+			d := t.Format("2006-01-02")
+			b, ok := buckets[d]
+			if !ok {
+				continue
+			}
+			b.Total++
+			switch r.GetStatus().GetPhase() {
+			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+				b.Done++
+			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+				b.Failed++
+			}
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" || stop {
+			break
+		}
+	}
+
+	// Sort dates descending.
+	var sorted []string
+	for d := range buckets {
+		sorted = append(sorted, d)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(sorted)))
+
+	if *jsonOut {
+		var out []dayBucket
+		for _, d := range sorted {
+			out = append(out, *buckets[d])
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+
+	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+	maxTotal := 0
+	for _, b := range buckets {
+		if b.Total > maxTotal {
+			maxTotal = b.Total
+		}
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "DATE\tTOTAL\tDONE\tFAILED\tBAR")
+	for _, d := range sorted {
+		b := buckets[d]
+		barLen := 0
+		if maxTotal > 0 {
+			barLen = int(float64(b.Total) / float64(maxTotal) * 20)
+		}
+		bar := strings.Repeat("█", barLen)
+		if useColor && b.Total > 0 {
+			if b.Failed > b.Done {
+				bar = "\033[31m" + bar + "\033[0m"
+			} else if b.Failed > 0 {
+				bar = "\033[33m" + bar + "\033[0m"
+			} else {
+				bar = "\033[32m" + bar + "\033[0m"
+			}
+		}
+		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", d, b.Total, b.Done, b.Failed, bar)
 	}
 	return w.Flush()
 }
