@@ -6152,6 +6152,7 @@ func runRunsScore(args []string) error {
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
 	tag := fs.String("tag", "", "Filter by tag")
+	includeArchived := fs.Bool("include-archived", false, "Include archived runs in the score calculation")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs score [flags]\n\nShow success rate across multiple time windows (1h, 24h, 7d, 30d).\n\nFlags:")
@@ -6194,22 +6195,26 @@ func runRunsScore(args []string) error {
 	var allRuns []runRecord
 	cursor := ""
 	for {
-		resp, err2 := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+		listReq := connect.NewRequest(&apiv1.ListAgentRunsRequest{
 			Limit:         100,
 			ProjectFilter: *project,
 			FeatureFilter: *feature,
 			TagFilter:     *tag,
 			Cursor:        cursor,
-		}))
+		})
+		if *includeArchived {
+			listReq.Header().Set("X-Include-Archived", "true")
+		}
+		resp, err2 := c.ListAgentRuns(context.Background(), listReq)
 		if err2 != nil {
 			break
 		}
-		stop := false
+		passedCutoff := false
 		for _, r := range resp.Msg.GetAgentRuns() {
 			ts := r.GetCreatedAt()
 			if ts == nil || !ts.AsTime().After(longestCutoff) {
-				stop = true
-				break
+				passedCutoff = true
+				continue
 			}
 			allRuns = append(allRuns, runRecord{
 				createdAt: ts.AsTime(),
@@ -6217,7 +6222,7 @@ func runRunsScore(args []string) error {
 			})
 		}
 		cursor = resp.Msg.GetNextCursor()
-		if cursor == "" || stop {
+		if cursor == "" || (!*includeArchived && passedCutoff) {
 			break
 		}
 	}
