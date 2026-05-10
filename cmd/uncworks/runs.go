@@ -101,7 +101,7 @@ func runRuns(args []string) error {
 		return runRunsStats(rest)
 	case "open":
 		return runRunsOpen(rest)
-	case "retry", "rerun", "copy":
+	case "retry", "rerun", "copy", "duplicate":
 		return runRunsRetry(rest)
 	case "cancel-all", "kill-all":
 		return runRunsCancelAll(rest)
@@ -139,6 +139,8 @@ func runRuns(args []string) error {
 		return runRunsSearch(rest)
 	case "timeline":
 		return runRunsTimeline(rest)
+	case "compare":
+		return runRunsCompare(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -4958,6 +4960,143 @@ func runRunsTimeline(args []string) error {
 		dur := runDuration(r)
 		proj := r.GetSpec().GetProject()
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", completedStr, r.GetId(), ph, dur, proj, title)
+	}
+	w.Flush()
+	return nil
+}
+
+// ── compare ───────────────────────────────────────────────────────────────────
+
+func runRunsCompare(args []string) error {
+	fs := flag.NewFlagSet("runs compare", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	jsonOut := fs.Bool("json", false, "Output comparison as JSON")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs compare <id1> <id2> [flags]\n\nShow a side-by-side field comparison of two runs.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 2 {
+		fs.Usage()
+		return fmt.Errorf("exactly two run IDs required")
+	}
+	id1, id2 := fs.Arg(0), fs.Arg(1)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	r1resp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id1}))
+	if err != nil {
+		return fmt.Errorf("fetching %s: %s", id1, humanizeErr(err))
+	}
+	r2resp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id2}))
+	if err != nil {
+		return fmt.Errorf("fetching %s: %s", id2, humanizeErr(err))
+	}
+	r1, r2 := r1resp.Msg, r2resp.Msg
+
+	getTitle := func(r *apiv1.AgentRun) string {
+		t := r.GetSpec().GetDisplayName()
+		if t == "" {
+			t = r.GetSpec().GetProject()
+		}
+		return t
+	}
+	getAge := func(r *apiv1.AgentRun) string {
+		if ts := r.GetCreatedAt(); ts != nil {
+			return relativeTime(ts.AsTime())
+		}
+		return "—"
+	}
+	getDur := func(r *apiv1.AgentRun) string { return runDuration(r) }
+	getBranch := func(r *apiv1.AgentRun) string {
+		if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
+			return repos[0].GetBranch()
+		}
+		return "—"
+	}
+
+	if *jsonOut {
+		type runSummary struct {
+			ID       string `json:"id"`
+			Title    string `json:"title"`
+			Phase    string `json:"phase"`
+			Duration string `json:"duration"`
+			Age      string `json:"age"`
+			Model    string `json:"model"`
+			Project  string `json:"project"`
+			Feature  string `json:"feature"`
+			Branch   string `json:"branch"`
+			PRUrl    string `json:"pr_url,omitempty"`
+		}
+		out := struct {
+			A runSummary `json:"a"`
+			B runSummary `json:"b"`
+		}{
+			A: runSummary{
+				ID:       r1.GetId(),
+				Title:    getTitle(r1),
+				Phase:    phaseLabel(r1.GetStatus().GetPhase()),
+				Duration: getDur(r1),
+				Age:      getAge(r1),
+				Model:    r1.GetSpec().GetModelTier(),
+				Project:  r1.GetSpec().GetProject(),
+				Feature:  r1.GetSpec().GetFeature(),
+				Branch:   getBranch(r1),
+				PRUrl:    r1.GetStatus().GetPrUrl(),
+			},
+			B: runSummary{
+				ID:       r2.GetId(),
+				Title:    getTitle(r2),
+				Phase:    phaseLabel(r2.GetStatus().GetPhase()),
+				Duration: getDur(r2),
+				Age:      getAge(r2),
+				Model:    r2.GetSpec().GetModelTier(),
+				Project:  r2.GetSpec().GetProject(),
+				Feature:  r2.GetSpec().GetFeature(),
+				Branch:   getBranch(r2),
+				PRUrl:    r2.GetStatus().GetPrUrl(),
+			},
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+
+	type row struct{ field, a, b string }
+	rows := []row{
+		{"ID", r1.GetId(), r2.GetId()},
+		{"Title", getTitle(r1), getTitle(r2)},
+		{"Phase", phaseLabel(r1.GetStatus().GetPhase()), phaseLabel(r2.GetStatus().GetPhase())},
+		{"Duration", getDur(r1), getDur(r2)},
+		{"Age", getAge(r1), getAge(r2)},
+		{"Model", r1.GetSpec().GetModelTier(), r2.GetSpec().GetModelTier()},
+		{"Project", r1.GetSpec().GetProject(), r2.GetSpec().GetProject()},
+		{"Feature", r1.GetSpec().GetFeature(), r2.GetSpec().GetFeature()},
+		{"Branch", getBranch(r1), getBranch(r2)},
+		{"PR URL", r1.GetStatus().GetPrUrl(), r2.GetStatus().GetPrUrl()},
+		{"Message", r1.GetStatus().GetMessage(), r2.GetStatus().GetMessage()},
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "FIELD\t%-22s\t%-22s\n", id1, id2)
+	fmt.Fprintf(w, "─────\t%s\t%s\n", strings.Repeat("─", 22), strings.Repeat("─", 22))
+	for _, r := range rows {
+		if r.a == "" && r.b == "" {
+			continue
+		}
+		a, b := r.a, r.b
+		if len(a) > 40 {
+			a = a[:37] + "..."
+		}
+		if len(b) > 40 {
+			b = b[:37] + "..."
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", r.field, a, b)
 	}
 	w.Flush()
 	return nil
