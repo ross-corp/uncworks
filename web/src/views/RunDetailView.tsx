@@ -614,6 +614,12 @@ export default function RunDetailView() {
                 <span className="text-muted-foreground">Created</span>
                 <span>{run.createdAt ? new Date(run.createdAt).toLocaleString() : "---"}</span>
               </div>
+              {run.updatedAt && run.updatedAt !== run.createdAt && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Updated</span>
+                  <span>{new Date(run.updatedAt).toLocaleString()}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Model</span>
                 <span>{run.spec.modelTier || "default"}</span>
@@ -632,6 +638,23 @@ export default function RunDetailView() {
                   <span>{run.spec.approvalMode}</span>
                 </div>
               )}
+              {run.status.retainUntil && (() => {
+                const retainDate = new Date(run.status.retainUntil);
+                const now = new Date();
+                const hoursLeft = (retainDate.getTime() - now.getTime()) / 3_600_000;
+                const soon = hoursLeft < 2 && hoursLeft > 0;
+                const expired = hoursLeft <= 0;
+                return (
+                  <div className="flex justify-between">
+                    <span className={`text-muted-foreground ${soon || expired ? "text-amber-500" : ""}`}>
+                      {expired ? "Expired" : "Retain until"}
+                    </span>
+                    <span className={soon || expired ? "text-amber-500 font-medium" : ""} title={retainDate.toISOString()}>
+                      {expired ? "archived" : soon ? `~${Math.ceil(hoursLeft)}h remaining` : retainDate.toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })()}
               {run.status.stage && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Stage</span>
