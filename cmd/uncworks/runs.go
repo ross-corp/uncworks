@@ -38,6 +38,7 @@ Subcommands:
   cost              Show cost and diff summary across runs (--since, --project, --model)
   velocity          Show runs-per-hour chart for the past 24h (--buckets, --project)
   percentiles       Show p50/p95/p99 duration for DONE runs (--since, --project)
+  anomalies         Show DONE runs with unusually long duration (above 2x p75) (--since, --project)
   stats             Show aggregate counts of runs by phase (--format, --since, --by-project, --model)
   count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since, --model)
   score             Show success rate across 1h/24h/7d/30d windows (--project, --feature, --json)
@@ -154,6 +155,8 @@ func runRuns(args []string) error {
 		return runRunsVelocity(rest)
 	case "percentiles", "pct":
 		return runRunsPercentiles(rest)
+	case "anomalies":
+		return runRunsAnomalies(rest)
 	case "stats":
 		return runRunsStats(rest)
 	case "open", "open-pr", "pr":
@@ -7175,5 +7178,132 @@ func runRunsPercentiles(args []string) error {
 	fmt.Printf("  p99  %s\n", formatDuration(pct(99)))
 	fmt.Printf("  min  %s\n", formatDuration(durations[0]))
 	fmt.Printf("  max  %s\n", formatDuration(durations[n-1]))
+	return nil
+}
+
+func runRunsAnomalies(args []string) error {
+	fs := flag.NewFlagSet("runs anomalies", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	since := fs.String("since", "7d", "Filter window (default 7d)")
+	threshold := fs.Float64("threshold", 2.0, "Flag runs with duration > threshold * p75")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs anomalies [flags]\n\nShow succeeded runs with unusually long duration.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	type runEntry struct {
+		id       string
+		title    string
+		duration time.Duration
+		started  time.Time
+	}
+	var entries []runEntry
+	var durations []time.Duration
+	cursor := ""
+	for {
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			Cursor:        cursor,
+		}))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		done := false
+		for _, r := range resp.Msg.GetAgentRuns() {
+			if r.GetStatus().GetPhase() != apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED {
+				continue
+			}
+			if !sinceTime.IsZero() {
+				ts := r.GetCreatedAt()
+				if ts != nil {
+					t := time.Unix(ts.Seconds, int64(ts.Nanos))
+					if t.Before(sinceTime) {
+						done = true
+						break
+					}
+				}
+			}
+			s := r.GetStatus().GetStartedAt()
+			e := r.GetStatus().GetCompletedAt()
+			if s == nil || e == nil {
+				continue
+			}
+			start := time.Unix(s.Seconds, int64(s.Nanos))
+			end := time.Unix(e.Seconds, int64(e.Nanos))
+			dur := end.Sub(start)
+			if dur <= 0 {
+				continue
+			}
+			durations = append(durations, dur)
+			title := r.GetSpec().GetDisplayName()
+			if len(title) > 40 {
+				title = title[:37] + "..."
+			}
+			entries = append(entries, runEntry{
+				id:       r.GetId(),
+				title:    title,
+				duration: dur,
+				started:  start,
+			})
+		}
+		if done || resp.Msg.GetNextCursor() == "" {
+			break
+		}
+		cursor = resp.Msg.GetNextCursor()
+	}
+
+	if len(durations) < 4 {
+		fmt.Printf("Not enough data (%d runs) to detect anomalies.\n", len(durations))
+		return nil
+	}
+
+	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+	p75 := durations[int(float64(len(durations)-1)*0.75)]
+	cutoff := time.Duration(float64(p75) * *threshold)
+
+	var anomalies []runEntry
+	for _, e := range entries {
+		if e.duration > cutoff {
+			anomalies = append(anomalies, e)
+		}
+	}
+	sort.Slice(anomalies, func(i, j int) bool { return anomalies[i].duration > anomalies[j].duration })
+
+	if len(anomalies) == 0 {
+		fmt.Printf("No anomalies detected (p75=%s, cutoff=%s)\n", formatDuration(p75), formatDuration(cutoff))
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "DURATION\tID\tSTARTED\tTITLE")
+	for _, a := range anomalies {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", formatDuration(a.duration), a.id, relativeTime(a.started), a.title)
+	}
+	w.Flush()
+	plural := "ies"
+	if len(anomalies) == 1 {
+		plural = "y"
+	}
+	fmt.Printf("\n%d anomal%s (>%.1fx p75=%s, cutoff=%s)\n",
+		len(anomalies), plural, *threshold, formatDuration(p75), formatDuration(cutoff))
 	return nil
 }
