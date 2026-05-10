@@ -240,6 +240,52 @@ func runRunsGetField(args []string, field string) error {
 	return runRunsGet(newArgs)
 }
 
+// normalizeRunArgs moves run ID arguments (matching ar-xxxxxx) to the end of
+// the args slice so that flag parsing works even when the user writes
+// 'runs get <id> --flag' instead of 'runs get --flag <id>'.
+func normalizeRunArgs(args []string) []string {
+	var flags, ids []string
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+		if isRunID(arg) {
+			ids = append(ids, arg)
+			i++
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			flags = append(flags, arg)
+			// If the flag doesn't embed its value with '=', the next arg (if
+			// it's not a flag and not a run ID) is the flag's value.
+			if !strings.Contains(arg, "=") && i+1 < len(args) &&
+				!strings.HasPrefix(args[i+1], "-") && !isRunID(args[i+1]) {
+				flags = append(flags, args[i+1])
+				i += 2
+				continue
+			}
+			i++
+			continue
+		}
+		// Non-flag, non-ID positional arg — leave in place (e.g. subcommand names).
+		flags = append(flags, arg)
+		i++
+	}
+	return append(flags, ids...)
+}
+
+// isRunID reports whether s looks like an agent run ID (ar- followed by 6 lowercase alphanumeric chars).
+func isRunID(s string) bool {
+	if len(s) != 9 || s[:3] != "ar-" {
+		return false
+	}
+	for _, c := range s[3:] {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
 // ── watch ─────────────────────────────────────────────────────────────────────
 
 func runRunsWatch(args []string) error {
@@ -889,6 +935,7 @@ func runRunsList(args []string) error {
 // ── get ───────────────────────────────────────────────────────────────────────
 
 func runRunsGet(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs get", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	showLog := fs.Bool("log", false, "Print the persisted agent log output")
@@ -1292,6 +1339,7 @@ func runRunsDescribe(args []string) error {
 }
 
 func runRunsTail(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs tail", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
@@ -1360,6 +1408,7 @@ func runRunsTail(args []string) error {
 // ── logs ──────────────────────────────────────────────────────────────────────
 
 func runRunsLogs(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs logs", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	noFollow := fs.Bool("no-follow", false, "Print stored log output only (don't stream live)")
