@@ -7381,6 +7381,7 @@ Reads key from OPENROUTER_API_KEY environment variable.`)
 	} else {
 		fmt.Printf("  tier:      paid\n")
 	}
+	fmt.Printf("  free tier: %v\n", d.IsFreeTier)
 	if d.Limit != nil {
 		fmt.Printf("  limit:     $%.4f\n", *d.Limit)
 		if d.LimitRemaining != nil {
