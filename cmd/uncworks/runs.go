@@ -2714,7 +2714,7 @@ func runRunsDiff(args []string) error {
 		return fmt.Errorf("run %s has no PR and --auto-push was not set", id)
 	}
 
-	agentBranch := fmt.Sprintf("agent/%s", id)
+	agentBranch := fmt.Sprintf("aot/%s", id)
 	diffArgs := []string{"diff", fmt.Sprintf("origin/%s...origin/%s", baseBranch, agentBranch)}
 	if *stat {
 		diffArgs = []string{"diff", "--stat", fmt.Sprintf("origin/%s...origin/%s", baseBranch, agentBranch)}
