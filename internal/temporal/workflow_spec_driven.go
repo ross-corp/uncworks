@@ -712,7 +712,10 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 
 			// --- POST-VERIFY: Enrich tags from diff ---
 			enrichCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-				StartToCloseTimeout: 30 * time.Second,
+				StartToCloseTimeout: 60 * time.Second,
+				RetryPolicy: &temporal.RetryPolicy{
+					MaximumAttempts: 2,
+				},
 			})
 			repoPath := "/workspace"
 			if len(input.Repos) > 0 {
