@@ -1436,6 +1436,17 @@ func runRunsGet(args []string) error {
 	if r.GetStatus().GetPrUrl() != "" {
 		fmt.Printf("PR:       %s\n", r.GetStatus().GetPrUrl())
 	}
+	if cost := r.GetStatus().GetTotalCost(); cost != "" {
+		add := r.GetStatus().GetTotalAdditions()
+		del := r.GetStatus().GetTotalDeletions()
+		if add > 0 || del > 0 {
+			fmt.Printf("Cost:     %s  (+%d -%d lines)\n", cost, add, del)
+		} else {
+			fmt.Printf("Cost:     %s\n", cost)
+		}
+	} else if add, del := r.GetStatus().GetTotalAdditions(), r.GetStatus().GetTotalDeletions(); add > 0 || del > 0 {
+		fmt.Printf("Diff:     +%d -%d lines\n", add, del)
+	}
 	if r.GetSpec().GetParentRunId() != "" {
 		fmt.Printf("Parent:   %s\n", r.GetSpec().GetParentRunId())
 	}
@@ -1515,6 +1526,17 @@ func runRunsTail(args []string) error {
 	}
 	if r.GetStatus().GetPrUrl() != "" {
 		fmt.Printf("PR:       %s\n", r.GetStatus().GetPrUrl())
+	}
+	if cost := r.GetStatus().GetTotalCost(); cost != "" {
+		add := r.GetStatus().GetTotalAdditions()
+		del := r.GetStatus().GetTotalDeletions()
+		if add > 0 || del > 0 {
+			fmt.Printf("Cost:     %s  (+%d -%d lines)\n", cost, add, del)
+		} else {
+			fmt.Printf("Cost:     %s\n", cost)
+		}
+	} else if add, del := r.GetStatus().GetTotalAdditions(), r.GetStatus().GetTotalDeletions(); add > 0 || del > 0 {
+		fmt.Printf("Diff:     +%d -%d lines\n", add, del)
 	}
 	return nil
 }

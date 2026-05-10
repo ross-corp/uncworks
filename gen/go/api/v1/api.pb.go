@@ -993,9 +993,15 @@ type AgentRunStatus struct {
 	// VerificationResult is the JSON-encoded verdict from the verification stage.
 	VerificationResult string `protobuf:"bytes,14,opt,name=verification_result,json=verificationResult,proto3" json:"verification_result,omitempty"`
 	// PRUrl is the URL of the GitHub PR created by the pipeline.
-	PrUrl         string `protobuf:"bytes,15,opt,name=pr_url,json=prUrl,proto3" json:"pr_url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PrUrl string `protobuf:"bytes,15,opt,name=pr_url,json=prUrl,proto3" json:"pr_url,omitempty"`
+	// TotalCost is the estimated spend for this run (e.g., "$0.12").
+	TotalCost string `protobuf:"bytes,16,opt,name=total_cost,json=totalCost,proto3" json:"total_cost,omitempty"`
+	// TotalAdditions is the aggregate number of lines added across all commits.
+	TotalAdditions int32 `protobuf:"varint,17,opt,name=total_additions,json=totalAdditions,proto3" json:"total_additions,omitempty"`
+	// TotalDeletions is the aggregate number of lines deleted across all commits.
+	TotalDeletions int32  `protobuf:"varint,18,opt,name=total_deletions,json=totalDeletions,proto3" json:"total_deletions,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AgentRunStatus) Reset() {
@@ -1131,6 +1137,27 @@ func (x *AgentRunStatus) GetPrUrl() string {
 		return x.PrUrl
 	}
 	return ""
+}
+
+func (x *AgentRunStatus) GetTotalCost() string {
+	if x != nil {
+		return x.TotalCost
+	}
+	return ""
+}
+
+func (x *AgentRunStatus) GetTotalAdditions() int32 {
+	if x != nil {
+		return x.TotalAdditions
+	}
+	return 0
+}
+
+func (x *AgentRunStatus) GetTotalDeletions() int32 {
+	if x != nil {
+		return x.TotalDeletions
+	}
+	return 0
 }
 
 type CreateAgentRunRequest struct {

@@ -188,6 +188,12 @@ message AgentRunStatus {
   string verification_result = 14;
   // PRUrl is the URL of the GitHub PR created by the pipeline.
   string pr_url = 15;
+  // TotalCost is the estimated spend for this run (e.g., "$0.12").
+  string total_cost = 16;
+  // TotalAdditions is the aggregate number of lines added across all commits.
+  int32 total_additions = 17;
+  // TotalDeletions is the aggregate number of lines deleted across all commits.
+  int32 total_deletions = 18;
 }
 
 message CreateAgentRunRequest {

@@ -1119,6 +1119,9 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 			RetryCount:         crd.Status.RetryCount,
 			VerificationResult: crd.Status.VerificationResult,
 			PrUrl:              crd.Status.PRUrl,
+			TotalCost:          crd.Status.TotalCost,
+			TotalAdditions:     crd.Status.TotalAdditions,
+			TotalDeletions:     crd.Status.TotalDeletions,
 		},
 		CreatedAt: timestamppb.New(crd.CreationTimestamp.Time),
 	}
