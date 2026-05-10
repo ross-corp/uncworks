@@ -396,35 +396,68 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		EnvVars:      map[string]string{"PI_MODEL": manageModel},
 	}))
 	if err != nil {
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("manage agent review failed to start: %v", err)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "llm_judge", Pass: false, Output: result.FailureReport,
+		})
 		slog.Warn("manage agent review failed to start", "err", err)
-	} else {
-		if pollErr := pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName+"-verify"); pollErr != nil {
-			slog.Warn("manage agent review failed", "err", pollErr)
-		} else {
-			activity.RecordHeartbeat(ctx, "parsing manage agent verdict")
-			verdictJSON, readErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
-				"cat .aot/logs/agent.jsonl 2>/dev/null | tail -50")
-			if readErr == nil {
-				verdict := parseLLMVerdict(verdictJSON)
-				if verdict != nil {
-					result.LLMVerdict = verdict
-					if !verdict.Pass {
-						var failedCriteria []string
-						for _, c := range verdict.Criteria {
-							if !c.Pass {
-								failedCriteria = append(failedCriteria, fmt.Sprintf("%s: %s", c.Scenario, c.Explanation))
-							}
-						}
-						// Extract detailed review feedback for the retry loop
-						result.ReviewFeedback = strings.Join(failedCriteria, "\n")
-						result.Pass = false
-						result.FailureReport = fmt.Sprintf("Manage agent review failed: %s", strings.Join(failedCriteria, "; "))
-						return VerifyRunOutput{Result: result}, nil
-					}
-				}
+		return VerifyRunOutput{Result: result}, nil
+	}
+
+	if pollErr := pollUntilAgentDone(ctx, sidecarClient, input.AgentRunName+"-verify"); pollErr != nil {
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("manage agent review failed: %v", pollErr)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "llm_judge", Pass: false, Output: result.FailureReport,
+		})
+		slog.Warn("manage agent review failed", "err", pollErr)
+		return VerifyRunOutput{Result: result}, nil
+	}
+
+	activity.RecordHeartbeat(ctx, "parsing manage agent verdict")
+	verdictJSON, readErr := execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
+		"cat .aot/logs/agent.jsonl 2>/dev/null | tail -50")
+	if readErr != nil {
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("failed to read manage agent log: %v", readErr)
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "llm_judge", Pass: false, Output: result.FailureReport,
+		})
+		return VerifyRunOutput{Result: result}, nil
+	}
+
+	verdict := parseLLMVerdict(verdictJSON)
+	if verdict == nil {
+		result.Pass = false
+		result.FailureReport = "manage agent produced no parseable verdict"
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "llm_judge", Pass: false, Output: result.FailureReport,
+		})
+		slog.Warn("manage agent produced no parseable verdict", "run", input.AgentRunName)
+		return VerifyRunOutput{Result: result}, nil
+	}
+
+	result.LLMVerdict = verdict
+	if !verdict.Pass {
+		var failedCriteria []string
+		for _, c := range verdict.Criteria {
+			if !c.Pass {
+				failedCriteria = append(failedCriteria, fmt.Sprintf("%s: %s", c.Scenario, c.Explanation))
 			}
 		}
+		result.ReviewFeedback = strings.Join(failedCriteria, "\n")
+		result.Pass = false
+		result.FailureReport = fmt.Sprintf("Manage agent review failed: %s", strings.Join(failedCriteria, "; "))
+		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+			Name: "llm_judge", Pass: false, Output: result.FailureReport,
+		})
+		return VerifyRunOutput{Result: result}, nil
 	}
+
+	result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
+		Name: "llm_judge", Pass: true, Output: "manage agent review passed",
+	})
 
 	// ── Gate 5: Archive ──
 	activity.RecordHeartbeat(ctx, "archiving change")

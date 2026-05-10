@@ -1,6 +1,9 @@
 import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
+import { writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { AOTExtension } from "./extension";
 import { AskHumanTool } from "./tools/ask-human";
 
@@ -73,6 +76,37 @@ describe("HITL Signaling", () => {
     assert.equal(result, "Continue with option A");
     assert.equal(ext.isPaused(), false);
     assert.equal(ext.isWaitingForInput(), false);
+
+    stdin.end();
+  });
+
+  it("should resolve via response file written by sidecar SendInput", async () => {
+    const stdin = new PassThrough();
+    const responsePath = join(tmpdir(), `hitl-test-${Date.now()}.txt`);
+    if (existsSync(responsePath)) unlinkSync(responsePath);
+
+    const ext = new AOTExtension({
+      agentRunId: "hitl-file-test",
+      controlPlaneAddress: "localhost:50051",
+      enableTracing: false,
+      stdin,
+      disableNotifications: true,
+      responseFilePath: responsePath,
+    });
+
+    const inputPromise = ext.waitForHumanInput("Which approach?");
+    assert.equal(ext.isPaused(), true);
+
+    // Simulate sidecar writing response.txt after a brief delay
+    setTimeout(() => {
+      writeFileSync(responsePath, "Use approach B\n");
+    }, 100);
+
+    const result = await inputPromise;
+    assert.equal(result, "Use approach B");
+    assert.equal(ext.isPaused(), false);
+    assert.equal(ext.isWaitingForInput(), false);
+    assert.equal(existsSync(responsePath), false, "response file should be consumed");
 
     stdin.end();
   });
