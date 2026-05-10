@@ -106,6 +106,7 @@ Shorthand subcommands:
   active            Show all active runs — RUNNING, PENDING, WAITING (alias for list --active --all)
   last-failed       Show the most recent FAILED run
   zero-commits      Show succeeded runs that made no code changes (alias for list --zero-commits --done --all)
+  committed         Show runs that committed code changes (alias for list --has-diff --all)
   approvals         Show runs waiting for approval (alias for list --phase WAITING --approval-mode hitl --all)
   queue             Show all pending runs (alias for list --pending --all)
   by-project        Group by project (alias for group --by project)
@@ -271,6 +272,8 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--failed", "--limit=1"}, rest...))
 	case "zero-commits":
 		return runRunsList(append([]string{"--zero-commits", "--done", "--all"}, rest...))
+	case "committed":
+		return runRunsList(append([]string{"--has-diff", "--all"}, rest...))
 	case "approvals":
 		return runRunsList(append([]string{"--phase", "WAITING", "--approval-mode", "hitl", "--all"}, rest...))
 	case "-h", "--help", "help":
@@ -488,6 +491,7 @@ func runRunsList(args []string) error {
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
 	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive, e.g. deepseek, claude)")
 	zeroCommits := fs.Bool("zero-commits", false, "Filter for succeeded runs that made no code changes")
+	hasDiff := fs.Bool("has-diff", false, "Filter for runs that committed code changes (totalAdditions > 0 or totalDeletions > 0)")
 	approvalModeFilter := fs.String("approval-mode", "", "Filter by approval mode (hitl, llm-judge, hybrid, or none for runs without approval)")
 	showApproval := fs.Bool("show-approval", false, "Add an APPROVAL column to the output")
 	fs.Usage = func() {
@@ -683,6 +687,15 @@ func runRunsList(args []string) error {
 		for _, r := range runs {
 			if r.GetStatus().GetPhase() == apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED &&
 				strings.Contains(r.GetStatus().GetMessage(), "no changes committed") {
+				filtered = append(filtered, r)
+			}
+		}
+		runs = filtered
+	}
+	if *hasDiff {
+		filtered := runs[:0]
+		for _, r := range runs {
+			if r.GetStatus().GetTotalAdditions() > 0 || r.GetStatus().GetTotalDeletions() > 0 {
 				filtered = append(filtered, r)
 			}
 		}
