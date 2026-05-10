@@ -40,6 +40,7 @@ describe('RunListView', () => {
           spec: { backend: 'pod', repos: [], prompt: 'test', devboxConfig: '', ttlSeconds: 3600, envVars: {}, modelTier: 'default', projectRef: 'my-project', displayName: 'First Run' },
           status: { phase: 'succeeded', message: '', podName: '', traceID: '', startedAt: '', completedAt: '' },
           createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
         } as AgentRun,
       ]),
     } as never)

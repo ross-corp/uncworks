@@ -87,6 +87,7 @@ export function mapRun(r: SharedAgentRun): AgentRun {
       parentPRUrl: r.status.parentPRUrl,
     },
     createdAt: r.createdAt,
+    updatedAt: r.updatedAt ?? r.createdAt,
   };
 }
 
