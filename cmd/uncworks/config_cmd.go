@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func runConfig(args []string) error {
@@ -37,6 +38,8 @@ func runConfig(args []string) error {
 		return runConfigSetStringField(fs.Args()[1:], "set-feature", "default_feature", func(cfg *Config, v string) { cfg.DefaultFeature = v }, "default feature name")
 	case "unset":
 		return runConfigUnset(fs.Args()[1:])
+	case "set-auto-push":
+		return runConfigSetAutoPush(fs.Args()[1:])
 	case "path":
 		p, err := configPath()
 		if err != nil {
@@ -184,6 +187,39 @@ func runConfigSetStringField(args []string, cmd, field string, setter func(*Conf
 	return nil
 }
 
+func runConfigSetAutoPush(args []string) error {
+	fs := flag.NewFlagSet("config set-auto-push", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-auto-push <true|false>\n\nSet default_auto_push. When true, --auto-push is applied to all new runs.\n")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("value argument required (true or false)")
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	switch strings.ToLower(fs.Arg(0)) {
+	case "true", "yes", "1", "on":
+		cfg.DefaultAutoPush = true
+	case "false", "no", "0", "off":
+		cfg.DefaultAutoPush = false
+	default:
+		return fmt.Errorf("invalid value %q: must be true or false", fs.Arg(0))
+	}
+	if err := saveConfig(cfg); err != nil {
+		return err
+	}
+	path, _ := configPath()
+	fmt.Printf("default_auto_push set to %v (config: %s)\n", cfg.DefaultAutoPush, path)
+	return nil
+}
+
 func runConfigUnset(args []string) error {
 	fs := flag.NewFlagSet("config unset", flag.ContinueOnError)
 	fs.Usage = func() {
@@ -213,8 +249,10 @@ func runConfigUnset(args []string) error {
 		cfg.DefaultProject = ""
 	case "feature", "default-feature":
 		cfg.DefaultFeature = ""
+	case "auto-push", "default-auto-push":
+		cfg.DefaultAutoPush = false
 	default:
-		return fmt.Errorf("unknown field %q: must be server, web-url, model, project, or feature", field)
+		return fmt.Errorf("unknown field %q: must be server, web-url, model, project, feature, or auto-push", field)
 	}
 	if err := saveConfig(cfg); err != nil {
 		return err
@@ -282,6 +320,7 @@ func runConfigShow(args []string) error {
 			"default_model_tier": cfg.DefaultModelTier,
 			"default_project":    cfg.DefaultProject,
 			"default_feature":    cfg.DefaultFeature,
+			"default_auto_push":  cfg.DefaultAutoPush,
 			"config_file":        path,
 		}
 		enc := json.NewEncoder(os.Stdout)
@@ -317,6 +356,7 @@ func runConfigShow(args []string) error {
 		feat = notSet("default_feature", "set-feature <name>")
 	}
 	fmt.Printf("default_feature:     %s\n", feat)
+	fmt.Printf("default_auto_push:   %v\n", cfg.DefaultAutoPush)
 	fmt.Printf("config file:         %s\n", path)
 	return nil
 }
