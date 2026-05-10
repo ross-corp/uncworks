@@ -39,18 +39,18 @@ Subcommands:
   count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since, --model)
   score             Show success rate across 1h/24h/7d/30d windows (--project, --feature, --json)
   rate              Alias for score
-  tally             Show daily run counts for the past N days (--days, --project, --json)
+  tally             Show daily run counts for the past N days (--days, --project, --include-archived, --json)
   summary           Show a dashboard summary of recent run activity
   latest            Show the most recent N runs (--n, --phase, --project, --tag, --ids-only)
   graph <id>        Show the run graph (parent/child relationships) (--watch for live refresh)
   inspect <id>      Diagnostic view: details, graph, and log tail (--last, --log-lines)
-  diff <id>         Show git commands to inspect a run's diff (--last, --stat, --exec)
+  diff <id>         Fetch and show git diff for a run's branch; auto-executes on TTY (--last, --stat, --print-cmd)
   compare <a> <b>   Side-by-side comparison of two runs (--json)
   open <id>         Open the PR URL for a completed run in browser (--last, --print-url)
   open-pr <id>      Alias for open
   ui <id>           Open a run in the UNCWORKS web dashboard (--last, --print-url)
   env <id>          Show env vars for a run (--export for shell export statements)
-  retry <id>        Re-run with same spec; override with --prompt, --branch, --model, --append-prompt (--last)
+  retry <id>        Re-run with same spec; override with --prompt, --branch, --model, --append-prompt, --diff (--last)
   rerun <id>        Alias for retry
   copy <id>         Alias for retry
   retry-last        Retry the most recent run (alias for retry --last)
@@ -2072,10 +2072,12 @@ func runRunsStats(args []string) error {
 			return fmt.Errorf("%s", humanizeErr(err))
 		}
 		modelNeedle := strings.ToLower(*modelFilter)
+		passedSinceStats := false
 		for _, r := range resp.Msg.GetAgentRuns() {
 			if !sinceTime.IsZero() {
-				ts := r.GetStatus().GetStartedAt()
+				ts := r.GetCreatedAt()
 				if ts == nil || !ts.AsTime().After(sinceTime) {
+					passedSinceStats = true
 					continue
 				}
 			}
@@ -2132,7 +2134,7 @@ func runRunsStats(args []string) error {
 			}
 		}
 		cursor = resp.Msg.GetNextCursor()
-		if cursor == "" || (*limit > 0 && total >= *limit) {
+		if cursor == "" || (*limit > 0 && total >= *limit) || (!sinceTime.IsZero() && passedSinceStats) {
 			break
 		}
 	}
