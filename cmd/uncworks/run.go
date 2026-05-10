@@ -76,6 +76,9 @@ Flags:`)
 		if *feature == "" && cfg.DefaultFeature != "" {
 			*feature = cfg.DefaultFeature
 		}
+		if !*autoPush && !*autoPR && cfg.DefaultAutoPush {
+			*autoPush = true
+		}
 	}
 
 	// Allow reading prompt from a file.

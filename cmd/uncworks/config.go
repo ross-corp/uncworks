@@ -25,6 +25,8 @@ type Config struct {
 	DefaultProject string `yaml:"default_project,omitempty"`
 	// DefaultFeature is the feature name used when --feature is not specified.
 	DefaultFeature string `yaml:"default_feature,omitempty"`
+	// DefaultAutoPush enables --auto-push by default when true.
+	DefaultAutoPush bool `yaml:"default_auto_push,omitempty"`
 }
 
 // configDir returns the XDG config directory for uncworks.
