@@ -382,23 +382,21 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 		pageSize = 50
 	}
 
-	// Use K8s server-side pagination via Limit + Continue token.
-	k8sListOpts := append(listOpts,
-		client.Limit(pageSize),
-		client.Continue(req.Msg.Cursor),
-	)
-
+	// Fetch all runs without K8s limit so we can sort globally before paginating.
+	// K8s server-side pagination returns items in resource-version order (oldest
+	// first), which breaks "newest first" semantics when a small limit is used.
 	var list aotv1alpha1.AgentRunList
-	if err := s.K8sClient.List(ctx, &list, k8sListOpts...); err != nil {
+	if err := s.K8sClient.List(ctx, &list, listOpts...); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list agentruns: %w", err))
 	}
 
-	// Sort by creation time (newest first)
+	// Sort by creation time (newest first).
 	sort.Slice(list.Items, func(i, j int) bool {
 		return list.Items[j].CreationTimestamp.Before(&list.Items[i].CreationTimestamp)
 	})
 
-	var runs []*apiv1.AgentRun
+	// Apply filters and collect all matching runs.
+	var allRuns []*apiv1.AgentRun
 	for i := range list.Items {
 		crd := &list.Items[i]
 		run := crdToProto(crd)
@@ -438,18 +436,31 @@ func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Requ
 			}
 		}
 
-		runs = append(runs, run)
+		allRuns = append(allRuns, run)
 	}
 
-	// Client-side truncation: K8s fake client ignores Limit, so we enforce it
-	// here as a safety net. For a real API server the K8s Limit already applied.
-	if int64(len(runs)) > pageSize {
-		runs = runs[:pageSize]
+	// Apply cursor-based pagination: the cursor is the ID of the last run on the
+	// previous page; skip everything up to and including that run.
+	startIdx := 0
+	if req.Msg.Cursor != "" {
+		for i, r := range allRuns {
+			if r.Id == req.Msg.Cursor {
+				startIdx = i + 1
+				break
+			}
+		}
+	}
+
+	page := allRuns[startIdx:]
+	var nextCursor string
+	if int64(len(page)) > pageSize {
+		nextCursor = page[pageSize-1].Id
+		page = page[:pageSize]
 	}
 
 	return connect.NewResponse(&apiv1.ListAgentRunsResponse{
-		AgentRuns:  runs,
-		NextCursor: list.Continue,
+		AgentRuns:  page,
+		NextCursor: nextCursor,
 	}), nil
 }
 
