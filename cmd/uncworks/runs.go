@@ -3525,6 +3525,7 @@ func runRunsSummary(args []string) error {
 	phaseCounts := map[string]int{}
 	projectCounts := map[string]int{}
 	var activeRuns []*apiv1.AgentRun
+	var recentCompleted []*apiv1.AgentRun
 	var latestRun *apiv1.AgentRun
 	total := 0
 	cursor := ""
@@ -3554,6 +3555,12 @@ func runRunsSummary(args []string) error {
 				apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
 				apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
 				activeRuns = append(activeRuns, r)
+			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED,
+				apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED,
+				apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+				if len(recentCompleted) < 5 {
+					recentCompleted = append(recentCompleted, r)
+				}
 			}
 			if latestRun == nil {
 				latestRun = r
@@ -3655,18 +3662,22 @@ func runRunsSummary(args []string) error {
 		}
 	}
 
-	if latestRun != nil {
-		title := latestRun.GetSpec().GetDisplayName()
-		if title == "" {
-			title = latestRun.GetSpec().GetProject()
+	if len(recentCompleted) > 0 {
+		fmt.Printf("\nRecent completions:\n")
+		for _, r := range recentCompleted {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			if len(title) > 40 {
+				title = title[:37] + "..."
+			}
+			age := ""
+			if ts := r.GetStatus().GetCompletedAt(); ts != nil {
+				age = "  " + relativeTime(ts.AsTime())
+			}
+			fmt.Printf("  %s  %-40s  %s%s\n", r.GetId(), title, colorPhase(phaseLabel(r.GetStatus().GetPhase())), age)
 		}
-		age := ""
-		if ts := latestRun.GetCreatedAt(); ts != nil {
-			age = " (" + relativeTime(ts.AsTime()) + ")"
-		}
-		fmt.Printf("\nMost recent: %s  %s%s  %s\n",
-			latestRun.GetId(), title, age,
-			colorPhase(phaseLabel(latestRun.GetStatus().GetPhase())))
 	}
 
 		return nil
