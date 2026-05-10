@@ -173,6 +173,10 @@ func runRuns(args []string) error {
 		return runRunsSlow(rest)
 	case "score", "rate":
 		return runRunsScore(rest)
+	case "queue":
+		return runRunsList(append([]string{"--pending", "--all"}, rest...))
+	case "retry-last":
+		return runRunsRetry(append([]string{"--last"}, rest...))
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -2147,6 +2151,7 @@ func runRunsOpen(args []string) error {
 	fs := flag.NewFlagSet("runs open", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	printURL := fs.Bool("print-url", false, "Print the PR URL instead of opening the browser")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs open <id> [flags]\n\nOpen the PR URL for a completed agent run in the default browser.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2154,11 +2159,28 @@ func runRunsOpen(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() != 1 {
-		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+
+	var id string
+	if *lastRun {
+		c0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(r0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		id = r0.Msg.GetAgentRuns()[0].GetId()
+	} else {
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
 	}
-	id := fs.Arg(0)
 
 	client, err := newClient(*server)
 	if err != nil {
@@ -2202,6 +2224,8 @@ func runRunsUI(args []string) error {
 	fs := flag.NewFlagSet("runs ui", flag.ContinueOnError)
 	webURL := fs.String("web-url", "", "Override web dashboard base URL (e.g. http://host:port)")
 	printURL := fs.Bool("print-url", false, "Print the URL instead of opening the browser")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
+	server := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs ui <id> [flags]\n\nOpen a run in the UNCWORKS web dashboard.\nRequires web_url in config (run: uncworks config set-web-url <url>).\n\nFlags:")
 		fs.PrintDefaults()
@@ -2209,11 +2233,28 @@ func runRunsUI(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() == 0 {
-		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+
+	var id string
+	if *lastRun {
+		c0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(r0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		id = r0.Msg.GetAgentRuns()[0].GetId()
+	} else {
+		if fs.NArg() == 0 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
 	}
-	id := fs.Arg(0)
 
 	base := *webURL
 	if base == "" {
@@ -2452,6 +2493,7 @@ func runRunsRetry(args []string) error {
 	fs.Var(&addEnvFlags, "add-env", "Add or override individual environment variables (repeatable, KEY=VALUE); merged with existing env vars")
 	var tagFlags multiFlag
 	fs.Var(&tagFlags, "tag", "Override tags (repeatable); replaces all tags if any are provided")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run. Use flags to override specific fields.\n\nFlags:")
 		fs.PrintDefaults()
@@ -2461,6 +2503,28 @@ func runRunsRetry(args []string) error {
 	}
 	if *modelShort != "" && *modelTier == "" {
 		*modelTier = *modelShort
+	}
+	if *lastRun && fs.NArg() == 0 {
+		c0, err0 := newClient(*server)
+		if err0 != nil {
+			return err0
+		}
+		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err0 != nil {
+			return fmt.Errorf("%s", humanizeErr(err0))
+		}
+		if len(r0.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		newArgs := append([]string{r0.Msg.GetAgentRuns()[0].GetId()}, args...)
+		// Remove --last from forwarded args.
+		var filtered []string
+		for _, a := range newArgs {
+			if a != "--last" && a != "-last" {
+				filtered = append(filtered, a)
+			}
+		}
+		return runRunsRetry(filtered)
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
