@@ -66,6 +66,11 @@ Flags:`)
 	if *modelShort != "" && *modelTier == "" {
 		*modelTier = *modelShort
 	}
+	if *modelTier == "" {
+		if cfg, err := loadConfig(); err == nil && cfg.DefaultModelTier != "" {
+			*modelTier = cfg.DefaultModelTier
+		}
+	}
 
 	// Allow reading prompt from a file.
 	if *promptFile != "" {

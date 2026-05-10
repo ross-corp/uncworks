@@ -75,7 +75,7 @@ func runRuns(args []string) error {
 	switch sub {
 	case "list":
 		return runRunsList(rest)
-	case "get":
+	case "get", "show":
 		return runRunsGet(rest)
 	case "describe":
 		return runRunsDescribe(rest)

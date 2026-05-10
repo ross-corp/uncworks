@@ -12,7 +12,7 @@ import (
 func runConfig(args []string) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show           Print the current CLI configuration\n  set-server     Set the gRPC server address\n  set-web-url    Set the web dashboard URL (used by 'runs ui')\n  edit           Open the config file in $EDITOR\n  reset          Reset the config to defaults\n\nFlags:")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show           Print the current CLI configuration\n  set-server     Set the gRPC server address\n  set-web-url    Set the web dashboard URL (used by 'runs ui')\n  set-model      Set the default model tier (used when --model-tier is not specified)\n  edit           Open the config file in $EDITOR\n  reset          Reset the config to defaults\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -29,6 +29,8 @@ func runConfig(args []string) error {
 		return runConfigSetServer(fs.Args()[1:])
 	case "set-web-url":
 		return runConfigSetWebURL(fs.Args()[1:])
+	case "set-model":
+		return runConfigSetModel(fs.Args()[1:])
 	case "edit":
 		return runConfigEdit(fs.Args()[1:])
 	case "reset":
@@ -101,6 +103,40 @@ func runConfigSetWebURL(args []string) error {
 	return nil
 }
 
+func runConfigSetModel(args []string) error {
+	fs := flag.NewFlagSet("config set-model", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-model <tier>\n\nSet the default model tier used when --model-tier is not specified.\nUse 'default' or '' to clear the default.")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return fmt.Errorf("model tier argument required")
+	}
+	tier := fs.Arg(0)
+	if tier == "default" || tier == "none" {
+		tier = ""
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	cfg.DefaultModelTier = tier
+	if err := saveConfig(cfg); err != nil {
+		return err
+	}
+	path, _ := configPath()
+	if tier == "" {
+		fmt.Printf("default_model_tier cleared (config: %s)\n", path)
+	} else {
+		fmt.Printf("default_model_tier set to %s (config: %s)\n", tier, path)
+	}
+	return nil
+}
+
 func runConfigEdit(args []string) error {
 	path, err := configPath()
 	if err != nil {
@@ -154,9 +190,10 @@ func runConfigShow(args []string) error {
 
 	if *jsonOut {
 		out := map[string]interface{}{
-			"server_address": cfg.Server.Address,
-			"web_url":        cfg.WebURL,
-			"config_file":    path,
+			"server_address":     cfg.Server.Address,
+			"web_url":            cfg.WebURL,
+			"default_model_tier": cfg.DefaultModelTier,
+			"config_file":        path,
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -167,12 +204,17 @@ func runConfigShow(args []string) error {
 	if addr == "" {
 		addr = "(not set — using local port-forward)"
 	}
-	fmt.Printf("server.address:  %s\n", addr)
+	fmt.Printf("server.address:      %s\n", addr)
 	webURL := cfg.WebURL
 	if webURL == "" {
 		webURL = "(not set — use 'config set-web-url <url>')"
 	}
-	fmt.Printf("web_url:         %s\n", webURL)
-	fmt.Printf("config file:     %s\n", path)
+	fmt.Printf("web_url:             %s\n", webURL)
+	model := cfg.DefaultModelTier
+	if model == "" {
+		model = "(not set — use 'config set-model <tier>')"
+	}
+	fmt.Printf("default_model_tier:  %s\n", model)
+	fmt.Printf("config file:         %s\n", path)
 	return nil
 }
