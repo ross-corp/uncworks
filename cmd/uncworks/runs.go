@@ -32,13 +32,14 @@ Subcommands:
   show <id>         Alias for get
   describe <id>     Show full detail including persisted log output
   logs <id>         Stream log output until the run completes (--no-follow, --grep, --lines, --last)
-  tail <id>         Stream logs and show summary when run completes
+  tail <id>         Stream logs and show summary when run completes (--last)
   watch             Auto-refresh the runs list (--interval, --active, --phase, --project)
   wait <id>         Block until a run reaches a terminal phase (--last, --timeout, --log, --on-success)
   stats             Show aggregate counts of runs by phase (--format, --since, --by-project, --model)
   count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since, --model)
   score             Show success rate across 1h/24h/7d/30d windows (--project, --feature, --json)
   rate              Alias for score
+  tally             Show daily run counts for the past N days (--days, --project, --json)
   summary           Show a dashboard summary of recent run activity
   latest            Show the most recent N runs (--n, --phase, --project, --tag, --ids-only)
   graph <id>        Show the run graph (parent/child relationships) (--watch for live refresh)
@@ -53,6 +54,7 @@ Subcommands:
   rerun <id>        Alias for retry
   copy <id>         Alias for retry
   retry-last        Retry the most recent run (alias for retry --last)
+  tail-last         Tail the most recent run (alias for tail --last)
   retry-failed      Bulk retry all FAILED runs matching filters (--project, --since, --dry-run, --list)
   cancel <id>       Request cancellation of a running agent (multiple IDs supported)
   kill <id>         Alias for cancel
@@ -72,6 +74,10 @@ Subcommands:
   timeline          Show a chronological view of completed runs (--since, --project)
   slow              Show slowest completed runs sorted by duration (--limit, --since, --project)
   alias             Show all available subcommand aliases
+  prompt <id>       Print only the prompt of a run (alias for get --field prompt)
+  id <id>           Print only the ID of a run (alias for get --field id)
+  children <id>     List child runs of a parent run ID
+  notify <id>       Wait for a run and send macOS notification when done (alias for wait --notify)
 
 Shorthand subcommands:
   today             Runs from the last 24h (alias for list --since 24h --all)
@@ -204,6 +210,8 @@ func runRuns(args []string) error {
 		return runRunsList(append([]string{"--pending", "--all"}, rest...))
 	case "retry-last":
 		return runRunsRetry(append([]string{"--last"}, rest...))
+	case "tail-last":
+		return runRunsTail(append([]string{"--last"}, rest...))
 	case "notify":
 		return runRunsWait(append([]string{"--notify"}, rest...))
 	case "children":
@@ -693,6 +701,7 @@ func runRunsList(args []string) error {
 	}
 
 	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+	useRelative := *relative || term.IsTerminal(int(os.Stdout.Fd()))
 	var listBuf bytes.Buffer
 	w := tabwriter.NewWriter(&listBuf, 0, 0, 2, ' ', 0)
 	if !*noHeader {
@@ -740,14 +749,14 @@ func runRunsList(args []string) error {
 		started := "-"
 		if r.GetStatus().GetStartedAt() != nil {
 			t := r.GetStatus().GetStartedAt().AsTime()
-			if *relative {
+			if useRelative {
 				started = relativeTime(t)
 			} else {
 				started = t.Format(time.RFC3339)
 			}
 		} else if r.GetCreatedAt() != nil {
 			t := r.GetCreatedAt().AsTime()
-			if *relative {
+			if useRelative {
 				started = relativeTime(t)
 			} else {
 				started = t.Format(time.RFC3339)
@@ -1250,6 +1259,7 @@ func runRunsDescribe(args []string) error {
 func runRunsTail(args []string) error {
 	fs := flag.NewFlagSet("runs tail", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs tail <id> [flags]\n\nStream logs and show a summary when the run completes.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1257,11 +1267,28 @@ func runRunsTail(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() != 1 {
-		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+
+	var id string
+	if *lastRun {
+		c, err := newClient(*server)
+		if err != nil {
+			return err
+		}
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		if len(resp.Msg.GetAgentRuns()) == 0 {
+			return fmt.Errorf("no runs found")
+		}
+		id = resp.Msg.GetAgentRuns()[0].GetId()
+	} else {
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
 	}
-	id := fs.Arg(0)
 
 	if err := runRunsLogs([]string{id, "--server=" + *server}); err != nil {
 		return err

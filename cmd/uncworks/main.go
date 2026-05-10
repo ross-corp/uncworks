@@ -30,6 +30,8 @@ Commands:
   failed     Show failed runs (alias for runs list --failed)
   top        Live view of active runs sorted by elapsed time (alias for runs top)
   watch      Auto-refresh the run list (alias for runs watch)
+  tail       Stream logs of the most recent run (alias for runs tail --last)
+  wait       Wait for the most recent run to complete (alias for runs wait --last)
   cancel     Request cancellation of a running agent
   kill       Alias for cancel
   input      Send human-in-the-loop response to a paused agent
@@ -80,6 +82,10 @@ func main() {
 		err = runRunsTop(args)
 	case "watch":
 		err = runRunsWatch(args)
+	case "tail":
+		err = runRunsTail(append([]string{"--last"}, args...))
+	case "wait":
+		err = runRunsWait(append([]string{"--last"}, args...))
 	case "cancel", "kill":
 		err = runCancel(args)
 	case "input":
