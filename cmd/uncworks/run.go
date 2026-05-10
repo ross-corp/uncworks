@@ -40,6 +40,7 @@ func runRun(args []string) error {
 	wait := fs.Bool("wait", false, "Wait for the run to complete; exit 0 on success, 1 on failure")
 	follow := fs.Bool("follow", false, "Stream logs after submitting the run (takes precedence over --wait)")
 	timeout := fs.Duration("timeout", 0, "Timeout for --wait mode (e.g. 30m, 1h); 0 means no timeout")
+	notify := fs.Bool("notify", false, "Send a macOS desktop notification when --wait mode completes")
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	var tags multiFlag
 	fs.Var(&tags, "tag", "Freeform tag for filtering (repeatable, e.g. --tag ci --tag infra)")
@@ -278,6 +279,14 @@ Flags:`)
 	phase := getResp.Msg.GetStatus().GetPhase()
 	msg := getResp.Msg.GetStatus().GetMessage()
 
+	doNotify := func(title, body string) {
+		if !*notify {
+			return
+		}
+		_ = exec.Command("osascript", "-e",
+			fmt.Sprintf(`display notification %q with title %q`, body, title)).Run()
+	}
+
 	switch phase {
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
 		if !*outputID {
@@ -286,13 +295,16 @@ Flags:`)
 				fmt.Printf("PR: %s\n", url)
 			}
 		}
+		doNotify("UNCWORKS: run succeeded", run.GetId())
 		return nil
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+		doNotify("UNCWORKS: run failed", run.GetId()+" — "+msg)
 		if msg != "" {
 			return fmt.Errorf("run %s failed: %s", run.GetId(), msg)
 		}
 		return fmt.Errorf("run %s failed", run.GetId())
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+		doNotify("UNCWORKS: run cancelled", run.GetId())
 		return fmt.Errorf("run %s was cancelled", run.GetId())
 	default:
 		return fmt.Errorf("run %s ended in unexpected phase: %s", run.GetId(), phaseLabel(phase))
