@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { usePoll } from "../hooks/usePoll";
 import { useCopilotContext } from "../hooks/useCopilotContext";
-import { ScrollTextIcon, GitBranchIcon, FolderIcon, TerminalIcon } from "lucide-react";
+import { ScrollTextIcon, GitBranchIcon, FolderIcon, TerminalIcon, NetworkIcon } from "lucide-react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { AgentRun } from "../types/agent-run";
@@ -129,6 +129,7 @@ export default function RunDetailView() {
   const [elapsed, setElapsed] = useState(0);
   const [pendingArchive, setPendingArchive] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [runGraph, setRunGraph] = useState<{ nodes: Array<{name: string; phase: string; role: string; startedAt?: string; completedAt?: string}>; edges: Array<{parent: string; child: string}> } | null>(null);
   const prevPhaseRef = useRef<string | undefined>(undefined);
   const retriesRef = useRef(0);
   const { spans, loading: tracesLoading } = useTraces(id || "", run?.status.phase);
@@ -156,6 +157,26 @@ export default function RunDetailView() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [run?.status.phase, run?.createdAt, run?.status.completedAt]);
+
+  // Fetch run graph when the run has children or a parent
+  useEffect(() => {
+    if (!id || !run) return;
+    const hasRelated = (run.children && run.children.length > 0) || !!run.spec.parentRunId;
+    if (!hasRelated) return;
+    client.getRunGraph(id).then((g) => {
+      setRunGraph({
+        nodes: (g.nodes ?? []).map((n) => ({
+          name: n.name,
+          phase: String(n.phase ?? ""),
+          role: n.role ?? "",
+          startedAt: n.startedAt ? String(n.startedAt) : undefined,
+          completedAt: n.completedAt ? String(n.completedAt) : undefined,
+        })),
+        edges: (g.edges ?? []).map((e) => ({ parent: e.parent, child: e.child })),
+      });
+    }).catch(() => {/* ignore */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, run?.children?.length, run?.spec.parentRunId]);
 
   // Auto-open HITL modal when phase transitions to waiting_for_input
   useEffect(() => {
@@ -654,6 +675,62 @@ export default function RunDetailView() {
                     {run.status.logOutput}
                   </pre>
                 </details>
+              </div>
+            )}
+
+            {/* Run graph (parent/child DAG) */}
+            {runGraph && runGraph.nodes.length > 1 && (
+              <div className="border-t pt-3 space-y-1">
+                <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground mb-2">
+                  <NetworkIcon className="w-3 h-3" />
+                  Run Graph ({runGraph.nodes.length} runs)
+                </div>
+                {(() => {
+                  const graph = runGraph!;
+                  // Build parent-first ordering: roots first, then children
+                  const childIds = new Set(graph.edges.map((e) => e.child));
+                  const roots = graph.nodes.filter((n) => !childIds.has(n.name));
+                  const phaseColor: Record<string, string> = {
+                    succeeded: "text-green-600 dark:text-green-400",
+                    failed: "text-red-500",
+                    running: "text-blue-500",
+                    pending: "text-muted-foreground",
+                    waiting_for_input: "text-amber-500",
+                    cancelled: "text-muted-foreground",
+                  };
+                  const phaseLabel: Record<string, string> = {
+                    succeeded: "✓", failed: "✗", running: "⟳",
+                    pending: "○", waiting_for_input: "?", cancelled: "⊘",
+                  };
+                  function NodeRow({ node, depth }: { node: typeof graph.nodes[0]; depth: number }) {
+                    const isCurrent = node.name === id;
+                    const children = graph.edges.filter((e) => e.parent === node.name)
+                      .map((e) => graph.nodes.find((n) => n.name === e.child))
+                      .filter(Boolean) as typeof graph.nodes;
+                    const clr = phaseColor[node.phase] ?? "text-muted-foreground";
+                    const lbl = phaseLabel[node.phase] ?? "○";
+                    return (
+                      <>
+                        <div
+                          className={`flex items-center gap-1 text-xs py-0.5 ${isCurrent ? "font-semibold" : ""}`}
+                          style={{ paddingLeft: depth * 14 }}
+                        >
+                          <span className={clr}>{lbl}</span>
+                          {isCurrent ? (
+                            <span className="font-mono">{node.name}</span>
+                          ) : (
+                            <a href={`/run/${node.name}`} className="font-mono hover:underline text-blue-500">
+                              {node.name}
+                            </a>
+                          )}
+                          {node.role && <span className="text-muted-foreground">({node.role})</span>}
+                        </div>
+                        {children.map((c) => <NodeRow key={c.name} node={c} depth={depth + 1} />)}
+                      </>
+                    );
+                  }
+                  return roots.map((r) => <NodeRow key={r.name} node={r} depth={0} />);
+                })()}
               </div>
             )}
           </div>
