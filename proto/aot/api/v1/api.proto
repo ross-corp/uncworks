@@ -131,6 +131,9 @@ message AgentRunSpec {
   // SpecRef is the name of a spec in the project's config repo (e.g., "add-comments").
   // Requires project_ref to be set. The controller fetches spec content from soft-serve.
   string spec_ref = 31;
+  // ApprovalMode controls what approval is required before a run is marked Succeeded.
+  // Values: "" (none), "hitl", "llm-judge", "hybrid".
+  string approval_mode = 32;
 }
 
 // PipelineConfig provides per-stage configuration for the spec-driven pipeline.

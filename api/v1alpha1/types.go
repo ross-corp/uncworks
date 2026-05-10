@@ -187,6 +187,14 @@ type AgentRunSpec struct {
 	// Tags are freeform labels for cross-cutting filtering.
 	// +optional
 	Tags []string `json:"tags,omitempty"`
+
+	// ApprovalMode controls what approval is required before a run is marked Succeeded.
+	// "": no approval required (auto-succeed when agent exits 0)
+	// "hitl": pause and wait for explicit human approval before marking Succeeded
+	// "llm-judge": require LLM-based review of completed work to pass (future)
+	// "hybrid": require both LLM review AND human approval (future)
+	// +optional
+	ApprovalMode string `json:"approvalMode,omitempty"`
 }
 
 // PipelineConfig provides per-stage configuration for the spec-driven pipeline.
