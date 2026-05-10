@@ -206,6 +206,16 @@ func runRuns(args []string) error {
 		return runRunsRetry(append([]string{"--last"}, rest...))
 	case "notify":
 		return runRunsWait(append([]string{"--notify"}, rest...))
+	case "children":
+		if len(rest) == 0 {
+			fmt.Fprintln(os.Stderr, "usage: uncworks runs children <parent-run-id>")
+			return fmt.Errorf("parent run ID required")
+		}
+		return runRunsList(append([]string{"--parent-run-id", rest[0], "--all"}, rest[1:]...))
+	case "prompt":
+		return runRunsGetField(rest, "prompt")
+	case "id":
+		return runRunsGetField(rest, "id")
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -214,6 +224,12 @@ func runRuns(args []string) error {
 		os.Exit(2)
 	}
 	return nil
+}
+
+// runRunsGetField is a tiny helper for single-field shortcuts like "runs prompt" and "runs id".
+func runRunsGetField(args []string, field string) error {
+	newArgs := append([]string{"--field", field}, args...)
+	return runRunsGet(newArgs)
 }
 
 // ── watch ─────────────────────────────────────────────────────────────────────
