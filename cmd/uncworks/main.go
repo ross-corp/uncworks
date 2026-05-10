@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Version and Commit are set at build time via -ldflags.
@@ -36,6 +37,8 @@ Commands:
   cancel     Request cancellation of a running agent
   kill       Alias for cancel
   input      Send human-in-the-loop response to a paused agent
+  approve    Approve a run waiting for human approval (sends "approve" input)
+  reject     Reject a run waiting for human approval (sends "reject: <reason>" input)
   graph      Print the run execution tree
   ping       Check API connectivity and measure round-trip latency
   summary    Dashboard summary of recent run activity (alias for runs summary)
@@ -97,6 +100,24 @@ func main() {
 		err = runCancel(args)
 	case "input":
 		err = runInput(args)
+	case "approve":
+		// Shortcut: uncworks approve <run-id> → sends "approve" as human input
+		if len(args) == 0 {
+			err = fmt.Errorf("usage: uncworks approve <run-id>")
+		} else {
+			err = runInput(append([]string{args[0], "approve"}, args[1:]...))
+		}
+	case "reject":
+		// Shortcut: uncworks reject <run-id> [reason] → sends "reject: <reason>" as human input
+		if len(args) == 0 {
+			err = fmt.Errorf("usage: uncworks reject <run-id> [reason]")
+		} else {
+			reason := "rejected"
+			if len(args) > 1 {
+				reason = "reject: " + strings.Join(args[1:], " ")
+			}
+			err = runInput([]string{args[0], reason})
+		}
 	case "graph":
 		err = runGraph(args)
 	case "ping":
