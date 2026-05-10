@@ -890,7 +890,7 @@ func runRunsGet(args []string) error {
 	waitFlag := fs.Bool("wait", false, "If the run is active, wait until it reaches a terminal phase then show details")
 	poll := fs.Int("poll", 0, "Auto-refresh every N seconds until the run reaches a terminal phase (0 = disabled)")
 	promptOnly := fs.Bool("prompt-only", false, "Print only the agent prompt text (useful for piping or editing)")
-	field := fs.String("field", "", "Print only this field's value: id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt")
+	field := fs.String("field", "", "Print only this field's value: id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt, message, stage, age, created-at, completed-at, tags")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
@@ -1073,8 +1073,26 @@ func runRunsGet(args []string) error {
 			val = r.GetSpec().GetPrompt()
 		case "duration":
 			val = runDuration(r)
+		case "message", "status-message":
+			val = r.GetStatus().GetMessage()
+		case "stage":
+			val = r.GetStatus().GetStage()
+		case "age", "created-at":
+			if ts := r.GetCreatedAt(); ts != nil {
+				val = relativeTime(ts.AsTime())
+			}
+		case "created-at-iso":
+			if ts := r.GetCreatedAt(); ts != nil {
+				val = ts.AsTime().Format(time.RFC3339)
+			}
+		case "completed-at":
+			if ts := r.GetStatus().GetCompletedAt(); ts != nil {
+				val = relativeTime(ts.AsTime())
+			}
+		case "tags":
+			val = strings.Join(r.GetSpec().GetTags(), ",")
 		default:
-			return fmt.Errorf("unknown field %q: must be id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, or prompt", *field)
+			return fmt.Errorf("unknown field %q: must be id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt, message, stage, age, created-at, created-at-iso, completed-at, or tags", *field)
 		}
 		fmt.Println(val)
 		return nil
