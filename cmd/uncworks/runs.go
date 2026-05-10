@@ -35,6 +35,7 @@ Subcommands:
   tail <id>         Stream logs and show summary when run completes (--last)
   watch             Auto-refresh the runs list (--interval, --active, --phase, --project)
   wait <id>         Block until a run reaches a terminal phase (--last, --timeout, --log, --on-success)
+  cost              Show cost and diff summary across runs (--since, --project, --model)
   stats             Show aggregate counts of runs by phase (--format, --since, --by-project, --model)
   count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since, --model)
   score             Show success rate across 1h/24h/7d/30d windows (--project, --feature, --json)
@@ -144,6 +145,8 @@ func runRuns(args []string) error {
 		return runRunsPrune(rest)
 	case "cancel", "kill":
 		return runCancel(rest)
+	case "cost":
+		return runRunsCost(rest)
 	case "stats":
 		return runRunsStats(rest)
 	case "open", "open-pr", "pr":
@@ -6853,4 +6856,121 @@ func runRunsTally(args []string) error {
 		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", d, b.Total, b.Done, b.Failed, bar)
 	}
 	return w.Flush()
+}
+
+func runRunsCost(args []string) error {
+	fs := flag.NewFlagSet("runs cost", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	since := fs.String("since", "", "Filter window (e.g. 24h, 7d, 30d)")
+	model := fs.String("model", "", "Filter by model tier substring")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cost [flags]\n\nShow cost and diff summary across agent runs.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	type modelStats struct {
+		runs      int
+		additions int32
+		deletions int32
+	}
+	byModel := map[string]*modelStats{}
+	totalRuns := 0
+	totalAdditions := int32(0)
+	totalDeletions := int32(0)
+	runsWithCost := 0
+	cursor := ""
+	modelNeedle := strings.ToLower(*model)
+
+	for {
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			Cursor:        cursor,
+		}))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		done := false
+		for _, r := range resp.Msg.GetAgentRuns() {
+			if !sinceTime.IsZero() {
+				ts := r.GetCreatedAt()
+				if ts != nil {
+					t := time.Unix(ts.Seconds, int64(ts.Nanos))
+					if t.Before(sinceTime) {
+						done = true
+						break
+					}
+				}
+			}
+			tier := r.GetSpec().GetModelTier()
+			if tier == "" {
+				tier = "default"
+			}
+			if modelNeedle != "" && !strings.Contains(strings.ToLower(tier), modelNeedle) {
+				continue
+			}
+			totalRuns++
+			totalAdditions += r.GetStatus().GetTotalAdditions()
+			totalDeletions += r.GetStatus().GetTotalDeletions()
+			if r.GetStatus().GetTotalCost() != "" {
+				runsWithCost++
+			}
+			ms := byModel[tier]
+			if ms == nil {
+				ms = &modelStats{}
+				byModel[tier] = ms
+			}
+			ms.runs++
+			ms.additions += r.GetStatus().GetTotalAdditions()
+			ms.deletions += r.GetStatus().GetTotalDeletions()
+		}
+		if done || resp.Msg.GetNextCursor() == "" {
+			break
+		}
+		cursor = resp.Msg.GetNextCursor()
+	}
+
+	label := "all time"
+	if *since != "" {
+		label = "last " + *since
+	}
+	if *project != "" {
+		label += " · " + *project
+	}
+	fmt.Printf("Cost summary (%s) — %d runs\n\n", label, totalRuns)
+	fmt.Printf("  Total diff:  +%d -%d lines\n", totalAdditions, totalDeletions)
+	if runsWithCost > 0 {
+		fmt.Printf("  Cost data:   %d/%d runs have cost estimates\n", runsWithCost, totalRuns)
+	}
+	if len(byModel) > 1 {
+		fmt.Println("\n  By model tier:")
+		tiers := make([]string, 0, len(byModel))
+		for tier := range byModel {
+			tiers = append(tiers, tier)
+		}
+		sort.Strings(tiers)
+		for _, tier := range tiers {
+			ms := byModel[tier]
+			fmt.Printf("    %-22s  %d runs  +%d -%d lines\n", tier, ms.runs, ms.additions, ms.deletions)
+		}
+	}
+	return nil
 }
