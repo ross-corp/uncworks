@@ -831,6 +831,7 @@ func runRunsGet(args []string) error {
 	waitFlag := fs.Bool("wait", false, "If the run is active, wait until it reaches a terminal phase then show details")
 	poll := fs.Int("poll", 0, "Auto-refresh every N seconds until the run reaches a terminal phase (0 = disabled)")
 	promptOnly := fs.Bool("prompt-only", false, "Print only the agent prompt text (useful for piping or editing)")
+	field := fs.String("field", "", "Print only this field's value: id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
@@ -978,6 +979,45 @@ func runRunsGet(args []string) error {
 
 	if *promptOnly {
 		fmt.Println(r.GetSpec().GetPrompt())
+		return nil
+	}
+
+	if *field != "" {
+		var val string
+		repo, branch := "", ""
+		if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
+			repo = repos[0].GetUrl()
+			branch = repos[0].GetBranch()
+		}
+		switch strings.ToLower(*field) {
+		case "id":
+			val = r.GetId()
+		case "phase":
+			val = phaseLabel(r.GetStatus().GetPhase())
+		case "title", "name":
+			val = r.GetSpec().GetDisplayName()
+		case "model", "model-tier":
+			val = r.GetSpec().GetModelTier()
+		case "project":
+			val = r.GetSpec().GetProject()
+		case "feature":
+			val = r.GetSpec().GetFeature()
+		case "branch":
+			val = branch
+		case "repo":
+			val = repo
+		case "pr-url", "pr":
+			val = r.GetStatus().GetPrUrl()
+		case "pod":
+			val = r.GetStatus().GetPodName()
+		case "prompt":
+			val = r.GetSpec().GetPrompt()
+		case "duration":
+			val = runDuration(r)
+		default:
+			return fmt.Errorf("unknown field %q: must be id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, or prompt", *field)
+		}
+		fmt.Println(val)
 		return nil
 	}
 
