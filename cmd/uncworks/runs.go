@@ -37,6 +37,7 @@ Subcommands:
   wait <id>         Block until a run reaches a terminal phase (--last, --timeout, --log, --on-success)
   cost              Show cost and diff summary across runs (--since, --project, --model)
   velocity          Show runs-per-hour chart for the past 24h (--buckets, --project)
+  percentiles       Show p50/p95/p99 duration for DONE runs (--since, --project)
   stats             Show aggregate counts of runs by phase (--format, --since, --by-project, --model)
   count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since, --model)
   score             Show success rate across 1h/24h/7d/30d windows (--project, --feature, --json)
@@ -151,6 +152,8 @@ func runRuns(args []string) error {
 		return runRunsCost(rest)
 	case "velocity":
 		return runRunsVelocity(rest)
+	case "percentiles", "pct":
+		return runRunsPercentiles(rest)
 	case "stats":
 		return runRunsStats(rest)
 	case "open", "open-pr", "pr":
@@ -7071,5 +7074,103 @@ func runRunsVelocity(args []string) error {
 		total += c
 	}
 	fmt.Printf("\n  Total: %d runs in last %dh (avg %.1f/h)\n", total, bucketCount, float64(total)/float64(bucketCount))
+	return nil
+}
+
+func runRunsPercentiles(args []string) error {
+	fs := flag.NewFlagSet("runs percentiles", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	since := fs.String("since", "", "Filter window (e.g. 24h, 7d, 30d)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs percentiles [flags]\n\nShow p50/p95/p99 duration for completed runs.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	var sinceTime time.Time
+	if *since != "" {
+		d, err := parseSinceDuration(*since)
+		if err != nil {
+			return fmt.Errorf("--since %q: %w", *since, err)
+		}
+		sinceTime = time.Now().Add(-d)
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	var durations []time.Duration
+	cursor := ""
+	for {
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			Cursor:        cursor,
+		}))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		done := false
+		for _, r := range resp.Msg.GetAgentRuns() {
+			if r.GetStatus().GetPhase() != apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED {
+				continue
+			}
+			if !sinceTime.IsZero() {
+				ts := r.GetCreatedAt()
+				if ts != nil {
+					t := time.Unix(ts.Seconds, int64(ts.Nanos))
+					if t.Before(sinceTime) {
+						done = true
+						break
+					}
+				}
+			}
+			started := r.GetStatus().GetStartedAt()
+			completed := r.GetStatus().GetCompletedAt()
+			if started == nil || completed == nil {
+				continue
+			}
+			s := time.Unix(started.Seconds, int64(started.Nanos))
+			e := time.Unix(completed.Seconds, int64(completed.Nanos))
+			if e.After(s) {
+				durations = append(durations, e.Sub(s))
+			}
+		}
+		if done || resp.Msg.GetNextCursor() == "" {
+			break
+		}
+		cursor = resp.Msg.GetNextCursor()
+	}
+
+	if len(durations) == 0 {
+		fmt.Println("No completed runs with duration data.")
+		return nil
+	}
+
+	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+	n := len(durations)
+	pct := func(p float64) time.Duration {
+		return durations[int(float64(n-1)*p/100)]
+	}
+
+	label := "all time"
+	if *since != "" {
+		label = "last " + *since
+	}
+	if *project != "" {
+		label += " · " + *project
+	}
+	fmt.Printf("Duration percentiles (%s) — %d completed runs\n\n", label, n)
+	fmt.Printf("  p50  %s\n", formatDuration(pct(50)))
+	fmt.Printf("  p75  %s\n", formatDuration(pct(75)))
+	fmt.Printf("  p95  %s\n", formatDuration(pct(95)))
+	fmt.Printf("  p99  %s\n", formatDuration(pct(99)))
+	fmt.Printf("  min  %s\n", formatDuration(durations[0]))
+	fmt.Printf("  max  %s\n", formatDuration(durations[n-1]))
 	return nil
 }
