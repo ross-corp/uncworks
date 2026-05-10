@@ -6274,6 +6274,7 @@ func runRunsTally(args []string) error {
 	project := fs.String("project", "", "Filter by project name")
 	feature := fs.String("feature", "", "Filter by feature name")
 	tag := fs.String("tag", "", "Filter by tag")
+	includeArchived := fs.Bool("include-archived", false, "Include archived runs in the counts")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
 	jsonOut := fs.Bool("json", false, "Output as JSON array")
 	fs.Usage = func() {
@@ -6310,17 +6311,21 @@ func runRunsTally(args []string) error {
 
 	cursor := ""
 	for {
-		resp, err2 := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+		listReq := connect.NewRequest(&apiv1.ListAgentRunsRequest{
 			Limit:         100,
 			ProjectFilter: *project,
 			FeatureFilter: *feature,
 			TagFilter:     *tag,
 			Cursor:        cursor,
-		}))
+		})
+		if *includeArchived {
+			listReq.Header().Set("X-Include-Archived", "true")
+		}
+		resp, err2 := c.ListAgentRuns(context.Background(), listReq)
 		if err2 != nil {
 			break
 		}
-		stop := false
+		passedCutoff := false
 		for _, r := range resp.Msg.GetAgentRuns() {
 			ts := r.GetCreatedAt()
 			if ts == nil {
@@ -6328,8 +6333,8 @@ func runRunsTally(args []string) error {
 			}
 			t := ts.AsTime().Local()
 			if t.Before(cutoff) {
-				stop = true
-				break
+				passedCutoff = true
+				continue
 			}
 			d := t.Format("2006-01-02")
 			b, ok := buckets[d]
@@ -6345,7 +6350,10 @@ func runRunsTally(args []string) error {
 			}
 		}
 		cursor = resp.Msg.GetNextCursor()
-		if cursor == "" || stop {
+		// When not including archived runs, stop once we've passed the cutoff date
+		// (all remaining pages will be older). With --include-archived, archived runs
+		// appear after non-archived in the API response, so we must paginate fully.
+		if cursor == "" || (!*includeArchived && passedCutoff) {
 			break
 		}
 	}
