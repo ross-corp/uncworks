@@ -358,6 +358,7 @@ func runRunsList(args []string) error {
 	titleWidth := fs.Int("title-width", 32, "Max characters to show in the title column (min: 10)")
 	showTags := fs.Bool("show-tags", false, "Add a tags column to the output")
 	showPR := fs.Bool("show-pr", false, "Add a PR URL column to the output")
+	showFeature := fs.Bool("show-feature", false, "Add a feature column to the output")
 	titleShort := fs.String("title", "", "Shorthand for --title-contains")
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
 	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive, e.g. deepseek, claude)")
@@ -680,6 +681,9 @@ func runRunsList(args []string) error {
 		if *verbose {
 			hdr += "\tREPO\tPROJECT\tSTAGE"
 		}
+		if *showFeature {
+			hdr += "\tFEATURE"
+		}
 		if *showTags {
 			hdr += "\tTAGS"
 		}
@@ -749,6 +753,13 @@ func runRunsList(args []string) error {
 				stageCol = "—"
 			}
 			row += "\t" + repo + "\t" + project + "\t" + stageCol
+		}
+		if *showFeature {
+			feat := r.GetSpec().GetFeature()
+			if feat == "" {
+				feat = "—"
+			}
+			row += "\t" + feat
 		}
 		if *showTags {
 			row += "\t" + tags
