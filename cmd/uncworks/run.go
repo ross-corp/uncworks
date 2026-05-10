@@ -35,7 +35,7 @@ func runRun(args []string) error {
 	editPrompt := fs.Bool("editor", false, "Open $EDITOR to compose the agent prompt interactively")
 	project := fs.String("project", "", "Project name this run belongs to")
 	feature := fs.String("feature", "", "Feature/unit-of-work this run contributes to")
-	modelTier := fs.String("model-tier", "", "LLM model tier (e.g. claude-sonnet-4.6, deepseek-v3.2, qwen3-coder, default-cloud)")
+	modelTier := fs.String("model-tier", "", "LLM model tier (e.g. claude-sonnet-4.6, deepseek-v3.2, qwen3-coder, gpt-oss-120b-free, default-cloud)")
 	modelShort := fs.String("model", "", "Shorthand for --model-tier")
 	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
 	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
