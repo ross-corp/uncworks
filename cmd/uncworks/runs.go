@@ -2843,11 +2843,29 @@ func runRunsRetry(args []string) error {
 			if *modelTier != "" {
 				subArgs = append(subArgs, "--model-tier="+*modelTier)
 			}
+			if *branch != "" {
+				subArgs = append(subArgs, "--branch="+*branch)
+			}
+			if *name != "" {
+				subArgs = append(subArgs, "--name="+*name)
+			}
+			if *autoPush {
+				subArgs = append(subArgs, "--auto-push")
+			}
+			if *autoPR {
+				subArgs = append(subArgs, "--auto-pr")
+			}
 			if *outputID {
 				subArgs = append(subArgs, "--output-id")
 			}
 			for _, t := range tagFlags {
 				subArgs = append(subArgs, "--tag="+t)
+			}
+			for _, e := range envFlags {
+				subArgs = append(subArgs, "--env="+e)
+			}
+			for _, e := range addEnvFlags {
+				subArgs = append(subArgs, "--add-env="+e)
 			}
 			if err := runRunsRetry(subArgs); err != nil {
 				fmt.Fprintf(os.Stderr, "  failed to retry %s: %v\n", rid, err)
