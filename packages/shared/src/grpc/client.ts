@@ -128,6 +128,7 @@ export class AOTClient {
       autoPush: spec.autoPush ?? false,
       autoPr: spec.autoPR ?? false,
       prBaseBranch: spec.prBaseBranch ?? "",
+      approvalMode: spec.approvalMode ?? "",
     });
     const resp = await this.client.createAgentRun({ spec: pbSpec });
     return toAgentRun(resp.agentRun!);
@@ -342,6 +343,7 @@ function toAgentRun(pb: PbAgentRun): AgentRun {
       autoPush: pb.spec?.autoPush || undefined,
       autoPR: pb.spec?.autoPr || undefined,
       prBaseBranch: pb.spec?.prBaseBranch || undefined,
+      approvalMode: pb.spec?.approvalMode || undefined,
     },
     status: {
       phase: phaseFromProto(pb.status?.phase ?? PbAgentRunPhase.UNSPECIFIED),

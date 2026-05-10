@@ -527,27 +527,52 @@ export default function RunDetailView() {
       </div>
 
       {/* HITL inline overlay (fallback when modal is closed) */}
-      {run.status.phase === "waiting_for_input" && !hitlModalOpen && (
-        <div className="border-t bg-yellow-500/10 px-4 py-2">
-          <div className="text-xs text-yellow-500 mb-1">Agent is waiting for input</div>
-          <div className="flex gap-2">
-            <input
-              className="flex-1 border bg-background px-2 py-1 text-sm outline-none focus:border-primary"
-              value={hitlInput}
-              onChange={(e) => setHitlInput(e.target.value)}
-              placeholder="Type your response..."
-              onKeyDown={(e) => { if (e.key === "Enter") sendHitl(); }}
-              autoFocus
-            />
-            <button
-              onClick={() => sendHitl()}
-              className="px-3 py-1 text-xs bg-primary text-primary-foreground"
-            >
-              Send
-            </button>
+      {run.status.phase === "waiting_for_input" && !hitlModalOpen && (() => {
+        const isApprovalWait = run.spec.approvalMode === "hitl" || run.spec.approvalMode === "hybrid";
+        if (isApprovalWait) {
+          return (
+            <div className="border-t bg-amber-500/10 px-4 py-3">
+              <div className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">Awaiting approval</div>
+              <div className="text-xs text-muted-foreground mb-2">{run.status.message}</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => sendHitl("approve")}
+                  className="px-3 py-1 text-xs bg-green-600 text-white hover:bg-green-700 rounded"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => sendHitl("reject")}
+                  className="px-3 py-1 text-xs bg-red-600 text-white hover:bg-red-700 rounded"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="border-t bg-yellow-500/10 px-4 py-2">
+            <div className="text-xs text-yellow-500 mb-1">Agent is waiting for input</div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 border bg-background px-2 py-1 text-sm outline-none focus:border-primary"
+                value={hitlInput}
+                onChange={(e) => setHitlInput(e.target.value)}
+                placeholder="Type your response..."
+                onKeyDown={(e) => { if (e.key === "Enter") sendHitl(); }}
+                autoFocus
+              />
+              <button
+                onClick={() => sendHitl()}
+                className="px-3 py-1 text-xs bg-primary text-primary-foreground"
+              >
+                Send
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* HITL Modal — tasks 7.1/7.2/7.4 */}
       <HitlModal
@@ -601,6 +626,12 @@ export default function RunDetailView() {
                 <span className="text-muted-foreground">Mode</span>
                 <span>{run.spec.orchestrationMode || "single"}</span>
               </div>
+              {run.spec.approvalMode && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Approval</span>
+                  <span>{run.spec.approvalMode}</span>
+                </div>
+              )}
               {run.status.stage && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Stage</span>
