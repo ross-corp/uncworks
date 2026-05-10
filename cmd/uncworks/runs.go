@@ -2921,6 +2921,8 @@ func runRunsRetry(args []string) error {
 	fs := flag.NewFlagSet("runs retry", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	prompt := fs.String("prompt", "", "Override the agent prompt")
+	promptFile := fs.String("prompt-file", "", "Read the override prompt from a file")
+	editPrompt := fs.Bool("editor", false, "Open $EDITOR to compose the override prompt interactively")
 	appendPrompt := fs.String("append-prompt", "", "Append additional context to the original prompt")
 	branch := fs.String("branch", "", "Override the branch")
 	modelTier := fs.String("model-tier", "", "Override the model tier")
@@ -2948,6 +2950,46 @@ func runRunsRetry(args []string) error {
 	}
 	if *modelShort != "" && *modelTier == "" {
 		*modelTier = *modelShort
+	}
+	// Load prompt from file if specified.
+	if *promptFile != "" {
+		raw, err := os.ReadFile(*promptFile)
+		if err != nil {
+			return fmt.Errorf("reading prompt file %q: %w", *promptFile, err)
+		}
+		*prompt = strings.TrimRight(string(raw), "\n")
+	}
+	// Open $EDITOR to compose the prompt interactively.
+	if *editPrompt && *prompt == "" {
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = os.Getenv("VISUAL")
+		}
+		if editor == "" {
+			editor = "vi"
+		}
+		tmpf, tmpErr := os.CreateTemp("", "uncworks-retry-prompt-*.txt")
+		if tmpErr != nil {
+			return fmt.Errorf("creating temp file for editor: %w", tmpErr)
+		}
+		tmpPath := tmpf.Name()
+		_ = tmpf.Close()
+		defer os.Remove(tmpPath)
+		editorCmd := exec.Command(editor, tmpPath)
+		editorCmd.Stdin = os.Stdin
+		editorCmd.Stdout = os.Stdout
+		editorCmd.Stderr = os.Stderr
+		if err := editorCmd.Run(); err != nil {
+			return fmt.Errorf("editor exited with error: %w", err)
+		}
+		raw, err := os.ReadFile(tmpPath)
+		if err != nil {
+			return fmt.Errorf("reading editor output: %w", err)
+		}
+		*prompt = strings.TrimSpace(string(raw))
+		if *prompt == "" {
+			return fmt.Errorf("prompt is empty (editor produced no content)")
+		}
 	}
 	if *lastRun && fs.NArg() == 0 {
 		c0, err0 := newClient(*server)
