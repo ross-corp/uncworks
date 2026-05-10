@@ -13,6 +13,7 @@ import (
 )
 
 func runCancel(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("cancel", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	lastRun := fs.Bool("last", false, "Cancel the most recent active run (auto-detect ID)")

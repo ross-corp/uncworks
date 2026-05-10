@@ -1618,6 +1618,7 @@ func runRunsLogs(args []string) error {
 // ── archive / unarchive ───────────────────────────────────────────────────────
 
 func runRunsArchive(args []string, archived bool) error {
+	args = normalizeRunArgs(args)
 	verb := "archive"
 	if !archived {
 		verb = "unarchive"
@@ -2435,6 +2436,7 @@ func runRunsStats(args []string) error {
 // ── open ────────────────────────────────────────────────────────────────────────
 
 func runRunsOpen(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs open", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	printURL := fs.Bool("print-url", false, "Print the PR URL instead of opening the browser")
@@ -2568,6 +2570,7 @@ func runRunsUI(args []string) error {
 // ── inspect ──────────────────────────────────────────────────────────────────
 
 func runRunsInspect(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs inspect", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	logLines := fs.Int("log-lines", 20, "Number of log tail lines to show (0 = all)")
@@ -2652,13 +2655,15 @@ func runRunsInspect(args []string) error {
 // ── diff ──────────────────────────────────────────────────────────────────────
 
 func runRunsDiff(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs diff", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	stat := fs.Bool("stat", false, "Show git diff --stat instead of full diff")
-	execFlag := fs.Bool("exec", false, "Actually run the git fetch and diff commands (instead of printing them)")
+	execFlag := fs.Bool("exec", false, "Run git fetch + diff (default when stdout is a TTY)")
+	printCmd := fs.Bool("print-cmd", false, "Print git commands instead of executing them")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs diff <id> [flags]\n\nShow the git commands to inspect the diff for a completed run.\n\nFlags:")
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs diff <id> [flags]\n\nFetch and show the git diff for a completed run's branch.\nWhen stdout is a TTY, runs git automatically; otherwise prints the git commands.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -2733,7 +2738,8 @@ func runRunsDiff(args []string) error {
 		fmt.Println()
 	}
 
-	if *execFlag {
+	shouldExec := *execFlag || (!*printCmd && term.IsTerminal(int(os.Stdout.Fd())))
+	if shouldExec {
 		fmt.Printf("$ git fetch origin %s\n", agentBranch)
 		fetchCmd := exec.Command("git", "fetch", "origin", agentBranch)
 		fetchCmd.Stdout = os.Stdout
@@ -4705,6 +4711,7 @@ func runRunsTop(args []string) error {
 // ── multi-tail ────────────────────────────────────────────────────────────────
 
 func runRunsMultiTail(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs multi-tail", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	grep := fs.String("grep", "", "Only show lines matching this substring (case-insensitive)")
@@ -5685,6 +5692,7 @@ func runRunsTimeline(args []string) error {
 // ── compare ───────────────────────────────────────────────────────────────────
 
 func runRunsCompare(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs compare", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	jsonOut := fs.Bool("json", false, "Output comparison as JSON")
@@ -5882,6 +5890,7 @@ func runRunsAlias(args []string) error {
 // ── env ──────────────────────────────────────────────────────────────────────
 
 func runRunsEnv(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs env", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	export := fs.Bool("export", false, "Output as shell export statements (eval-friendly)")
@@ -6125,40 +6134,59 @@ func runRunsScore(args []string) error {
 		{"30d", 30 * 24 * time.Hour},
 	}
 
+	// Fetch once for the largest window (30d) and compute all smaller windows
+	// from the same dataset — avoids 4 separate pagination loops.
+	longestCutoff := time.Now().Add(-windows[len(windows)-1].dur)
+	type runRecord struct {
+		createdAt time.Time
+		phase     apiv1.AgentRunPhase
+	}
+	var allRuns []runRecord
+	cursor := ""
+	for {
+		resp, err2 := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			TagFilter:     *tag,
+			Cursor:        cursor,
+		}))
+		if err2 != nil {
+			break
+		}
+		stop := false
+		for _, r := range resp.Msg.GetAgentRuns() {
+			ts := r.GetCreatedAt()
+			if ts == nil || !ts.AsTime().After(longestCutoff) {
+				stop = true
+				break
+			}
+			allRuns = append(allRuns, runRecord{
+				createdAt: ts.AsTime(),
+				phase:     r.GetStatus().GetPhase(),
+			})
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" || stop {
+			break
+		}
+	}
+
+	now := time.Now()
 	var results []windowResult
 	for _, win := range windows {
-		cutoff := time.Now().Add(-win.dur)
+		cutoff := now.Add(-win.dur)
 		done, failed, total := 0, 0, 0
-		cursor := ""
-		for {
-			resp, err2 := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
-				Limit:         100,
-				ProjectFilter: *project,
-				FeatureFilter: *feature,
-				TagFilter:     *tag,
-				Cursor:        cursor,
-			}))
-			if err2 != nil {
-				break
+		for _, r := range allRuns {
+			if !r.createdAt.After(cutoff) {
+				continue
 			}
-			stop := false
-			for _, r := range resp.Msg.GetAgentRuns() {
-				ts := r.GetCreatedAt()
-				if ts == nil || !ts.AsTime().After(cutoff) {
-					stop = true
-					break
-				}
-				total++
-				switch r.GetStatus().GetPhase() {
-				case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
-					done++
-				case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
-					failed++
-				}
-			}
-			cursor = resp.Msg.GetNextCursor()
-			if cursor == "" || stop {
-				break
+			total++
+			switch r.phase {
+			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED:
+				done++
+			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+				failed++
 			}
 		}
 		rate := 0.0
