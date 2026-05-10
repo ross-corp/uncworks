@@ -185,9 +185,29 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 	}
 
 	// Validate model_tier
-	validTiers := map[string]bool{"": true, "default": true, "default-cloud": true, "premium": true, "deepseek-v3.2": true}
+	validTiers := map[string]bool{
+		"":                true,
+		"default":         true,
+		"default-cloud":   true,
+		"premium":         true,
+		"ci":              true,
+		"deepseek-v3.1":   true,
+		"deepseek-v3.2":   true,
+		"qwen3:8b":        true,
+		"llama3.1:8b":     true,
+		"qwen2.5:0.5b":    true,
+		"qwen3-coder":     true,
+		"qwen3-235b":      true,
+		"mistral-medium":  true,
+		"claude-sonnet-4": true,
+		"claude-haiku":    true,
+		"claude-sonnet-4.6": true,
+		"gpt-4.1-mini":   true,
+		"gemini-flash":    true,
+		"gemini-3-flash":  true,
+	}
 	if !validTiers[req.Msg.Spec.ModelTier] {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown model_tier %q: valid values are default, default-cloud, premium, deepseek-v3.2", req.Msg.Spec.ModelTier))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown model_tier %q", req.Msg.Spec.ModelTier))
 	}
 
 	name, err := generateRunName()
