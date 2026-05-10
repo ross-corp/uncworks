@@ -1150,6 +1150,7 @@ func runRunsLogs(args []string) error {
 	timestamps := fs.Bool("timestamps", false, "Prefix each line with a timestamp")
 	grep := fs.String("grep", "", "Only show lines matching this substring (case-insensitive; works in both streaming and --no-follow mode)")
 	save := fs.String("save", "", "Save log output to a file (in addition to stdout)")
+	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
 		fs.PrintDefaults()
@@ -1157,11 +1158,30 @@ func runRunsLogs(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	if fs.NArg() != 1 {
-		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+
+	var id string
+	if *lastRun {
+		c2, err2 := newClient(*server)
+		if err2 != nil {
+			return err2
+		}
+		resp2, err2 := c2.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
+		if err2 != nil {
+			return fmt.Errorf("%s", humanizeErr(err2))
+		}
+		if runs := resp2.Msg.GetAgentRuns(); len(runs) > 0 {
+			id = runs[0].GetId()
+			fmt.Printf("Latest run: %s\n", id)
+		} else {
+			return fmt.Errorf("no runs found")
+		}
+	} else {
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return fmt.Errorf("run ID argument required")
+		}
+		id = fs.Arg(0)
 	}
-	id := fs.Arg(0)
 
 	// --save only works in --no-follow mode.
 	if *save != "" && !*noFollow {
