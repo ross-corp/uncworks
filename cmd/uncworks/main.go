@@ -30,6 +30,7 @@ Commands:
   failed     Show failed runs (alias for runs list --failed)
   top        Live view of active runs sorted by elapsed time (alias for runs top)
   watch      Auto-refresh the run list (alias for runs watch)
+  last       Show details of the most recent run (alias for runs get --last)
   tail       Stream logs of the most recent run (alias for runs tail --last)
   wait       Wait for the most recent run to complete (alias for runs wait --last)
   cancel     Request cancellation of a running agent
@@ -37,6 +38,10 @@ Commands:
   input      Send human-in-the-loop response to a paused agent
   graph      Print the run execution tree
   ping       Check API connectivity and measure round-trip latency
+  summary    Dashboard summary of recent run activity (alias for runs summary)
+  score      Success rate across time windows (alias for runs score)
+  tally      Daily run counts for the past N days (alias for runs tally)
+  stats      Aggregate run counts by phase (alias for runs stats)
   search     Search the knowledge base for past work
   config     Show or edit the CLI configuration
 
@@ -82,6 +87,8 @@ func main() {
 		err = runRunsTop(args)
 	case "watch":
 		err = runRunsWatch(args)
+	case "last":
+		err = runRunsGet(append([]string{"--last"}, args...))
 	case "tail":
 		err = runRunsTail(append([]string{"--last"}, args...))
 	case "wait":
@@ -94,6 +101,14 @@ func main() {
 		err = runGraph(args)
 	case "ping":
 		err = runPing(args)
+	case "summary":
+		err = runRunsSummary(args)
+	case "score":
+		err = runRunsScore(args)
+	case "tally":
+		err = runRunsTally(args)
+	case "stats":
+		err = runRunsStats(args)
 	case "search":
 		err = runSearch(args)
 	case "config":
