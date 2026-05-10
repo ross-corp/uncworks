@@ -2425,6 +2425,7 @@ func runRunsRetryFailed(args []string) error {
 	limit := fs.Int("limit", 0, "Retry at most N runs (0 = no limit)")
 	dryRun := fs.Bool("dry-run", false, "Print what would be retried without actually doing it")
 	yes := fs.Bool("yes", false, "Skip confirmation prompt")
+	verbose := fs.Bool("verbose", false, "Show a prompt preview for each run before confirming")
 	modelTier := fs.String("model-tier", "", "Override model tier for all retried runs")
 	appendPrompt := fs.String("append-prompt", "", "Append this text to the original prompt of each retried run")
 	fs.Usage = func() {
@@ -2498,7 +2499,18 @@ func runRunsRetryFailed(args []string) error {
 		if len(title) > 40 {
 			title = title[:37] + "..."
 		}
-		fmt.Printf("  %s  %s\n", r.GetId(), title)
+		age := ""
+		if ts := r.GetCreatedAt(); ts != nil {
+			age = "  (" + relativeTime(ts.AsTime()) + ")"
+		}
+		fmt.Printf("  %s  %s%s\n", r.GetId(), title, age)
+		if *verbose {
+			prompt := r.GetSpec().GetPrompt()
+			if len(prompt) > 120 {
+				prompt = prompt[:117] + "..."
+			}
+			fmt.Printf("           prompt: %s\n", strings.ReplaceAll(prompt, "\n", " "))
+		}
 	}
 
 	if *dryRun {
