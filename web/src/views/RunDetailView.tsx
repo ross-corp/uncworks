@@ -591,6 +591,59 @@ export default function RunDetailView() {
               <span className="text-muted-foreground text-xs">Prompt</span>
               <p className="mt-1 text-xs">{run.spec.prompt}</p>
             </div>
+            {run.status.verificationResult && (() => {
+              try {
+                const vr = JSON.parse(run.status.verificationResult) as {
+                  pass: boolean;
+                  tasksCompleted?: number;
+                  tasksTotal?: number;
+                  automatedChecks?: { name: string; pass: boolean; output?: string }[];
+                  failureReport?: string;
+                  llmVerdict?: { pass: boolean; criteria?: { scenario: string; pass: boolean; explanation: string }[] };
+                };
+                return (
+                  <div className="border-t pt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground text-xs font-medium">Verification</span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${vr.pass ? "bg-green-500/20 text-green-600" : "bg-red-500/20 text-red-600"}`}>
+                        {vr.pass ? "PASSED" : "FAILED"}
+                      </span>
+                    </div>
+                    {vr.tasksTotal !== undefined && (
+                      <div className="text-xs text-muted-foreground">
+                        Tasks: {vr.tasksCompleted ?? 0}/{vr.tasksTotal}
+                      </div>
+                    )}
+                    {vr.automatedChecks && vr.automatedChecks.length > 0 && (
+                      <div className="space-y-1">
+                        {vr.automatedChecks.map((check, i) => (
+                          <div key={i} className="flex items-start gap-1.5">
+                            <span className={`mt-0.5 text-xs ${check.pass ? "text-green-500" : "text-red-500"}`}>
+                              {check.pass ? "✓" : "✗"}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-mono">{check.name}</div>
+                              {!check.pass && check.output && (
+                                <div className="text-xs text-muted-foreground truncate" title={check.output}>
+                                  {check.output.slice(0, 80)}{check.output.length > 80 ? "…" : ""}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {vr.failureReport && !vr.pass && (
+                      <div className="text-xs text-red-500 bg-red-500/10 rounded p-2 break-words">
+                        {vr.failureReport}
+                      </div>
+                    )}
+                  </div>
+                );
+              } catch {
+                return null;
+              }
+            })()}
             {run.status.logOutput && (
               <div className="border-t pt-3">
                 <details>
