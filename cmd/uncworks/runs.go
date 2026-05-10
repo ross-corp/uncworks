@@ -256,7 +256,7 @@ func runRunsWatch(args []string) error {
 	titleShortW := fs.String("title", "", "Shorthand for --title-contains")
 	stage := fs.String("stage", "", "Filter by run stage (e.g. planning, executing, verifying)")
 	active := fs.Bool("active", false, "Show only active runs (RUNNING + PENDING + WAITING)")
-	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title")
+	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title, model, project")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs watch [flags]\n\nAuto-refresh the runs list every N seconds. Press Ctrl+C to stop.\n\nFlags:")
@@ -370,7 +370,7 @@ func runRunsList(args []string) error {
 	verbose := fs.Bool("verbose", false, "Show extra columns (repo, project)")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	relative := fs.Bool("relative", false, "Show relative timestamps (e.g. '5m ago') instead of ISO")
-	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title (default: server order / most-recent-first)")
+	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title, model, project (default: server order / most-recent-first)")
 	idsOnly := fs.Bool("ids-only", false, "Print only run IDs (one per line, for scripting)")
 	recent := fs.Bool("recent", false, "Shorthand for --since 24h")
 	runningOnly := fs.Bool("running", false, "Shorthand for --phase RUNNING")
@@ -602,8 +602,16 @@ func runRunsList(args []string) error {
 				tj := runs[j].GetSpec().GetDisplayName()
 				return strings.ToLower(ti) < strings.ToLower(tj)
 			})
+		case "model":
+			sort.Slice(runs, func(i, j int) bool {
+				return strings.ToLower(runs[i].GetSpec().GetModelTier()) < strings.ToLower(runs[j].GetSpec().GetModelTier())
+			})
+		case "project":
+			sort.Slice(runs, func(i, j int) bool {
+				return strings.ToLower(runs[i].GetSpec().GetProject()) < strings.ToLower(runs[j].GetSpec().GetProject())
+			})
 		default:
-			return fmt.Errorf("--sort %q: must be started, phase, elapsed, or title", *sortBy)
+			return fmt.Errorf("--sort %q: must be started, phase, elapsed, title, model, or project", *sortBy)
 		}
 	}
 	if len(runs) == 0 && !*jsonOut && !*idsOnly {
