@@ -36,6 +36,7 @@ Subcommands:
   watch             Auto-refresh the runs list (--interval, --active, --phase, --project)
   wait <id>         Block until a run reaches a terminal phase (--last, --timeout, --log, --on-success)
   cost              Show cost and diff summary across runs (--since, --project, --model)
+  velocity          Show runs-per-hour chart for the past 24h (--buckets, --project)
   stats             Show aggregate counts of runs by phase (--format, --since, --by-project, --model)
   count             Print a count of runs (--by-phase, --by-feature, --by-tag, --project, --since, --model)
   score             Show success rate across 1h/24h/7d/30d windows (--project, --feature, --json)
@@ -148,6 +149,8 @@ func runRuns(args []string) error {
 		return runCancel(rest)
 	case "cost":
 		return runRunsCost(rest)
+	case "velocity":
+		return runRunsVelocity(rest)
 	case "stats":
 		return runRunsStats(rest)
 	case "open", "open-pr", "pr":
@@ -6985,5 +6988,88 @@ func runRunsCost(args []string) error {
 			fmt.Printf("    %-22s  %d runs  +%d -%d lines\n", tier, ms.runs, ms.additions, ms.deletions)
 		}
 	}
+	return nil
+}
+
+func runRunsVelocity(args []string) error {
+	fs := flag.NewFlagSet("runs velocity", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	project := fs.String("project", "", "Filter by project name")
+	buckets := fs.Int("buckets", 24, "Number of hourly buckets to show (default 24 = last 24h)")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs velocity [flags]\n\nShow runs-per-hour for the past N hours.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	c, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	bucketCount := *buckets
+	if bucketCount < 1 {
+		bucketCount = 24
+	}
+	counts := make([]int, bucketCount)
+	sinceTime := now.Add(-time.Duration(bucketCount) * time.Hour)
+
+	cursor := ""
+	for {
+		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			ProjectFilter: *project,
+			Cursor:        cursor,
+		}))
+		if err != nil {
+			return fmt.Errorf("%s", humanizeErr(err))
+		}
+		done := false
+		for _, r := range resp.Msg.GetAgentRuns() {
+			ts := r.GetCreatedAt()
+			if ts == nil {
+				continue
+			}
+			t := time.Unix(ts.Seconds, int64(ts.Nanos)).UTC()
+			if t.Before(sinceTime) {
+				done = true
+				break
+			}
+			idx := int(now.Sub(t) / time.Hour)
+			if idx >= 0 && idx < bucketCount {
+				counts[bucketCount-1-idx]++
+			}
+		}
+		if done || resp.Msg.GetNextCursor() == "" {
+			break
+		}
+		cursor = resp.Msg.GetNextCursor()
+	}
+
+	maxCount := 0
+	for _, c := range counts {
+		if c > maxCount {
+			maxCount = c
+		}
+	}
+
+	const barWidth = 20
+	fmt.Printf("Runs per hour — last %dh\n\n", bucketCount)
+	for i, count := range counts {
+		hoursAgo := bucketCount - i
+		barLen := 0
+		if maxCount > 0 {
+			barLen = count * barWidth / maxCount
+		}
+		fmt.Printf("  %-8s  %s %d\n", fmt.Sprintf("%dh ago", hoursAgo), strings.Repeat("█", barLen), count)
+	}
+	total := 0
+	for _, c := range counts {
+		total += c
+	}
+	fmt.Printf("\n  Total: %d runs in last %dh (avg %.1f/h)\n", total, bucketCount, float64(total)/float64(bucketCount))
 	return nil
 }
