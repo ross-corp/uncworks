@@ -59,6 +59,7 @@ func BuildWorkflowInput(agentRun *aotv1alpha1.AgentRun, liteLLMBaseURL, gitHubTo
 		Backend:               string(agentRun.Spec.Backend),
 		SpecSource:            agentRun.Spec.SpecSource,
 		GitHubTokenSecretName: gitHubTokenSecretName,
+		ApprovalMode:          agentRun.Spec.ApprovalMode,
 	}
 
 	if agentRun.Spec.PipelineConfig != nil {
