@@ -48,14 +48,12 @@ STUCK=$(temporal workflow list --namespace default --address localhost:7233 \
   --query 'ExecutionStatus="Running"' 2>/dev/null | grep -c 'AgentRunWorkflow' || true)
 echo "Temporal running workflows: ${STUCK:-0}"
 
-# Log tail (last 5 lines, errors only)
-LOGFILE="$HOME/Library/Logs/UNCWORKS/uncworks.log"
-if [ -f "$LOGFILE" ]; then
-  ERRORS=$(grep -i 'error\|panic\|fatal' "$LOGFILE" | tail -3 || true)
-  if [ -n "$ERRORS" ]; then
-    echo "Recent log errors:"
-    echo "$ERRORS" | sed 's/^/  /'
-  fi
+# Recent apiserver errors (last 5 min window from k8s logs)
+APIERRORS=$(kubectl logs deployment/uncworks-aot-apiserver -n "$NS" \
+  --since=5m --tail=50 2>/dev/null | grep -i '"level":"ERROR"\|panic\|fatal' | tail -3 || true)
+if [ -n "$APIERRORS" ]; then
+  echo "Recent errors:"
+  echo "$APIERRORS" | sed 's/^/  /'
 fi
 
 echo "======================"
