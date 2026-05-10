@@ -72,9 +72,31 @@ interface FeatureGroup {
 }
 
 function ExternalStatus({ run }: { run: AgentRun }) {
-  if (!run.status.prUrl && !run.status.lastCIStatus) return null;
+  const vrPass = (() => {
+    if (!run.status.verificationResult) return null;
+    try {
+      const vr = JSON.parse(run.status.verificationResult) as { pass: boolean };
+      return vr.pass;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!run.status.prUrl && !run.status.lastCIStatus && vrPass === null) return null;
   return (
     <div className="flex items-center gap-1 shrink-0">
+      {vrPass !== null && (
+        <span
+          className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${
+            vrPass
+              ? "bg-green-500/15 text-green-600 dark:text-green-400"
+              : "bg-red-500/15 text-red-600 dark:text-red-400"
+          }`}
+          title={vrPass ? "Verification passed" : "Verification failed"}
+        >
+          V{vrPass ? "✓" : "✗"}
+        </span>
+      )}
       {run.status.prUrl && (
         <a
           href={run.status.prUrl}
