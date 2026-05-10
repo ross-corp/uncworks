@@ -27,6 +27,8 @@ Commands:
   run        Submit a new agent run non-interactively
   runs       List, inspect, and stream logs for agent runs (list/get/logs)
   jobs       Show active (RUNNING + PENDING + WAITING) runs (alias for runs list --active)
+  top        Live view of active runs sorted by elapsed time (alias for runs top)
+  watch      Auto-refresh the run list (alias for runs watch)
   cancel     Request cancellation of a running agent
   kill       Alias for cancel
   input      Send human-in-the-loop response to a paused agent
@@ -71,6 +73,10 @@ func main() {
 		err = runRuns(args)
 	case "jobs":
 		err = runRunsList(append([]string{"--active"}, args...))
+	case "top":
+		err = runRunsTop(args)
+	case "watch":
+		err = runRunsWatch(args)
 	case "cancel", "kill":
 		err = runCancel(args)
 	case "input":
