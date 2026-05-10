@@ -752,6 +752,12 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 				},
 			})
 
+			// ── Approval gate ────────────────────────────────────────────────
+			if gateErr := runApprovalGate(ctx, input, state, humanInputCh, podIP, repoPath, llmKey); gateErr != nil {
+				return gateErr
+			}
+			// ── End approval gate ─────────────────────────────────────────────
+
 			state.Phase = "Succeeded"
 			state.Message = fmt.Sprintf("Spec-driven pipeline: verified and archived (attempt %d)", attempt)
 			if state.PRUrl != "" {

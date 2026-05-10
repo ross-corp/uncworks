@@ -82,9 +82,20 @@ function ExternalStatus({ run }: { run: AgentRun }) {
     }
   })();
 
-  if (!run.status.prUrl && !run.status.lastCIStatus && vrPass === null) return null;
+  const awaitingApproval = run.status.phase === "waiting_for_input" &&
+    (run.spec.approvalMode === "hitl" || run.spec.approvalMode === "hybrid");
+
+  if (!run.status.prUrl && !run.status.lastCIStatus && vrPass === null && !awaitingApproval) return null;
   return (
     <div className="flex items-center gap-1 shrink-0">
+      {awaitingApproval && (
+        <span
+          className="text-xs font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-md animate-pulse"
+          title="Waiting for human approval"
+        >
+          ⏳ Approve
+        </span>
+      )}
       {vrPass !== null && (
         <span
           className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${
