@@ -432,6 +432,7 @@ func runRunsList(args []string) error {
 	showPR := fs.Bool("show-pr", false, "Add a PR URL column to the output")
 	showFeature := fs.Bool("show-feature", false, "Add a feature column to the output")
 	showMessage := fs.Bool("show-message", false, "Add a STATUS MESSAGE column (truncated to 60 chars)")
+	noModel := fs.Bool("no-model", false, "Hide the MODEL column")
 	titleShort := fs.String("title", "", "Shorthand for --title-contains")
 	countOnly := fs.Bool("count", false, "Print only the total count of matching runs")
 	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive, e.g. deepseek, claude)")
@@ -771,7 +772,11 @@ func runRunsList(args []string) error {
 	var listBuf bytes.Buffer
 	w := tabwriter.NewWriter(&listBuf, 0, 0, 2, ' ', 0)
 	if !*noHeader {
-		hdr := "ID\tTITLE\tPHASE\tDURATION\tMODEL\tSTARTED"
+		hdr := "ID\tTITLE\tPHASE\tDURATION"
+		if !*noModel {
+			hdr += "\tMODEL"
+		}
+		hdr += "\tSTARTED"
 		if *verbose {
 			hdr += "\tREPO\tPROJECT\tSTAGE"
 		}
@@ -832,7 +837,11 @@ func runRunsList(args []string) error {
 		tags := strings.Join(r.GetSpec().GetTags(), ",")
 		prURL := r.GetStatus().GetPrUrl()
 
-		row := r.GetId() + "\t" + title + "\t" + phase + "\t" + duration + "\t" + model + "\t" + started
+		row := r.GetId() + "\t" + title + "\t" + phase + "\t" + duration
+		if !*noModel {
+			row += "\t" + model
+		}
+		row += "\t" + started
 		if *verbose {
 			repo := "—"
 			if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
@@ -918,7 +927,7 @@ func runRunsList(args []string) error {
 
 	if nextCursor != "" && !*all {
 		fmt.Fprintf(os.Stderr, "next-cursor: %s\n", nextCursor)
-		fmt.Printf("Showing %d run(s) — use --all or --limit to see more\n", len(runs))
+		fmt.Printf("Showing %d run(s)%s — use --all or --limit to see more\n", len(runs), phaseSummary())
 	} else if *all {
 		fmt.Printf("Showing all %d run(s)%s\n", len(runs), phaseSummary())
 	} else if len(runs) > 0 {
@@ -2752,6 +2761,7 @@ func runRunsDiff(args []string) error {
 // ── retry ────────────────────────────────────────────────────────────────────
 
 func runRunsRetry(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs retry", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	prompt := fs.String("prompt", "", "Override the agent prompt")
@@ -4279,6 +4289,7 @@ func runRunsSummary(args []string) error {
 // ── wait ──────────────────────────────────────────────────────────────────────
 
 func runRunsWait(args []string) error {
+	args = normalizeRunArgs(args)
 	fs := flag.NewFlagSet("runs wait", flag.ContinueOnError)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	timeout := fs.Duration("timeout", 0, "Max time to wait (e.g. 10m, 1h); 0 = no limit")
