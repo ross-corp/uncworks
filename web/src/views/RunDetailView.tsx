@@ -122,6 +122,7 @@ export default function RunDetailView() {
   const [run, setRun] = useState<AgentRun | null>(null);
   const [tab, setTab] = useState<Tab>("logs");
   const [showInfo, setShowInfo] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
   const [selectedSpan, setSelectedSpan] = useState<TraceSpan | null>(null);
   const [hitlInput, setHitlInput] = useState("");
   const [hitlModalOpen, setHitlModalOpen] = useState(false);
@@ -529,9 +530,22 @@ export default function RunDetailView() {
           </SheetHeader>
           <div className="px-4 space-y-4 text-sm">
             <div className="space-y-2">
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">ID</span>
-                <span className="font-mono text-xs">{run.id}</span>
+                <div className="flex items-center gap-1">
+                  <span className="font-mono text-xs">{run.id}</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(run.id);
+                      setIdCopied(true);
+                      setTimeout(() => setIdCopied(false), 1500);
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1"
+                    title="Copy ID"
+                  >
+                    {idCopied ? "Copied!" : "📋"}
+                  </button>
+                </div>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created</span>
@@ -560,6 +574,18 @@ export default function RunDetailView() {
               <span className="text-muted-foreground text-xs">Prompt</span>
               <p className="mt-1 text-xs">{run.spec.prompt}</p>
             </div>
+            {run.status.logOutput && (
+              <div className="border-t pt-3">
+                <details>
+                  <summary className="text-muted-foreground text-xs cursor-pointer select-none">
+                    Stored Logs ({run.status.logOutput.split("\n").length} lines)
+                  </summary>
+                  <pre className="mt-2 text-xs bg-muted/50 rounded p-2 overflow-auto max-h-96 font-mono whitespace-pre-wrap break-all">
+                    {run.status.logOutput}
+                  </pre>
+                </details>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
