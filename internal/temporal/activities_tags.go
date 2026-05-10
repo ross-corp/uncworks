@@ -64,13 +64,20 @@ func (a *Activities) EnrichRunTags(ctx context.Context, input EnrichRunTagsInput
 
 	// 2. Parse additions/deletions and patch status before tag work
 	additions, deletions := parseDiffStatSummary(diffStat)
-	if additions > 0 || deletions > 0 {
-		statusPatch, _ := json.Marshal(map[string]interface{}{
-			"status": map[string]interface{}{
-				"totalAdditions": additions,
-				"totalDeletions": deletions,
-			},
-		})
+
+	// Also try to read token usage from /workspace/.aot/usage.json for cost calculation
+	totalCost := computeCostFromUsageFile(ctx, sc, input.AgentRunName, input.Namespace, a)
+
+	if additions > 0 || deletions > 0 || totalCost != "" {
+		statusFields := map[string]interface{}{}
+		if additions > 0 || deletions > 0 {
+			statusFields["totalAdditions"] = additions
+			statusFields["totalDeletions"] = deletions
+		}
+		if totalCost != "" {
+			statusFields["totalCost"] = totalCost
+		}
+		statusPatch, _ := json.Marshal(map[string]interface{}{"status": statusFields})
 		crd := &aotv1alpha1.AgentRun{}
 		crd.Name = input.AgentRunName
 		crd.Namespace = input.Namespace
@@ -255,6 +262,58 @@ func deriveTagsFromDiff(diffStat string) []string {
 	}
 
 	return tags
+}
+
+// computeCostFromUsageFile reads /workspace/.aot/usage.json via sidecar and computes
+// a cost estimate string (e.g. "$0.04") based on the model tier from the AgentRun CRD.
+// Returns empty string if the file doesn't exist or cost cannot be computed.
+func computeCostFromUsageFile(ctx context.Context, sc agentv1connect.AgentSidecarServiceClient, agentRunName, namespace string, a *Activities) string {
+	resp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        "cat /workspace/.aot/usage.json",
+		TimeoutSeconds: 10,
+	}))
+	if err != nil || resp.Msg.ExitCode != 0 || len(resp.Msg.Stdout) == 0 {
+		return ""
+	}
+
+	var usage struct {
+		InputTokens     int64 `json:"inputTokens"`
+		OutputTokens    int64 `json:"outputTokens"`
+		CacheReadTokens int64 `json:"cacheReadTokens"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(resp.Msg.Stdout)), &usage); err != nil {
+		return ""
+	}
+	if usage.InputTokens == 0 && usage.OutputTokens == 0 {
+		return ""
+	}
+
+	// Get model tier from AgentRun CRD
+	crd := &aotv1alpha1.AgentRun{}
+	if err := a.K8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: agentRunName}, crd); err != nil {
+		return ""
+	}
+	modelTier := crd.Spec.ModelTier
+
+	// Pricing per million tokens (input, output) in USD
+	type pricing struct{ input, output float64 }
+	pricingTable := map[string]pricing{
+		"deepseek-v3.2": {0.14, 0.28},
+		"default":       {3.0, 15.0},   // claude-sonnet-3.x
+		"default-cloud": {3.0, 15.0},
+		"premium":       {15.0, 75.0},  // claude-opus
+		"":              {3.0, 15.0},
+	}
+	p, ok := pricingTable[modelTier]
+	if !ok {
+		p = pricingTable["default"]
+	}
+
+	cost := float64(usage.InputTokens)/1e6*p.input + float64(usage.OutputTokens)/1e6*p.output
+	if cost < 0.01 {
+		return fmt.Sprintf("$%.4f", cost)
+	}
+	return fmt.Sprintf("$%.2f", cost)
 }
 
 var diffStatSummaryRe = regexp.MustCompile(`(\d+) insertion|(\d+) deletion`)
