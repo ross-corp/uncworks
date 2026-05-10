@@ -61,6 +61,7 @@ Subcommands:
   histogram         Show a bar chart of run activity over a time window (--since, --buckets)
   group             Show runs organized into groups (--by project|feature|tag, --since)
   ui <id>           Open a run in the UNCWORKS web dashboard (requires web_url in config)
+  search <term>     Search runs by prompt text, title, or project (--phase, --since, --project)
 `
 
 func runRuns(args []string) error {
@@ -133,6 +134,8 @@ func runRuns(args []string) error {
 		return runRunsGroup(rest)
 	case "ui":
 		return runRunsUI(rest)
+	case "search":
+		return runRunsSearch(rest)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -4412,4 +4415,170 @@ func parseSinceDuration(s string) (time.Duration, error) {
 		return time.Duration(days) * 24 * time.Hour, nil
 	}
 	return time.ParseDuration(s)
+}
+
+// ── search ────────────────────────────────────────────────────────────────────
+
+func runRunsSearch(args []string) error {
+	fs := flag.NewFlagSet("runs search", flag.ContinueOnError)
+	server := fs.String("server", "", "gRPC server address (overrides config)")
+	phase := fs.String("phase", "", "Filter by phase (RUNNING, DONE, FAILED, etc.)")
+	project := fs.String("project", "", "Filter by project name")
+	feature := fs.String("feature", "", "Filter by feature name")
+	tag := fs.String("tag", "", "Filter by tag")
+	since := fs.String("since", "7d", "Time window to search (e.g. 1h, 24h, 7d)")
+	limit := fs.Int("limit", 50, "Max number of matching runs to show")
+	noColor := fs.Bool("no-color", false, "Disable ANSI color")
+	jsonOut := fs.Bool("json", false, "Output matching runs as JSON array")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: uncworks runs search <term> [flags]\n\nSearch runs by prompt text, title, or project name.\nThe search term is matched case-insensitively against the run prompt, display name, and project.\n\nFlags:")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() == 0 {
+		fs.Usage()
+		return fmt.Errorf("search term required")
+	}
+	query := strings.ToLower(strings.Join(fs.Args(), " "))
+
+	d, err := parseSinceDuration(*since)
+	if err != nil {
+		return fmt.Errorf("--since %q: %w", *since, err)
+	}
+	sinceTime := time.Now().Add(-d)
+
+	client, err := newClient(*server)
+	if err != nil {
+		return err
+	}
+
+	useColor := !*noColor && term.IsTerminal(int(os.Stdout.Fd()))
+
+	var phaseF apiv1.AgentRunPhase
+	if *phase != "" {
+		switch strings.ToUpper(*phase) {
+		case "RUNNING":
+			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING
+		case "DONE", "SUCCEEDED":
+			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED
+		case "FAILED":
+			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED
+		case "PENDING":
+			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING
+		case "CANCELLED":
+			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
+		}
+	}
+
+	var matches []*apiv1.AgentRun
+	cursor := ""
+	for {
+		req := &apiv1.ListAgentRunsRequest{
+			Limit:         100,
+			PhaseFilter:   phaseF,
+			ProjectFilter: *project,
+			FeatureFilter: *feature,
+			TagFilter:     *tag,
+			Cursor:        cursor,
+		}
+		resp, apiErr := client.ListAgentRuns(context.Background(), connect.NewRequest(req))
+		if apiErr != nil {
+			break
+		}
+		for _, r := range resp.Msg.GetAgentRuns() {
+			ts := r.GetCreatedAt()
+			if ts != nil && !ts.AsTime().After(sinceTime) {
+				continue
+			}
+			prompt := strings.ToLower(r.GetSpec().GetPrompt())
+			title := strings.ToLower(r.GetSpec().GetDisplayName())
+			proj := strings.ToLower(r.GetSpec().GetProject())
+			if strings.Contains(prompt, query) || strings.Contains(title, query) || strings.Contains(proj, query) {
+				matches = append(matches, r)
+			}
+		}
+		if len(matches) >= *limit {
+			matches = matches[:*limit]
+			break
+		}
+		cursor = resp.Msg.GetNextCursor()
+		if cursor == "" {
+			break
+		}
+	}
+
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		type jsonRun struct {
+			ID      string `json:"id"`
+			Title   string `json:"title"`
+			Project string `json:"project"`
+			Phase   string `json:"phase"`
+			Created string `json:"created_at"`
+		}
+		var out []jsonRun
+		for _, r := range matches {
+			title := r.GetSpec().GetDisplayName()
+			if title == "" {
+				title = r.GetSpec().GetProject()
+			}
+			out = append(out, jsonRun{
+				ID:      r.GetId(),
+				Title:   title,
+				Project: r.GetSpec().GetProject(),
+				Phase:   phaseLabel(r.GetStatus().GetPhase()),
+				Created: r.GetCreatedAt().AsTime().Format(time.RFC3339),
+			})
+		}
+		return enc.Encode(out)
+	}
+
+	if len(matches) == 0 {
+		fmt.Printf("No runs found matching %q in the last %s.\n", query, *since)
+		return nil
+	}
+
+	fmt.Printf("Found %d run(s) matching %q:\n\n", len(matches), query)
+	colorPhase := func(label string) string {
+		if !useColor {
+			return label
+		}
+		switch label {
+		case "RUNNING":
+			return "\033[32m" + label + "\033[0m"
+		case "PENDING":
+			return "\033[33m" + label + "\033[0m"
+		case "FAILED":
+			return "\033[31m" + label + "\033[0m"
+		case "DONE":
+			return "\033[90m" + label + "\033[0m"
+		case "CANCELLED":
+			return "\033[35m" + label + "\033[0m"
+		}
+		return label
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tPHASE\tPROJECT\tAGE\tTITLE")
+	for _, r := range matches {
+		title := r.GetSpec().GetDisplayName()
+		if title == "" {
+			title = r.GetSpec().GetProject()
+		}
+		if len(title) > 45 {
+			title = title[:42] + "..."
+		}
+		age := ""
+		if ts := r.GetCreatedAt(); ts != nil {
+			age = relativeTime(ts.AsTime())
+		}
+		phase := colorPhase(phaseLabel(r.GetStatus().GetPhase()))
+		proj := r.GetSpec().GetProject()
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), phase, proj, age, title)
+	}
+	w.Flush()
+	return nil
 }
