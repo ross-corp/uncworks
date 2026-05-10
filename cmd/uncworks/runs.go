@@ -2351,6 +2351,7 @@ func runRunsRetry(args []string) error {
 	appendPrompt := fs.String("append-prompt", "", "Append additional context to the original prompt")
 	branch := fs.String("branch", "", "Override the branch")
 	modelTier := fs.String("model-tier", "", "Override the model tier")
+	modelShort := fs.String("model", "", "Shorthand for --model-tier")
 	name := fs.String("name", "", "Override the display name")
 	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
 	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
@@ -2369,6 +2370,9 @@ func runRunsRetry(args []string) error {
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+	if *modelShort != "" && *modelTier == "" {
+		*modelTier = *modelShort
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()

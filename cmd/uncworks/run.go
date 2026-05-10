@@ -35,6 +35,7 @@ func runRun(args []string) error {
 	project := fs.String("project", "", "Project name this run belongs to")
 	feature := fs.String("feature", "", "Feature/unit-of-work this run contributes to")
 	modelTier := fs.String("model-tier", "", "LLM model tier (e.g. deepseek-v3.2, default-cloud, premium)")
+	modelShort := fs.String("model", "", "Shorthand for --model-tier")
 	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
 	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
 	wait := fs.Bool("wait", false, "Wait for the run to complete; exit 0 on success, 1 on failure")
@@ -60,6 +61,10 @@ Flags:`)
 	}
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+
+	if *modelShort != "" && *modelTier == "" {
+		*modelTier = *modelShort
 	}
 
 	// Allow reading prompt from a file.
