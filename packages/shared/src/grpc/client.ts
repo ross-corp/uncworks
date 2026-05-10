@@ -15,6 +15,7 @@ import {
   AgentRunPhase as PbAgentRunPhase,
   AgentRunEventType as PbAgentRunEventType,
   OrchestrationMode as PbOrchestrationMode,
+  type RunGraph as PbRunGraph,
 } from "../../../../gen/ts/aot/api/v1/api_pb.js";
 import type {
   AgentRun,
@@ -184,6 +185,11 @@ export class AOTClient {
   async sendHumanInput(agentRunId: string, input: string): Promise<boolean> {
     const resp = await this.client.sendHumanInput({ agentRunId, input });
     return resp.accepted;
+  }
+
+  /** Get the run graph (parent/child DAG) for a run. */
+  async getRunGraph(id: string): Promise<PbRunGraph> {
+    return this.client.getRunGraph({ id });
   }
 }
 
