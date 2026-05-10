@@ -826,7 +826,12 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 			"cache_read_tokens", totalCache,
 			"total_tokens", totalIn+totalOut,
 		)
-		// TODO(agent): wire to cost tracking / budget enforcement
+		// Persist token usage so EnrichRunTags can compute totalCost
+		const aotDir = "/workspace/.aot"
+		if mkErr := os.MkdirAll(aotDir, 0o755); mkErr == nil {
+			usageJSON := fmt.Sprintf(`{"inputTokens":%d,"outputTokens":%d,"cacheReadTokens":%d}`, totalIn, totalOut, totalCache)
+			_ = os.WriteFile(aotDir+"/usage.json", []byte(usageJSON), 0o644)
+		}
 	}
 
 	// Close log files after streams are drained
