@@ -660,84 +660,9 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		// Check terminal states
 		switch state.Phase {
 		case "Succeeded":
-			// ── Approval gate ────────────────────────────────────────────────
-			mode := strings.ToLower(strings.TrimSpace(input.ApprovalMode))
-
-			// LLM judge: runs for "llm-judge" and "hybrid" modes.
-			if mode == "llm-judge" || mode == "hybrid" {
-				state.Message = "Agent completed — running LLM judge review"
-				judgeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-					StartToCloseTimeout: 3 * time.Minute,
-					HeartbeatTimeout:    30 * time.Second,
-					RetryPolicy: &temporal.RetryPolicy{
-						MaximumAttempts: 2,
-					},
-				})
-				var judgeOut LLMJudgeOutput
-				if err := workflow.ExecuteActivity(judgeCtx, ActivityLLMJudgeChanges, LLMJudgeInput{
-					AgentRunName:   input.AgentRunName,
-					PodIP:          podIP,
-					RepoPath:       repoPath,
-					Prompt:         input.Prompt,
-					LiteLLMBaseURL: input.LiteLLMBaseURL,
-					LLMKey:         llmKey,
-					ModelTier:      input.ModelTier,
-				}).Get(ctx, &judgeOut); err != nil {
-					workflow.GetLogger(ctx).Warn("LLM judge activity failed", "error", err)
-					// Fail-safe: treat activity errors as rejection
-					state.Phase = "Failed"
-					state.Message = fmt.Sprintf("LLM judge failed: %v", err)
-					return fmt.Errorf("LLM judge activity error: %w", err)
-				}
-				if !judgeOut.Approved {
-					state.Phase = "Failed"
-					state.Message = "Rejected by LLM judge: " + judgeOut.Reason
-					return fmt.Errorf("run rejected by LLM judge: %s", judgeOut.Reason)
-				}
-				state.Message = "LLM judge approved: " + judgeOut.Reason
-			}
-
-			// HITL: runs for "hitl" and "hybrid" modes (after LLM judge for hybrid).
-			if mode == "hitl" || mode == "hybrid" {
-				state.Phase = "WaitingForInput"
-				state.Message = "Agent completed — awaiting human approval. Use: uncworks input <id> <approve|reject>"
-				approvalCh := workflow.GetSignalChannel(ctx, SignalApprovalDecision)
-				approved := false
-				rejectionReason := ""
-
-				approvalSelector := workflow.NewSelector(ctx)
-				// Primary path: explicit ApprovalDecisionSignal
-				approvalSelector.AddReceive(approvalCh, func(ch workflow.ReceiveChannel, _ bool) {
-					var sig ApprovalDecisionSignal
-					ch.Receive(ctx, &sig)
-					approved = sig.Approved
-					rejectionReason = sig.Reason
-				})
-				// Fallback path: use the human-input channel (treat "reject" prefix as rejection)
-				approvalSelector.AddReceive(humanInputCh, func(ch workflow.ReceiveChannel, _ bool) {
-					var sig HumanInputSignal
-					ch.Receive(ctx, &sig)
-					lower := strings.ToLower(strings.TrimSpace(sig.Input))
-					if strings.HasPrefix(lower, "reject") || strings.HasPrefix(lower, "deny") || strings.HasPrefix(lower, "no") {
-						approved = false
-						rejectionReason = sig.Input
-					} else {
-						approved = true
-					}
-				})
-				approvalSelector.Select(ctx)
-
-				if !approved {
-					reason := rejectionReason
-					if reason == "" {
-						reason = "rejected by human reviewer"
-					}
-					state.Phase = "Failed"
-					state.Message = "Rejected: " + reason
-					return fmt.Errorf("run rejected by human reviewer: %s", reason)
-				}
-				state.Phase = "Succeeded"
-				state.Message = "Approved by human reviewer"
+			// ── Approval gate ─────────────────────────────────────────────────
+			if err := runApprovalGate(ctx, input, state, humanInputCh, podIP, repoPath, llmKey); err != nil {
+				return err
 			}
 			// ── End approval gate ─────────────────────────────────────────────
 
@@ -1108,4 +1033,94 @@ func modelIDFromTier(tier string) string {
 		return "litellm/default"
 	}
 	return "litellm/" + tier
+}
+
+// runApprovalGate enforces the approval policy for a completed run.
+// It mutates state.Phase/Message and returns a non-nil error if the run is rejected.
+// For "llm-judge" / "hybrid": calls the LLM judge activity.
+// For "hitl" / "hybrid": blocks waiting for a human approval signal.
+func runApprovalGate(
+	ctx workflow.Context,
+	input WorkflowInput,
+	state *WorkflowState,
+	humanInputCh workflow.ReceiveChannel,
+	podIP, repoPath, llmKey string,
+) error {
+	mode := strings.ToLower(strings.TrimSpace(input.ApprovalMode))
+
+	// LLM judge: runs for "llm-judge" and "hybrid" modes.
+	if mode == "llm-judge" || mode == "hybrid" {
+		state.Message = "Agent completed — running LLM judge review"
+		judgeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+			StartToCloseTimeout: 3 * time.Minute,
+			HeartbeatTimeout:    30 * time.Second,
+			RetryPolicy: &temporal.RetryPolicy{
+				MaximumAttempts: 2,
+			},
+		})
+		var judgeOut LLMJudgeOutput
+		if err := workflow.ExecuteActivity(judgeCtx, ActivityLLMJudgeChanges, LLMJudgeInput{
+			AgentRunName:   input.AgentRunName,
+			PodIP:          podIP,
+			RepoPath:       repoPath,
+			Prompt:         input.Prompt,
+			LiteLLMBaseURL: input.LiteLLMBaseURL,
+			LLMKey:         llmKey,
+			ModelTier:      input.ModelTier,
+		}).Get(ctx, &judgeOut); err != nil {
+			workflow.GetLogger(ctx).Warn("LLM judge activity failed", "error", err)
+			state.Phase = "Failed"
+			state.Message = fmt.Sprintf("LLM judge failed: %v", err)
+			return fmt.Errorf("LLM judge activity error: %w", err)
+		}
+		if !judgeOut.Approved {
+			state.Phase = "Failed"
+			state.Message = "Rejected by LLM judge: " + judgeOut.Reason
+			return fmt.Errorf("run rejected by LLM judge: %s", judgeOut.Reason)
+		}
+		state.Message = "LLM judge approved: " + judgeOut.Reason
+	}
+
+	// HITL: runs for "hitl" and "hybrid" modes (after LLM judge for hybrid).
+	if mode == "hitl" || mode == "hybrid" {
+		state.Phase = "WaitingForInput"
+		state.Message = "Agent completed — awaiting human approval. Use: uncworks input <id> <approve|reject>"
+		approvalCh := workflow.GetSignalChannel(ctx, SignalApprovalDecision)
+		approved := false
+		rejectionReason := ""
+
+		approvalSelector := workflow.NewSelector(ctx)
+		approvalSelector.AddReceive(approvalCh, func(ch workflow.ReceiveChannel, _ bool) {
+			var sig ApprovalDecisionSignal
+			ch.Receive(ctx, &sig)
+			approved = sig.Approved
+			rejectionReason = sig.Reason
+		})
+		approvalSelector.AddReceive(humanInputCh, func(ch workflow.ReceiveChannel, _ bool) {
+			var sig HumanInputSignal
+			ch.Receive(ctx, &sig)
+			lower := strings.ToLower(strings.TrimSpace(sig.Input))
+			if strings.HasPrefix(lower, "reject") || strings.HasPrefix(lower, "deny") || strings.HasPrefix(lower, "no") {
+				approved = false
+				rejectionReason = sig.Input
+			} else {
+				approved = true
+			}
+		})
+		approvalSelector.Select(ctx)
+
+		if !approved {
+			reason := rejectionReason
+			if reason == "" {
+				reason = "rejected by human reviewer"
+			}
+			state.Phase = "Failed"
+			state.Message = "Rejected: " + reason
+			return fmt.Errorf("run rejected by human reviewer: %s", reason)
+		}
+		state.Phase = "Succeeded"
+		state.Message = "Approved by human reviewer"
+	}
+
+	return nil
 }
