@@ -506,6 +506,7 @@ func runRunsList(args []string) error {
 	hasDiff := fs.Bool("has-diff", false, "Filter for runs that committed code changes (totalAdditions > 0 or totalDeletions > 0)")
 	approvalModeFilter := fs.String("approval-mode", "", "Filter by approval mode (hitl, llm-judge, hybrid, or none for runs without approval)")
 	showApproval := fs.Bool("show-approval", false, "Add an APPROVAL column to the output")
+	compact := fs.Bool("compact", false, "Compact output: 20-char title, no model column")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
@@ -516,6 +517,10 @@ func runRunsList(args []string) error {
 
 	if *titleShort != "" && *titleContains == "" {
 		*titleContains = *titleShort
+	}
+	if *compact {
+		*titleWidth = 20
+		*noModel = true
 	}
 	if *recent && *since == "" {
 		*since = "24h"
