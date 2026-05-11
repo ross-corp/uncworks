@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import cronstrue from "cronstrue";
 import { apiFetch } from "../hooks/apiFetch";
+import { useClient, mapRun } from "../hooks/useClient";
 import { formatAge } from "../lib/format";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -29,6 +30,7 @@ interface ScheduleDetail {
 export default function ScheduleDetailView() {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
+  const client = useClient();
   const [schedule, setSchedule] = useState<ScheduleDetail | null>(null);
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,16 +63,13 @@ export default function ScheduleDetailView() {
     }
 
     try {
-      const resp = await apiFetch("/api/v1/runs");
-      if (resp.ok) {
-        const data: AgentRun[] = await resp.json();
-        const filtered = (Array.isArray(data) ? data : []).filter(
-          (r) =>
-            (r.spec.tags && r.spec.tags.includes(`schedule:${name}`)) ||
-            r.spec.feature === name
-        );
-        setRuns(filtered.slice(0, 10));
-      }
+      const raw = await client.listAgentRuns();
+      const filtered = raw.map(mapRun).filter(
+        (r) =>
+          (r.spec.tags && r.spec.tags.includes(`schedule:${name}`)) ||
+          r.spec.feature === name
+      );
+      setRuns(filtered.slice(0, 20));
     } catch (e) {
       toast.error(`Failed to load runs: ${e instanceof Error ? e.message : String(e)}`);
     }
