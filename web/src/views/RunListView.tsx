@@ -83,7 +83,7 @@ function ExternalStatus({ run }: { run: AgentRun }) {
   })();
 
   const awaitingApproval = run.status.phase === "waiting_for_input" &&
-    (run.spec.approvalMode === "hitl" || run.spec.approvalMode === "hybrid");
+    (!run.spec.approvalMode || run.spec.approvalMode === "hitl" || run.spec.approvalMode === "hybrid");
 
   if (!run.status.prUrl && !run.status.lastCIStatus && vrPass === null && !awaitingApproval) return null;
   return (

@@ -533,7 +533,8 @@ export default function RunDetailView() {
 
       {/* HITL inline overlay (fallback when modal is closed) */}
       {run.status.phase === "waiting_for_input" && !hitlModalOpen && (() => {
-        const isApprovalWait = run.spec.approvalMode === "hitl" || run.spec.approvalMode === "hybrid";
+        // Empty approvalMode defaults to "hybrid" in the workflow engine
+        const isApprovalWait = !run.spec.approvalMode || run.spec.approvalMode === "hitl" || run.spec.approvalMode === "hybrid";
         if (isApprovalWait) {
           return (
             <div className="border-t bg-amber-500/10 px-4 py-3">
