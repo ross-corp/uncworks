@@ -384,6 +384,19 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	reviewPrompt := buildManageReviewPrompt(
 		input.ChangeName, gitDiff, specContent, implementLog, input.PreviousReviewFeedback)
 
+	// Write opening trace span for the LLM judge stage
+	judgeSpanID := fmt.Sprintf("judge-%d", time.Now().UnixNano())
+	judgeStartTime := time.Now()
+	writeActivityTraceSpan(ctx, sidecarClient, input.AgentRunName, TraceSpanData{
+		ID:        judgeSpanID,
+		TraceID:   input.TraceID,
+		ParentID:  input.ParentSpanID,
+		Name:      "verification.llm-judge",
+		Type:      "stage",
+		StartTime: judgeStartTime.Format(time.RFC3339Nano),
+		Metadata:  map[string]interface{}{"stage": "verify", "phase": "llm-judge"},
+	})
+
 	// Start the manage agent review session
 	manageModel := input.ManageModel
 	_, err = sidecarClient.StartAgent(ctx, connect.NewRequest(&agentv1.StartAgentRequest{
@@ -391,7 +404,7 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		Prompt:       reviewPrompt,
 		RepoPath:     workDir,
 		Stage:        "verify",
-		ParentSpanId: input.ParentSpanID,
+		ParentSpanId: judgeSpanID,
 		TraceId:      input.TraceID,
 		EnvVars:      map[string]string{"PI_MODEL": manageModel},
 	}))
@@ -439,6 +452,45 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 	}
 
 	result.LLMVerdict = verdict
+
+	// Write per-criterion verdict to log output (task 7.2)
+	var verdictLines []string
+	verdictLines = append(verdictLines, fmt.Sprintf("[verification.llm-judge] verdict: pass=%v salvageable=%v confidence=%.2f",
+		verdict.Pass, verdict.Salvageable, verdict.ConfidenceScore))
+	for _, c := range verdict.Criteria {
+		mark := "PASS"
+		if !c.Pass {
+			mark = "FAIL"
+		}
+		verdictLines = append(verdictLines, fmt.Sprintf("  [%s] %s: %s", mark, c.Scenario, c.Explanation))
+	}
+	verdictLog := strings.Join(verdictLines, "\n")
+	_, _ = execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
+		fmt.Sprintf("echo %q >> /workspace/.aot/logs/verification.log 2>/dev/null || true", verdictLog))
+
+	// Close judge span
+	judgeStatus := "ok"
+	if !verdict.Pass {
+		judgeStatus = "error"
+	}
+	writeActivityTraceSpan(ctx, sidecarClient, input.AgentRunName, TraceSpanData{
+		ID:        judgeSpanID,
+		TraceID:   input.TraceID,
+		ParentID:  input.ParentSpanID,
+		Name:      "verification.llm-judge",
+		Type:      "stage",
+		StartTime: judgeStartTime.Format(time.RFC3339Nano),
+		EndTime:   time.Now().Format(time.RFC3339Nano),
+		Status:    judgeStatus,
+		Metadata: map[string]interface{}{
+			"stage":       "verify",
+			"phase":       "llm-judge",
+			"pass":        verdict.Pass,
+			"salvageable": verdict.Salvageable,
+			"confidence":  verdict.ConfidenceScore,
+		},
+	})
+
 	if !verdict.Pass {
 		var failedCriteria []string
 		for _, c := range verdict.Criteria {
@@ -449,11 +501,21 @@ func (a *Activities) VerifyRun(ctx context.Context, input VerifyRunInput) (Verif
 		result.ReviewFeedback = strings.Join(failedCriteria, "\n")
 		result.Pass = false
 		result.FailureReport = fmt.Sprintf("Manage agent review failed: %s", strings.Join(failedCriteria, "; "))
+		result.Salvageable = verdict.Salvageable
+		result.SalvageGuidance = verdict.SalvageGuidance
+		result.ConfidenceScore = verdict.ConfidenceScore
 		result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
 			Name: "llm_judge", Pass: false, Output: result.FailureReport,
 		})
+		// Write overall verdict as final log line (task 7.3)
+		finalLine := fmt.Sprintf("[verification.llm-judge] FAILED — %s", result.FailureReport)
+		_, _ = execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
+			fmt.Sprintf("echo %q >> /workspace/.aot/logs/verification.log 2>/dev/null || true", finalLine))
 		return VerifyRunOutput{Result: result}, nil
 	}
+	// Write overall verdict as final log line on success (task 7.3)
+	_, _ = execInSidecar(ctx, sidecarClient, input.AgentRunName, workDir,
+		"echo '[verification.llm-judge] PASSED' >> /workspace/.aot/logs/verification.log 2>/dev/null || true")
 
 	result.AutomatedChecks = append(result.AutomatedChecks, AutomatedCheck{
 		Name: "llm_judge", Pass: true, Output: "manage agent review passed",
@@ -907,10 +969,33 @@ Your job is to evaluate whether the implement agent correctly completed the work
 2. Check the git diff to verify each scenario is satisfied.
 3. If unclear, use the read tool to examine the modified files.
 4. If the implement agent left questions in its output, either answer them (if you can) or escalate to the human via ask_user.
-5. Output your verdict as JSON:
+5. If the implementation fails, assess whether the work is **salvageable**: the core approach is correct and a targeted retry would likely fix the remaining gaps. Set salvageable=true if the gap is small and well-defined; set it false if the implementation is fundamentally wrong or incomplete in a large way.
+6. Output your verdict as JSON:
 
-{"pass": true/false, "feedback": "detailed review comments", "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}]}
+{"pass": true/false, "feedback": "detailed review comments", "criteria": [{"scenario": "...", "pass": true/false, "explanation": "..."}], "salvageable": true/false, "salvageGuidance": "specific instructions for the retry attempt", "confidenceScore": 0.0-1.0}
+
+When pass=true, salvageable and confidenceScore can be omitted.
+When pass=false, always include salvageable and confidenceScore. Set confidenceScore to your estimate (0=no chance, 1=certain) that a single targeted retry will succeed.
 `)
 
 	return prompt.String()
+}
+
+// writeActivityTraceSpan writes a trace span to the workspace's spans.jsonl
+// directly from an activity (not a workflow), using the sidecar ExecCommand.
+func writeActivityTraceSpan(ctx context.Context, sc agentv1connect.AgentSidecarServiceClient, agentRunName string, span TraceSpanData) {
+	data, err := json.Marshal(span)
+	if err != nil {
+		return
+	}
+	escaped := strings.ReplaceAll(string(data), "'", "'\\''")
+	cmd := fmt.Sprintf("mkdir -p /workspace/.aot/traces && echo '%s' >> /workspace/.aot/traces/spans.jsonl", escaped)
+	resp, rpcErr := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
+		Command:        cmd,
+		WorkingDir:     "/workspace",
+		TimeoutSeconds: 5,
+	}))
+	if rpcErr != nil || (resp != nil && resp.Msg.ExitCode != 0) {
+		slog.Warn("writeActivityTraceSpan failed", "run", agentRunName, "err", rpcErr)
+	}
 }

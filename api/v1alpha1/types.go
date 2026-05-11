@@ -195,6 +195,12 @@ type AgentRunSpec struct {
 	// "hybrid": require both LLM review AND human approval (future)
 	// +optional
 	ApprovalMode string `json:"approvalMode,omitempty"`
+
+	// OpenspecChange is the name of the openspec change associated with this run.
+	// When set, the verification stage uses it to run `openspec list --change <name>` as a task completion gate.
+	// Ad-hoc runs without this field skip the task-gate.
+	// +optional
+	OpenspecChange string `json:"openspecChange,omitempty"`
 }
 
 // PipelineConfig provides per-stage configuration for the spec-driven pipeline.

@@ -62,14 +62,14 @@ function elapsedSecs(startedAt?: string, completedAt?: string): number | undefin
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
 }
 
-type Tab = "dag" | "runs" | "timeline";
+type Tab = "overview" | "runs";
 
 export default function ChainRunDetailView() {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
   const [chainRun, setChainRun] = useState<ChainRunDetail | null>(null);
   const [chainDef, setChainDef] = useState<ChainDef | null>(null);
-  const [tab, setTab] = useState<Tab>("dag");
+  const [tab, setTab] = useState<Tab>("overview");
 
   useEffect(() => {
     let cancelled = false;
@@ -207,7 +207,7 @@ export default function ChainRunDetailView() {
 
       {/* Tab switcher */}
       <div className="flex gap-1 border-b px-4 pt-2">
-        {(["dag", "runs", "timeline"] as Tab[]).map((t) => (
+        {(["overview", "runs"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -217,14 +217,14 @@ export default function ChainRunDetailView() {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "dag" ? "DAG" : t === "runs" ? `Runs (${steps.filter(s => s.runId).length})` : "Timeline"}
+            {t === "overview" ? "Overview" : `Runs (${steps.filter(s => s.runId).length})`}
           </button>
         ))}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {tab === "dag" && (
+        {tab === "overview" && (
           <div className="h-full">
             {dagSteps.length === 0 ? (
               <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
@@ -240,94 +240,43 @@ export default function ChainRunDetailView() {
 
         {tab === "runs" && (
           <div className="overflow-y-auto overscroll-none p-6 h-full">
-            <div className="max-w-2xl mx-auto">
-              {steps.filter((s) => s.runId).length === 0 ? (
-                <div className="text-center text-muted-foreground text-sm">No agent runs yet.</div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-muted-foreground text-xs uppercase tracking-wider">
-                      <th className="text-left py-2 pr-4 font-medium">Step</th>
-                      <th className="text-left py-2 pr-4 font-medium">Run ID</th>
-                      <th className="text-left py-2 pr-4 font-medium">Status</th>
-                      <th className="text-left py-2 font-medium">Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {steps.filter((s) => s.runId).map((step) => {
-                      const secs = elapsedSecs(step.startedAt, step.completedAt);
-                      const badgeClass = PHASE_BADGE[step.phase] || PHASE_BADGE.pending;
-                      return (
-                        <tr
-                          key={step.name}
-                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
-                          onClick={() => navigate(`/run/${step.runId}`)}
-                        >
-                          <td className="py-2.5 pr-4 font-medium">{step.name}</td>
-                          <td className="py-2.5 pr-4 font-mono text-xs text-muted-foreground">{step.runId}</td>
-                          <td className="py-2.5 pr-4">
-                            <span className={`px-2 py-0.5 rounded text-xs uppercase font-semibold ${badgeClass}`}>
-                              {step.phase}
-                            </span>
-                          </td>
-                          <td className="py-2.5 text-xs text-muted-foreground">
-                            {secs !== undefined ? formatDuration(secs) : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        )}
-
-        {tab === "timeline" && (
-          <div className="overflow-y-auto overscroll-none p-6 h-full">
-            <div className="max-w-2xl mx-auto space-y-2">
-              {steps.length === 0 && (
-                <div className="text-center text-muted-foreground text-sm">No steps yet.</div>
-              )}
-              {steps.map((step, idx) => {
-                const secs = elapsedSecs(step.startedAt, step.completedAt);
-                const badgeClass = PHASE_BADGE[step.phase] || PHASE_BADGE.pending;
-                // Compute bar width relative to max duration
-                return (
-                  <div
-                    key={step.name}
-                    role={step.runId ? "button" : undefined}
-                    tabIndex={step.runId ? 0 : undefined}
-                    className={`flex items-center gap-3 group ${step.runId ? "cursor-pointer" : ""}`}
-                    onClick={() => step.runId && navigate(`/run/${step.runId}`)}
-                    onKeyDown={(e) => step.runId && (e.key === "Enter" || e.key === " ") && navigate(`/run/${step.runId}`)}
-                  >
-                    <span className="w-5 text-xs text-muted-foreground text-right shrink-0">{idx + 1}</span>
-                    <span className="w-32 text-sm font-medium truncate shrink-0 group-hover:text-primary transition-colors">
-                      {step.name}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-xs uppercase font-semibold shrink-0 ${badgeClass}`}>
-                      {step.phase}
-                    </span>
-                    {step.startedAt && (
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {new Date(step.startedAt).toLocaleTimeString()}
-                      </span>
-                    )}
-                    {secs !== undefined && (
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {formatDuration(secs)}
-                      </span>
-                    )}
-                    {step.message && step.message !== "completed" && step.message !== "started" && (
-                      <span className="text-xs text-muted-foreground truncate">{step.message}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {chainRun.status?.message && (
-              <div className="mt-4 text-center text-xs text-muted-foreground">{chainRun.status.message}</div>
+            {steps.filter((s) => s.runId).length === 0 ? (
+              <div className="text-center text-muted-foreground text-sm">No agent runs yet.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs uppercase tracking-wider">
+                    <th className="text-left py-2 pr-4 font-medium">Step</th>
+                    <th className="text-left py-2 pr-4 font-medium">Run ID</th>
+                    <th className="text-left py-2 pr-4 font-medium">Status</th>
+                    <th className="text-left py-2 font-medium">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {steps.filter((s) => s.runId).map((step) => {
+                    const secs = elapsedSecs(step.startedAt, step.completedAt);
+                    const badgeClass = PHASE_BADGE[step.phase] || PHASE_BADGE.pending;
+                    return (
+                      <tr
+                        key={step.name}
+                        className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                        onClick={() => navigate(`/run/${step.runId}`)}
+                      >
+                        <td className="py-2.5 pr-4 font-medium">{step.name}</td>
+                        <td className="py-2.5 pr-4 font-mono text-xs text-muted-foreground">{step.runId}</td>
+                        <td className="py-2.5 pr-4">
+                          <span className={`px-2 py-0.5 rounded text-xs uppercase font-semibold ${badgeClass}`}>
+                            {step.phase}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-xs text-muted-foreground">
+                          {secs !== undefined ? formatDuration(secs) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
         )}

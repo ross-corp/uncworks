@@ -343,6 +343,16 @@ export function SpanDetail({
 
   const meta = span.metadata ?? {};
   const toolInput = meta.toolInput as string | undefined;
+  const toolOutputRaw = meta.toolOutput as string | undefined;
+  const toolOutput = toolOutputRaw
+    ? (() => {
+        const lines = toolOutputRaw.split("\n");
+        if (lines.length > 256) {
+          return lines.slice(0, 256).join("\n") + "\n(truncated — view full output in logs)";
+        }
+        return toolOutputRaw;
+      })()
+    : undefined;
   const contentText = (meta.content as string | undefined) ?? (meta.thinking as string | undefined);
   const checkpointSha = meta.checkpointSha as string | undefined;
   const stage = meta.stage as string | undefined;
@@ -664,6 +674,21 @@ export function SpanDetail({
           </Collapsible>
         )}
 
+        {/* Tool output — collapsed by default */}
+        {toolOutput && (
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs font-medium text-foreground hover:text-foreground/80 transition-colors group">
+              <ChevronRightIcon className="h-3 w-3 text-muted-foreground group-data-[state=open]:rotate-90 transition-transform" />
+              Tool Output
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <pre className="mt-1 p-2 bg-background border border-border rounded text-xs font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
+                {toolOutput}
+              </pre>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
         {/* Response content */}
         {contentText && (
           <Collapsible defaultOpen>
@@ -683,7 +708,7 @@ export function SpanDetail({
         {meta &&
           Object.keys(meta).filter(
             (k) =>
-              !["error", "toolInput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result", "compaction.tokens_before", "compaction.tokens_after", "compaction.tokens_saved", "compaction.reduction_pct"].includes(k)
+              !["error", "toolInput", "toolOutput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result", "compaction.tokens_before", "compaction.tokens_after", "compaction.tokens_saved", "compaction.reduction_pct"].includes(k)
           ).length > 0 && (
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group">
@@ -696,7 +721,7 @@ export function SpanDetail({
                     Object.fromEntries(
                       Object.entries(meta).filter(
                         ([k]) =>
-                          !["error", "toolInput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result", "compaction.tokens_before", "compaction.tokens_after", "compaction.tokens_saved", "compaction.reduction_pct"].includes(k)
+                          !["error", "toolInput", "toolOutput", "thinking", "content", "checkpointSha", "prevCheckpointSHA", "checkpointSHA", "stage", "attempt", "role", "durationMs", "tool", "gen_ai.request.model", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.total_tokens", "gen_ai.usage.cache_read_tokens", "gen_ai.context.window_size", "gen_ai.context.utilization_pct", "agentRunId", "pipeline.result", "pipeline.stages", "pipeline.attempts", "result", "compaction.tokens_before", "compaction.tokens_after", "compaction.tokens_saved", "compaction.reduction_pct"].includes(k)
                       )
                     ),
                     null,

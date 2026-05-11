@@ -584,6 +584,12 @@ export default function RunListView() {
 
   function UnifiedRunRow({ ur, index }: { ur: UnifiedRun; index: number }) {
     const badge = KIND_BADGE[ur.kind];
+    const approvalMode = ur.agentRun?.spec.approvalMode;
+    const approvalLabel = !approvalMode || approvalMode === "hybrid" || approvalMode === "llm-judge"
+      ? "llm-judge"
+      : approvalMode === "hitl"
+        ? "hitl"
+        : null;
     return (
       <div
         data-testid={`run-row-${ur.id}`}
@@ -598,6 +604,15 @@ export default function RunListView() {
         <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md shrink-0 ${badge.className}`}>
           {badge.label}
         </span>
+        {ur.agentRun && approvalLabel && (
+          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md shrink-0 ${
+            approvalLabel === "hitl"
+              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+              : "bg-violet-500/15 text-violet-500"
+          }`}>
+            {approvalLabel}
+          </span>
+        )}
 
         <RunStatusBadge phase={ur.status} />
 

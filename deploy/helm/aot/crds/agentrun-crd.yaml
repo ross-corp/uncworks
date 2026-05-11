@@ -86,6 +86,9 @@ spec:
                   type: array
                   items:
                     type: string
+                openspecChange:
+                  type: string
+                  maxLength: 128
                 devboxConfig:
                   type: string
                   maxLength: 512

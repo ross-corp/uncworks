@@ -367,7 +367,7 @@ function buildDisplayEntries(entries: LogEntry[]): DisplayEntry[] {
     } else if (entry.type === "assistant") {
       result.push({ entry, label: "implement" });
     } else if (entry.type === "system") {
-      result.push({ entry, label: "system" });
+      // system entries are filtered out of the UI (they are runtime injected context, not user-visible)
     } else {
       result.push({ entry, label: "system" });
     }

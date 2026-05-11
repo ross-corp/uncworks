@@ -34,6 +34,10 @@ type VerificationResult struct {
 	FailureReport   string           `json:"failureReport,omitempty"`
 	ReviewFeedback  string           `json:"reviewFeedback,omitempty"` // Manage agent review feedback (Tier 2)
 	ExecutionTimeMs int64            `json:"executionTimeMs"`
+	// Salvageability — populated by the LLM judge on failure.
+	Salvageable     bool    `json:"salvageable,omitempty"`
+	SalvageGuidance string  `json:"salvageGuidance,omitempty"`
+	ConfidenceScore float64 `json:"confidenceScore,omitempty"`
 }
 
 // AutomatedCheck is a single automated verification check result.
@@ -46,9 +50,12 @@ type AutomatedCheck struct {
 
 // LLMVerdict is the LLM judge's evaluation of semantic criteria.
 type LLMVerdict struct {
-	Pass     bool              `json:"pass"`
-	Criteria []CriterionResult `json:"criteria"`
-	Model    string            `json:"model"`
+	Pass            bool              `json:"pass"`
+	Criteria        []CriterionResult `json:"criteria"`
+	Model           string            `json:"model"`
+	Salvageable     bool              `json:"salvageable,omitempty"`
+	SalvageGuidance string            `json:"salvageGuidance,omitempty"`
+	ConfidenceScore float64           `json:"confidenceScore,omitempty"`
 }
 
 // CriterionResult is a single WHEN/THEN criterion evaluation.
@@ -539,6 +546,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	// =============================================
 	var lastFailureReport string
 	var lastReviewFeedback string
+	var lastSalvageGuidance string
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if checkCancel() || state.Phase == "Cancelled" {
@@ -561,15 +569,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			Metadata:  map[string]interface{}{"stage": "execute", "attempt": attempt},
 		})
 
-		prompt := fmt.Sprintf("Implement the OpenSpec change '%s'.\n\nRead specs at /workspace/openspec/changes/%s/ for requirements.\nRead tasks.md for your checklist. Mark each task [x] as you complete it.\n\nOriginal task: %s",
-			changeName, changeName, input.Prompt)
-		if lastReviewFeedback != "" {
-			prompt = fmt.Sprintf("MANAGE AGENT REVIEW FAILED (attempt %d):\n\n%s\n\nFix the issues identified above and complete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
-				attempt-1, lastReviewFeedback, changeName, changeName, input.Prompt)
-		} else if lastFailureReport != "" {
-			prompt = fmt.Sprintf("PREVIOUS ATTEMPT FAILED (structural checks):\n%s\n\nFix the issues and complete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
-				lastFailureReport, changeName, changeName, input.Prompt)
-		}
+		prompt := buildRetryPrompt(attempt, changeName, input.Prompt, lastSalvageGuidance, lastReviewFeedback, lastFailureReport)
 
 		if err := workflow.ExecuteActivity(
 			workflow.WithActivityOptions(ctx, executeOpts),
@@ -789,14 +789,19 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		})
 
 		// Verification failed — prepare retry context.
-		// Prefer manage agent review feedback over generic failure report.
-		if verifyOutput.Result.ReviewFeedback != "" {
+		// Prefer salvage guidance (from LLM judge) over manage review feedback over generic failure report.
+		if verifyOutput.Result.SalvageGuidance != "" {
+			lastSalvageGuidance = verifyOutput.Result.SalvageGuidance
+		} else if verifyOutput.Result.ReviewFeedback != "" {
 			lastReviewFeedback = verifyOutput.Result.ReviewFeedback
+			lastSalvageGuidance = ""
 		}
 		lastFailureReport = verifyOutput.Result.FailureReport
 		workflow.GetLogger(ctx).Info("Verification failed, will retry",
 			"attempt", attempt,
 			"maxRetries", maxRetries,
+			"salvageable", verifyOutput.Result.Salvageable,
+			"confidenceScore", verifyOutput.Result.ConfidenceScore,
 			"failureReport", lastFailureReport,
 		)
 	}
@@ -821,6 +826,33 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	state.Message = fmt.Sprintf("Spec-driven pipeline: failed verification after %d attempts. %s",
 		maxRetries, lastFailureReport)
 	return nil
+}
+
+// buildRetryPrompt constructs the execute prompt for a retry attempt.
+// If salvage guidance is available, it is prepended so the agent understands exactly what to fix.
+func buildRetryPrompt(attempt int, changeName, originalPrompt, salvageGuidance, reviewFeedback, failureReport string) string {
+	if salvageGuidance != "" {
+		return fmt.Sprintf(
+			"SALVAGE RETRY (attempt %d) — The previous attempt was partially correct but needs targeted fixes:\n\n%s\n\nComplete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
+			attempt, salvageGuidance, changeName, changeName, originalPrompt,
+		)
+	}
+	if reviewFeedback != "" {
+		return fmt.Sprintf(
+			"MANAGE AGENT REVIEW FAILED (attempt %d):\n\n%s\n\nFix the issues identified above and complete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
+			attempt-1, reviewFeedback, changeName, changeName, originalPrompt,
+		)
+	}
+	if failureReport != "" {
+		return fmt.Sprintf(
+			"PREVIOUS ATTEMPT FAILED (structural checks):\n%s\n\nFix the issues and complete the OpenSpec change '%s'.\nRead specs at /workspace/openspec/changes/%s/\nMark ALL tasks [x] in tasks.md when complete.\n\nOriginal task: %s",
+			failureReport, changeName, changeName, originalPrompt,
+		)
+	}
+	return fmt.Sprintf(
+		"Implement the OpenSpec change '%s'.\n\nRead specs at /workspace/openspec/changes/%s/ for requirements.\nRead tasks.md for your checklist. Mark each task [x] as you complete it.\n\nOriginal task: %s",
+		changeName, changeName, originalPrompt,
+	)
 }
 
 // postVerifyPushAndPR handles the post-verification push and PR creation steps.
