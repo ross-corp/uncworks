@@ -3,6 +3,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  MarkerType,
   type Node,
   type Edge,
   type NodeProps,
@@ -115,7 +116,10 @@ export default function RunDagViz({ nodes, edges, currentRunName }: RunDagVizPro
       id: `${e.parent}->${e.child}`,
       source: e.parent,
       target: e.child,
+      type: "smoothstep",
       animated: targetNode?.phase === "running",
+      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+      style: { strokeWidth: 1.5 },
     };
   });
 

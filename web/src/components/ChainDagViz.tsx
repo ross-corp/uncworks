@@ -4,6 +4,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  MarkerType,
   type Node,
   type Edge,
   type NodeProps,
@@ -145,7 +146,7 @@ export default function ChainDagViz({ steps }: ChainDagVizProps) {
     };
   });
 
-  // Build edges
+  // Build edges with directional arrows
   const edges: Edge[] = [];
   for (const s of steps) {
     for (const dep of s.dependsOn) {
@@ -153,7 +154,10 @@ export default function ChainDagViz({ steps }: ChainDagVizProps) {
         id: `${dep}->${s.name}`,
         source: dep,
         target: s.name,
+        type: "smoothstep",
         animated: s.phase === "running",
+        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+        style: { strokeWidth: 1.5 },
       });
     }
   }
