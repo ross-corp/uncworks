@@ -128,14 +128,19 @@ export default function ChainRunDetailView() {
     depMap.set(s.name, s.dependsOn || []);
   }
 
-  // Build ChainStepStatus array for DAG viz
-  const dagSteps: ChainStepStatus[] = steps.map((s) => ({
-    name: s.name,
-    phase: s.phase,
-    dependsOn: depMap.get(s.name) || [],
-    runId: s.runId,
-    elapsedSeconds: elapsedSecs(s.startedAt, s.completedAt),
-  }));
+  // Build ChainStepStatus array from the chain definition (all steps, always),
+  // overlaying live status when available. This ensures survey→implement arrows
+  // appear even before "implement" has started.
+  const dagSteps: ChainStepStatus[] = (chainSteps.length > 0 ? chainSteps : steps.map(s => ({name: s.name, templateRef: "", dependsOn: depMap.get(s.name) || []}))).map((cs) => {
+    const status = steps.find((s) => s.name === cs.name);
+    return {
+      name: cs.name,
+      phase: status?.phase || "pending",
+      dependsOn: cs.dependsOn || [],
+      runId: status?.runId,
+      elapsedSeconds: status ? elapsedSecs(status.startedAt, status.completedAt) : undefined,
+    };
+  });
 
   // Text-based fallback step list
   const stepFallback = (

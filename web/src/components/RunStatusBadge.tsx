@@ -22,7 +22,7 @@ export default function RunStatusBadge({ phase, stage }: RunStatusBadgeProps) {
   const config = STATUS_CONFIG[phase] ?? STATUS_CONFIG.pending;
 
   let label = phase;
-  if (phase === "waiting_for_input") label = "waiting";
+  if (phase === "waiting_for_input") label = "approval";
   if (phase === "pending") label = "queued";
 
   let stageLabel = "";

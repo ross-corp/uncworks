@@ -111,7 +111,7 @@ Shorthand subcommands:
   last-failed       Show the most recent FAILED run
   zero-commits      Show succeeded runs that made no code changes (alias for list --zero-commits --done --all)
   committed         Show runs that committed code changes (alias for list --has-diff --all)
-  approvals         Show runs waiting for approval (alias for list --phase WAITING --approval-mode hitl --all)
+  approvals         Show runs waiting for approval (alias for list --phase WAITING --show-approval --all)
   queue             Show all pending runs (alias for list --pending --all)
   by-project        Group by project (alias for group --by project)
   by-feature        Group by feature (alias for group --by feature)
@@ -287,7 +287,7 @@ func runRuns(args []string) error {
 	case "committed":
 		return runRunsList(append([]string{"--has-diff", "--all"}, rest...))
 	case "approvals":
-		return runRunsList(append([]string{"--phase", "WAITING", "--approval-mode", "hitl", "--all"}, rest...))
+		return runRunsList(append([]string{"--phase", "WAITING", "--show-approval", "--all"}, rest...))
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, runsUsage)
 		return nil
@@ -727,7 +727,8 @@ func runRunsList(args []string) error {
 				if mode == "" {
 					filtered = append(filtered, r)
 				}
-			} else if mode == needle {
+			} else if mode == needle || (needle == "hybrid" && mode == "") {
+				// empty approvalMode defaults to hybrid in the workflow engine
 				filtered = append(filtered, r)
 			}
 		}
