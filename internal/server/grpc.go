@@ -874,8 +874,10 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 		truncated = truncated[:200]
 	}
 
+	// Use the free-tier OpenRouter model for display name generation.
+	// "default" maps to Ollama which is not always running.
 	reqBody := map[string]interface{}{
-		"model": "default",
+		"model": "gpt-oss-120b-free",
 		"messages": []map[string]string{
 			{"role": "system", "content": "Generate a short kebab-case name (3-5 words) for this coding task. Output ONLY the name, nothing else."},
 			{"role": "user", "content": truncated},
@@ -888,7 +890,7 @@ func (s *AOTServiceHandler) generateDisplayName(ctx context.Context, prompt stri
 		return deriveNameFromPrompt(prompt)
 	}
 
-	llmCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	llmCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
 	llmBase := strings.TrimSuffix(strings.TrimRight(s.LiteLLMBaseURL, "/"), "/v1")
