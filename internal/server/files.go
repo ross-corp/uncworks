@@ -560,10 +560,20 @@ func (f *FileHandler) handleStructuredLogs(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Always read from PVC host path (JSONL is written to disk, not container logs).
-	hostPath, err := f.getPVCHostPath(r.Context(), runID)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("workspace not found for run %q: %v", runID, err)})
+	// Try to read from PVC host path first (live runs); fall back to CRD AgentJSONL field.
+	hostPath, hostPathErr := f.getPVCHostPath(r.Context(), runID)
+	if hostPathErr != nil {
+		// PVC gone (run cleaned up) — serve from persisted CRD field.
+		crd := &aotv1alpha1.AgentRun{}
+		if err := f.k8sClient.Get(r.Context(), runtimeclient.ObjectKey{
+			Namespace: f.namespace,
+			Name:      runID,
+		}, crd); err != nil {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: fmt.Sprintf("workspace not found for run %q: %v", runID, hostPathErr)})
+			return
+		}
+		entries := parseAgentJSONL(crd.Status.AgentJSONL)
+		writeJSON(w, http.StatusOK, entries)
 		return
 	}
 

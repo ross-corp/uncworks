@@ -263,6 +263,11 @@ type AgentRunStatus struct {
 	// +optional
 	LogOutput string `json:"logOutput,omitempty"`
 
+	// AgentJSONL is the full pi-coding-agent JSONL log (capped at 512 KB), collected before pod deletion.
+	// Used as fallback for the structured-logs endpoint when the PVC has been deleted.
+	// +optional
+	AgentJSONL string `json:"agentJSONL,omitempty"`
+
 	// RetainUntil is when the pod retention expires and cleanup will run.
 	// +optional
 	RetainUntil *metav1.Time `json:"retainUntil,omitempty"`

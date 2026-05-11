@@ -236,6 +236,9 @@ spec:
                 logOutput:
                   type: string
                   maxLength: 1048576
+                agentJSONL:
+                  type: string
+                  maxLength: 524288
                 retainUntil:
                   type: string
                   format: date-time

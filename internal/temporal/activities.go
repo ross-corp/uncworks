@@ -833,15 +833,16 @@ func (a *Activities) CollectAgentLogs(ctx context.Context, input CollectAgentLog
 		sidecarURL,
 	)
 
-	// Extract the final assistant message text from agent.jsonl (pi structured log).
-	// Falls back to tail of agent.log if jsonl is absent or node is unavailable.
-	// node is available in the rpc-gateway container (via the sidecar image).
+	// Collect both the full JSONL (for the UI structured-log endpoint) and the last
+	// assistant text (for chain contextFrom). Output is a JSON object:
+	//   {"logOutput":"...last assistant text...","agentJSONL":"...full jsonl..."}
+	// Falls back to agent.log tail if node is unavailable.
 	const extractScript = `
 node -e "
 const fs=require('fs');
 const f='/workspace/.aot/logs/agent.jsonl';
-if(!fs.existsSync(f)){process.exit(1);}
-const lines=fs.readFileSync(f,'utf8').trim().split('\n');
+const raw=fs.existsSync(f)?fs.readFileSync(f,'utf8'):'';
+const lines=raw.trim().split('\n').filter(Boolean);
 let lastText='';
 for(const l of lines){
   try{
@@ -852,8 +853,9 @@ for(const l of lines){
     }
   }catch(e){}
 }
-process.stdout.write(lastText.slice(-32768));
-" 2>/dev/null || tail -c 32768 /workspace/.aot/logs/agent.log 2>/dev/null || echo ''`
+const cappedJSONL=raw.length>524288?raw.slice(-524288):raw;
+process.stdout.write(JSON.stringify({logOutput:lastText.slice(-32768),agentJSONL:cappedJSONL}));
+" 2>/dev/null || (echo '{}' && true)`
 	resp, err := sc.ExecCommand(ctx, connect.NewRequest(&agentv1.ExecCommandRequest{
 		Command:        extractScript,
 		WorkingDir:     "/workspace",
@@ -864,19 +866,34 @@ process.stdout.write(lastText.slice(-32768));
 		return nil // non-fatal
 	}
 
-	logOutput := strings.TrimRight(resp.Msg.Stdout, "\x00")
+	stdout := strings.TrimRight(resp.Msg.Stdout, "\x00")
 
-	// Patch the AgentRun CRD status.logOutput using a merge patch.
-	patch := []byte(fmt.Sprintf(`{"status":{"logOutput":%q}}`, logOutput))
+	var parsed struct {
+		LogOutput  string `json:"logOutput"`
+		AgentJSONL string `json:"agentJSONL"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
+		// Fallback: treat stdout as plain logOutput (old behavior)
+		parsed.LogOutput = stdout
+	}
+
+	// Patch both fields in a single status update.
+	patchBytes, _ := json.Marshal(map[string]interface{}{
+		"status": map[string]string{
+			"logOutput":  parsed.LogOutput,
+			"agentJSONL": parsed.AgentJSONL,
+		},
+	})
 	crd := &aotv1alpha1.AgentRun{}
 	crd.Name = input.AgentRunName
 	crd.Namespace = input.Namespace
-	if err := a.K8sClient.Status().Patch(ctx, crd, client.RawPatch(types.MergePatchType, patch)); err != nil {
+	if err := a.K8sClient.Status().Patch(ctx, crd, client.RawPatch(types.MergePatchType, patchBytes)); err != nil {
 		slog.Warn("collect logs: patch failed", "agentRun", input.AgentRunName, "err", err)
 		return nil
 	}
 
-	slog.Info("CollectAgentLogs completed", "agentRun", input.AgentRunName, "bytes", len(logOutput))
+	slog.Info("CollectAgentLogs completed", "agentRun", input.AgentRunName,
+		"logOutputBytes", len(parsed.LogOutput), "agentJSONLBytes", len(parsed.AgentJSONL))
 	return nil
 }
 
