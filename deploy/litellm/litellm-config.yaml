@@ -21,17 +21,16 @@ model_list:
       model: "ollama_chat/qwen2.5:0.5b"
       api_base: "http://ollama:11434"
 
-  # Default: best local model (no rate limits, fast, no API key needed)
+  # Default: deepseek-v3.2 — reliable cloud coding model, cheap output ($0.38/M out)
+  # Ollama is not running; route default to the best cost-effective cloud model.
   - model_name: "default"
     litellm_params:
-      model: "ollama_chat/qwen3:8b"
-      api_base: "http://ollama:11434"
+      model: "openrouter/deepseek/deepseek-v3.2"
 
-  # Default-cloud: cheapest effective paid model
-  # DeepSeek V3.1 — $0.15/M in, $0.75/M out, strong coding/reasoning
+  # Default-cloud: same as default (deepseek-v3.2)
   - model_name: "default-cloud"
     litellm_params:
-      model: "openrouter/deepseek/deepseek-chat-v3.1"
+      model: "openrouter/deepseek/deepseek-v3.2"
 
   # CI: tiny local model for testing only
   - model_name: "ci"
@@ -103,7 +102,7 @@ model_list:
   # Claude Sonnet 4.6 — latest Anthropic
   - model_name: "claude-sonnet-4.6"
     litellm_params:
-      model: "openrouter/anthropic/claude-sonnet-4-6-20260320"
+      model: "openrouter/anthropic/claude-sonnet-4.6"
 
   # Grok 4.1 Fast
   - model_name: "grok-4.1-fast"
@@ -121,6 +120,12 @@ model_list:
       model: "openrouter/minimax/minimax-m2.5"
 
   # --- Free tier (rate-limited, fallback only) ---
+
+  # GPT-OSS 120B Free — OpenAI open-source model, supports tool calling, free tier
+  - model_name: "gpt-oss-120b-free"
+    litellm_params:
+      model: "openrouter/openai/gpt-oss-120b:free"
+
   - model_name: "nemotron-3-super-free"
     litellm_params:
       model: "openrouter/nvidia/nemotron-3-super-120b-a12b:free"
@@ -146,6 +151,11 @@ model_list:
     litellm_params:
       model: "openrouter/anthropic/claude-sonnet-4"
 
+  # llm-judge: cheap model dedicated to LLM-as-judge quality evaluations
+  - model_name: "llm-judge"
+    litellm_params:
+      model: "openrouter/deepseek/deepseek-chat-v3.1"
+
 general_settings:
   master_key: sk-uncworks-local
   # Disable spend/error logging to avoid "No connected db." errors when no
@@ -158,10 +168,13 @@ general_settings:
 litellm_settings:
   # Fallback chains: paid → paid → local
   fallbacks:
-    - {"qwen3-coder": ["deepseek-v3.2", "deepseek-v3.1", "qwen3:8b"]}
-    - {"deepseek-v3.2": ["qwen3-coder", "deepseek-v3.1", "qwen3:8b"]}
-    - {"deepseek-v3.1": ["qwen3-coder", "deepseek-v3.2", "qwen3:8b"]}
-    - {"default-cloud": ["deepseek-v3.2", "qwen3:8b"]}
+    - {"claude-sonnet-4.6": ["deepseek-v3.2", "deepseek-v3.1"]}
+    - {"claude-sonnet-4": ["deepseek-v3.2", "deepseek-v3.1"]}
+    - {"qwen3-coder": ["deepseek-v3.2", "deepseek-v3.1"]}
+    - {"deepseek-v3.2": ["qwen3-coder", "deepseek-v3.1"]}
+    - {"deepseek-v3.1": ["qwen3-coder", "deepseek-v3.2"]}
+    - {"default": ["deepseek-v3.2", "deepseek-v3.1"]}
+    - {"default-cloud": ["deepseek-v3.2", "deepseek-v3.1"]}
 
   # Retry settings
   num_retries: 3
