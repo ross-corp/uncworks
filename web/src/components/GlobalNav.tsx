@@ -13,6 +13,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useSettings } from "../hooks/useSettings";
+import { apiFetch } from "../hooks/apiFetch";
 
 // ROSS CORP org avatar — same image works on light and dark backgrounds
 const LOGO_URL = "https://avatars.githubusercontent.com/u/172242530?s=64";
@@ -98,7 +99,7 @@ export default function GlobalNav() {
     let cancelled = false;
     async function poll() {
       try {
-        const resp = await fetch("/api/v1/counts");
+        const resp = await apiFetch("/api/v1/counts");
         if (!cancelled && resp.ok) {
           const data = await resp.json();
           setCounts({

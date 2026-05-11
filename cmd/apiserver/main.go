@@ -230,11 +230,12 @@ func main() {
 	// Register project endpoints
 	softServeAddr := envOrDefault("SOFT_SERVE_ADDR", "soft-serve.aot.svc:23231")
 	softServeKeyPath := envOrDefault("SOFT_SERVE_KEY_PATH", "/etc/soft-serve/id_ed25519")
-	var ssClient *softserve.Client
+	// Assign as interface to avoid the nil-concrete-in-interface trap.
+	var ssManager softserve.RepoManager
 	if _, err := os.Stat(softServeKeyPath); err == nil {
-		ssClient = &softserve.Client{SSHAddr: softServeAddr, KeyPath: softServeKeyPath}
+		ssManager = &softserve.Client{SSHAddr: softServeAddr, KeyPath: softServeKeyPath}
 	}
-	projectHandler := &server.ProjectHandler{K8sClient: k8sClient, Namespace: namespace, SoftServe: ssClient}
+	projectHandler := &server.ProjectHandler{K8sClient: k8sClient, Namespace: namespace, SoftServe: ssManager}
 	projectHandler.RegisterProjectHandlers(mux)
 
 	// Register chain/schedule/template endpoints

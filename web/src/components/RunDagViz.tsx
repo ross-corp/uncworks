@@ -9,6 +9,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { useNavigate } from "react-router-dom";
 import type { RunGraphNode, RunGraphEdge } from "../types/agent-run";
 
 const NODE_W = 180;
@@ -74,6 +75,7 @@ interface RunDagVizProps {
 }
 
 export default function RunDagViz({ nodes, edges, currentRunName }: RunDagVizProps) {
+  const navigate = useNavigate();
   // Compute depth (column) for each node based on edges
   const depthMap = new Map<string, number>();
   function depth(name: string): number {
@@ -125,7 +127,7 @@ export default function RunDagViz({ nodes, edges, currentRunName }: RunDagVizPro
 
   function onNodeClick(_: React.MouseEvent, node: Node) {
     const d = node.data as RunNodeData;
-    if (!d.isCurrent) window.location.href = `/run/${d.name}`;
+    if (!d.isCurrent && d.name) navigate(`/run/${d.name}`);
   }
 
   return (

@@ -182,7 +182,7 @@ export default function ChainRunDetailView() {
       <div className="h-12 border-b flex items-center px-4 gap-2">
         <div className="flex flex-col gap-0.5">
           <div className="text-xs text-muted-foreground">
-            <Link to="/chains" className="hover:text-foreground transition-colors">Chains</Link>
+            <Link to="/chainruns" className="hover:text-foreground transition-colors">Chain Runs</Link>
             {" / "}
             <span>{chainRun.metadata.name}</span>
           </div>
