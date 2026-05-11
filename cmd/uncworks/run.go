@@ -39,7 +39,7 @@ func runRun(args []string) error {
 	modelShort := fs.String("model", "", "Shorthand for --model-tier")
 	autoPush := fs.Bool("auto-push", false, "Push changes to a feature branch after the run succeeds")
 	autoPR := fs.Bool("auto-pr", false, "Create a GitHub PR after the run succeeds (implies --auto-push)")
-	approvalMode := fs.String("approval-mode", "", "Approval required before run is marked Succeeded: hitl, llm-judge, hybrid, or empty for none")
+	approvalMode := fs.String("approval-mode", "", "Approval gate before run succeeds: hitl (human), llm-judge (automated), hybrid, or empty for none")
 	ttl := fs.Duration("ttl", 0, "Workspace PVC retention after run completes (e.g. 30m, 2h); 0 uses server default (2h)")
 	wait := fs.Bool("wait", false, "Wait for the run to complete; exit 0 on success, 1 on failure")
 	follow := fs.Bool("follow", false, "Stream logs after submitting the run (takes precedence over --wait)")
