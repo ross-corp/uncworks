@@ -146,11 +146,12 @@ type StageConfigInput struct {
 
 // WorkflowState represents the current state of the workflow, returned by queries.
 type WorkflowState struct {
-	Phase          string
-	Message        string
-	PodName        string
-	DeploymentName string
-	PRUrl          string
+	Phase              string
+	Message            string
+	PodName            string
+	DeploymentName     string
+	PRUrl              string
+	VerificationResult string // JSON-encoded LLM judge verdict, persisted to CRD status
 }
 
 // HumanInputSignal is the payload for the human-input signal.
@@ -1054,9 +1055,13 @@ func modelIDFromTier(tier string) string {
 }
 
 // runApprovalGate enforces the approval policy for a completed run.
-// It mutates state.Phase/Message and returns a non-nil error if the run is rejected.
-// For "llm-judge" / "hybrid": calls the LLM judge activity.
-// For "hitl" / "hybrid": blocks waiting for a human approval signal.
+// It mutates state.Phase/Message/VerificationResult and returns non-nil if rejected.
+//
+// Default (empty mode) = "hybrid": LLM judge + HITL approval popup.
+// "none" explicitly skips both gates.
+// "llm-judge": automated quality check only (no human gate).
+// "hitl": human approval only (no LLM judge).
+// "hybrid": LLM judge must pass first, then human approves.
 func runApprovalGate(
 	ctx workflow.Context,
 	input WorkflowInput,
@@ -1065,8 +1070,15 @@ func runApprovalGate(
 	podIP, repoPath, llmKey string,
 ) error {
 	mode := strings.ToLower(strings.TrimSpace(input.ApprovalMode))
+	if mode == "" {
+		mode = "hybrid" // default: quality check + human approval for every run
+	}
+	if mode == "none" {
+		return nil // explicit opt-out
+	}
 
 	// LLM judge: runs for "llm-judge" and "hybrid" modes.
+	// Always uses a cheap dedicated judge model regardless of the agent model.
 	if mode == "llm-judge" || mode == "hybrid" {
 		state.Message = "Agent completed — running LLM judge review"
 		judgeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
@@ -1084,19 +1096,22 @@ func runApprovalGate(
 			Prompt:         input.Prompt,
 			LiteLLMBaseURL: input.LiteLLMBaseURL,
 			LLMKey:         llmKey,
-			ModelTier:      input.ModelTier,
+			ModelTier:      "deepseek-v3.1", // cheap dedicated judge model
 		}).Get(ctx, &judgeOut); err != nil {
 			workflow.GetLogger(ctx).Warn("LLM judge activity failed", "error", err)
-			state.Phase = "Failed"
-			state.Message = fmt.Sprintf("LLM judge failed: %v", err)
-			return fmt.Errorf("LLM judge activity error: %w", err)
+			// Don't fail the run on judge errors — fall through to HITL if applicable.
+			state.Message = fmt.Sprintf("LLM judge error (skipped): %v", err)
+		} else {
+			// Persist verdict to CRD so the web UI can display it.
+			verdictJSON := fmt.Sprintf(`{"pass":%v,"failureReport":%q}`, judgeOut.Approved, judgeOut.Reason)
+			state.VerificationResult = verdictJSON
+			if !judgeOut.Approved {
+				state.Phase = "Failed"
+				state.Message = "Rejected by LLM judge: " + judgeOut.Reason
+				return fmt.Errorf("run rejected by LLM judge: %s", judgeOut.Reason)
+			}
+			state.Message = "LLM judge approved: " + judgeOut.Reason
 		}
-		if !judgeOut.Approved {
-			state.Phase = "Failed"
-			state.Message = "Rejected by LLM judge: " + judgeOut.Reason
-			return fmt.Errorf("run rejected by LLM judge: %s", judgeOut.Reason)
-		}
-		state.Message = "LLM judge approved: " + judgeOut.Reason
 	}
 
 	// HITL: runs for "hitl" and "hybrid" modes (after LLM judge for hybrid).

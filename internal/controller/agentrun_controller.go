@@ -361,6 +361,10 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 		agentRun.Status.PRUrl = state.PRUrl
 		updated = true
 	}
+	if state.VerificationResult != "" && agentRun.Status.VerificationResult != state.VerificationResult {
+		agentRun.Status.VerificationResult = state.VerificationResult
+		updated = true
+	}
 
 	// startWorkflow sets StartedAt before Status().Update(), but a concurrent reconcile
 	// triggered by the annotation update can cause that update to conflict and be lost.
