@@ -32,7 +32,7 @@ echo "LiteLLM: $LITELLM"
 echo "Runs (recent):"
 kubectl get agentruns -n "$NS" \
   --sort-by=.metadata.creationTimestamp \
-  --no-headers 2>/dev/null | tail -5 | \
+  --no-headers 2>/dev/null | tail -5 | tac | \
   awk '{printf "  %-20s %-12s %s\n", $1, $3, $4}' || true
 
 # Stale/competing workers in other namespaces
