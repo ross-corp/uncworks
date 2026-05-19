@@ -4,7 +4,7 @@
 
 - A local Kubernetes cluster. Docker Desktop, OrbStack (fastest on macOS), Rancher Desktop, k3d, or kind all work.
 - `kubectl` and `helm` on PATH.
-- The `uncworks` CLI: `brew install uncworks/tap/uncworks`, or grab a binary from [GitHub Releases](https://github.com/uncworks/uncworks/releases).
+- The `uncworks` CLI: grab a binary from [GitHub Releases](https://github.com/ross-corp/uncworks/releases), or build from source with `./install.sh` from a checkout (needs Go 1.25+).
 
 ## Setup
 

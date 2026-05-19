@@ -7,8 +7,9 @@ The core abstraction is the `AgentRun` CRD. Everything else — scheduling, LLM 
 
 ## Quick start
 
+Grab the `uncworks` CLI from [GitHub Releases](https://github.com/ross-corp/uncworks/releases), then:
+
 ```bash
-brew install uncworks/tap/uncworks
 uncworks setup        # picks a local kube context, installs the Helm chart
 uncworks open         # port-forward + open the web UI
 ```
