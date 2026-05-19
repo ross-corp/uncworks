@@ -17,6 +17,28 @@ Cluster requirements: any local Kubernetes (Docker Desktop, OrbStack, k3d, kind)
 
 See [docs/getting-started.md](docs/getting-started.md) for the full path including remote clusters and the TUI.
 
+## Screenshots
+
+Runs list — one row per `AgentRun`, filterable by stage, mode, and approval gate.
+
+![Runs list](docs/screenshots/home.png)
+
+Logs — live stream of the agent's actions: prompts, tool calls, file reads, and bash output.
+
+![Logs tab](docs/screenshots/logs.png)
+
+Files — workspace tree inside the agent pod, scoped to `/workspace`.
+
+![File explorer](docs/screenshots/file-explorer.png)
+
+Shell — attach to the running pod for ad-hoc inspection.
+
+![Shell tab](docs/screenshots/shell.png)
+
+Traces — span timeline for the workflow, agent thoughts, and tool invocations.
+
+![Traces tab](docs/screenshots/traces.png)
+
 ## How it works
 
 ```mermaid
