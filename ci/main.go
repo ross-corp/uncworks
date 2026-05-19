@@ -584,7 +584,7 @@ func (m *Ci) BuildBinaries(ctx context.Context, source *dagger.Directory, versio
 			WithEnvVariable("GOOS", p.goos).
 			WithEnvVariable("GOARCH", p.goarch).
 			WithEnvVariable("CGO_ENABLED", "0").
-			WithExec([]string{"go", "build", "-ldflags", fmt.Sprintf("-X main.version=%s", version),
+			WithExec([]string{"go", "build", "-ldflags", fmt.Sprintf("-X main.Version=%s", version),
 				"-o", "/out/" + name, "./cmd/uncworks"}).
 			File("/out/" + name)
 		out = out.WithFile(name, binary)
