@@ -1,57 +1,56 @@
-# Model Configuration
+# Models
 
-UNCWORKS routes all LLM requests through a LiteLLM proxy, providing a unified interface for local and cloud models. Configuration lives in `deploy/litellm/litellm-config.yaml`.
-
-## Architecture
+All LLM calls route through LiteLLM (`:4000`). The agent picks a model by name; LiteLLM handles auth, routing, retries, and fallbacks. Config: `deploy/litellm/litellm-config.yaml`.
 
 ```
-Agent Pod --> LiteLLM Proxy --> Ollama (local)
-                            --> OpenRouter (cloud)
+agent → LiteLLM → Ollama (local) | OpenRouter (cloud)
 ```
 
-The agent selects a model by name (e.g., `qwen3:8b`, `deepseek-v3.1`). LiteLLM handles routing, retries, and fallback chains.
+## Built-in models
 
-## Available Models
+### Local (Ollama)
 
-### Local Models (Ollama)
+| Name | Backend |
+|------|---------|
+| `qwen3:8b` | Default local. |
+| `llama3.1:8b` | Alternative. |
+| `qwen2.5:0.5b` | CI only. |
+| `default` | Alias → `qwen3:8b`. |
+| `ci` | Alias → `qwen2.5:0.5b`. |
 
-| Model Name | Backend | Notes |
-|------------|---------|-------|
-| `qwen3:8b` | Ollama | Default local model, strong coding |
-| `llama3.1:8b` | Ollama | Alternative local model |
-| `qwen2.5:0.5b` | Ollama | Tiny model for CI/testing only |
-| `default` | Ollama | Alias for `qwen3:8b` |
-| `ci` | Ollama | Alias for `qwen2.5:0.5b` |
+### Cloud (OpenRouter)
 
-### Cloud Models (OpenRouter)
+| Name | Provider | $/M in / out | Context |
+|------|----------|-------------:|--------:|
+| `deepseek-v3.1` | DeepSeek | 0.15 / 0.75 | 32K |
+| `deepseek-v3.2` | DeepSeek | 0.26 / 0.38 | 164K |
+| `qwen3-coder` | Qwen | 0.22 / 1.00 | 262K |
+| `mistral-medium` | Mistral | 0.40 / 2.00 | 131K |
+| `default-cloud` | DeepSeek | alias → `deepseek-v3.2` | — |
+| `premium` | Qwen | alias → `qwen3-coder` | — |
+| `llm-judge` | DeepSeek | alias → `deepseek-v3.1` (cheap judge) | — |
 
-| Model Name | Provider | Cost (in/out per M tokens) | Context |
-|------------|----------|---------------------------|---------|
-| `deepseek-v3.1` | DeepSeek | $0.15 / $0.75 | 32K |
-| `deepseek-v3.2` | DeepSeek | $0.26 / $0.38 | 164K |
-| `qwen3-coder` | Qwen | $0.22 / $1.00 | 262K |
-| `mistral-medium` | Mistral | $0.40 / $2.00 | 131K |
-| `default-cloud` | DeepSeek | Alias for `deepseek-v3.1` | -- |
-| `premium` | Qwen | Alias for `qwen3-coder` | -- |
+### Free tier
 
-### Free Tier (rate-limited)
+| Name | Provider |
+|------|----------|
+| `qwen3-coder-free` | Qwen via OpenRouter |
+| `mistral-small-free` | Mistral via OpenRouter |
+| `gpt-oss-120b-free` | OpenRouter |
 
-| Model Name | Provider |
-|------------|----------|
-| `qwen3-coder-free` | Qwen (via OpenRouter) |
-| `mistral-small-free` | Mistral (via OpenRouter) |
+Free models are rate-limited. The CLI marks them with a `(free)` indicator in `uncworks runs credits`.
 
-## Fallback Chains
+## Fallbacks
 
-LiteLLM is configured with fallback chains so that if a cloud model is unavailable, requests fall through to alternatives:
+LiteLLM falls through on provider failure:
 
-- `qwen3-coder` --> `deepseek-v3.2` --> `deepseek-v3.1` --> `qwen3:8b`
-- `deepseek-v3.2` --> `qwen3-coder` --> `deepseek-v3.1` --> `qwen3:8b`
-- `default-cloud` --> `deepseek-v3.2` --> `qwen3:8b`
+- `qwen3-coder` → `deepseek-v3.2` → `deepseek-v3.1` → `qwen3:8b`
+- `deepseek-v3.2` → `qwen3-coder` → `deepseek-v3.1` → `qwen3:8b`
+- `default-cloud` → `deepseek-v3.2` → `qwen3:8b`
 
-## Adding a Model
+## Adding a model
 
-Add an entry to the `model_list` in `deploy/litellm/litellm-config.yaml`:
+Edit `deploy/litellm/litellm-config.yaml`:
 
 ```yaml
 - model_name: "my-model"
@@ -59,7 +58,7 @@ Add an entry to the `model_list` in `deploy/litellm/litellm-config.yaml`:
     model: "openrouter/provider/model-name"
 ```
 
-For Ollama models, use the `ollama_chat/` prefix and specify `api_base`:
+Ollama needs the `ollama_chat/` prefix and an `api_base`:
 
 ```yaml
 - model_name: "my-local-model"
@@ -68,14 +67,14 @@ For Ollama models, use the `ollama_chat/` prefix and specify `api_base`:
     api_base: "http://ollama:11434"
 ```
 
-## OpenRouter Setup
-
-Cloud models route through [OpenRouter](https://openrouter.ai). Set your API key as an environment variable accessible to LiteLLM:
+## OpenRouter
 
 ```
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-## Model Selection in Runs
+Set during `uncworks setup` or pass via Helm values. The key is held by LiteLLM, never the agent — agent pods get a scoped LiteLLM virtual key with budget caps and per-key model allowlists.
 
-When creating a run, the `modelTier` field (or model selector in the UI) determines which model the agent uses. This maps directly to a `model_name` in the LiteLLM config. For spec-driven runs, each pipeline stage can use a different model via `pipelineConfig`.
+## Per-run / per-stage selection
+
+`modelTier` on the `AgentRun` spec selects the model. For spec-driven, `pipelineConfig.{plan,execute,verify}.model` overrides per stage. The LLM judge always uses `deepseek-v3.1` independent of the agent — judge cost is decoupled from agent cost.

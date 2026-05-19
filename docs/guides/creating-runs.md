@@ -1,56 +1,65 @@
-# Creating Runs
+# Creating runs
 
-Agent runs are the core unit of work in UNCWORKS. Each run clones one or more repositories into a sandboxed workspace, starts an LLM-powered coding agent, and tracks execution through completion.
+A run is one `AgentRun` CRD → one Temporal workflow → one agent pod. The CRD spec is the contract; everything in the UI and CLI maps onto it.
 
-## Via the Web UI
+## Required fields
 
-1. Open the dashboard (default: `http://<host-ip>:30300`)
-2. Navigate to the new run page
-3. Fill in the required fields:
-   - **Repository URL** -- The git repo to clone (e.g., `https://github.com/org/repo`)
-   - **Branch** -- Optional; defaults to the repository's default branch
-   - **Prompt** -- The task description for the agent (e.g., "Add input validation to the user registration endpoint")
-   - **Model** -- Select from available models configured in LiteLLM
-4. Choose an orchestration mode:
-   - **Single** -- One agent handles the entire task (default)
-   - **Auto** -- The agent autonomously decomposes the task into subtasks
-   - **Manual** -- You define explicit subtasks with individual prompts
-   - **Spec-Driven** -- Uses the OpenSpec Plan/Execute/Verify pipeline
-5. Submit the run
+- `repos[]` — at least one git URL (HTTPS or SSH). `branch` and `path` default sensibly.
+- `prompt` — task description. Auto-derived from `specContent` for spec-driven runs.
 
-## Orchestration Modes
+Everything else has defaults.
 
-### Single
+## Modes
 
-The simplest mode. A single agent pod receives the prompt and works until completion or failure. Best for focused, well-scoped tasks.
+| Mode | When |
+|------|------|
+| `single` | One agent, one prompt. Default for ad-hoc work. |
+| `auto` | Senior agent decomposes into junior agents. Currently falls back to single-run execution. |
+| `manual` | You list subtasks in `orchestration.tasks[]`. Max 7. Each task gets a junior agent. |
+| `spec-driven` | Full Plan / Execute / Verify with OpenSpec. Auto-selected when `specContent` is set. See [spec-driven.md](spec-driven.md). |
 
-### Auto
+## Approval gates
 
-The agent receives a decomposition prompt and can use the `delegate_task` tool to break work into tracked subtasks. Subtasks execute inline but are visible in the dashboard.
+`approvalMode` controls what runs need before flipping to `Succeeded`. The default (empty) is **hybrid**.
 
-### Manual
+| Mode | LLM judge | Human approval |
+|------|-----------|----------------|
+| `none` | — | — |
+| `llm-judge` | yes | — |
+| `hitl` | — | yes |
+| `hybrid` (default) | yes — must pass | yes — after judge |
 
-You define an explicit list of subtasks, each with its own prompt and optional repo restriction. Each subtask runs as a separate agent. Useful when you know the exact breakdown.
+The judge uses a cheap dedicated model (`deepseek-v3.1`) regardless of the agent's model — the judge model is independent of cost choices for the run itself.
 
-### Spec-Driven
+When a run is awaiting human approval, it sits in `WaitingForInput` and the UI shows Approve/Reject buttons. From the CLI:
 
-The most structured mode. Uses OpenSpec to generate formal specifications, then implements and verifies against them. See the [Spec-Driven Pipeline guide](spec-driven.md) for details.
+```bash
+uncworks input <run-id> approve
+uncworks input <run-id> reject "reason"
+```
 
-## Monitoring a Run
+## Phases
 
-Once submitted, the run progresses through phases:
+`Pending → Running → (WaitingForInput) → Succeeded | Failed | Cancelled`
 
-| Phase | Description |
-|-------|-------------|
-| Pending | Run created, waiting for pod provisioning |
-| Running | Agent is actively working |
-| WaitingForInput | Agent paused, awaiting human input via `ask_user` |
-| Succeeded | Agent completed the task |
-| Failed | Agent encountered an unrecoverable error |
-| Cancelled | User cancelled the run |
+`Running` covers everything from pod provisioning through the agent finishing and the approval gate completing. `WaitingForInput` is used for both `ask_user` calls during the run and the human-approval step at the end.
 
-The dashboard shows real-time logs, tool calls, trace timelines, and file diffs for each run.
+## Auto-push and PR
 
-## Human-in-the-Loop
+If `autoPush: true`, successful runs push to `aot/<run-id>`. With `autoPR: true`, a PR is opened against `prBaseBranch` (default `main`). CI failures on `aot/*` branches trigger an autofix run; after 3 attempts it falls back to a comment on the PR.
 
-When an agent calls `ask_user`, the run enters the `WaitingForInput` phase. The dashboard displays the question and provides an input field. Submit your response via the UI or through the `SendHumanInput` API endpoint.
+## OpenSpec integration
+
+Set `openspecChange` to the change name when the run is implementing a specific OpenSpec proposal. The Verify stage uses it as a task-completion gate (`openspec list --change <name>`). Ad-hoc runs leave it empty and skip that gate.
+
+## Where it shows up
+
+| Field | Purpose |
+|-------|---------|
+| `project` | Project label, also displayed in the sidebar |
+| `feature` | Feature/unit-of-work bucket |
+| `tags[]` | Cross-cutting filters |
+| `projectRef` | If set, empty run fields inherit from the Project CRD |
+| `specRef` | Pulls spec from the project's config repo |
+
+Full field reference: [reference/crd.md](../reference/crd.md).

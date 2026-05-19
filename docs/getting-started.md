@@ -1,55 +1,18 @@
-# Getting Started
-
-This guide walks through setting up a local UNCWORKS instance using `uncworks setup`.
+# Getting started
 
 ## Prerequisites
 
-| Tool | Purpose |
-|------|---------|
-| **uncworks CLI** | UNCWORKS setup and management (`brew install uncworks/tap/uncworks`) |
-| **kubectl** | Kubernetes CLI |
-| **helm** | Kubernetes package manager |
-| **A local Kubernetes cluster** | See options below |
-
-### Local Kubernetes Cluster
-
-UNCWORKS runs on Kubernetes. You need a local cluster — any of the following work:
-
-**macOS:**
-- [Docker Desktop](https://docs.docker.com/desktop/kubernetes/) — enable Kubernetes in Preferences > Kubernetes
-- [OrbStack](https://orbstack.dev/) — `brew install orbstack` (fastest)
-- [Rancher Desktop](https://rancherdesktop.io/) — `brew install --cask rancher`
-
-**Linux:**
-- [k3d](https://k3d.io/) — `curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash` (requires Docker)
-- [kind](https://kind.sigs.k8s.io/) — `go install sigs.k8s.io/kind@latest` (requires Docker)
-
-## Install the CLI
-
-```bash
-# macOS / Linux (Homebrew)
-brew install uncworks/tap/uncworks
-
-# Or download a binary directly from GitHub Releases:
-# https://github.com/uncworks/uncworks/releases
-```
+- A local Kubernetes cluster. Docker Desktop, OrbStack (fastest on macOS), Rancher Desktop, k3d, or kind all work.
+- `kubectl` and `helm` on PATH.
+- The `uncworks` CLI: `brew install uncworks/tap/uncworks`, or grab a binary from [GitHub Releases](https://github.com/uncworks/uncworks/releases).
 
 ## Setup
-
-Run the interactive setup wizard:
 
 ```bash
 uncworks setup
 ```
 
-The wizard will:
-1. Detect your local Kubernetes context and let you select one
-2. Check that the cluster has sufficient resources (min 2 CPU / 2Gi memory, recommended 4/4Gi)
-3. Prompt for required configuration (LLM API key, GitHub token, Temporal address)
-4. Deploy UNCWORKS via Helm (`helm upgrade --install`)
-5. Print the web UI URL
-
-For non-interactive / scripted setup:
+The wizard picks a kube context, checks resources (2 CPU / 2 GiB floor; 4/4 recommended), asks for an LLM key + GitHub token, and runs `helm upgrade --install`. For non-interactive use:
 
 ```bash
 uncworks setup \
@@ -59,74 +22,56 @@ uncworks setup \
   --temporal-host temporal:7233
 ```
 
-### Using the Local Values Preset
-
-For local clusters, pass the included values preset for lighter resource usage and NodePort exposure:
+Local clusters can use the bundled lighter preset (NodePort 30300, reduced requests, Ollama off):
 
 ```bash
 uncworks setup --values deploy/helm/values.local.yaml
 ```
 
-This sets NodePort 30300 for the web UI, reduces resource requests, and disables Ollama by default.
-
-## Access the UI
-
-After setup:
+## Open it
 
 ```bash
-uncworks open    # starts port-forward + opens browser
+uncworks open    # port-forward + browser
+uncworks tui     # terminal UI
 ```
 
-Or navigate directly to `http://localhost:30300` if your cluster exposes NodePorts on localhost (Docker Desktop, OrbStack, Rancher Desktop).
+Docker Desktop / OrbStack / Rancher expose NodePorts on `localhost`, so http://localhost:30300 also works.
 
-## Terminal UI
+## Remote server
 
 ```bash
-uncworks tui     # launch the Bubble Tea terminal UI
+uncworks connect grpc.example.com:50055
+uncworks tui    # now talks to the remote server
 ```
 
-The TUI shows active runs, streams logs, and lets you submit new runs — all from the terminal.
+## First run
 
-## Connecting to a Remote Server
+In the web UI: "New run", paste a repo URL, set a branch (default if blank), write a prompt, pick a model tier, pick a mode (`single` for a one-shot, `spec-driven` for Plan/Execute/Verify), submit.
+
+Or from the CLI:
 
 ```bash
-uncworks connect grpc.example.com:50055   # store remote address
-uncworks tui                               # TUI connects to remote server
+uncworks runs create \
+  --repo https://github.com/owner/repo \
+  --prompt "Add a health check endpoint" \
+  --model-tier default-cloud \
+  --mode single
 ```
 
-## Status and Teardown
+By default every run goes through the **hybrid** approval gate: an LLM judge reviews the diff, and then a human approves or rejects in the UI. Override with `--approval-mode none|hitl|llm-judge|hybrid`.
+
+## Status, teardown
 
 ```bash
-uncworks status      # show pod health
-uncworks teardown    # uninstall UNCWORKS (keeps PVCs by default)
-uncworks teardown --purge   # also delete PVCs (destroys workspace data)
+uncworks status              # pod health
+uncworks teardown            # uninstall, keep PVCs
+uncworks teardown --purge    # uninstall + delete PVCs (workspace data is gone)
 ```
 
-## Create Your First Run
+## Next
 
-1. Open the web dashboard via `uncworks open`
-2. Click "New Run"
-3. Fill in the form:
-   - **Prompt**: Describe the task (e.g., "Add a health check endpoint to the API")
-   - **Repository URL**: GitHub repo URL (e.g., `https://github.com/owner/repo.git`)
-   - **Branch**: Branch to check out (defaults to main)
-   - **Model**: Select a model tier (`default` for local Ollama, `default-cloud` for OpenRouter)
-   - **Mode**: `single` for a simple task or `spec-driven` for the full plan/execute/verify pipeline
-4. Click "Create Run"
-
-## Configure Cloud Models (Optional)
-
-Pass your API key during setup:
-
-```bash
-uncworks setup --llm-key sk-or-...   # OpenRouter or OpenAI key
-```
-
-## Next Steps
-
-- [Creating Runs](guides/creating-runs.md) — Detailed guide on run creation options
-- [Model Configuration](guides/models.md) — Add and configure LLM models
-- [Spec-Driven Runs](guides/spec-driven.md) — Using the plan/execute/verify pipeline
-- [API Reference](reference/api.md) — ConnectRPC and REST endpoint documentation
-- [CRD Reference](reference/crd.md) — AgentRun and Project CRD field reference
-- [macOS App](guides/macos-app.md) — Installing the native UNCWORKS.app
+- [Creating runs](guides/creating-runs.md)
+- [Spec-driven pipeline](guides/spec-driven.md)
+- [Models](guides/models.md)
+- [API reference](reference/api.md)
+- [CRD reference](reference/crd.md)

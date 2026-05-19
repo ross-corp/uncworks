@@ -1,83 +1,75 @@
-# Determinism Extension Reference
+# Determinism extension reference
 
-The UNCWORKS determinism extension (`extensions/aot-determinism.ts`) enforces guardrails on agent behavior within the spec-driven pipeline. It registers custom tools and applies policies to prevent runaway execution.
+`extensions/aot-determinism.ts` — loaded into every agent run via `--extension /opt/aot/extensions/aot-determinism.ts`. Registers custom tools and enforces policies.
 
-## Custom Tools
+## Custom tools
 
-### ask_user
+### `ask_user`
 
-Pauses the agent and asks the human operator a question via the UNCWORKS dashboard.
+Pauses the agent and asks the operator a question via the dashboard.
 
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `question` | `string` | Yes | The question to display |
-| `options` | `string[]` | No | Optional list of choices |
+| Param | Type | Required | Notes |
+|-------|------|----------|-------|
+| `question` | `string` | yes | |
+| `options` | `string[]` | no | Optional choices |
 
-**Behavior:** Writes a question payload to `/workspace/.aot/input/question.json`, then polls `/workspace/.aot/input/response.txt` until the sidecar's `SendInput` RPC writes a response. Times out after 5 minutes.
+Writes `/workspace/.aot/input/question.json`; polls `/workspace/.aot/input/response.txt` until the sidecar's `SendInput` writes it. 5-minute timeout.
 
-**Role restriction:** Only available to `manage` agents. `implement` agents are blocked from calling this tool and must surface questions in their output.
+Manage role only — `implement` agents are blocked.
 
-### delegate_task
+### `delegate_task`
 
-Tracks a subtask delegation for dashboard visibility.
+Marker for dashboard visibility; subtask handled inline.
 
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `task` | `string` | Yes | Description of the subtask |
-| `context` | `string` | No | Additional context, file paths, or constraints |
+| Param | Type | Required | Notes |
+|-------|------|----------|-------|
+| `task` | `string` | yes | |
+| `context` | `string` | no | |
 
-**Behavior:** Writes a marker file to `/workspace/.aot/subagents/<id>.json` and returns guidance to handle the task inline. The delegation is tracked for observability but executed within the current agent.
+Writes `/workspace/.aot/subagents/<id>.json`.
 
 ## Policies
 
-### Loop Detection
+### Loop detection
 
-Blocks repeated identical tool calls. If the same tool is called 3+ consecutive times with identical input, the call is blocked and the agent receives an error message. The counter resets after a different tool call.
+Blocks the 3rd consecutive identical call. Counter resets on a different call.
 
-- **Threshold:** 3 consecutive identical calls (`MAX_REPEAT_CALLS`)
+### Turn cap
 
-### Turn Limit
+Kills the agent after 50 turns.
 
-Kills the agent after a maximum number of conversational turns to prevent runaway execution.
+### Roles (`PI_ROLE`)
 
-- **Limit:** 50 turns (`MAX_TURNS`)
+| Role | Restrictions |
+|------|--------------|
+| `manage` | Writes confined to `/workspace/openspec/` + `/workspace/.aot/`. Can use `ask_user`. |
+| `implement` | Repo writes allowed. No `ask_user` — surface questions in output. |
 
-### Role-Based Restrictions
+### Plan-stage write validation (`PI_STAGE=plan`)
 
-**manage agents** (`PI_ROLE=manage`):
-- Cannot write or edit files outside `/workspace/openspec/` and `/workspace/.aot/`
-- Can use `ask_user`
+- Spec files (`*/specs/*/spec.md`): must use `SHALL` or `MUST` in requirements.
+- `tasks.md`: ≤ 30 checkboxes.
 
-**implement agents** (`PI_ROLE=implement`):
-- Can read and write repository source code
-- Cannot use `ask_user`
+### Protected paths
 
-### Write Validation (Plan Stage)
+Writes outside `/workspace` blocked.
 
-During `PI_STAGE=plan`, the extension validates writes to spec files:
-- Spec files (`*/specs/*/spec.md`) must contain `SHALL` or `MUST` in requirement text
-- Task files (`tasks.md`) are limited to 30 checkboxes to prevent over-decomposition
+## Env
 
-### Protected Paths
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `PI_STAGE` | `""` | `plan` / `execute` / `verify` |
+| `PI_ROLE` | `implement` | `manage` / `implement` |
 
-All write/edit operations to absolute paths outside `/workspace` are blocked.
+## File contracts
 
-## Configuration
-
-The extension reads its configuration from environment variables:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PI_STAGE` | Current pipeline stage (`plan`, `execute`, `verify`) | `""` |
-| `PI_ROLE` | Agent role (`manage` or `implement`) | `implement` |
-
-## File Paths
-
-| Path | Purpose |
-|------|---------|
+| Path | Use |
+|------|-----|
 | `/workspace/.aot/input/question.json` | HITL question payload |
-| `/workspace/.aot/input/response.txt` | HITL response from user |
-| `/workspace/.aot/subagents/*.json` | Delegation tracking markers |
-| `/workspace/.aot/logs/agent.jsonl` | Agent execution log |
+| `/workspace/.aot/input/response.txt` | HITL response |
+| `/workspace/.aot/subagents/*.json` | Delegation markers |
+| `/workspace/.aot/logs/agent.jsonl` | Audit log of agent execution |
+
+## Sidecar-level backups
+
+The sidecar also kills the agent on 5 consecutive identical tool-call signatures (defense in depth in case the extension misses).

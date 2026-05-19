@@ -1,125 +1,89 @@
-# Workspace Layout and Hydration
+# Workspace and hydration
 
-Each agent run gets an isolated workspace on a Kubernetes PVC mounted at `/workspace`. The workspace is provisioned by the hydration init container before the agent starts.
+One PVC per run, mounted at `/workspace`. The hydration init container provisions it before the sidecar and agent start.
 
-## Workspace Directory Structure
+## Layout
 
 ```
 /workspace/
-  <repo-name>/              # Git worktree (e.g., /workspace/myapp/)
-    .git                     # Worktree link to bare repo
-    src/                     # Source code
-    devbox.json              # Per-repo devbox config (if present)
-    ...
-  .bare/
-    <repo-name>/             # Bare clone of the repository
+  <repo>/                          worktree, checked out on aot/<branch>
+    .git                           worktree link file (not a real .git dir)
+  .bare/<repo>/                    bare clone (canonical objects)
   openspec/
-    config.yaml              # OpenSpec configuration
-    changes/
-      <change-name>/         # Active change being worked on
-        .openspec.yaml
-        proposal.md
-        design.md
-        tasks.md
-        specs/
-          <capability>/
-            spec.md          # WHEN/THEN acceptance criteria
-        verification-result.json  # Written by Verify stage
-      archive/               # Completed changes
+    config.yaml
+    changes/<change>/
+      proposal.md  design.md  tasks.md
+      specs/<capability>/spec.md
+      verification-result.json
+    changes/archive/
   .aot/
-    metadata.json            # Run metadata (agent run ID, repos, prompt, model)
-    logs/
-      agent.log              # Human-readable agent output
-      agent.jsonl            # Raw JSONL event stream (tool calls, responses)
-    traces/
-      spans.jsonl            # Trace spans for timeline visualization
-    input/
-      question.json          # HITL question from ask_user tool
-      response.txt           # HITL response from SendInput RPC
-    subagents/
-      delegate-*.json        # Delegation tracking markers
-    verification/
-      <change>-result.json   # Fallback location for verification results
-  .devcontainer/
-    devcontainer.json        # VS Code Remote Containers config
-  uncspace.yaml              # Workspace manifest (repos, devbox sources)
-  devbox.json                # Root devbox config (includes per-repo configs)
-  spec/
-    main.cs.md               # CodeSpeak spec (if specContent provided)
-  codespeak.json             # CodeSpeak config (if specContent provided)
+    metadata.json                  run id, repos, prompt, model
+    logs/agent.log                 human-readable
+    logs/agent.jsonl               raw pi events
+    traces/spans.jsonl             tool-call + stage spans
+    input/question.json            HITL question
+    input/response.txt             HITL response
+    subagents/delegate-*.json      delegation markers
+    verification/<change>-result.json   fallback location
+  .devcontainer/devcontainer.json
+  uncspace.yaml                    workspace manifest (repos ↔ paths)
+  devbox.json                      root config; auto-composed if not explicit
+  spec/main.cs.md                  CodeSpeak spec (when specContent provided)
+  codespeak.json                   ditto
 ```
 
-## Hydration Process
-
-The hydrator runs as an init container and provisions the workspace before the sidecar and agent start.
+## Hydration
 
 ```mermaid
 sequenceDiagram
-    participant H as Hydrator (Init Container)
-    participant PVC as /workspace PVC
-    participant Git as Git Remote
+    participant H as hydrator
+    participant PVC as /workspace
+    participant Git as git remote
 
-    H->>Git: git clone --bare <url> /workspace/.bare/<repo>
-    H->>PVC: git worktree add -b aot/<branch> /workspace/<repo> <branch>
-
-    alt Multiple repos
-        H->>Git: Clone additional repos
-        H->>PVC: Create additional worktrees
+    H->>Git: clone --bare → .bare/<repo>
+    H->>PVC: worktree add -b aot/<branch> → /workspace/<repo>
+    opt extra repos
+        H->>Git: clone --bare
+        H->>PVC: worktree add
     end
-
-    opt specContent provided
-        H->>PVC: Write spec/main.cs.md + codespeak.json
+    opt specContent set
+        H->>PVC: write spec/main.cs.md + codespeak.json
     end
-
-    H->>PVC: Write uncspace.yaml (workspace manifest)
-    H->>PVC: Write .devcontainer/devcontainer.json
-    H->>PVC: Create .aot/traces/ and .aot/logs/
-    H->>PVC: Write .aot/metadata.json
-
-    alt Explicit devbox config
-        H->>PVC: devbox install (using specified config path)
-    else Auto-compose
-        H->>PVC: Scan repos for devbox.json
-        H->>PVC: Write root devbox.json with include directives
+    H->>PVC: write uncspace.yaml, .devcontainer/, .aot/{logs,traces}/, metadata.json
+    alt explicit devbox path
+        H->>PVC: devbox install (AOT_DEVBOX_CONFIG)
+    else auto-compose
+        H->>PVC: scan repos → write root devbox.json with includes
         H->>PVC: devbox install
     end
 ```
 
-### Configuration (Environment Variables)
+### Env
 
-| Variable | Description |
-|----------|-------------|
-| `AOT_REPOS` | JSON array of `{url, branch, path}` objects for multi-repo support |
-| `AOT_REPO_URL` | Single repo URL (fallback for backward compatibility) |
-| `AOT_BRANCH` | Branch name (fallback, used with `AOT_REPO_URL`) |
-| `AOT_WORKSPACE_DIR` | Workspace root (default: `/workspace`) |
-| `AOT_DEVBOX_CONFIG` | Explicit path to devbox.json within the repo |
-| `AOT_SPEC_CONTENT` | CodeSpeak spec content to write to the workspace |
-| `AOT_AGENT_RUN_ID` | Agent run identifier for metadata |
-| `AOT_PROMPT` | Original user prompt for metadata |
-| `AOT_MODEL_TIER` | Model tier for metadata |
+| Var | Purpose |
+|-----|---------|
+| `AOT_REPOS` | JSON `[{url, branch, path}, ...]` for multi-repo |
+| `AOT_REPO_URL`, `AOT_BRANCH` | Single-repo fallback |
+| `AOT_WORKSPACE_DIR` | Workspace root (default `/workspace`) |
+| `AOT_DEVBOX_CONFIG` | Path inside repo to a specific devbox.json |
+| `AOT_SPEC_CONTENT` | CodeSpeak spec body |
+| `AOT_AGENT_RUN_ID` | Run id |
+| `AOT_PROMPT` | Original prompt (metadata only) |
+| `AOT_MODEL_TIER` | Model tier (metadata only) |
 
-### Bare Clone + Worktree Strategy
+## Bare + worktree
 
-The hydrator uses a two-step approach instead of a regular `git clone`:
+`git clone --bare` puts objects in `.bare/<repo>/`. `git worktree add -b aot/<branch>` creates the working copy at `/workspace/<repo>/` on a fresh branch.
 
-1. **Bare clone** (`git clone --bare`) into `/workspace/.bare/<repo>/` -- stores only git objects, no working tree. This is the canonical repository data.
-2. **Worktree** (`git worktree add -b aot/<branch>`) into `/workspace/<repo>/` -- creates a lightweight working copy linked to the bare clone on a new branch (`aot/main`, `aot/develop`, etc.).
+This isolates agent changes from source branches (pushes go to `aot/<run-id>`) and lets multiple worktrees share one bare clone if multi-worktree flows are added later.
 
-This enables multiple worktrees from the same bare clone if needed, keeps the working directory clean, and creates an isolated branch for agent changes that does not affect the source branch.
+## Devbox
 
-## Devbox Integration
+- **Explicit**: `AOT_DEVBOX_CONFIG` → `devbox install` against that path in the primary repo.
+- **Auto-compose**: scan all repos for `devbox.json`, generate a root `/workspace/devbox.json` with `include` directives, then `devbox install` once from the root.
 
-Devbox provides reproducible development environments by declaring system-level dependencies (compilers, runtimes, CLI tools) in `devbox.json`.
+## OpenSpec
 
-**Explicit config**: If `AOT_DEVBOX_CONFIG` is set, the hydrator runs `devbox install` using that config file path within the primary repo worktree.
+`/workspace/openspec/` lives at the workspace root, not inside any repo — spec artifacts are shared across repos in multi-repo runs. Plan stage runs `openspec init` (idempotent) and `openspec new change`. Verify uses `openspec validate`, `status`, `list`, and `archive`.
 
-**Auto-compose**: If no explicit config is set, the hydrator scans all repo worktrees for `devbox.json` files and generates a root `/workspace/devbox.json` with `include` directives pointing to each repo's config. Then it runs `devbox install` from the workspace root, installing all dependencies from all repos in one pass.
-
-## OpenSpec Integration
-
-OpenSpec is the structured specification framework used by the spec-driven pipeline.
-
-The `/workspace/openspec/` directory lives at the workspace root (not inside any repo) so that spec artifacts are shared across repos in multi-repo setups. The pipeline's Plan stage initializes OpenSpec (`openspec init`), scaffolds a change (`openspec new change`), and directs the manage agent to populate the artifacts. The Verify stage uses `openspec validate`, `openspec status`, `openspec list`, and `openspec archive` to evaluate and finalize the change.
-
-The workspace manifest (`uncspace.yaml`) records the mapping between repos and their worktree paths, enabling OpenSpec specs to reference files across repos using workspace-relative paths.
+`uncspace.yaml` records the repo → worktree-path mapping so specs can reference files across repos with workspace-relative paths.

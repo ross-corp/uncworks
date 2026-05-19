@@ -1,245 +1,142 @@
-# Agent Pods
+# Agent pods
 
-Each agent run provisions a Kubernetes Deployment with a PersistentVolumeClaim (PVC) at `/workspace`. The pod contains three containers sharing this volume. The Temporal Worker controls the agent lifecycle through ConnectRPC calls to the sidecar.
-
-## Pod Architecture
+One Deployment per run, with a PVC at `/workspace`. Three containers share the volume. The Temporal worker drives the pod through the sidecar's ConnectRPC surface.
 
 ```mermaid
 flowchart TD
-    subgraph pod["Agent Pod"]
-        init["Init: hydration\n(cmd/hydration)\nRuns first. Clones repos as bare +\nworktree. Exits when ready."]
-
-        init -->|"writes to /workspace"| agent
-        init -->|"writes to /workspace"| sidecar
-
-        agent["Container: agent\n(sleep infinity)\n\nHolds the pod alive.\nWorkspace available for\ndebug/exec access."]
-
-        sidecar["Container: rpc-gateway\n(sidecar :50052)\n\nConnectRPC server (h2c)\nLaunches pi-coding-agent\nStreams stdout/stderr\nCaptures trace spans\nManages agent lifecycle"]
-
-        subgraph pvc["/workspace (PVC, 2Gi)"]
-            bare[".bare/ — bare git clone"]
-            repo["&lt;repo-name&gt;/ — git worktree (checked out)"]
-            openspec["openspec/ — OpenSpec artifacts"]
-            aot[".aot/ — UNCWORKS runtime data\n  logs/ — agent.log, agent.jsonl\n  traces/ — spans.jsonl\n  input/ — HITL question.json/response"]
+    subgraph pod["Agent pod"]
+        init["init: hydration\nclone + worktree + devbox"]
+        agent["agent: sleep infinity\n(holds the workspace open)"]
+        side["sidecar :50052\nh2c ConnectRPC\nspawns pi-coding-agent"]
+        subgraph pvc["/workspace PVC"]
+            bare[".bare/ — bare clones"]
+            repo["<repo>/ — worktree"]
+            os["openspec/"]
+            aot[".aot/  logs · traces · input · subagents"]
         end
-
+        init -- writes --> pvc
         agent --- pvc
-        sidecar --- pvc
+        side --- pvc
     end
-
-    agent -->|"LLM API calls"| litellm["LiteLLM Proxy\n:4000"]
-    sidecar -->|"ConnectRPC from\nTemporal Worker"| temporal["Temporal Worker"]
+    side -->|LLM via virtual key| litellm["LiteLLM"]
+    side -->|GetStatus / Start / Stop| tw["Temporal worker"]
 ```
 
-## Container Details
+## Containers
 
-### Init Container: hydration
+| Container | Image | Role |
+|-----------|-------|------|
+| init `hydration` | `docker/Dockerfile.hydration` | `cmd/hydration` Go binary. Bare-clones repos into `.bare/`, creates a worktree at `/workspace/<repo>/` on a new `aot/<branch>`, runs `devbox install`. Writes `.aot/metadata.json`, `uncspace.yaml`. Exits 0. |
+| `agent` | `docker/Dockerfile.agent-base` | `sleep infinity`. Holds the pod and workspace alive for `kubectl exec`. Doesn't run the agent process. |
+| `rpc-gateway` (sidecar) | `docker/Dockerfile.sidecar` | `cmd/sidecar` + `pi-coding-agent` + `openspec` CLI + extensions. Spawns `pi`, captures events, exposes ConnectRPC. |
 
-Built from `docker/Dockerfile.hydration`. A Go binary (`cmd/hydration`) that:
+The sidecar holds:
 
-1. Clones each repository in `spec.repos[]` as a bare clone into `/workspace/.bare/`
-2. Creates a git worktree for each repo at `/workspace/<repo-name>/`
-3. Checks out the specified branch (or default branch)
-4. If `devboxConfig` is set, installs devbox packages
-5. If `specContent` is provided, writes it to the workspace as an OpenSpec artifact
-6. Exits with code 0 when hydration is complete
+- `pi-coding-agent` (`@mariozechner/pi-coding-agent`) — the agent runtime.
+- `openspec` CLI (`@fission-ai/openspec`).
+- `pi-compaxxt` (`@ssweens/pi-compaxxt`) — context compression.
+- `pi-dcp` (`zenobi-us/pi-dcp`) — dynamic context pruning.
+- `aot-determinism.ts` at `/opt/aot/extensions/` — policy enforcement, loaded via `--extension`.
 
-The Temporal Worker polls init container status via the Kubernetes API until it terminates successfully.
+### Sidecar env
 
-### Container: agent
+| Var | Source | Purpose |
+|-----|--------|---------|
+| `AOT_AGENT_RUN_ID` | run name | Links sidecar to its `AgentRun` |
+| `PI_MODEL` | `modelIDFromTier(modelTier)` | Model name passed to `pi` (e.g. `litellm/default-cloud`) |
+| `PI_ACCEPT_TOS` | `1` | Skip TOS prompt |
+| `OPENAI_API_KEY` | LiteLLM virtual key | Per-run scoped key |
+| `OPENAI_BASE_URL` | LiteLLM base URL | Routes through the proxy |
 
-Uses the agent base image (`docker/Dockerfile.agent-base`). Runs `sleep infinity` to keep the pod alive. The workspace volume is mounted at `/workspace` for debug access via `kubectl exec`. This container does not run the agent process -- the sidecar handles that.
-
-### Container: rpc-gateway (sidecar)
-
-Built from `docker/Dockerfile.sidecar`. Contains:
-
-- **sidecar binary** (`cmd/sidecar`) -- ConnectRPC server (h2c on port 50052)
-- **pi-coding-agent** (`@mariozechner/pi-coding-agent`) -- LLM coding agent (Node.js)
-- **openspec CLI** (`@fission-ai/openspec`) -- Spec management tool
-- **pi-compaxxt extension** (`@ssweens/pi-compaxxt`) -- Context compression
-- **pi-dcp extension** (`zenobi-us/pi-dcp`) -- Dynamic context pruning
-- **aot-determinism extension** (`/opt/aot/extensions/aot-determinism.ts`) -- Policy enforcement
-
-Environment variables set on this container:
-
-| Variable | Source | Purpose |
-|----------|--------|---------|
-| `AOT_AGENT_RUN_ID` | Run name | Links sidecar to its AgentRun |
-| `PI_MODEL` | `modelIDFromTier(modelTier)` | Model selection for pi (e.g., `litellm/default-cloud`) |
-| `PI_ACCEPT_TOS` | `1` | Skip interactive TOS prompt |
-| `OPENAI_API_KEY` | LiteLLM virtual key | Authenticates LLM calls |
-| `OPENAI_BASE_URL` | LiteLLM base URL | Routes LLM calls through proxy |
-
-## Workspace Layout
+## Workspace layout
 
 ```
 /workspace/
-  .bare/                          Bare git clone (shared across worktrees)
-  <repo-name>/                    Git worktree (checked-out working copy)
-    .git                          Worktree link file
-    <source files>
-  openspec/                       OpenSpec workspace (spec-driven mode)
-    changes/
-      <change-name>/
-        proposal.md
-        design.md
-        tasks.md
-        specs/
-          <spec-name>/
-            spec.md
-  .aot/                           UNCWORKS runtime directory
-    logs/
-      agent.log                   Human-readable agent output
-      agent.jsonl                 Raw JSONL events from pi
-    traces/
-      spans.jsonl                 Trace spans (tool calls, stage transitions)
-    input/
-      question.json               HITL question from agent (ask_user tool)
-      response.txt                Human response (written by SendInput RPC)
-    subagents/                    Delegation markers (delegate_task tool)
+  <repo>/                          worktree (checked out on aot/<branch>)
+  .bare/<repo>/                    bare clone (single source of git objects)
+  openspec/
+    changes/<change>/
+      proposal.md  design.md  tasks.md
+      specs/<capability>/spec.md
+      verification-result.json
+    changes/archive/               completed changes
+  .aot/
+    metadata.json                  run id, repos, prompt, model
+    logs/agent.log                 human-readable
+    logs/agent.jsonl               raw pi events
+    traces/spans.jsonl             tool-call + stage spans (+ per-span diffs)
+    input/question.json            HITL question from ask_user
+    input/response.txt             HITL response (written by SendInput)
+    subagents/delegate-*.json      delegation markers
+  .devcontainer/devcontainer.json
+  uncspace.yaml                    repos ↔ worktree paths
+  devbox.json                      root config (auto-composed from repo configs)
 ```
 
-## Git Checkpoint System
+## Why bare + worktree
 
-The sidecar tracks git state for trace span diffs:
+`git clone --bare` into `.bare/<repo>/` holds the git objects. `git worktree add -b aot/<branch>` creates the working copy at `/workspace/<repo>/` on a new branch. Two reasons:
 
-1. On each `StartAgent` call, the sidecar records the current HEAD SHA as the checkpoint baseline
-2. When a tool call completes (detected via pi JSONL events), the sidecar:
-   - Runs `git diff` against the last checkpoint SHA
-   - If files changed, creates a `TraceSpan` with the diff attached
-   - Updates the checkpoint SHA to current HEAD
-3. This produces per-tool-call diffs visible in the trace timeline UI
+1. The agent's branch is isolated from the source — pushes go to `aot/<run-id>`, source branches stay clean.
+2. Additional worktrees from the same bare clone are cheap if multi-worktree workflows are added later.
 
-The git user is configured as `aot-agent <agent@aot.uncworks.io>` for any commits made in the workspace.
+## Devbox
 
-## Pi Extensions
+Explicit: `AOT_DEVBOX_CONFIG` path → `devbox install` against that file.
 
-### aot-determinism
+Auto-compose: hydrator scans each repo for `devbox.json` and writes a root `/workspace/devbox.json` with `include` directives. One `devbox install` from the root pulls all repos' deps.
 
-The primary policy enforcement extension (`/opt/aot/extensions/aot-determinism.ts`). Loaded via `--extension` flag on every pi invocation.
+## Git checkpoint
 
-**Loop detection:**
-- Blocks after 3 identical consecutive tool calls (resets counter after blocking)
-- Sidecar-level backup: kills agent after 5 identical consecutive tool call signatures
+The sidecar tracks git state to produce per-tool-call diffs:
 
-**Turn limit:**
-- Kills agent after 50 turns to prevent runaway execution
+1. `StartAgent` records the current HEAD as the checkpoint baseline.
+2. Each pi tool-call-complete event triggers `git diff` against the checkpoint.
+3. If files changed, a `TraceSpan` is appended to `.aot/traces/spans.jsonl` with the diff embedded; the checkpoint advances to current HEAD.
 
-**Write validation (plan stage):**
-- Spec files must contain `SHALL` or `MUST` keywords in requirements
-- `tasks.md` limited to 30 checkboxes maximum
+Commits made in the workspace use `aot-agent <agent@aot.uncworks.io>`.
 
-**Protected paths:**
-- All writes blocked outside `/workspace`
+## Trace spans
 
-**Role-based policies:**
+Two sources, same file (`.aot/traces/spans.jsonl`):
 
-| Role | Stage | Restrictions |
-|------|-------|-------------|
-| `manage` | plan, verify | Cannot write files outside `/workspace/openspec/` and `/workspace/.aot/` |
-| `implement` | execute | Cannot use the `ask_user` tool (must surface questions in output) |
-
-**Custom tools provided:**
-
-| Tool | Description |
-|------|-------------|
-| `ask_user` | Writes question JSON to `/workspace/.aot/input/question.json`, polls for `/workspace/.aot/input/response.txt`. Times out after 5 minutes. Available to manage agents only. |
-| `delegate_task` | Records a delegation marker file in `/workspace/.aot/subagents/` for dashboard visibility. |
-
-### pi-compaxxt
-
-Third-party extension (`@ssweens/pi-compaxxt`). Compresses context to reduce token usage.
-
-### pi-dcp
-
-Third-party extension (`zenobi-us/pi-dcp`). Dynamic context pruning -- intelligently removes irrelevant context from the agent's window.
-
-## Trace Span Capture
-
-The sidecar captures trace spans from two sources:
-
-**1. Pi JSONL events (stdout):**
-
-Pi streams all events as JSONL to stdout in `--mode json`. The sidecar parses each line and detects:
-- Tool call start/end events -- creates a span per tool invocation
-- Text response events -- accumulates for human-readable log
-
-When a tool call completes, the sidecar:
-1. Generates a span ID (UUID)
-2. Records start/end timestamps
-3. Captures a git diff against the last checkpoint (if files changed)
-4. Appends the span to `/workspace/.aot/traces/spans.jsonl`
-
-**2. Workflow-level stage spans:**
-
-The Temporal workflow writes stage-level trace spans (PLAN, EXECUTE, VERIFY) via the `WriteTraceSpan` activity. These are appended to the same `spans.jsonl` file and provide the top-level timeline structure.
-
-**Span schema:**
+- Pi JSONL events on stdout → one span per tool call (with diff if dirty).
+- Workflow-level → PLAN / EXECUTE / VERIFY stage spans written via `WriteTraceSpan`.
 
 ```json
 {
-  "id": "uuid",
-  "traceId": "uuid",
-  "parentId": "uuid (optional)",
-  "name": "tool name or stage name",
+  "id": "uuid", "traceId": "uuid", "parentId": "uuid|null",
+  "name": "tool name | stage name",
   "type": "tool_call | stage | input",
-  "startTime": "RFC3339Nano",
-  "endTime": "RFC3339Nano",
+  "startTime": "rfc3339nano", "endTime": "rfc3339nano",
   "status": "ok | error | unset",
-  "metadata": { "stage": "execute", "model": "...", ... },
+  "metadata": { "stage": "execute", "model": "..." },
   "hasDiff": true,
-  "diff": {
-    "files": [
-      { "path": "src/main.go", "patch": "@@ -1,3 +1,5 @@\n ..." }
-    ]
-  }
+  "diff": { "files": [{ "path": "...", "patch": "..." }] }
 }
 ```
 
-## Agent Lifecycle
+## Sidecar RPCs
 
-```mermaid
-sequenceDiagram
-    participant TW as Temporal Worker
-    participant SG as Sidecar Gateway
-    participant PI as pi-coding-agent
+### `AgentSidecarService`
 
-    TW->>SG: StartAgent(prompt, stage, model)
-    SG->>PI: exec pi -p --mode json<br/>--no-session<br/>--extension aot-det...<br/>--system-prompt &lt;stage&gt;<br/>--model litellm/&lt;tier&gt;<br/>&lt;prompt&gt;
-    SG-->>TW: Started: true
+| RPC | Purpose |
+|-----|---------|
+| `StartAgent` | Spawn `pi` with prompt, stage, role, model, env, repo path. Kills any prior agent. Records initial span, sets git identity. |
+| `GetStatus` | `RUNNING` / `COMPLETED` / `FAILED` / `WAITING_FOR_INPUT` / `UNSPECIFIED`. Includes the pending question payload when waiting. |
+| `ExecCommand` | Arbitrary shell command in the pod. Used by Plan/Verify for `openspec` invocations. Returns stdout/stderr/exit. |
+| `SendInput` | Writes the human's response to `.aot/input/response.txt`. |
+| `StopAgent` | SIGINT → SIGKILL after 5s. |
+| `StreamOutput` | Server-stream of stdout/stderr from the agent process. |
 
-    TW->>SG: GetStatus()
-    SG-->>TW: RUNNING
-    Note over SG,PI: poll every 5s
-    Note right of PI: agent reads/writes<br/>files in /workspace
+### `AgentNotificationService`
 
-    TW->>SG: GetStatus()
-    SG-->>TW: RUNNING
-    Note over SG,PI: tool call detected via JSONL parsing:<br/>capture git diff, write trace span
+Used by the extension (when loaded) to push tool-call start/end events to the sidecar over Connect-RPC for more precise span timing.
 
-    PI-->>SG: exit 0
-    TW->>SG: GetStatus()
-    SG-->>TW: COMPLETED
+## Resilience
 
-    Note over TW: workflow continues<br/>to next stage or cleanup
-```
+429 from the LLM provider → up to 3 retries with a 10s backoff.
 
-**Rate limit handling:** HTTP 429 errors from the LLM provider trigger automatic retry of the agent process up to 3 times with a 10-second delay between attempts.
+50-turn cap kills the agent — configured in the determinism extension.
 
-## Sidecar RPC Services
-
-### AgentSidecarService
-
-| RPC | Description |
-|-----|-------------|
-| `StartAgent` | Spawns the `pi` process with prompt, repo path, stage, env vars, and model. Kills any previously running agent first. Starts pipe readers, records initial trace span, configures git identity. |
-| `GetStatus` | Returns process state: `RUNNING`, `COMPLETED`, `FAILED`, `WAITING_FOR_INPUT`, or `UNSPECIFIED`. Includes the pending question payload when waiting. |
-| `ExecCommand` | Executes an arbitrary shell command in the pod with configurable working directory and timeout. Used by Plan/Verify activities to run `openspec` CLI commands. Returns stdout, stderr, and exit code. |
-| `SendInput` | Writes the human's response to `/workspace/.aot/input/response.txt`, which the `ask_user` tool polls for. |
-| `StopAgent` | Sends SIGINT to the agent process for graceful shutdown. Falls back to SIGKILL after 5 seconds. |
-| `StreamOutput` | Server-streaming RPC that subscribes to the agent's stdout/stderr channels and forwards output in real time. |
-
-### AgentNotificationService
-
-Used by the agent (via the extension) to notify the sidecar of events like tool calls starting/ending. Enables more precise trace span capture.
+PVC outlives the pod for debug access; cleanup activity only scales the deployment to 0.

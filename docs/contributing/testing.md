@@ -1,90 +1,72 @@
 # Testing
 
-UNCWORKS uses lefthook for git hooks and Task for running test suites.
+Test runners are Task targets. Git hooks live in lefthook.
 
-## Git Hooks
+## Hooks
 
-Install hooks via:
-
-```
+```bash
 task hooks:install
 ```
 
-### Pre-Commit (parallel)
+### pre-commit (parallel)
 
-| Hook | Scope | Description |
-|------|-------|-------------|
-| `go-fmt` | `*.go` | Formats Go files and re-stages |
-| `golangci-lint` | `*.go` | Lints new Go changes |
-| `buf-lint` | `*.proto` | Lints protobuf files |
-| `tsc-web` | `*.{ts,tsx}` | TypeScript check on `web/` |
-| `tsc-shared` | `*.{ts,tsx}` | TypeScript check on `packages/shared/` |
-| `tsc-extension` | `*.{ts,tsx}` | TypeScript check on `packages/pi-aot-extension/` |
+| Hook | Scope | |
+|------|-------|---|
+| `go-fmt` | `*.go` | Formats + re-stages |
+| `golangci-lint` | `*.go` | Lints |
+| `buf-lint` | `*.proto` | |
+| `tsc-web` | `*.{ts,tsx}` | `web/` |
+| `tsc-shared` | `*.{ts,tsx}` | `packages/shared/` |
+| `tsc-extension` | `*.{ts,tsx}` | `packages/pi-aot-extension/` |
 
-### Commit Message
+### commit-msg
 
-Uses `commitlint` to enforce conventional commit format.
+`commitlint` — conventional commits.
 
-### Pre-Push (parallel)
+### pre-push (parallel)
 
-| Hook | Description |
-|------|-------------|
-| `go-test` | Runs Go unit + integration tests |
-| `buf-breaking` | Checks for breaking proto changes against `main` |
+| Hook | |
+|------|---|
+| `go-test` | Go unit + integration |
+| `buf-breaking` | Proto breaking-change check vs `main` |
 
-## Test Suites
+## Suites
 
-### Quick Tests
+| Command | What |
+|---------|------|
+| `task test` | Go + web + extension, parallel |
+| `task test:unit` | Go unit only (`-short`); fast, no Docker |
+| `task test:go` | Go unit + integration |
+| `task test:contract` | ConnectRPC + protovalidate |
+| `task test:temporal` | Workflow tests |
+| `task test:layer2` | Pipeline integration (LLM stubbed, no cluster) |
+| `task test:regression` | Regression suite — gates releases and PRs to main |
+| `task test:integration` | Docker (testcontainers) |
+| `task test:extension` | pi-aot-extension TS |
+| `task test:shared` | `@aot/shared` TS |
+| `task test:web` | Playwright |
+| `task test:all` | Sequential: proto lint → unit → contract → temporal → integration → e2e |
 
-```
-task test          # Run Go, web, and extension tests in parallel
-task test:unit     # Go unit tests only (fast, no Docker)
-task test:go       # Go tests (unit + integration)
-```
+Single Go test: `go test ./internal/server/... -run TestCreateAgentRun -count=1`.
 
-### Full Pipeline
+## E2E
 
-```
-task test:all      # Sequential: proto lint -> unit -> contract -> temporal -> integration -> e2e
-```
+Against a live cluster:
 
-### By Category
+| Command | |
+|---------|---|
+| `task test:e2e` | Go E2E (30m timeout) |
+| `task test:e2e:api` | API-focused |
+| `task test:e2e:infra` | Build + import + LLM E2E |
+| `task test:e2e:playwright` | Browser only |
+| `task test:e2e:full` | Setup Soft-Serve → Go + Playwright → teardown |
 
-| Command | Description | Requirements |
-|---------|-------------|--------------|
-| `task test:unit` | Go unit tests (`-short` flag) | `kubebuilder` envtest assets |
-| `task test:contract` | ConnectRPC + protovalidate tests | -- |
-| `task test:temporal` | Temporal workflow tests | temporal-workflow-engine |
-| `task test:integration` | Integration tests | Docker (testcontainers) |
-| `task test:extension` | pi-aot-extension TypeScript tests | npm |
-| `task test:shared` | @aot/shared TypeScript tests | npm |
-| `task test:web` | Playwright E2E for web dashboard | npm, Playwright browsers |
+Full E2E uses [Soft-Serve](https://github.com/charmbracelet/soft-serve) for fixture repos.
 
-### E2E Tests
+## Lint / proto
 
-E2E tests run against a live cluster:
-
-```
-task test:e2e           # Go E2E tests against k0s cluster (30min timeout)
-task test:e2e:api       # API-focused E2E tests
-task test:e2e:infra     # Build images, import, run LLM E2E tests
-task test:e2e:full      # Full suite: setup Soft-Serve, run Go + Playwright, teardown
-task test:e2e:playwright # Playwright browser tests only
-```
-
-The full E2E suite (`test:e2e:full`) uses [Soft-Serve](https://github.com/charmbracelet/soft-serve) as a local git server with fixture repositories.
-
-## Linting
-
-```
-task lint
-```
-
-Runs `golangci-lint` on Go code and `tsc --noEmit` on all TypeScript packages (web, shared, pi-aot-extension).
-
-## Proto Checks
-
-```
-task proto:lint      # Lint proto files with buf
-task proto:breaking  # Check for breaking changes against main branch
+```bash
+task lint            # golangci-lint + tsc --noEmit (web, shared, extension)
+task proto:lint
+task proto:breaking
 ```

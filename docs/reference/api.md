@@ -1,222 +1,126 @@
-# API Reference
+# API reference
 
-The UNCWORKS API consists of a ConnectRPC service for run management and REST endpoints for files, traces, projects, and integrations. The API server listens on port 50055 by default.
+ConnectRPC + REST on `:50055` (same mux). All RPCs gRPC- and HTTP/JSON-callable.
 
-## ConnectRPC Service: AOTService
+Proto: `proto/aot/api/v1/api.proto` (`AOTService`) and `proto/aot/agent/v1/agent.proto` (`AgentSidecarService`, internal).
 
-Defined in `proto/aot/api/v1/api.proto`. All RPCs use ConnectRPC (gRPC-compatible, also callable via HTTP/JSON).
+## `AOTService`
 
-### CreateAgentRun
+### `CreateAgentRun`
 
-Creates a new agent run. Generates a human-readable display name from the prompt via LLM. Auto-sets labels for project, feature, repo, and tags.
-
-```
-rpc CreateAgentRun(CreateAgentRunRequest) returns (CreateAgentRunResponse)
+```proto
+rpc CreateAgentRun(CreateAgentRunRequest) returns (CreateAgentRunResponse);
 ```
 
-**Request:**
-```
-CreateAgentRunRequest {
-  spec: AgentRunSpec {
-    backend: Backend               // POD (default, currently the only option)
-    repos: [Repository]            // Git repositories to clone (at least one required)
-    prompt: string                 // Task description (required)
-    model_tier: string             // LiteLLM model name (default: "default")
-    manage_model_tier: string      // Model for plan/verify stages
-    implement_model_tier: string   // Model for execute stage
-    ttl_seconds: int32             // Max lifetime in seconds (default: 3600)
-    env_vars: map<string,string>   // Additional env vars for agent
-    spec_content: string           // OpenSpec markdown content
-    spec_source: string            // Origin: "editor", "webhook:github:...", "ci-autofix:..."
-    project_ref: string            // Project CRD name for inheritance
-    spec_ref: string               // Spec name in project config repo
-    orchestration_mode: enum       // SINGLE, AUTO, MANUAL, SPEC_DRIVEN
-    orchestration: Orchestration   // Task list for MANUAL mode
-    pipeline_config: PipelineConfig // Per-stage config for spec-driven mode
-    max_budget: double             // Max LLM spend in USD
-    auto_push: bool                // Push changes to feature branch on success
-    auto_pr: bool                  // Create GitHub PR on success (requires auto_push)
-    pr_base_branch: string         // PR target branch (default: "main")
-    project: string                // Project label for filtering
-    feature: string                // Feature label for filtering
-    tags: [string]                 // Freeform tags for cross-cutting filtering
-    image: string                  // Override default agent container image
-    devbox_config: string          // Path to devbox.json
-    workspace_name: string         // Workspace preset name
-    parent_run_id: string          // Links junior run to parent
-    spec_run_id: string            // Groups runs from a single spec execution
-  }
-}
-```
+Creates an `AgentRun` CRD. Generates `ar-XXXXXX` ID, LLM-derived display name, auto-sets project/feature/repo/tag labels.
 
-**Response:** `CreateAgentRunResponse { agent_run: AgentRun }`
+`AgentRunSpec` fields (selected):
 
-### GetAgentRun
+| Field | Type | Notes |
+|-------|------|-------|
+| `backend` | `Backend` | `POD` (only option) |
+| `repos[]` | `Repository` | At least one for most runs |
+| `prompt` | `string` | Required for single/manual; auto for spec-driven w/ `spec_content` |
+| `model_tier` | `string` | Default `default` |
+| `manage_model_tier`, `implement_model_tier` | `string` | Per-role override |
+| `ttl_seconds` | `int32` | Default 3600 |
+| `env_vars` | `map<string,string>` | Extra env on the agent |
+| `spec_content` | `string` | CodeSpeak markdown → auto spec-driven |
+| `spec_source` | `string` | `editor`, `webhook:github:...`, `ci-autofix:...` |
+| `project_ref` | `string` | Inherit empty fields from a `Project` |
+| `spec_ref` | `string` | Spec name in project's config repo |
+| `orchestration_mode` | enum | `SINGLE` / `AUTO` / `MANUAL` / `SPEC_DRIVEN` |
+| `orchestration` | `Orchestration` | Task list for `MANUAL` |
+| `pipeline_config` | `PipelineConfig` | Per-stage overrides |
+| `max_budget` | `double` | USD cap, enforced by LiteLLM virtual key |
+| `auto_push` / `auto_pr` / `pr_base_branch` | | Git/PR automation |
+| `approval_mode` | `string` | `""`/`hybrid` (default), `none`, `hitl`, `llm-judge` |
+| `openspec_change` | `string` | Enables task-completion gate in Verify |
+| `parent_run_id`, `spec_run_id` | `string` | Orchestration links |
+| `image`, `devbox_config`, `workspace_name` | `string` | Workspace overrides |
 
-Retrieves the current state of a run by ID. Enriches with real-time Temporal workflow state via query. Populates `children` list for orchestrated runs.
+### `GetAgentRun`
 
-```
-rpc GetAgentRun(GetAgentRunRequest { id: string }) returns (AgentRun)
-```
+`{ id } → AgentRun`. Live state from Temporal query merged with CRD. Populates `children[]`.
 
-### ListAgentRuns
+### `ListAgentRuns`
 
-Lists runs with optional filters. Returns newest first. Excludes archived runs by default (include via `X-Include-Archived: true` header).
+Filters: `phase_filter`, `spec_run_id`, `parent_run_id`, `stage_filter`, `project_filter`, `feature_filter`, `tag_filter`, `limit`. Newest-first. Archived hidden unless `X-Include-Archived: true`.
 
-```
-rpc ListAgentRuns(ListAgentRunsRequest) returns (ListAgentRunsResponse)
-```
+### `WatchAgentRun`
 
-**Filters:**
+Server-stream of `AgentRunEvent`. Emits current state first, then deltas until terminal. Event types: `PHASE_CHANGED`, `LOG`, `TOOL_CALL`, `WAITING_FOR_INPUT`, `COMPLETED`.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `phase_filter` | enum | Filter by phase (Pending, Running, Succeeded, etc.) |
-| `spec_run_id` | string | Filter by spec execution group |
-| `parent_run_id` | string | Filter by parent run (for child runs) |
-| `stage_filter` | string | Filter by pipeline stage (planning, executing, verifying) |
-| `project_filter` | string | Filter by project label |
-| `feature_filter` | string | Filter by feature label |
-| `tag_filter` | string | Filter by tag |
-| `limit` | int32 | Maximum number of results |
+### `CancelAgentRun`
 
-**Response:** `ListAgentRunsResponse { agent_runs: [AgentRun] }`
+`{ id }`. Cancels the Temporal workflow.
 
-### WatchAgentRun
+### `SendHumanInput`
 
-Server-streaming RPC. Sends the current state as the initial event, then streams real-time updates via the event bus until the run reaches a terminal phase.
+`{ agent_run_id, input } → { accepted }`. Forwards user input to a paused agent. For HITL questions: the agent's answer. For approval gates: `approve` / `reject` / `deny` / `no` (anything else is treated as approve, with the input used as a reject reason where applicable).
 
-```
-rpc WatchAgentRun(WatchAgentRunRequest { id: string }) returns (stream AgentRunEvent)
-```
+### `GetRunGraph`
 
-**Event types:** `PHASE_CHANGED`, `LOG`, `TOOL_CALL`, `WAITING_FOR_INPUT`, `COMPLETED`
+`{ id } → RunGraph`. Tree of parent + children via `aot.uncworks.io/spec-run-id`. Nodes carry `name`, `phase`, `role` (`single`/`senior`/`junior`), `started_at`, `completed_at`.
 
-### CancelAgentRun
+### `SearchPastWork`
 
-Requests cancellation of a running agent. Sends a cancel signal to the Temporal workflow.
+Vector search over past run artifacts. Needs the brain/embedder subsystem.
 
-```
-rpc CancelAgentRun(CancelAgentRunRequest { id: string }) returns (CancelAgentRunResponse)
-```
+Filters: `query` (required), `repo_url`, `source_filter` (`CODE` / `TRACE` / unset), `created_after`, `created_before`, `limit` (default 10, max 100).
 
-### SendHumanInput
+## REST
 
-Provides human-in-the-loop input to a paused agent. Only valid when the run is in `WaitingForInput` phase. Signals the Temporal workflow which forwards to the sidecar.
+### Runs
 
-```
-rpc SendHumanInput(SendHumanInputRequest) returns (SendHumanInputResponse)
-```
-
-**Request:** `{ agent_run_id: string, input: string }`
-**Response:** `{ accepted: bool }`
-
-### GetRunGraph
-
-Returns the parent/child run tree for a spec execution. Uses the `aot.uncworks.io/spec-run-id` label to find all related runs.
-
-```
-rpc GetRunGraph(GetRunGraphRequest { id: string }) returns (RunGraph)
-```
-
-**Response:**
-```
-RunGraph {
-  nodes: [RunGraphNode {
-    name: string
-    phase: AgentRunPhase
-    role: string        // "single", "senior", "junior"
-    started_at: Timestamp
-    completed_at: Timestamp
-  }]
-  edges: [RunGraphEdge {
-    parent: string
-    child: string
-  }]
-}
-```
-
-### SearchPastWork
-
-Searches the knowledge base for relevant past work using vector similarity. Requires the knowledge system to be configured (PostgreSQL + embeddings).
-
-```
-rpc SearchPastWork(SearchPastWorkRequest) returns (SearchPastWorkResponse)
-```
-
-**Filters:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `query` | string | Natural language search query (required) |
-| `repo_url` | string | Filter by repository URL |
-| `source_filter` | enum | `CODE`, `TRACE`, or unset (all) |
-| `created_after` | Timestamp | Minimum creation date |
-| `created_before` | Timestamp | Maximum creation date |
-| `limit` | int32 | Max results (default: 10, max: 100) |
-
----
-
-## REST Endpoints
-
-### Run Files and Logs
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/runs/{id}/files` | List files in the run's workspace |
-| `GET` | `/api/v1/runs/{id}/files/content?path=<path>` | Read file content from workspace |
-| `GET` | `/api/v1/runs/{id}/logs` | Raw agent log output |
-| `GET` | `/api/v1/runs/{id}/logs/structured` | Parsed structured log entries |
-| `GET` | `/api/v1/runs/{id}/logs/thinking` | Extracted thinking/reasoning blocks |
-| `GET` | `/api/v1/runs/{id}/verification` | Verification result JSON (spec-driven runs) |
+| Method | Path | Returns |
+|--------|------|---------|
+| GET | `/api/v1/runs/{id}/files` | Directory listing |
+| GET | `/api/v1/runs/{id}/files/content?path=` | File content |
+| GET | `/api/v1/runs/{id}/logs` | `agent.log` (human-readable) |
+| GET | `/api/v1/runs/{id}/logs/structured` | `agent.jsonl` |
+| GET | `/api/v1/runs/{id}/logs/thinking` | Reasoning blocks |
+| GET | `/api/v1/runs/{id}/verification` | `VerificationResult` JSON |
 
 ### Traces
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/runs/{id}/traces` | List trace spans for a run |
-| `GET` | `/api/v1/runs/{id}/traces/{spanId}/diff` | Get the git diff for a specific span |
-| `GET` | `/api/v1/runs/{id}/traces/watch` | SSE stream of trace span updates |
+| Method | Path | Returns |
+|--------|------|---------|
+| GET | `/api/v1/runs/{id}/traces` | Spans |
+| GET | `/api/v1/runs/{id}/traces/{spanId}/diff` | Per-span git diff |
+| GET | `/api/v1/runs/{id}/traces/watch` | SSE stream |
 
 ### Archive
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/runs/{id}/archive` | Archive (soft-delete) a run |
-| `POST` | `/api/v1/runs/bulk-archive` | Archive multiple runs at once |
+| Method | Path | |
+|--------|------|---|
+| POST | `/api/v1/runs/{id}/archive` | Soft-delete |
+| POST | `/api/v1/runs/bulk-archive` | Bulk |
 
-### Debug
+### Debug / exec
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/runs/{id}/debug` | Start a debug session (scales pod to 1) |
-| `DELETE` | `/api/v1/runs/{id}/debug` | Stop a debug session |
-| `GET` | `/api/v1/runs/{id}/connect` | WebSocket connection to the pod |
-
-### Exec
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/runs/{id}/exec` | WebSocket shell exec into the agent pod |
+| Method | Path | |
+|--------|------|---|
+| POST/DELETE | `/api/v1/runs/{id}/debug` | Start / stop debug session (scales pod to 1) |
+| GET | `/api/v1/runs/{id}/connect` | WebSocket pod connect |
+| GET | `/api/v1/runs/{id}/exec` | WebSocket shell |
 
 ### Projects
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/projects` | List all projects (newest first) |
-| `POST` | `/api/v1/projects` | Create a new project |
-| `GET` | `/api/v1/projects/{name}` | Get project details |
-| `DELETE` | `/api/v1/projects/{name}` | Delete a project (and its soft-serve repo) |
-| `GET` | `/api/v1/projects/{name}/files` | List files in the project's config repo |
-| `GET` | `/api/v1/projects/{name}/files/{path...}` | Read a file from the config repo |
-| `PUT` | `/api/v1/projects/{name}/files/{path...}` | Write a file to the config repo (with commit) |
+| Method | Path | |
+|--------|------|---|
+| GET/POST | `/api/v1/projects` | List / create |
+| GET/DELETE | `/api/v1/projects/{name}` | Read / delete |
+| GET | `/api/v1/projects/{name}/files` | Config repo listing |
+| GET/PUT | `/api/v1/projects/{name}/files/{path...}` | Read / write (commits) |
 
-**Create project request body:**
+Create body:
+
 ```json
 {
   "name": "my-project",
   "displayName": "My Project",
-  "description": "A short summary",
+  "description": "...",
   "repos": [{"url": "https://github.com/owner/repo.git", "branch": "main"}],
   "devbox": {"packages": ["go@1.22", "nodejs@20"]},
   "defaults": {
@@ -229,62 +133,53 @@ rpc SearchPastWork(SearchPastWorkRequest) returns (SearchPastWorkResponse)
 }
 ```
 
-**Write file request body:**
+Write body:
+
 ```json
-{
-  "content": "file content here",
-  "commitMessage": "update spec (optional, auto-generated if omitted)"
-}
+{ "content": "...", "commitMessage": "update spec (optional)" }
 ```
 
-### Specs (GitHub Integration)
+### Specs
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/specs/push` | Push spec content to a GitHub repository |
-| `GET` | `/api/v1/specs/pull` | Pull spec content from a GitHub repository |
-| `GET` | `/api/v1/specs/{id}/graph` | Get the run graph for a spec execution |
-| `GET` | `/api/v1/specs/{id}/graph/watch` | SSE stream of run graph updates |
+| Method | Path | |
+|--------|------|---|
+| POST | `/api/v1/specs/push` | Push to GitHub |
+| GET | `/api/v1/specs/pull` | Pull from GitHub |
+| GET | `/api/v1/specs/{id}/graph` | Run graph for a spec execution |
+| GET | `/api/v1/specs/{id}/graph/watch` | SSE |
 
-### Classification
+### Misc
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/classify` | Classify a prompt into project/feature/tags via LLM |
+| Method | Path | |
+|--------|------|---|
+| POST | `/api/v1/classify` | LLM classification of a prompt → project/feature/tags |
+| POST | `/api/v1/webhooks/github` | GitHub webhook |
 
-### Webhooks
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/webhooks/github` | GitHub webhook endpoint |
-
-**Supported events:**
+Webhooks:
 
 | Event | Action | Behavior |
 |-------|--------|----------|
-| `push` | -- | Scans commits for `.cs.md` files. Creates an AgentRun per spec file found. Fetches file content from GitHub API at the push SHA. |
-| `check_run` | `completed` (failure) | Triggers CI autofix on `aot/*` branches. Debounces 30s, fetches CI logs, creates a fix run. Max 3 retry attempts per branch. |
-| `check_run` | `completed` (success) | Updates `lastCIStatus` on the run associated with the branch. |
+| `push` | — | Scans commits for `.cs.md` files; creates an `AgentRun` per spec at the push SHA. |
+| `check_run` | `completed` / `failure` on `aot/*` | CI autofix: debounce 30s, fetch logs, condense, create a fix run. Max 3 attempts per branch. |
+| `check_run` | `completed` / `success` | Updates `lastCIStatus` on the run associated with the branch. |
 
-**Configuration (environment variables):**
+Env:
 
-| Variable | Description |
-|----------|-------------|
-| `GITHUB_WEBHOOK_SECRET` | HMAC-SHA256 secret for signature validation. If unset, all requests are accepted. |
-| `GITHUB_WEBHOOK_REPOS` | Comma-separated allowlist of `owner/repo` strings. If unset, all repos are allowed. |
-| `CI_AUTOFIX_MAX_RETRIES` | Max CI autofix attempts per branch (default: 3). |
+| Var | Purpose |
+|-----|---------|
+| `GITHUB_WEBHOOK_SECRET` | HMAC-SHA256 secret; unset = no validation |
+| `GITHUB_WEBHOOK_REPOS` | Comma-separated `owner/repo` allowlist; unset = open |
+| `CI_AUTOFIX_MAX_RETRIES` | Default 3 |
 
----
+## `AgentSidecarService` (internal)
 
-## Internal Service: AgentSidecarService
+Used by the Temporal worker → agent pods. Not for external clients.
 
-Defined in `proto/aot/agent/v1/agent.proto`. Used by the Temporal Worker to communicate with agent pods. Not intended for external clients.
-
-| RPC | Description |
-|-----|-------------|
-| `StartAgent` | Start the pi-coding-agent process |
-| `GetStatus` | Get current agent process state |
-| `StopAgent` | Send SIGINT/SIGKILL to agent |
-| `SendInput` | Write HITL response to workspace |
-| `ExecCommand` | Run a shell command in the pod |
-| `StreamOutput` | Server-stream of stdout/stderr |
+| RPC | |
+|-----|---|
+| `StartAgent` | Spawn pi |
+| `GetStatus` | Process state |
+| `StopAgent` | SIGINT → SIGKILL |
+| `SendInput` | Write HITL response |
+| `ExecCommand` | Shell command in pod |
+| `StreamOutput` | Server-stream stdout/stderr |

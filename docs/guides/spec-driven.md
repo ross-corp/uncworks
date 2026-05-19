@@ -1,90 +1,80 @@
-# Spec-Driven Pipeline
+# Spec-driven pipeline
 
-The spec-driven orchestration mode uses OpenSpec to impose structure on agent work. Instead of giving an agent a free-form prompt, the pipeline decomposes work into three stages: Plan, Execute, and Verify.
+Three stages — Plan, Execute, Verify — with a retry loop on Verify failure. Two agent roles, one source of truth (the OpenSpec change directory).
 
-## How It Works
+## Stages
 
-### Stage 1: Plan
+### Plan — `manage` agent
 
-A **manage** agent generates formal specifications from the user's prompt:
+1. `openspec init --tools pi --force` in `/workspace` (if needed).
+2. `openspec new change "<name>"` scaffolds `/workspace/openspec/changes/<name>/`.
+3. Templates fetched via `openspec instructions {proposal,specs,tasks} --json`.
+4. Agent writes `proposal.md`, `design.md`, spec files, `tasks.md` — read-only outside `openspec/` and `.aot/`.
+5. `openspec validate` and `openspec status` confirm structural integrity.
 
-1. Scaffolds an OpenSpec change directory at `/workspace/openspec/changes/<name>/`
-2. Reads the codebase to understand what needs to change
-3. Writes `proposal.md`, spec files (with SHALL/MUST requirements and WHEN/THEN scenarios), `tasks.md`, and `design.md`
-4. Validates the spec via `openspec validate` and `openspec status`
+Spec requirements must use `SHALL` or `MUST`. Scenarios use `WHEN/THEN`. `tasks.md` is capped at 30 checkboxes — enforced by the determinism extension.
 
-The plan stage fails if the spec is structurally invalid or incomplete.
+### Execute — `implement` agent
 
-### Stage 2: Execute
+Reads the spec, writes code, ticks `tasks.md` items as `[x]`. No `ask_user` from this role — questions must surface in output. On retry, the prompt is prefixed with the previous failure report.
 
-An **implement** agent receives the spec and implements the changes:
+### Verify — `manage` agent + automated gates
 
-1. Reads the specs at `/workspace/openspec/changes/<name>/`
-2. Implements code changes according to the requirements
-3. Marks tasks complete in `tasks.md` as it progresses
+Five gates, evaluated in order:
 
-### Stage 3: Verify
+| Gate | What |
+|------|------|
+| Task completion | All `tasks.md` items checked (only when `openspecChange` is set on the run) |
+| Structural validation | `openspec validate "<name>" --json` |
+| File existence | Backtick-wrapped paths in `THEN ... exist` lines must resolve |
+| Test commands | Backtick-wrapped commands on `WHEN/THEN` lines with keywords (`run`, `test`, `build`, …) get executed |
+| LLM judge | Manage agent evaluates each scenario against the diff and emits a JSON verdict |
 
-The system runs automated verification against the spec:
+The judge can mark a verdict **salvageable** — meaning the failure is recoverable on retry. Non-salvageable failures terminate the pipeline immediately.
 
-1. **Task completion** -- Checks that all tasks in `tasks.md` are marked done
-2. **Structural validation** -- Runs `openspec validate` to ensure spec integrity
-3. **File existence** -- Verifies files referenced in WHEN/THEN scenarios exist
-4. **Test commands** -- Extracts and runs commands from spec scenarios (e.g., backtick-wrapped commands in WHEN/THEN lines)
-5. **LLM judge** -- A verification agent evaluates each WHEN/THEN scenario against the implementation
+On overall pass, `openspec archive "<name>" --yes` moves the change to the archive. Archive failure is logged, not fatal.
 
-If verification fails, the pipeline retries the Execute stage with the failure report appended to the prompt. The default retry limit is 3 attempts.
+## Roles
 
-## Agent Roles
+| Role | Stage | What it can touch |
+|------|-------|-------------------|
+| `manage` | plan, verify | `/workspace/openspec/`, `/workspace/.aot/` only |
+| `implement` | execute | Repo source code |
 
-### manage (Plan + Verify)
+Loaded via `PI_ROLE` env var by the determinism extension.
 
-- Can only write to `/workspace/openspec/` and `/workspace/.aot/`
-- Cannot modify repository source code
-- Can use `ask_user` to request human clarification
-- Responsible for spec generation and verification oversight
+## Retry
 
-### implement (Execute)
+Verify failure with retries left → Execute again, prompt prefixed with the failure report. `MaxRetries` on the Execute stage is the bound (default 3). When exhausted, the run fails with the last report.
 
-- Can read and write repository source code
-- Cannot use `ask_user` (must surface questions in output)
-- Follows the spec created by the manage agent
-
-## Pipeline Configuration
-
-Per-stage configuration is available via `PipelineConfig` in the AgentRun spec:
+## Config
 
 ```yaml
 pipelineConfig:
-  plan:
-    model: "default-cloud"
-    timeoutSeconds: 300
-    maxRetries: 2
-    onFailure: "fail"
-  execute:
-    model: "default-cloud"
-    timeoutSeconds: 900
-    maxRetries: 3
-    onFailure: "retry"
-  verify:
-    model: "default-cloud"
-    timeoutSeconds: 180
-    maxRetries: 1
-    onFailure: "fail"
+  plan:    { model: default-cloud, timeoutSeconds: 300, maxRetries: 2, onFailure: fail  }
+  execute: { model: default-cloud, timeoutSeconds: 900, maxRetries: 3, onFailure: retry }
+  verify:  { model: default-cloud, timeoutSeconds: 180, maxRetries: 1, onFailure: fail  }
 ```
 
-## Verification Result
+`onFailure`: `retry`, `fail`, or `skip`.
 
-The verification stage produces a structured JSON result written to the change directory:
+## Output
+
+Verify writes a `VerificationResult` JSON to the change directory:
 
 ```json
 {
-  "pass": true,
+  "pass": false,
   "tasksCompleted": 5,
-  "tasksTotal": 5,
+  "tasksTotal": 7,
   "validationValid": true,
-  "automatedChecks": [...],
-  "llmVerdict": { "pass": true, "criteria": [...] },
-  "executionTimeMs": 45000
+  "automatedChecks": [
+    {"name": "task_completion", "pass": false, "output": "5/7 tasks complete"}
+  ],
+  "llmVerdict": {"pass": false, "salvageable": true, "criteria": [/* ... */]},
+  "failureReport": "...",
+  "executionTimeMs": 12500
 }
 ```
+
+Visible in the UI's Verify tab and via `GET /api/v1/runs/{id}/verification`.
