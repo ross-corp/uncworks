@@ -313,14 +313,14 @@ func main() {
 	// Wait for interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	
+
 	<-ctx.Done()
 	slog.Info("shutting down cudgel-shim server...")
-	
+
 	// Give in-flight requests up to 30 seconds to complete
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("cudgel-shim shutdown error", "err", err)
 	} else {

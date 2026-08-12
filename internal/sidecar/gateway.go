@@ -43,7 +43,7 @@ type Gateway struct {
 
 	// stopCh is closed by Stop() to signal background goroutines (e.g.
 	// rate-limit retry sleeps) to abandon their work promptly.
-	stopCh chan struct{}
+	stopCh   chan struct{}
 	stopOnce sync.Once
 }
 
@@ -1675,10 +1675,10 @@ var (
 
 	// Token usage accumulators — summed across all message_end events in a run.
 	// Reset by StartAgent; logged at run completion.
-	tokenUsageMu         sync.Mutex
-	runInputTokens       int
-	runOutputTokens      int
-	runCacheReadTokens   int
+	tokenUsageMu       sync.Mutex
+	runInputTokens     int
+	runOutputTokens    int
+	runCacheReadTokens int
 )
 
 // modelContextWindows maps model names to their context window sizes (in tokens).
@@ -2293,16 +2293,16 @@ func ExtractToolCallSignature(line string) string {
 // that ExecCommand cannot be used to exfiltrate secrets injected by the worker.
 func execSafeEnv() []string {
 	sensitive := map[string]bool{
-		"OPENAI_API_KEY":      true,
-		"ANTHROPIC_API_KEY":   true,
-		"LITELLM_MASTER_KEY":  true,
-		"LITELLM_API_KEY":     true,
-		"GITHUB_TOKEN":        true,
-		"GITHUB_PAT":          true,
-		"AOT_API_KEY":         true,
-		"AWS_ACCESS_KEY_ID":   true,
+		"OPENAI_API_KEY":        true,
+		"ANTHROPIC_API_KEY":     true,
+		"LITELLM_MASTER_KEY":    true,
+		"LITELLM_API_KEY":       true,
+		"GITHUB_TOKEN":          true,
+		"GITHUB_PAT":            true,
+		"AOT_API_KEY":           true,
+		"AWS_ACCESS_KEY_ID":     true,
 		"AWS_SECRET_ACCESS_KEY": true,
-		"GOOGLE_API_KEY":      true,
+		"GOOGLE_API_KEY":        true,
 	}
 	var safe []string
 	for _, kv := range os.Environ() {

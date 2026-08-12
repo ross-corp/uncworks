@@ -39,11 +39,11 @@ import (
 type AOTServiceHandler struct {
 	apiv1connect.UnimplementedAOTServiceHandler
 
-	K8sClient      client.Client
-	TemporalClient temporalclient.Client
-	EventBus       eventbus.EventBus
-	Namespace      string
-	LiteLLMBaseURL string
+	K8sClient        client.Client
+	TemporalClient   temporalclient.Client
+	EventBus         eventbus.EventBus
+	Namespace        string
+	LiteLLMBaseURL   string
 	LiteLLMMasterKey string
 
 	// Knowledge system (optional — nil means search is unavailable)
@@ -75,12 +75,12 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 		litellmURL = "http://litellm:4000"
 	}
 	litellmKey := os.Getenv("LITELLM_MASTER_KEY")
-	
+
 	// Create rate limiter for CreateAgentRun
 	// Default: 5 RPS, burst 3 (more restrictive than global defaults)
 	rps := parseEnvFloat("RATE_LIMIT_CREATE_AGENT_RUN_RPS", 5.0)
 	burst := parseEnvInt("RATE_LIMIT_CREATE_AGENT_RUN_BURST", 3)
-	
+
 	var createAgentRunRateLimiter *RateLimiter
 	if rps > 0 && burst > 0 {
 		createAgentRunRateLimiter = NewRateLimiter(RateLimiterConfig{
@@ -91,7 +91,7 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 			TrustProxy: os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true",
 		})
 	}
-	
+
 	// Create rate limiter for CancelAgentRun
 	// Default: 1 RPS, burst 5
 	cancelRPS := parseEnvFloat("RATE_LIMIT_CANCEL_AGENT_RUN_RPS", 1.0)
@@ -106,9 +106,9 @@ func NewAOTServiceHandler(k8sClient client.Client, bus eventbus.EventBus, namesp
 			TrustProxy: os.Getenv("RATE_LIMIT_TRUST_PROXY") == "true",
 		})
 	}
-	
+
 	maxConcurrent := parseEnvInt("MAX_CONCURRENT_RUNS", 10)
-	
+
 	return &AOTServiceHandler{
 		K8sClient:                 k8sClient,
 		EventBus:                  bus,
@@ -158,14 +158,14 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 			// Use the same logic as stripPort in ratelimit.go
 			ip = stripPort(peer.Addr)
 		}
-		
+
 		if ip != "" && !s.createAgentRunRateLimiter.Allow(ip) {
 			slog.Warn("CreateAgentRun rate limit exceeded", "ip", ip)
-			return nil, connect.NewError(connect.CodeResourceExhausted, 
+			return nil, connect.NewError(connect.CodeResourceExhausted,
 				fmt.Errorf("rate limit exceeded for CreateAgentRun"))
 		}
 	}
-	
+
 	if s.maxConcurrentRuns > 0 {
 		active, err := s.countActiveRuns(ctx)
 		if err != nil {
@@ -176,7 +176,7 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 				fmt.Errorf("concurrent run limit reached (%d/%d active); try again later", active, s.maxConcurrentRuns))
 		}
 	}
-	
+
 	if req.Msg.Spec == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
 	}
@@ -189,27 +189,27 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 
 	// Validate model_tier
 	validTiers := map[string]bool{
-		"":                true,
-		"default":         true,
-		"default-cloud":   true,
-		"premium":         true,
-		"ci":              true,
-		"deepseek-v3.1":   true,
-		"deepseek-v3.2":   true,
-		"qwen3:8b":        true,
-		"llama3.1:8b":     true,
-		"qwen2.5:0.5b":    true,
-		"qwen3-coder":     true,
-		"qwen3-235b":      true,
-		"mistral-medium":  true,
-		"claude-sonnet-4": true,
-		"claude-haiku":    true,
+		"":                  true,
+		"default":           true,
+		"default-cloud":     true,
+		"premium":           true,
+		"ci":                true,
+		"deepseek-v3.1":     true,
+		"deepseek-v3.2":     true,
+		"qwen3:8b":          true,
+		"llama3.1:8b":       true,
+		"qwen2.5:0.5b":      true,
+		"qwen3-coder":       true,
+		"qwen3-235b":        true,
+		"mistral-medium":    true,
+		"claude-sonnet-4":   true,
+		"claude-haiku":      true,
 		"claude-sonnet-4.6": true,
 		"gpt-4.1-mini":      true,
-		"gemini-flash":       true,
-		"gemini-3-flash":     true,
-		"gpt-oss-120b-free":  true,
-		"qwen3-coder-free":   true,
+		"gemini-flash":      true,
+		"gemini-3-flash":    true,
+		"gpt-oss-120b-free": true,
+		"qwen3-coder-free":  true,
 	}
 	if !validTiers[req.Msg.Spec.ModelTier] {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown model_tier %q", req.Msg.Spec.ModelTier))
@@ -529,7 +529,7 @@ func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Req
 			return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("rate limit exceeded"))
 		}
 	}
-	
+
 	if err := validateRunID(req.Msg.Id); err != nil {
 		return nil, err
 	}
@@ -1119,10 +1119,10 @@ func crdToProto(crd *aotv1alpha1.AgentRun) *apiv1.AgentRun {
 		AutoPush:          crd.Spec.AutoPush,
 		AutoPr:            crd.Spec.AutoPR,
 		PrBaseBranch:      crd.Spec.PRBaseBranch,
-		Project:      crdFieldOrLabel(crd, crd.Spec.Project, "aot.uncworks.io/project"),
-		Feature:      crdFieldOrLabel(crd, crd.Spec.Feature, "aot.uncworks.io/feature"),
-		Tags:         crdTagsOrLabel(crd),
-		ApprovalMode: crd.Spec.ApprovalMode,
+		Project:           crdFieldOrLabel(crd, crd.Spec.Project, "aot.uncworks.io/project"),
+		Feature:           crdFieldOrLabel(crd, crd.Spec.Feature, "aot.uncworks.io/feature"),
+		Tags:              crdTagsOrLabel(crd),
+		ApprovalMode:      crd.Spec.ApprovalMode,
 	}
 	if crd.Spec.PipelineConfig != nil {
 		protoSpec.PipelineConfig = &apiv1.PipelineConfig{

@@ -370,9 +370,9 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			StartToCloseTimeout: 20 * time.Minute,
 			HeartbeatTimeout:    30 * time.Second,
 			RetryPolicy: &temporal.RetryPolicy{
-				MaximumAttempts:    3,
-				InitialInterval:    5 * time.Second,
-				BackoffCoefficient: 1.0,
+				MaximumAttempts:        3,
+				InitialInterval:        5 * time.Second,
+				BackoffCoefficient:     1.0,
 				NonRetryableErrorTypes: []string{"eviction"},
 			},
 		}),

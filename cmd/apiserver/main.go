@@ -288,17 +288,17 @@ func main() {
 	// Create context that will be cancelled on SIGINT/SIGTERM
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	
+
 	// Wait for shutdown signal
 	<-ctx.Done()
-	
+
 	slog.Info("shutting down UNCWORKS API server...")
 	serverCancel()
-	
+
 	// Give in-flight requests up to 30 seconds to complete
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
-	
+
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "err", err)
 	} else {

@@ -190,7 +190,7 @@ func runConfigSetStringField(args []string, cmd, field string, setter func(*Conf
 func runConfigSetAutoPush(args []string) error {
 	fs := flag.NewFlagSet("config set-auto-push", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-auto-push <true|false>\n\nSet default_auto_push. When true, --auto-push is applied to all new runs.\n")
+		_, _ = fmt.Fprint(fs.Output(), "Usage: uncworks config set-auto-push <true|false>\n\nSet default_auto_push. When true, --auto-push is applied to all new runs.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -223,7 +223,7 @@ func runConfigSetAutoPush(args []string) error {
 func runConfigUnset(args []string) error {
 	fs := flag.NewFlagSet("config unset", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config unset <field>\n\nClear a config field. Valid fields: server, web-url, model, project, feature\n")
+		_, _ = fmt.Fprint(fs.Output(), "Usage: uncworks config unset <field>\n\nClear a config field. Valid fields: server, web-url, model, project, feature\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {

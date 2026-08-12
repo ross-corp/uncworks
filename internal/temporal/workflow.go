@@ -462,10 +462,10 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		HeartbeatTimeout: 90 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
 			// Increase retries — heartbeat timeouts during worker restarts are transient.
-			MaximumAttempts:    6,
-			InitialInterval:    5 * time.Second,
-			BackoffCoefficient: 1.5,
-			MaximumInterval:    30 * time.Second,
+			MaximumAttempts:        6,
+			InitialInterval:        5 * time.Second,
+			BackoffCoefficient:     1.5,
+			MaximumInterval:        30 * time.Second,
 			NonRetryableErrorTypes: []string{"eviction"},
 		},
 	}

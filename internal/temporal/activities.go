@@ -26,9 +26,9 @@ import (
 
 	"connectrpc.com/connect"
 
+	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
-	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/litellm"
 )
@@ -96,7 +96,7 @@ type WaitForHydrationOutput struct {
 // When AgentRunName is set, discovers the pod via label selector (Deployment-managed).
 func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydrationInput) (*WaitForHydrationOutput, error) {
 	slog.Debug("WaitForHydration started", "agentRun", input.AgentRunName, "namespace", input.Namespace, "podName", input.PodName)
-	
+
 	iteration := 0
 	for {
 		pod, err := a.findPod(ctx, input.Namespace, input.AgentRunName, input.PodName)
@@ -263,8 +263,8 @@ type CheckPodStatusInput struct {
 
 // CheckPodStatusOutput contains the pod's current status.
 type CheckPodStatusOutput struct {
-	Phase  corev1.PodPhase
-	Reason string
+	Phase   corev1.PodPhase
+	Reason  string
 	Message string
 }
 
@@ -274,7 +274,7 @@ func (a *Activities) CheckPodStatus(ctx context.Context, input CheckPodStatusInp
 	if err != nil {
 		return nil, fmt.Errorf("find pod %s: %w", input.PodName, err)
 	}
-	
+
 	return &CheckPodStatusOutput{
 		Phase:   pod.Status.Phase,
 		Reason:  pod.Status.Reason,

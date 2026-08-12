@@ -572,7 +572,7 @@ func runRunsList(args []string) error {
 		ProjectFilter: *project,
 		FeatureFilter: *feature,
 	}
-	
+
 	if *phase != "" {
 		var phaseEnum apiv1.AgentRunPhase
 		phaseUpper := strings.ToUpper(*phase)
@@ -594,7 +594,7 @@ func runRunsList(args []string) error {
 		}
 		listReq.PhaseFilter = phaseEnum
 	}
-	
+
 	if *tag != "" {
 		listReq.TagFilter = *tag
 	}
@@ -606,7 +606,7 @@ func runRunsList(args []string) error {
 	if *stage != "" {
 		listReq.StageFilter = strings.ToLower(*stage)
 	}
-	
+
 	if *cursor != "" {
 		listReq.Cursor = *cursor
 	}
@@ -4594,194 +4594,194 @@ func runRunsSummary(args []string) error {
 	doSummary := func() error {
 		sinceTime := time.Now().Add(-d)
 
-	phaseCounts := map[string]int{}
-	projectCounts := map[string]int{}
-	var activeRuns []*apiv1.AgentRun
-	var recentCompleted []*apiv1.AgentRun
-	var recentFailed []*apiv1.AgentRun
-	var latestRun *apiv1.AgentRun
-	total := 0
-	cursor := ""
-	for {
-		listReq := &apiv1.ListAgentRunsRequest{
-			Limit:         100,
-			ProjectFilter: *project,
-			Cursor:        cursor,
-		}
-		resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
-		if err != nil {
-			break
-		}
-		for _, r := range resp.Msg.GetAgentRuns() {
-			ts := r.GetCreatedAt()
-			if ts == nil || !ts.AsTime().After(sinceTime) {
-				continue
+		phaseCounts := map[string]int{}
+		projectCounts := map[string]int{}
+		var activeRuns []*apiv1.AgentRun
+		var recentCompleted []*apiv1.AgentRun
+		var recentFailed []*apiv1.AgentRun
+		var latestRun *apiv1.AgentRun
+		total := 0
+		cursor := ""
+		for {
+			listReq := &apiv1.ListAgentRunsRequest{
+				Limit:         100,
+				ProjectFilter: *project,
+				Cursor:        cursor,
 			}
-			total++
-			label := phaseLabel(r.GetStatus().GetPhase())
-			phaseCounts[label]++
-			if proj := r.GetSpec().GetProject(); proj != "" {
-				projectCounts[proj]++
+			resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
+			if err != nil {
+				break
 			}
-			switch r.GetStatus().GetPhase() {
-			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING,
-				apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
-				apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
-				activeRuns = append(activeRuns, r)
-			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
-				if len(recentFailed) < 5 {
-					recentFailed = append(recentFailed, r)
+			for _, r := range resp.Msg.GetAgentRuns() {
+				ts := r.GetCreatedAt()
+				if ts == nil || !ts.AsTime().After(sinceTime) {
+					continue
 				}
-				if len(recentCompleted) < 5 {
-					recentCompleted = append(recentCompleted, r)
+				total++
+				label := phaseLabel(r.GetStatus().GetPhase())
+				phaseCounts[label]++
+				if proj := r.GetSpec().GetProject(); proj != "" {
+					projectCounts[proj]++
 				}
-			case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED,
-				apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
-				if len(recentCompleted) < 5 {
-					recentCompleted = append(recentCompleted, r)
+				switch r.GetStatus().GetPhase() {
+				case apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING,
+					apiv1.AgentRunPhase_AGENT_RUN_PHASE_PENDING,
+					apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT:
+					activeRuns = append(activeRuns, r)
+				case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
+					if len(recentFailed) < 5 {
+						recentFailed = append(recentFailed, r)
+					}
+					if len(recentCompleted) < 5 {
+						recentCompleted = append(recentCompleted, r)
+					}
+				case apiv1.AgentRunPhase_AGENT_RUN_PHASE_SUCCEEDED,
+					apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
+					if len(recentCompleted) < 5 {
+						recentCompleted = append(recentCompleted, r)
+					}
+				}
+				if latestRun == nil {
+					latestRun = r
 				}
 			}
-			if latestRun == nil {
-				latestRun = r
+			cursor = resp.Msg.GetNextCursor()
+			if cursor == "" {
+				break
 			}
 		}
-		cursor = resp.Msg.GetNextCursor()
-		if cursor == "" {
-			break
-		}
-	}
 
-	colorPhase := func(label string) string {
-		if !useColorSum {
+		colorPhase := func(label string) string {
+			if !useColorSum {
+				return label
+			}
+			switch label {
+			case "RUNNING":
+				return "\033[32m" + label + "\033[0m"
+			case "PENDING":
+				return "\033[33m" + label + "\033[0m"
+			case "WAITING":
+				return "\033[36m" + label + "\033[0m"
+			case "FAILED":
+				return "\033[31m" + label + "\033[0m"
+			case "DONE":
+				return "\033[90m" + label + "\033[0m"
+			case "CANCELLED":
+				return "\033[35m" + label + "\033[0m"
+			}
 			return label
 		}
-		switch label {
-		case "RUNNING":
-			return "\033[32m" + label + "\033[0m"
-		case "PENDING":
-			return "\033[33m" + label + "\033[0m"
-		case "WAITING":
-			return "\033[36m" + label + "\033[0m"
-		case "FAILED":
-			return "\033[31m" + label + "\033[0m"
-		case "DONE":
-			return "\033[90m" + label + "\033[0m"
-		case "CANCELLED":
-			return "\033[35m" + label + "\033[0m"
-		}
-		return label
-	}
 
-	fmt.Printf("Runs in the last %s", *since)
-	if *project != "" {
-		fmt.Printf(" (project: %s)", *project)
-	}
-	fmt.Printf(":\n\n")
+		fmt.Printf("Runs in the last %s", *since)
+		if *project != "" {
+			fmt.Printf(" (project: %s)", *project)
+		}
+		fmt.Printf(":\n\n")
 
-	if total == 0 {
-		fmt.Println("  No runs found.")
-		return nil
-	}
+		if total == 0 {
+			fmt.Println("  No runs found.")
+			return nil
+		}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	for _, ph := range []string{"RUNNING", "PENDING", "WAITING", "DONE", "FAILED", "CANCELLED"} {
-		if n := phaseCounts[ph]; n > 0 {
-			pct := n * 100 / total
-			bar := strings.Repeat("█", pct/5)
-			fmt.Fprintf(w, "  %s\t%d\t(%d%%)\t%s\n", colorPhase(ph), n, pct, bar)
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		for _, ph := range []string{"RUNNING", "PENDING", "WAITING", "DONE", "FAILED", "CANCELLED"} {
+			if n := phaseCounts[ph]; n > 0 {
+				pct := n * 100 / total
+				bar := strings.Repeat("█", pct/5)
+				_, _ = fmt.Fprintf(w, "  %s\t%d\t(%d%%)\t%s\n", colorPhase(ph), n, pct, bar)
+			}
 		}
-	}
-	fmt.Fprintf(w, "  ─────────────\t\t\t\n")
-	fmt.Fprintf(w, "  TOTAL\t%d\t\t\n", total)
-	w.Flush()
+		_, _ = fmt.Fprintf(w, "  ─────────────\t\t\t\n")
+		_, _ = fmt.Fprintf(w, "  TOTAL\t%d\t\t\n", total)
+		_ = w.Flush()
 
-	if len(projectCounts) > 0 && *project == "" {
-		type projEntry struct {
-			name  string
-			count int
-		}
-		var projs []projEntry
-		for k, v := range projectCounts {
-			projs = append(projs, projEntry{k, v})
-		}
-		sort.Slice(projs, func(i, j int) bool {
-			if projs[i].count != projs[j].count {
-				return projs[i].count > projs[j].count
+		if len(projectCounts) > 0 && *project == "" {
+			type projEntry struct {
+				name  string
+				count int
 			}
-			return projs[i].name < projs[j].name
-		})
-		maxProj := 5
-		if len(projs) < maxProj {
-			maxProj = len(projs)
+			var projs []projEntry
+			for k, v := range projectCounts {
+				projs = append(projs, projEntry{k, v})
+			}
+			sort.Slice(projs, func(i, j int) bool {
+				if projs[i].count != projs[j].count {
+					return projs[i].count > projs[j].count
+				}
+				return projs[i].name < projs[j].name
+			})
+			maxProj := 5
+			if len(projs) < maxProj {
+				maxProj = len(projs)
+			}
+			fmt.Printf("\nTop projects:\n")
+			wProj := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			for _, p := range projs[:maxProj] {
+				pct := p.count * 100 / total
+				_, _ = fmt.Fprintf(wProj, "  %s\t%d\t(%d%%)\n", p.name, p.count, pct)
+			}
+			_ = wProj.Flush()
 		}
-		fmt.Printf("\nTop projects:\n")
-		wProj := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		for _, p := range projs[:maxProj] {
-			pct := p.count * 100 / total
-			fmt.Fprintf(wProj, "  %s\t%d\t(%d%%)\n", p.name, p.count, pct)
-		}
-		wProj.Flush()
-	}
 
-	if len(activeRuns) > 0 {
-		fmt.Printf("\nActive runs (%d):\n", len(activeRuns))
-		for _, r := range activeRuns {
-			title := r.GetSpec().GetDisplayName()
-			if title == "" {
-				title = r.GetSpec().GetProject()
+		if len(activeRuns) > 0 {
+			fmt.Printf("\nActive runs (%d):\n", len(activeRuns))
+			for _, r := range activeRuns {
+				title := r.GetSpec().GetDisplayName()
+				if title == "" {
+					title = r.GetSpec().GetProject()
+				}
+				if len(title) > 40 {
+					title = title[:37] + "..."
+				}
+				age := ""
+				if ts := r.GetCreatedAt(); ts != nil {
+					age = "  " + relativeTime(ts.AsTime())
+				}
+				fmt.Printf("  %s  %-40s  %s%s\n", r.GetId(), title, colorPhase(phaseLabel(r.GetStatus().GetPhase())), age)
 			}
-			if len(title) > 40 {
-				title = title[:37] + "..."
-			}
-			age := ""
-			if ts := r.GetCreatedAt(); ts != nil {
-				age = "  " + relativeTime(ts.AsTime())
-			}
-			fmt.Printf("  %s  %-40s  %s%s\n", r.GetId(), title, colorPhase(phaseLabel(r.GetStatus().GetPhase())), age)
 		}
-	}
 
-	if len(recentCompleted) > 0 {
-		fmt.Printf("\nRecent completions:\n")
-		for _, r := range recentCompleted {
-			title := r.GetSpec().GetDisplayName()
-			if title == "" {
-				title = r.GetSpec().GetProject()
+		if len(recentCompleted) > 0 {
+			fmt.Printf("\nRecent completions:\n")
+			for _, r := range recentCompleted {
+				title := r.GetSpec().GetDisplayName()
+				if title == "" {
+					title = r.GetSpec().GetProject()
+				}
+				if len(title) > 40 {
+					title = title[:37] + "..."
+				}
+				age := ""
+				if ts := r.GetStatus().GetCompletedAt(); ts != nil {
+					age = "  " + relativeTime(ts.AsTime())
+				}
+				fmt.Printf("  %s  %-40s  %s%s\n", r.GetId(), title, colorPhase(phaseLabel(r.GetStatus().GetPhase())), age)
 			}
-			if len(title) > 40 {
-				title = title[:37] + "..."
-			}
-			age := ""
-			if ts := r.GetStatus().GetCompletedAt(); ts != nil {
-				age = "  " + relativeTime(ts.AsTime())
-			}
-			fmt.Printf("  %s  %-40s  %s%s\n", r.GetId(), title, colorPhase(phaseLabel(r.GetStatus().GetPhase())), age)
 		}
-	}
 
-	if len(recentFailed) > 0 {
-		fmt.Printf("\nRecent failures:\n")
-		wf := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		for _, r := range recentFailed {
-			title := r.GetSpec().GetDisplayName()
-			if title == "" {
-				title = r.GetSpec().GetProject()
+		if len(recentFailed) > 0 {
+			fmt.Printf("\nRecent failures:\n")
+			wf := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			for _, r := range recentFailed {
+				title := r.GetSpec().GetDisplayName()
+				if title == "" {
+					title = r.GetSpec().GetProject()
+				}
+				if len(title) > 30 {
+					title = title[:27] + "..."
+				}
+				msg := r.GetStatus().GetMessage()
+				if len(msg) > 60 {
+					msg = msg[:57] + "..."
+				}
+				age := ""
+				if ts := r.GetStatus().GetCompletedAt(); ts != nil {
+					age = relativeTime(ts.AsTime())
+				}
+				_, _ = fmt.Fprintf(wf, "  %s\t%-30s\t%s\t%s\n", r.GetId(), title, age, msg)
 			}
-			if len(title) > 30 {
-				title = title[:27] + "..."
-			}
-			msg := r.GetStatus().GetMessage()
-			if len(msg) > 60 {
-				msg = msg[:57] + "..."
-			}
-			age := ""
-			if ts := r.GetStatus().GetCompletedAt(); ts != nil {
-				age = relativeTime(ts.AsTime())
-			}
-			fmt.Fprintf(wf, "  %s\t%-30s\t%s\t%s\n", r.GetId(), title, age, msg)
+			_ = wf.Flush()
 		}
-		wf.Flush()
-	}
 
 		return nil
 	} // end doSummary
@@ -6637,11 +6637,11 @@ func runRunsScore(args []string) error {
 	}
 
 	type windowResult struct {
-		Window  string  `json:"window"`
-		Total   int     `json:"total"`
-		Done    int     `json:"done"`
-		Failed  int     `json:"failed"`
-		Rate    float64 `json:"success_rate"`
+		Window string  `json:"window"`
+		Total  int     `json:"total"`
+		Done   int     `json:"done"`
+		Failed int     `json:"failed"`
+		Rate   float64 `json:"success_rate"`
 	}
 
 	windows := []struct {

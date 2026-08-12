@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	"connectrpc.com/connect"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"connectrpc.com/connect"
 
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	apiv1connect "github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
@@ -27,12 +27,12 @@ import (
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 var (
-	styleTitle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
-	styleStatus    = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	styleSelected  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	styleHelp      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	styleBorder    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+	styleTitle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
+	styleStatus   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	styleSelected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	styleHelp     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	styleBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
 )
 
 // ── View types ────────────────────────────────────────────────────────────────
@@ -160,11 +160,11 @@ func relativeTime(t time.Time) string {
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type tuiModel struct {
-	client    apiv1connect.AOTServiceClient
-	view      tuiView
-	width     int
-	height    int
-	err       error
+	client apiv1connect.AOTServiceClient
+	view   tuiView
+	width  int
+	height int
+	err    error
 
 	// run list
 	list    list.Model

@@ -1,0 +1,2 @@
+Placeholder so //go:embed dist/* resolves before the web bundle is built.
+Build the real bundle with: task build:web

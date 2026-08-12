@@ -91,7 +91,7 @@ func main() {
 	// Graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	
+
 	go func() {
 		<-ctx.Done()
 		slog.Info("shutting down BFF server...")

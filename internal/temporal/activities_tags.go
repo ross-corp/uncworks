@@ -299,9 +299,9 @@ func computeCostFromUsageFile(ctx context.Context, sc agentv1connect.AgentSideca
 	type pricing struct{ input, output float64 }
 	pricingTable := map[string]pricing{
 		"deepseek-v3.2": {0.14, 0.28},
-		"default":       {3.0, 15.0},   // claude-sonnet-3.x
+		"default":       {3.0, 15.0}, // claude-sonnet-3.x
 		"default-cloud": {3.0, 15.0},
-		"premium":       {15.0, 75.0},  // claude-opus
+		"premium":       {15.0, 75.0}, // claude-opus
 		"":              {3.0, 15.0},
 	}
 	p, ok := pricingTable[modelTier]

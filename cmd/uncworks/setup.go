@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-
 	// isTerminal is used to detect whether stdin is attached to a TTY.
 	// We use a direct syscall so we avoid adding a new dependency.
 )
@@ -27,14 +26,14 @@ func isTTY() bool {
 
 // setupConfig holds all values needed to install UNCWORKS.
 type setupConfig struct {
-	KubeContext   string
-	Namespace     string
-	LLMKey        string
-	GitHubToken   string
-	TemporalHost  string
-	ChartRef      string
-	ChartVersion  string
-	ValuesFile    string
+	KubeContext  string
+	Namespace    string
+	LLMKey       string
+	GitHubToken  string
+	TemporalHost string
+	ChartRef     string
+	ChartVersion string
+	ValuesFile   string
 }
 
 func runSetup(args []string) error {
@@ -208,9 +207,9 @@ func resourcePreflight(kubeCtx string) error {
 		return nil
 	}
 
-	minCPU := int64(2000)   // 2 vCPUs
+	minCPU := int64(2000)                   // 2 vCPUs
 	minMem := int64(2 * 1024 * 1024 * 1024) // 2Gi
-	recCPU := int64(4000)   // 4 vCPUs
+	recCPU := int64(4000)                   // 4 vCPUs
 	recMem := int64(4 * 1024 * 1024 * 1024) // 4Gi
 
 	if res.CPUMillicores < minCPU || res.MemoryBytes < minMem {

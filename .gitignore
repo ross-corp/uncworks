@@ -109,6 +109,10 @@ storybook-static
 /bin/
 /bff
 /uncworks
+
+# The bff binary embeds cmd/bff/dist. Keep the directory and a placeholder in
+# git so `go build ./...` works before the web bundle is built.
+!cmd/bff/dist/
 !cmd/bff/dist/placeholder
 
 # Local databases — never commit runtime state
