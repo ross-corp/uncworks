@@ -63,7 +63,13 @@ func (a *Activities) LLMJudgeChanges(ctx context.Context, input LLMJudgeInput) (
 
 	verdict, err := callChatCompletion(ctx, input.LiteLLMBaseURL, input.LLMKey, model, reviewPrompt)
 	if err != nil {
-		return LLMJudgeOutput{Approved: false, Reason: fmt.Sprintf("LLM judge error: %v", err), GitDiff: gitDiff}, nil
+		// Return the error rather than a rejection. An unreachable judge says
+		// nothing about the agent's work, and reporting it as Approved=false
+		// made a missing base URL or a 500 read as "the change is bad" and fail
+		// the run. The workflow already treats a judge error as non-fatal and
+		// falls through to human approval, and that path could never fire while
+		// this swallowed the error.
+		return LLMJudgeOutput{GitDiff: gitDiff}, fmt.Errorf("calling the judge model: %w", err)
 	}
 
 	approved := verdict.Approved

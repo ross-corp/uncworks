@@ -823,6 +823,15 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	}
 }
 
+// JuniorApprovalMode maps a parent's approval mode onto its junior. Only an
+// explicit mode carries down; an unset one means the parent gates the aggregate.
+func JuniorApprovalMode(parent string) string {
+	if mode := strings.ToLower(strings.TrimSpace(parent)); mode != "" {
+		return mode
+	}
+	return "none"
+}
+
 // SpawnJuniorInput contains parameters for spawning a child workflow.
 type SpawnJuniorInput struct {
 	ParentRunName         string
@@ -840,6 +849,9 @@ type SpawnJuniorInput struct {
 	LiteLLMBaseURL        string
 	SpecRunID             string
 	GitHubTokenSecretName string
+	// ApprovalMode is the parent's mode. An empty value means the junior runs
+	// with no gate of its own.
+	ApprovalMode string
 }
 
 // SpawnJuniorWorkflow starts a child AgentRunWorkflow for a junior agent.
@@ -872,6 +884,12 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 		SpecRunID:             input.SpecRunID,
 		GitHubTokenSecretName: input.GitHubTokenSecretName,
 		OrchestrationMode:     OrchestrationModeSingle, // juniors always run as single
+		// A junior is a subtask of its parent, and the parent's gate reviews the
+		// aggregate diff. Defaulting a junior to hybrid would ask for one human
+		// approval per subtask before the parent's own gate, so a manual
+		// orchestration with seven subtasks would block on seven signals nobody
+		// knows to send.
+		ApprovalMode: JuniorApprovalMode(input.ApprovalMode),
 	}
 
 	future := workflow.ExecuteChildWorkflow(childCtx, AgentRunWorkflow, childInput)
