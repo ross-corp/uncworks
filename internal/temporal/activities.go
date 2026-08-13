@@ -4,6 +4,7 @@ package temporal
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -26,11 +27,22 @@ import (
 
 	"connectrpc.com/connect"
 
+	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
-	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/litellm"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = stderrors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = stderrors.New("invalid input")
+	// errNotFound reports that a named thing is absent.
+	errNotFound = stderrors.New("not found")
 )
 
 const sidecarPort = 50052
@@ -96,7 +108,7 @@ type WaitForHydrationOutput struct {
 // When AgentRunName is set, discovers the pod via label selector (Deployment-managed).
 func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydrationInput) (*WaitForHydrationOutput, error) {
 	slog.Debug("WaitForHydration started", "agentRun", input.AgentRunName, "namespace", input.Namespace, "podName", input.PodName)
-	
+
 	iteration := 0
 	for {
 		pod, err := a.findPod(ctx, input.Namespace, input.AgentRunName, input.PodName)
@@ -105,7 +117,10 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for pod: %v", err))
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				if err := ctx.Err(); err != nil {
+					return nil, fmt.Errorf("wait for hydration: %w", err)
+				}
+				return nil, nil
 			case <-time.After(2 * time.Second):
 			}
 			continue
@@ -113,6 +128,7 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 
 		// Check for eviction specifically
 		if pod.Status.Reason == "Evicted" {
+			//nolint:wrapcheck // the error is constructed here, not passed through
 			return nil, temporalsdk.NewApplicationError(
 				fmt.Sprintf("pod was evicted before hydration completed: %s", pod.Status.Message),
 				"eviction",
@@ -126,7 +142,8 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 						slog.Info("hydration complete", "agentRun", input.AgentRunName, "podIP", pod.Status.PodIP, "pod", pod.Name)
 						return &WaitForHydrationOutput{PodIP: pod.Status.PodIP, PodName: pod.Name}, nil
 					}
-					return nil, fmt.Errorf("hydration failed with exit code %d: %s",
+					return nil, fmt.Errorf("%w: hydration failed with exit code %d: %s",
+						errFailed,
 						initStatus.State.Terminated.ExitCode,
 						initStatus.State.Terminated.Message)
 				}
@@ -141,12 +158,13 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 		if pod.Status.Phase == corev1.PodFailed {
 			// Check if pod failed due to eviction
 			if pod.Status.Reason == "Evicted" {
+				//nolint:wrapcheck // the error is constructed here, not passed through
 				return nil, temporalsdk.NewApplicationError(
 					fmt.Sprintf("pod was evicted before hydration completed: %s", pod.Status.Message),
 					"eviction",
 				)
 			}
-			return nil, fmt.Errorf("pod failed before hydration completed: %s", pod.Status.Message)
+			return nil, fmt.Errorf("%w: pod failed before hydration completed: %s", errFailed, pod.Status.Message)
 		}
 
 		// Log debug message every 10 iterations (~20 seconds)
@@ -159,7 +177,10 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return nil, fmt.Errorf("wait for hydration: %w", err)
+			}
+			return nil, nil
 		case <-time.After(2 * time.Second):
 		}
 	}
@@ -210,7 +231,7 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 		}))
 		if err == nil {
 			if !resp.Msg.Started {
-				return fmt.Errorf("agent did not start: %s", resp.Msg.Error)
+				return fmt.Errorf("%w: agent did not start: %s", errFailed, resp.Msg.Error)
 			}
 			return nil
 		}
@@ -218,7 +239,10 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("start agent: %w", err)
+			}
+			return nil
 		case <-time.After(2 * time.Second):
 		}
 	}
@@ -263,8 +287,8 @@ type CheckPodStatusInput struct {
 
 // CheckPodStatusOutput contains the pod's current status.
 type CheckPodStatusOutput struct {
-	Phase  corev1.PodPhase
-	Reason string
+	Phase   corev1.PodPhase
+	Reason  string
 	Message string
 }
 
@@ -274,7 +298,7 @@ func (a *Activities) CheckPodStatus(ctx context.Context, input CheckPodStatusInp
 	if err != nil {
 		return nil, fmt.Errorf("find pod %s: %w", input.PodName, err)
 	}
-	
+
 	return &CheckPodStatusOutput{
 		Phase:   pod.Status.Phase,
 		Reason:  pod.Status.Reason,
@@ -632,7 +656,7 @@ func (a *Activities) findPod(ctx context.Context, namespace, agentRunName, podNa
 		if len(podList.Items) > 0 {
 			return &podList.Items[0], nil
 		}
-		return nil, fmt.Errorf("no pod found with label aot.uncworks.io/agentrun=%s", agentRunName)
+		return nil, fmt.Errorf("%w: no pod found with label aot.uncworks.io/agentrun=%s", errFailed, agentRunName)
 	}
 	// Fallback: direct pod name lookup (deprecated bare-pod path)
 	var pod corev1.Pod
@@ -787,7 +811,7 @@ type ScaleDownDeploymentInput struct {
 func (a *Activities) ScaleDownDeployment(ctx context.Context, input ScaleDownDeploymentInput) error {
 	if !strings.HasPrefix(input.DeploymentName, "agentrun-") {
 		slog.Warn("ScaleDownDeployment: refusing to scale down non-agent deployment", "deployment", input.DeploymentName)
-		return fmt.Errorf("safety check: deployment %q does not have agentrun- prefix", input.DeploymentName)
+		return fmt.Errorf("%w: safety check: deployment %q does not have agentrun- prefix", errFailed, input.DeploymentName)
 	}
 	var deployment appsv1.Deployment
 	if err := a.K8sClient.Get(ctx, client.ObjectKey{
@@ -909,11 +933,11 @@ type ArchiveAndCleanupInput struct {
 func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndCleanupInput) error {
 	if !strings.HasPrefix(input.DeploymentName, "agentrun-") {
 		slog.Warn("ArchiveAndCleanup: refusing to delete non-agent deployment", "deployment", input.DeploymentName)
-		return fmt.Errorf("safety check: deployment %q does not have agentrun- prefix", input.DeploymentName)
+		return fmt.Errorf("%w: safety check: deployment %q does not have agentrun- prefix", errFailed, input.DeploymentName)
 	}
 	if input.PVCName != "" && !strings.HasPrefix(input.PVCName, "aot-ws-") {
 		slog.Warn("ArchiveAndCleanup: refusing to delete non-agent PVC", "pvc", input.PVCName)
-		return fmt.Errorf("safety check: PVC %q does not have aot-ws- prefix", input.PVCName)
+		return fmt.Errorf("%w: safety check: PVC %q does not have aot-ws- prefix", errFailed, input.PVCName)
 	}
 	slog.Info("cleanup started", "agentRunName", input.DeploymentName, "deploymentName", input.DeploymentName)
 

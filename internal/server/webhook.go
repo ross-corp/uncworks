@@ -81,7 +81,11 @@ func (wh *WebhookHandler) httpDo(req *http.Request) (*http.Response, error) {
 	if c == nil {
 		c = http.DefaultClient
 	}
-	return c.Do(req)
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http do: %w", err)
+	}
+	return resp, nil
 }
 
 // ServeHTTP implements http.Handler for the GitHub webhook endpoint.
@@ -230,7 +234,7 @@ func (wh *WebhookHandler) fetchFileContent(ctx context.Context, repo, path, sha 
 	url := fmt.Sprintf("https://api.github.com/repos/%s/contents/%s?ref=%s", repo, path, sha)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("fetch file content: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3.raw")
 	if wh.githubProvider != nil {
@@ -246,7 +250,7 @@ func (wh *WebhookHandler) fetchFileContent(ctx context.Context, repo, path, sha 
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("github api returned %d", resp.StatusCode)
+		return "", fmt.Errorf("%w: github api returned %d", errFailed, resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)

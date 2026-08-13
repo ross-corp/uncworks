@@ -2,6 +2,7 @@
 // Assumes the API is running at http://localhost:50055 (proxied via vite dev server).
 // Run with: cd web && npm run test:e2e
 import { test, expect } from "@playwright/test";
+import { heading, waitForEditor } from "./helpers";
 
 // ---------------------------------------------------------------------------
 // Minimal API mocks so the layout does not error when the cluster is down.
@@ -52,7 +53,7 @@ test.describe("Projects", () => {
     await mockApis(page);
     await page.goto("/projects");
 
-    await expect(page.locator("text=Projects")).toBeVisible();
+    await expect(heading(page, "Projects")).toBeVisible();
   });
 
   test("can create a project with a kebab-case name", async ({ page }) => {
@@ -90,15 +91,15 @@ test.describe("New Run form", () => {
     await mockApis(page);
     await page.goto("/new");
 
-    await expect(page.locator("text=New Run")).toBeVisible();
+    await expect(heading(page, "New Run")).toBeVisible();
   });
 
   test("New Run form shows prompt field", async ({ page }) => {
     await mockApis(page);
     await page.goto("/new");
 
-    const textarea = page.locator("textarea[placeholder='What should the agent do?']");
-    await expect(textarea).toBeVisible();
+    // The prompt field is a Monaco editor, not a textarea. See helpers.ts.
+    await waitForEditor(page, "prompt-editor");
   });
 
   test("New Run form has no repositories field visible by default", async ({ page }) => {
@@ -118,7 +119,7 @@ test.describe("Settings", () => {
     await mockApis(page);
     await page.goto("/settings");
 
-    await expect(page.locator("text=Settings")).toBeVisible();
+    await expect(heading(page, "Settings")).toBeVisible();
   });
 
   test("Settings page loads with Appearance section", async ({ page }) => {
@@ -126,13 +127,13 @@ test.describe("Settings", () => {
     await page.goto("/settings");
 
     // Appearance section heading
-    await expect(page.locator("text=Appearance")).toBeVisible();
+    await expect(heading(page, /appearance/i)).toBeVisible();
   });
 
   test("Settings page loads with GitHub section", async ({ page }) => {
     await mockApis(page);
     await page.goto("/settings");
 
-    await expect(page.locator("text=GitHub")).toBeVisible();
+    await expect(heading(page, /github/i)).toBeVisible();
   });
 });

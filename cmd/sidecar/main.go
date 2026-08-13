@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -94,7 +95,7 @@ func main() {
 	gw := sidecar.NewGateway(port)
 
 	go func() {
-		if err := gw.Start(); err != nil && err != http.ErrServerClosed {
+		if err := gw.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("gateway failed", "err", err)
 			os.Exit(1)
 		}
@@ -161,7 +162,7 @@ func fetchModelsFromProxy(baseURL, apiKey string) ([]piModel, error) {
 
 	resp, err := client.ListModels(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch models from proxy: %w", err)
 	}
 
 	var models []piModel

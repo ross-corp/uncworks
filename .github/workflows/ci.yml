@@ -5,6 +5,10 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # A verdict computed on the pull-request SHA was computed against a base the
+  # queue may have moved past, so the required checks are recomputed here on the
+  # commit that actually lands.
+  merge_group:
 
 permissions:
   contents: read
@@ -14,12 +18,100 @@ jobs:
     name: Build + Lint + Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
         with:
           version: latest
           module: ./ci
           call: all --source .
+
+  # Two jobs rather than one, named for the checks the design asks the owner to
+  # mark required. A single job would give branch protection only its own name,
+  # so step 4 of the rollout would have nothing to select.
+  #
+  # Neither carries continue-on-error. An unrequired check that fails does not
+  # block a merge, so the staged rollout works without pretending the job
+  # passed, and the kill switch stays a settings change.
+  gate-tier:
+    name: factory/tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The gate diffs the head against the base, so it needs both.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Compute the tier verdict
+        env:
+          # github.head_ref is empty on merge_group, because the queue rewrites
+          # the branch. The Change-Id trailer travels with the commit, so the
+          # merge-group run resolves the same change the pull-request run did.
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref || 'main' }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          BASE_REF="${BASE_REF#refs/heads/}"
+          git fetch --no-tags origin "$BASE_REF"
+          go run ./cmd/uncworks gate check \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --branch "$HEAD_BRANCH" \
+            --message "$(git log -1 --format=%B)" \
+            --only factory/tier
+
+  gate-citations:
+    name: factory/citations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Compute the citations verdict
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref || 'main' }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          BASE_REF="${BASE_REF#refs/heads/}"
+          git fetch --no-tags origin "$BASE_REF"
+          go run ./cmd/uncworks gate check \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --branch "$HEAD_BRANCH" \
+            --message "$(git log -1 --format=%B)" \
+            --only factory/citations
+
+  gate-advisory:
+    name: Factory Gate (advisory)
+    runs-on: ubuntu-latest
+    # The two advisory verdicts report and never block, so this job absorbs
+    # their exit code rather than the required jobs doing it.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Report the advisory verdicts
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref || 'main' }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          BASE_REF="${BASE_REF#refs/heads/}"
+          git fetch --no-tags origin "$BASE_REF"
+          go run ./cmd/uncworks gate check \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --branch "$HEAD_BRANCH" \
+            --message "$(git log -1 --format=%B)"
 
   release:
     name: Release Please
@@ -30,8 +122,8 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           # RELEASE_PLEASE_TOKEN must be a repo secret: PAT with contents+pull-requests write.
           # Using a PAT (not GITHUB_TOKEN) so release-please PRs can trigger downstream workflows.
@@ -47,7 +139,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -77,7 +169,7 @@ jobs:
     if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
         with:
           version: latest
@@ -92,16 +184,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: 'npm'
@@ -143,7 +235,7 @@ jobs:
           echo "DMG_PATH=$DMG_NAME" >> "$GITHUB_ENV"
 
       - name: Upload DMG to GitHub Release
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: ${{ env.DMG_PATH }}
         env:
@@ -158,7 +250,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
         with:

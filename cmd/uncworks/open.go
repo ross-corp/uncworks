@@ -2,6 +2,7 @@
 package main
 
 import (
+	gocontext "context"
 	"flag"
 	"fmt"
 	"os"
@@ -22,11 +23,11 @@ func runOpen(args []string) error {
 	port := fs.Int("port", defaultWebLocalPort, "Local port to forward to the web UI")
 	noBrowser := fs.Bool("no-browser", false, "Start port-forward without opening a browser tab")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks open [flags]\n\nStart a kubectl port-forward for the UNCWORKS web UI and open it in your browser.\nCtrl-C stops the port-forward.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks open [flags]\n\nStart a kubectl port-forward for the UNCWORKS web UI and open it in your browser.\nCtrl-C stops the port-forward.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("open: %w", err)
 	}
 	if err := checkPrereqs(); err != nil {
 		return err
@@ -34,7 +35,7 @@ func runOpen(args []string) error {
 
 	// Kill any stale port-forward from a previous run.
 	if err := killStalePF(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not kill stale port-forward: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "warning: could not kill stale port-forward: %v\n", err)
 	}
 
 	pfArgs := []string{
@@ -46,7 +47,7 @@ func runOpen(args []string) error {
 		pfArgs = append([]string{"--context", *context}, pfArgs...)
 	}
 
-	cmd := exec.Command("kubectl", pfArgs...)
+	cmd := exec.CommandContext(gocontext.Background(), "kubectl", pfArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -55,14 +56,14 @@ func runOpen(args []string) error {
 
 	// Persist PID for cleanup on next run.
 	if err := writePIDFile(cmd.Process.Pid); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not write PID file: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "warning: could not write PID file: %v\n", err)
 	}
 
 	url := fmt.Sprintf("http://localhost:%d", *port)
 	fmt.Printf("Web UI available at %s (Ctrl-C to stop)\n", url)
 	if !*noBrowser {
 		if err := openBrowser(url); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not open browser: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "warning: could not open browser: %v\n", err)
 			fmt.Printf("Open %s in your browser.\n", url)
 		}
 	}
@@ -113,13 +114,16 @@ func openBrowser(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.CommandContext(gocontext.Background(), "open", url)
 	case "linux":
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.CommandContext(gocontext.Background(), "xdg-open", url)
 	case "windows":
-		cmd = exec.Command("start", url)
+		cmd = exec.CommandContext(gocontext.Background(), "start", url)
 	default:
-		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+		return fmt.Errorf("%w: unsupported OS: %s", errInvalidInput, runtime.GOOS)
 	}
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("open browser: %w", err)
+	}
+	return nil
 }

@@ -307,7 +307,7 @@ export default function RunDetailView() {
             <span>{run.spec.displayName || run.name}</span>
           </div>
           <div className="flex items-center gap-3">
-          <span className="font-semibold">{run.spec.displayName || run.name}</span>
+          <h1 className="font-semibold text-base">{run.spec.displayName || run.name}</h1>
           <RunStatusBadge phase={run.status.phase} stage={run.status.stage} />
           {/* Waiting for input amber badge — task 7.3 */}
           {isWaiting && (

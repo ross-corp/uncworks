@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,15 +14,15 @@ import (
 func runConfig(args []string) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show             Print the current CLI configuration\n  set-server       Set the gRPC server address\n  set-web-url      Set the web dashboard URL (used by 'runs ui')\n  set-model        Set the default model tier (used when --model-tier is not specified)\n  set-project      Set the default project name (used when --project is not specified)\n  set-feature      Set the default feature name (used when --feature is not specified)\n  unset <field>    Clear a config field (server, web-url, model, project, feature)\n  path             Print the config file path\n  edit             Open the config file in $EDITOR\n  reset            Reset the config to defaults\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show             Print the current CLI configuration\n  set-server       Set the gRPC server address\n  set-web-url      Set the web dashboard URL (used by 'runs ui')\n  set-model        Set the default model tier (used when --model-tier is not specified)\n  set-project      Set the default project name (used when --project is not specified)\n  set-feature      Set the default feature name (used when --feature is not specified)\n  unset <field>    Clear a config field (server, web-url, model, project, feature)\n  path             Print the config file path\n  edit             Open the config file in $EDITOR\n  reset            Reset the config to defaults\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config: %w", err)
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
-		return fmt.Errorf("subcommand required")
+		return fmt.Errorf("%w: subcommand required", errInvalidInput)
 	}
 	switch fs.Arg(0) {
 	case "show":
@@ -52,24 +53,24 @@ func runConfig(args []string) error {
 	case "reset":
 		return runConfigReset(fs.Args()[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n", fs.Arg(0))
+		_, _ = fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n", fs.Arg(0))
 		fs.Usage()
-		return fmt.Errorf("unknown subcommand %q", fs.Arg(0))
+		return fmt.Errorf("%w: unknown subcommand %q", errInvalidInput, fs.Arg(0))
 	}
 }
 
 func runConfigSetServer(args []string) error {
 	fs := flag.NewFlagSet("config set-server", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-server <address>\n\nSet the gRPC server address. Use 'local' to reset to port-forward mode.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks config set-server <address>\n\nSet the gRPC server address. Use 'local' to reset to port-forward mode.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set server: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("address argument required")
+		return fmt.Errorf("%w: address argument required", errInvalidInput)
 	}
 	addr := fs.Arg(0)
 	if addr == "local" {
@@ -95,15 +96,15 @@ func runConfigSetServer(args []string) error {
 func runConfigSetWebURL(args []string) error {
 	fs := flag.NewFlagSet("config set-web-url", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-web-url <url>\n\nSet the UNCWORKS web dashboard base URL (e.g. http://192.168.1.10:30080).\nUsed by 'uncworks runs ui' to open run detail pages.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks config set-web-url <url>\n\nSet the UNCWORKS web dashboard base URL (e.g. http://192.168.1.10:30080).\nUsed by 'uncworks runs ui' to open run detail pages.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set web url: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("URL argument required")
+		return fmt.Errorf("%w: URL argument required", errInvalidInput)
 	}
 	url := fs.Arg(0)
 	cfg, err := loadConfig()
@@ -122,15 +123,15 @@ func runConfigSetWebURL(args []string) error {
 func runConfigSetModel(args []string) error {
 	fs := flag.NewFlagSet("config set-model", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-model <tier>\n\nSet the default model tier used when --model-tier is not specified.\nUse 'default' or '' to clear the default.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks config set-model <tier>\n\nSet the default model tier used when --model-tier is not specified.\nUse 'default' or '' to clear the default.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set model: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("model tier argument required")
+		return fmt.Errorf("%w: model tier argument required", errInvalidInput)
 	}
 	tier := fs.Arg(0)
 	if tier == "default" || tier == "none" {
@@ -156,15 +157,15 @@ func runConfigSetModel(args []string) error {
 func runConfigSetStringField(args []string, cmd, field string, setter func(*Config, string), label string) error {
 	fs := flag.NewFlagSet("config "+cmd, flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: uncworks config %s <value>\n\nSet the %s. Use 'none' to clear.\n", cmd, label)
+		_, _ = fmt.Fprintf(fs.Output(), "Usage: uncworks config %s <value>\n\nSet the %s. Use 'none' to clear.\n", cmd, label)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set string field: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("value argument required")
+		return fmt.Errorf("%w: value argument required", errInvalidInput)
 	}
 	val := fs.Arg(0)
 	if val == "none" || val == "default" {
@@ -190,15 +191,15 @@ func runConfigSetStringField(args []string, cmd, field string, setter func(*Conf
 func runConfigSetAutoPush(args []string) error {
 	fs := flag.NewFlagSet("config set-auto-push", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-auto-push <true|false>\n\nSet default_auto_push. When true, --auto-push is applied to all new runs.\n")
+		_, _ = fmt.Fprint(fs.Output(), "Usage: uncworks config set-auto-push <true|false>\n\nSet default_auto_push. When true, --auto-push is applied to all new runs.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set auto push: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("value argument required (true or false)")
+		return fmt.Errorf("%w: value argument required (true or false)", errInvalidInput)
 	}
 	cfg, err := loadConfig()
 	if err != nil {
@@ -210,7 +211,7 @@ func runConfigSetAutoPush(args []string) error {
 	case "false", "no", "0", "off":
 		cfg.DefaultAutoPush = false
 	default:
-		return fmt.Errorf("invalid value %q: must be true or false", fs.Arg(0))
+		return fmt.Errorf("%w: invalid value %q: must be true or false", errInvalidInput, fs.Arg(0))
 	}
 	if err := saveConfig(cfg); err != nil {
 		return err
@@ -223,15 +224,15 @@ func runConfigSetAutoPush(args []string) error {
 func runConfigUnset(args []string) error {
 	fs := flag.NewFlagSet("config unset", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config unset <field>\n\nClear a config field. Valid fields: server, web-url, model, project, feature\n")
+		_, _ = fmt.Fprint(fs.Output(), "Usage: uncworks config unset <field>\n\nClear a config field. Valid fields: server, web-url, model, project, feature\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config unset: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("field argument required")
+		return fmt.Errorf("%w: field argument required", errInvalidInput)
 	}
 	cfg, err := loadConfig()
 	if err != nil {
@@ -252,7 +253,7 @@ func runConfigUnset(args []string) error {
 	case "auto-push", "default-auto-push":
 		cfg.DefaultAutoPush = false
 	default:
-		return fmt.Errorf("unknown field %q: must be server, web-url, model, project, feature, or auto-push", field)
+		return fmt.Errorf("%w: unknown field %q: must be server, web-url, model, project, feature, or auto-push", errInvalidInput, field)
 	}
 	if err := saveConfig(cfg); err != nil {
 		return err
@@ -280,11 +281,14 @@ func runConfigEdit(args []string) error {
 	if editor == "" {
 		editor = "vi"
 	}
-	cmd := exec.Command(editor, path)
+	cmd := exec.CommandContext(context.Background(), editor, path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("config edit: %w", err)
+	}
+	return nil
 }
 
 func runConfigReset(args []string) error {

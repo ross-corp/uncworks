@@ -1,6 +1,16 @@
 package v1alpha1
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+)
 
 // ValidateChainDAG checks that the steps form a valid DAG:
 //   - no cycles
@@ -10,7 +20,7 @@ func ValidateChainDAG(steps []ChainStep) error {
 	names := make(map[string]struct{}, len(steps))
 	for _, s := range steps {
 		if _, exists := names[s.Name]; exists {
-			return fmt.Errorf("duplicate step name %q", s.Name)
+			return fmt.Errorf("%w: duplicate step name %q", errFailed, s.Name)
 		}
 		names[s.Name] = struct{}{}
 	}
@@ -19,17 +29,17 @@ func ValidateChainDAG(steps []ChainStep) error {
 	for _, s := range steps {
 		for _, dep := range s.DependsOn {
 			if _, ok := names[dep]; !ok {
-				return fmt.Errorf("step %q depends on undefined step %q", s.Name, dep)
+				return fmt.Errorf("%w: step %q depends on undefined step %q", errFailed, s.Name, dep)
 			}
 		}
 		if s.ContextFrom != "" {
 			if _, ok := names[s.ContextFrom]; !ok {
-				return fmt.Errorf("step %q contextFrom references undefined step %q", s.Name, s.ContextFrom)
+				return fmt.Errorf("%w: step %q contextFrom references undefined step %q", errFailed, s.Name, s.ContextFrom)
 			}
 		}
 		if s.BranchFrom != "" {
 			if _, ok := names[s.BranchFrom]; !ok {
-				return fmt.Errorf("step %q branchFrom references undefined step %q", s.Name, s.BranchFrom)
+				return fmt.Errorf("%w: step %q branchFrom references undefined step %q", errFailed, s.Name, s.BranchFrom)
 			}
 		}
 	}
@@ -68,7 +78,7 @@ func ValidateChainDAG(steps []ChainStep) error {
 	}
 
 	if visited != len(steps) {
-		return fmt.Errorf("chain contains a cycle")
+		return fmt.Errorf("%w: chain contains a cycle", errFailed)
 	}
 	return nil
 }

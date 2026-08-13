@@ -22,7 +22,7 @@ func runGraph(args []string) error {
 	watch := fs.Bool("watch", false, "Auto-refresh the graph every --interval seconds (Ctrl+C to stop)")
 	interval := fs.Int("interval", 3, "Refresh interval in seconds for --watch mode")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks graph <run-id> [flags]\n\nPrint the execution tree for a run.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks graph <run-id> [flags]\n\nPrint the execution tree for a run.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -30,7 +30,7 @@ func runGraph(args []string) error {
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+		return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 	}
 	id := fs.Arg(0)
 
@@ -45,7 +45,7 @@ func runGraph(args []string) error {
 		req := connect.NewRequest(&apiv1.GetRunGraphRequest{Id: id})
 		resp, err := client.GetRunGraph(context.Background(), req)
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 
 		if *jsonOut {
@@ -93,7 +93,7 @@ func runGraph(args []string) error {
 		}
 		fmt.Printf("graph %s  (every %ds, Ctrl+C to stop)\n\n", id, *interval)
 		if err := fetchAndPrint(); err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		}
 		time.Sleep(time.Duration(*interval) * time.Second)
 	}

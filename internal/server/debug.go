@@ -192,7 +192,7 @@ func (d *DebugHandler) lookupAgentRun(ctx context.Context, runID string) (*aotv1
 		Namespace: d.namespace,
 		Name:      runID,
 	}, crd); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("lookup agent run: %w", err)
 	}
 	return crd, nil
 }

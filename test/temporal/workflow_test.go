@@ -6,6 +6,7 @@ package temporal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -17,6 +18,20 @@ import (
 	aottemporal "github.com/uncworks/aot/internal/temporal"
 )
 
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
+	// errUnavailable reports that a dependency did not answer.
+	errUnavailable = errors.New("unavailable")
+)
+
+// defaultInput opts out of the approval gate, so a lifecycle test exercises the
+// lifecycle. An empty ApprovalMode means hybrid, which waits for a human signal
+// that a lifecycle test has no reason to send. The gate has its own tests below.
 func defaultInput() aottemporal.WorkflowInput {
 	return aottemporal.WorkflowInput{
 		AgentRunName: "test-run",
@@ -24,6 +39,7 @@ func defaultInput() aottemporal.WorkflowInput {
 		Repos:        []aottemporal.Repository{{URL: "https://github.com/example/repo.git", Branch: "main"}},
 		Prompt:       "fix the tests",
 		TTLSeconds:   3600,
+		ApprovalMode: "none",
 	}
 }
 
@@ -54,6 +70,9 @@ func mockLifecycleActivities(env *testsuite.TestWorkflowEnvironment) {
 	env.OnActivity((*aottemporal.KnowledgeActivities).HydrateContext, mock.Anything, mock.Anything, mock.Anything).Return(&aottemporal.HydrateContextOutput{}, nil).Maybe()
 	env.OnActivity((*aottemporal.KnowledgeActivities).PersistRunData, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	env.OnActivity((*aottemporal.KnowledgeActivities).EmbedRunData, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	// ArchiveAndCleanup runs from a deferred block on every exit path. Without a
+	// mock the real activity runs against a nil Kubernetes client and panics.
+	env.OnActivity((*aottemporal.Activities).ArchiveAndCleanup, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 }
 
 // TestWorkflow_HappyPath verifies the complete lifecycle:
@@ -182,7 +201,7 @@ func TestWorkflow_CompensationOnFailure(t *testing.T) {
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(
-		fmt.Errorf("agent process failed to start"),
+		fmt.Errorf("%w: agent process failed to start", errFailed),
 	)
 	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -239,7 +258,7 @@ func TestWorkflow_ConsecutiveStatusErrors(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	// GetAgentStatus always fails (all retries exhausted)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
-		nil, fmt.Errorf("connection refused"),
+		nil, fmt.Errorf("%w: connection refused", errInvalidInput),
 	)
 	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -276,7 +295,7 @@ func TestWorkflow_TransientStatusError(t *testing.T) {
 			callCount++
 			// Fail first 3 polls, then succeed with completed
 			if callCount <= 3 {
-				return nil, fmt.Errorf("transient network error")
+				return nil, fmt.Errorf("%w: transient network error", errUnavailable)
 			}
 			return &aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil
 		},
@@ -450,4 +469,125 @@ func TestWorkflow_CIAutofix_SkipsPlan(t *testing.T) {
 	// Verify PlanRun was NOT called (it should be skipped for ci-autofix)
 	// The test would panic if an unmocked activity was called, so completing
 	// without error proves PlanRun was skipped.
+}
+
+// The approval gate had no test, which is how the default path stayed broken:
+// every lifecycle test opted out of it by accident, because an unset
+// ApprovalMode means hybrid and no test sent the signal hybrid waits for.
+
+// mockRunToCompletion mocks the activities every run needs to reach the gate.
+func mockRunToCompletion(env *testsuite.TestWorkflowEnvironment) {
+	env.OnActivity((*aottemporal.Activities).CreateAgentDeployment, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.CreateAgentDeploymentOutput{DeploymentName: "agentrun-test-run", PVCName: "aot-ws-test-run"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).WaitForHydration, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
+		&aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil,
+	)
+	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+}
+
+func TestApprovalGate_LLMJudgeRejectionFailsTheRun(t *testing.T) {
+	env := setupEnv(t)
+	mockRunToCompletion(env)
+	env.OnActivity((*aottemporal.Activities).LLMJudgeChanges, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.LLMJudgeOutput{Approved: false, Reason: "the diff does not address the prompt"}, nil,
+	)
+
+	input := defaultInput()
+	input.ApprovalMode = "llm-judge"
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
+
+	require.True(t, env.IsWorkflowCompleted())
+	err := env.GetWorkflowError()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "does not address the prompt")
+}
+
+func TestApprovalGate_LLMJudgeApprovalPasses(t *testing.T) {
+	env := setupEnv(t)
+	mockRunToCompletion(env)
+	env.OnActivity((*aottemporal.Activities).LLMJudgeChanges, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.LLMJudgeOutput{Approved: true, Reason: "the diff matches the prompt"}, nil,
+	)
+
+	input := defaultInput()
+	input.ApprovalMode = "llm-judge"
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+}
+
+func TestApprovalGate_AnUnreachableJudgeDoesNotRejectTheRun(t *testing.T) {
+	// The judge activity used to convert an unreachable model into
+	// Approved=false, so a missing LiteLLM base URL failed the run as though
+	// the agent's work were bad. The workflow's own comment says a judge error
+	// is non-fatal, and that path could not fire while the error was swallowed.
+	env := setupEnv(t)
+	mockRunToCompletion(env)
+	env.OnActivity((*aottemporal.Activities).LLMJudgeChanges, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.LLMJudgeOutput{}, fmt.Errorf("%w: LiteLLM base URL not configured", errUnavailable),
+	)
+
+	input := defaultInput()
+	input.ApprovalMode = "llm-judge"
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError(),
+		"an unreachable judge says nothing about the diff, so it must not fail the run")
+}
+
+func TestApprovalGate_HybridWaitsForAHumanAfterTheJudge(t *testing.T) {
+	env := setupEnv(t)
+	mockRunToCompletion(env)
+	env.OnActivity((*aottemporal.Activities).LLMJudgeChanges, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.LLMJudgeOutput{Approved: true, Reason: "looks right"}, nil,
+	)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(aottemporal.SignalApprovalDecision,
+			aottemporal.ApprovalDecisionSignal{Approved: true})
+	}, time.Second)
+
+	input := defaultInput()
+	input.ApprovalMode = "hybrid"
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+}
+
+func TestApprovalGate_HybridRejectionFromAHumanFailsTheRun(t *testing.T) {
+	env := setupEnv(t)
+	mockRunToCompletion(env)
+	env.OnActivity((*aottemporal.Activities).LLMJudgeChanges, mock.Anything, mock.Anything, mock.Anything).Return(
+		aottemporal.LLMJudgeOutput{Approved: true, Reason: "looks right"}, nil,
+	)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(aottemporal.SignalApprovalDecision,
+			aottemporal.ApprovalDecisionSignal{Approved: false, Reason: "wrong approach"})
+	}, time.Second)
+
+	input := defaultInput()
+	input.ApprovalMode = "hybrid"
+	env.ExecuteWorkflow(aottemporal.AgentRunWorkflow, input)
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.Error(t, env.GetWorkflowError())
+}
+
+func TestSpawnJunior_InheritsTheParentApprovalMode(t *testing.T) {
+	// A junior is a subtask, and the parent's gate reviews the aggregate. A
+	// junior that defaulted to hybrid waited for its own human signal, so a
+	// manual orchestration with seven subtasks blocked on seven signals.
+	if got := aottemporal.JuniorApprovalMode(""); got != "none" {
+		t.Fatalf("an unset parent mode must leave the junior ungated, got %q", got)
+	}
+	if got := aottemporal.JuniorApprovalMode("hitl"); got != "hitl" {
+		t.Fatalf("an explicit parent mode carries down, got %q", got)
+	}
 }

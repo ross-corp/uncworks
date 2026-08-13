@@ -1,6 +1,6 @@
 # Testing
 
-Test runners are Task targets. Git hooks live in lefthook.
+Every test runner is a Task target. Lefthook holds the git hooks.
 
 ## Hooks
 
@@ -8,65 +8,69 @@ Test runners are Task targets. Git hooks live in lefthook.
 task hooks:install
 ```
 
-### pre-commit (parallel)
+### pre-commit, run in parallel
 
-| Hook | Scope | |
+| Hook | Scope | What it does |
 |------|-------|---|
-| `go-fmt` | `*.go` | Formats + re-stages |
-| `golangci-lint` | `*.go` | Lints |
-| `buf-lint` | `*.proto` | |
-| `tsc-web` | `*.{ts,tsx}` | `web/` |
-| `tsc-shared` | `*.{ts,tsx}` | `packages/shared/` |
-| `tsc-extension` | `*.{ts,tsx}` | `packages/pi-aot-extension/` |
+| `go-fmt` | `*.go` | Formats the file and re-stages it |
+| `golangci-lint` | `*.go` | Lints the new changes only |
+| `buf-lint` | `*.proto` | Lints the proto files |
+| `tsc-web` | `*.{ts,tsx}` | Type-checks `web/` |
+| `tsc-shared` | `*.{ts,tsx}` | Type-checks `packages/shared/` |
+| `tsc-extension` | `*.{ts,tsx}` | Type-checks `packages/pi-aot-extension/` |
 
 ### commit-msg
 
-`commitlint` — conventional commits.
+`commitlint` enforces conventional commits.
 
-### pre-push (parallel)
+### pre-push, run in parallel
 
-| Hook | |
+| Hook | What it does |
 |------|---|
-| `go-test` | Go unit + integration |
-| `buf-breaking` | Proto breaking-change check vs `main` |
+| `go-test` | Runs the Go unit and integration tests |
+| `buf-breaking` | Checks the proto files for breaking changes against `main` |
 
 ## Suites
 
 | Command | What |
 |---------|------|
-| `task test` | Go + web + extension, parallel |
-| `task test:unit` | Go unit only (`-short`); fast, no Docker |
-| `task test:go` | Go unit + integration |
-| `task test:contract` | ConnectRPC + protovalidate |
+| `task test` | Runs the Go, web, and extension tests in parallel |
+| `task test:unit` | Go unit tests only, with `-short`. Fast, and needs no Docker |
+| `task test:go` | Go unit and integration tests |
+| `task test:contract` | ConnectRPC and protovalidate contract tests |
 | `task test:temporal` | Workflow tests |
-| `task test:layer2` | Pipeline integration (LLM stubbed, no cluster) |
-| `task test:regression` | Regression suite — gates releases and PRs to main |
-| `task test:integration` | Docker (testcontainers) |
-| `task test:extension` | pi-aot-extension TS |
-| `task test:shared` | `@aot/shared` TS |
-| `task test:web` | Playwright |
-| `task test:all` | Sequential: proto lint → unit → contract → temporal → integration → e2e |
+| `task test:layer2` | Pipeline integration with the LLM stubbed, and no cluster |
+| `task test:regression` | Regression suite. It gates releases and pull requests to main |
+| `task test:integration` | Integration tests through testcontainers, which needs Docker |
+| `task test:extension` | pi-aot-extension TypeScript tests |
+| `task test:shared` | `@aot/shared` TypeScript tests |
+| `task test:web` | Playwright browser tests |
+| `task test:all` | Runs proto lint, unit, contract, temporal, integration, and e2e in that order |
 
-Single Go test: `go test ./internal/server/... -run TestCreateAgentRun -count=1`.
+Run one Go test with `go test ./internal/server/... -run TestCreateAgentRun -count=1`.
+
+Run controller tests with `-p 1`. Parallel test binaries race to extract the same
+envtest etcd binary, and the loser fails with `text file busy`.
 
 ## E2E
 
-Against a live cluster:
+These run against a live cluster.
 
-| Command | |
+| Command | What it runs |
 |---------|---|
-| `task test:e2e` | Go E2E (30m timeout) |
-| `task test:e2e:api` | API-focused |
-| `task test:e2e:infra` | Build + import + LLM E2E |
-| `task test:e2e:playwright` | Browser only |
-| `task test:e2e:full` | Setup Soft-Serve → Go + Playwright → teardown |
+| `task test:e2e` | The Go E2E suite, with a 30 minute timeout |
+| `task test:e2e:api` | The API-focused subset |
+| `task test:e2e:infra` | Build, import, and the LLM E2E subset |
+| `task test:e2e:playwright` | The browser tests only |
+| `task test:e2e:full` | Sets up Soft-Serve, runs the Go and Playwright suites, then tears down |
 
-Full E2E uses [Soft-Serve](https://github.com/charmbracelet/soft-serve) for fixture repos.
+The full E2E suite serves its fixture repos from
+[Soft-Serve](https://github.com/charmbracelet/soft-serve).
 
-## Lint / proto
+## Lint and proto
 
 ```bash
-task lint            # golangci-lint + tsc --noEmit (web, shared, extension)
+task lint            # golangci-lint, then tsc --noEmit for web, shared, and extension
 task proto:lint
 task proto:breaking
 ```

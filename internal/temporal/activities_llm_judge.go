@@ -63,7 +63,13 @@ func (a *Activities) LLMJudgeChanges(ctx context.Context, input LLMJudgeInput) (
 
 	verdict, err := callChatCompletion(ctx, input.LiteLLMBaseURL, input.LLMKey, model, reviewPrompt)
 	if err != nil {
-		return LLMJudgeOutput{Approved: false, Reason: fmt.Sprintf("LLM judge error: %v", err), GitDiff: gitDiff}, nil
+		// Return the error rather than a rejection. An unreachable judge says
+		// nothing about the agent's work, and reporting it as Approved=false
+		// made a missing base URL or a 500 read as "the change is bad" and fail
+		// the run. The workflow already treats a judge error as non-fatal and
+		// falls through to human approval, and that path could never fire while
+		// this swallowed the error.
+		return LLMJudgeOutput{GitDiff: gitDiff}, fmt.Errorf("calling the judge model: %w", err)
 	}
 
 	approved := verdict.Approved
@@ -133,7 +139,7 @@ type chatCompletionResponse struct {
 // callChatCompletion sends a single chat completion request to the LiteLLM proxy.
 func callChatCompletion(ctx context.Context, baseURL, apiKey, model, prompt string) (*llmJudgeVerdict, error) {
 	if baseURL == "" {
-		return nil, fmt.Errorf("LiteLLM base URL not configured")
+		return nil, fmt.Errorf("%w: LiteLLM base URL not configured", errNotFound)
 	}
 
 	reqBody, err := json.Marshal(chatCompletionRequest{
@@ -149,7 +155,7 @@ func callChatCompletion(ctx context.Context, baseURL, apiKey, model, prompt stri
 	url := strings.TrimRight(baseURL, "/") + "/v1/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("call chat completion: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if apiKey != "" {
@@ -161,11 +167,11 @@ func callChatCompletion(ctx context.Context, baseURL, apiKey, model, prompt stri
 	if err != nil {
 		return nil, fmt.Errorf("chat completion request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("chat completion returned %d: %s", resp.StatusCode, truncate(string(body), 200))
+		return nil, fmt.Errorf("%w: chat completion returned %d: %s", errFailed, resp.StatusCode, truncate(string(body), 200))
 	}
 
 	var completion chatCompletionResponse
@@ -173,7 +179,7 @@ func callChatCompletion(ctx context.Context, baseURL, apiKey, model, prompt stri
 		return nil, fmt.Errorf("failed to parse completion response: %w", err)
 	}
 	if len(completion.Choices) == 0 {
-		return nil, fmt.Errorf("no choices in completion response")
+		return nil, fmt.Errorf("%w: no choices in completion response", errFailed)
 	}
 
 	content := strings.TrimSpace(completion.Choices[0].Message.Content)

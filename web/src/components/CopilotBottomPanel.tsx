@@ -125,12 +125,16 @@ export default function CopilotBottomPanel() {
       }
       // ⌘K / Ctrl+K toggles
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        // The editable guard exists so the shortcut does not steal ⌘K from a
+        // field the user is typing in. It must not apply while the panel is
+        // open: opening the panel focuses its own input, so the guard made the
+        // "(⌘K to close)" the placeholder advertises impossible to use.
         const tag = (document.activeElement as HTMLElement)?.tagName ?? "";
         const isEditable =
           tag === "INPUT" ||
           tag === "TEXTAREA" ||
           (document.activeElement as HTMLElement)?.isContentEditable;
-        if (!isEditable) {
+        if (open || !isEditable) {
           e.preventDefault();
           setOpen(!open);
         }

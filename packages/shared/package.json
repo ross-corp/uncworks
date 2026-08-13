@@ -16,16 +16,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^2.0.0",
-    "@connectrpc/connect": "^2.0.0",
-    "@connectrpc/connect-web": "^2.0.0",
-    "solid-js": "^1.9.4"
+    "@bufbuild/protobuf": "^2.13.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-web": "^2.1.2",
+    "solid-js": "^1.9.14"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^4.1.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.7.0",
-    "vitest": "^4.1.0"
+    "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }

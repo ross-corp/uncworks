@@ -2,9 +2,12 @@
 
 ## Prerequisites
 
-- A local Kubernetes cluster. Docker Desktop, OrbStack (fastest on macOS), Rancher Desktop, k3d, or kind all work.
-- `kubectl` and `helm` on PATH.
-- The `uncworks` CLI: grab a binary from [GitHub Releases](https://github.com/ross-corp/uncworks/releases), or build from source with `./install.sh` from a checkout (needs Go 1.25+).
+- A local Kubernetes cluster. Docker Desktop, OrbStack, Rancher Desktop, k3d, and
+  kind all work. OrbStack starts fastest on macOS.
+- `kubectl` and `helm` on your PATH.
+- The `uncworks` CLI. Download a binary from
+  [GitHub Releases](https://github.com/ross-corp/uncworks/releases), or build it
+  from a checkout with `./install.sh`, which needs Go 1.25 or later.
 
 ## Setup
 
@@ -12,7 +15,12 @@
 uncworks setup
 ```
 
-The wizard picks a kube context, checks resources (2 CPU / 2 GiB floor; 4/4 recommended), asks for an LLM key + GitHub token, and runs `helm upgrade --install`. For non-interactive use:
+The wizard selects a kube context, checks that the cluster has enough resources,
+asks for an LLM key and a GitHub token, and runs `helm upgrade --install`. The
+resource floor is 2 CPU and 2 GiB. Allocate 4 CPU and 4 GiB for a usable
+experience.
+
+Pass every answer as a flag to skip the wizard.
 
 ```bash
 uncworks setup \
@@ -22,22 +30,24 @@ uncworks setup \
   --temporal-host temporal:7233
 ```
 
-Local clusters can use the bundled lighter preset (NodePort 30300, reduced requests, Ollama off):
+A local cluster can use the lighter preset. It serves NodePort 30300, requests
+fewer resources, and disables Ollama.
 
 ```bash
 uncworks setup --values deploy/helm/values.local.yaml
 ```
 
-## Open it
+## Open the UI
 
 ```bash
-uncworks open    # port-forward + browser
+uncworks open    # port-forward and open a browser
 uncworks tui     # terminal UI
 ```
 
-Docker Desktop / OrbStack / Rancher expose NodePorts on `localhost`, so http://localhost:30300 also works.
+Docker Desktop, OrbStack, and Rancher Desktop expose NodePorts on `localhost`, so
+http://localhost:30300 also works.
 
-## Remote server
+## Connect to a remote server
 
 ```bash
 uncworks connect grpc.example.com:50055
@@ -46,9 +56,12 @@ uncworks tui    # now talks to the remote server
 
 ## First run
 
-In the web UI: "New run", paste a repo URL, set a branch (default if blank), write a prompt, pick a model tier, pick a mode (`single` for a one-shot, `spec-driven` for Plan/Execute/Verify), submit.
+In the web UI, select New run, paste a repository URL, set a branch, write a
+prompt, select a model tier, and select a mode. Leave the branch blank to use the
+default branch. Select `single` for a one-shot run, or `spec-driven` for the
+Plan, Execute, and Verify pipeline.
 
-Or from the CLI:
+The CLI does the same thing.
 
 ```bash
 uncworks runs create \
@@ -58,15 +71,19 @@ uncworks runs create \
   --mode single
 ```
 
-By default every run goes through the **hybrid** approval gate: an LLM judge reviews the diff, and then a human approves or rejects in the UI. Override with `--approval-mode none|hitl|llm-judge|hybrid`.
+Every run goes through the `hybrid` approval gate by default. An LLM judge
+reviews the diff, and then a human approves or rejects it in the UI. Change the
+gate with `--approval-mode none|hitl|llm-judge|hybrid`.
 
-## Status, teardown
+## Status and teardown
 
 ```bash
-uncworks status              # pod health
-uncworks teardown            # uninstall, keep PVCs
-uncworks teardown --purge    # uninstall + delete PVCs (workspace data is gone)
+uncworks status              # report pod health
+uncworks teardown            # uninstall and keep the PVCs
+uncworks teardown --purge    # uninstall and delete the PVCs
 ```
+
+`--purge` deletes every workspace. The data cannot be recovered.
 
 ## Next
 
@@ -74,4 +91,4 @@ uncworks teardown --purge    # uninstall + delete PVCs (workspace data is gone)
 - [Spec-driven pipeline](guides/spec-driven.md)
 - [Models](guides/models.md)
 - [API reference](reference/api.md)
-- [CRD reference](reference/crd.md)
+- [Custom resource reference](reference/crd.md)

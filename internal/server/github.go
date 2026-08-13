@@ -13,9 +13,6 @@ import (
 	aotgithub "github.com/uncworks/aot/internal/github"
 )
 
-// maxSpecBodyBytes caps the request body for spec push operations at 1 MB.
-const maxSpecBodyBytes = 1 << 20
-
 // GitHubClient communicates with the GitHub Contents API.
 type GitHubClient struct {
 	provider   aotgithub.TokenProvider
@@ -33,9 +30,13 @@ func NewGitHubClient(provider aotgithub.TokenProvider) *GitHubClient {
 // getToken retrieves the current token from the provider.
 func (g *GitHubClient) getToken(ctx context.Context) (string, error) {
 	if g.provider == nil {
-		return "", fmt.Errorf("GITHUB_TOKEN not configured")
+		return "", fmt.Errorf("%w: GITHUB_TOKEN not configured", errNotFound)
 	}
-	return g.provider.Token(ctx)
+	token, err := g.provider.Token(ctx)
+	if err != nil {
+		return "", fmt.Errorf("get token: %w", err)
+	}
+	return token, nil
 }
 
 // --- request / response types ---
@@ -240,7 +241,7 @@ func setAuthHeaders(req *http.Request, token string) {
 func splitRepo(fullRepo string) (string, string, error) {
 	parts := strings.SplitN(fullRepo, "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("repo must be in owner/repo format, got %q", fullRepo)
+		return "", "", fmt.Errorf("%w: repo must be in owner/repo format, got %q", errInvalidInput, fullRepo)
 	}
 	return parts[0], parts[1], nil
 }

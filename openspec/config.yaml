@@ -1,5 +1,10 @@
 schema: spec-driven
 
+# openspec's built-in spec-driven schema generates proposal, design, spec, and
+# tasks. openspec/schema.yaml extends that set with citations.lock and review.md
+# and tightens the authoring rules. It is the authority for an author or an
+# agent; `uncworks spec check` enforces every rule a program can decide.
+
 # Project context (optional)
 # This is shown to AI when creating artifacts.
 # Add your tech stack, conventions, style guides, domain knowledge, etc.

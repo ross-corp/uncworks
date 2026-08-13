@@ -6,7 +6,15 @@
 // These tests are the source of truth for "does the app actually work."
 import { test, expect } from "@playwright/test";
 
-// Generous timeouts — real API calls are slower than mocks.
+// This file talks to a real cluster on purpose, so it cannot pass in CI or on a
+// laptop with no port-forward. It used to run anyway and fail, which taught
+// everyone to ignore three red tests. Set UNCWORKS_LIVE=1 to run it.
+test.skip(
+  !process.env.UNCWORKS_LIVE,
+  "needs a live cluster: set UNCWORKS_LIVE=1 and port-forward the apiserver on :50055",
+);
+
+// Generous timeouts, because real API calls are slower than mocks.
 const LOAD_TIMEOUT = 15_000;
 const NAV_TIMEOUT = 10_000;
 

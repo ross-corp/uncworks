@@ -55,7 +55,7 @@ func runRun(args []string) error {
 	outputID := fs.Bool("output-id", false, "Print only the run ID (for scripting)")
 	dryRun := fs.Bool("dry-run", false, "Preview the run spec without actually creating the run")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
+		_, _ = fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
 
 Submit a new agent run and print the run ID.
 
@@ -117,8 +117,8 @@ Flags:`)
 		}
 		tmpPath := tmpf.Name()
 		_ = tmpf.Close()
-		defer os.Remove(tmpPath)
-		editorCmd := exec.Command(editor, tmpPath)
+		defer func() { _ = os.Remove(tmpPath) }()
+		editorCmd := exec.CommandContext(context.Background(), editor, tmpPath)
 		editorCmd.Stdin = os.Stdin
 		editorCmd.Stdout = os.Stdout
 		editorCmd.Stderr = os.Stderr
@@ -131,20 +131,20 @@ Flags:`)
 		}
 		*prompt = strings.TrimSpace(string(raw))
 		if *prompt == "" {
-			return fmt.Errorf("prompt is empty (editor produced no content)")
+			return fmt.Errorf("%w: prompt is empty (editor produced no content)", errInvalidInput)
 		}
 	}
 
 	// Auto-detect repo from git origin if not specified.
 	if *repo == "" {
-		if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+		if out, err := exec.CommandContext(context.Background(), "git", "remote", "get-url", "origin").Output(); err == nil {
 			*repo = strings.TrimSpace(string(out))
 		}
 	}
 
 	// Auto-detect current branch if not specified.
 	if *branch == "" {
-		if out, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+		if out, err := exec.CommandContext(context.Background(), "git", "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
 			b := strings.TrimSpace(string(out))
 			if b != "" && b != "HEAD" {
 				*branch = b
@@ -157,18 +157,18 @@ Flags:`)
 
 	if *prompt == "" {
 		fs.Usage()
-		return fmt.Errorf("--prompt is required")
+		return fmt.Errorf("%w: --prompt is required", errInvalidInput)
 	}
 	if *repo == "" {
 		fs.Usage()
-		return fmt.Errorf("--repo is required (could not auto-detect git remote origin)")
+		return fmt.Errorf("%w: --repo is required (could not auto-detect git remote origin)", errInvalidInput)
 	}
 
 	envVars := map[string]string{}
 	for _, kv := range envFlags {
 		parts := strings.SplitN(kv, "=", 2)
 		if len(parts) != 2 {
-			return fmt.Errorf("--env %q: must be KEY=VALUE", kv)
+			return fmt.Errorf("%w: --env %q: must be KEY=VALUE", errInvalidInput, kv)
 		}
 		envVars[parts[0]] = parts[1]
 	}
@@ -184,7 +184,7 @@ Flags:`)
 			}
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) != 2 {
-				return fmt.Errorf("--env-file line %q: must be KEY=VALUE", line)
+				return fmt.Errorf("%w: --env-file line %q: must be KEY=VALUE", errInvalidInput, line)
 			}
 			envVars[strings.TrimSpace(parts[0])] = parts[1]
 		}
@@ -235,11 +235,11 @@ Flags:`)
 		Repos: []*apiv1.Repository{
 			{Url: *repo, Branch: *branch},
 		},
-		Prompt:      *prompt,
-		DisplayName: *name,
-		Project:     *project,
-		Feature:     *feature,
-		ModelTier:   *modelTier,
+		Prompt:       *prompt,
+		DisplayName:  *name,
+		Project:      *project,
+		Feature:      *feature,
+		ModelTier:    *modelTier,
 		AutoPush:     *autoPush || *autoPR,
 		AutoPr:       *autoPR,
 		Tags:         []string(tags),
@@ -252,12 +252,12 @@ Flags:`)
 	req := connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: spec})
 	resp, err := client.CreateAgentRun(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	run := resp.Msg.GetAgentRun()
 	if run == nil {
-		return fmt.Errorf("server returned empty run")
+		return fmt.Errorf("%w: server returned empty run", errInvalidInput)
 	}
 
 	if *outputID {
@@ -304,7 +304,7 @@ Flags:`)
 
 	stream, err := client.WatchAgentRun(waitCtx, connect.NewRequest(&apiv1.WatchAgentRunRequest{Id: run.GetId()}))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	startTime := time.Now()
@@ -327,14 +327,14 @@ Flags:`)
 	}
 	if err := stream.Err(); err != nil {
 		if waitCtx.Err() != nil {
-			return fmt.Errorf("timed out after %s waiting for run %s", *timeout, run.GetId())
+			return fmt.Errorf("%w: timed out after %s waiting for run %s", errUnavailable, *timeout, run.GetId())
 		}
-		return fmt.Errorf("stream error: %s", humanizeErr(err))
+		return fmt.Errorf("%w: stream error: %s", errFailed, humanizeErr(err))
 	}
 
 	getResp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: run.GetId()}))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 	phase := getResp.Msg.GetStatus().GetPhase()
 	msg := getResp.Msg.GetStatus().GetMessage()
@@ -343,7 +343,7 @@ Flags:`)
 		if !*notify {
 			return
 		}
-		_ = exec.Command("osascript", "-e",
+		_ = exec.CommandContext(context.Background(), "osascript", "-e",
 			fmt.Sprintf(`display notification %q with title %q`, body, title)).Run()
 	}
 
@@ -360,13 +360,13 @@ Flags:`)
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
 		doNotify("UNCWORKS: run failed", run.GetId()+" — "+msg)
 		if msg != "" {
-			return fmt.Errorf("run %s failed: %s", run.GetId(), msg)
+			return fmt.Errorf("%w: run %s failed: %s", errFailed, run.GetId(), msg)
 		}
-		return fmt.Errorf("run %s failed", run.GetId())
+		return fmt.Errorf("%w: run %s failed", errFailed, run.GetId())
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
 		doNotify("UNCWORKS: run cancelled", run.GetId())
-		return fmt.Errorf("run %s was cancelled", run.GetId())
+		return fmt.Errorf("%w: run %s was cancelled", errFailed, run.GetId())
 	default:
-		return fmt.Errorf("run %s ended in unexpected phase: %s", run.GetId(), phaseLabel(phase))
+		return fmt.Errorf("%w: run %s ended in unexpected phase: %s", errInvalidInput, run.GetId(), phaseLabel(phase))
 	}
 }

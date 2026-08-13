@@ -18,43 +18,43 @@ import (
 
 // AppSettings holds all user-configurable values for the desktop app.
 type AppSettings struct {
-	GitHubToken    string            `json:"githubToken"    yaml:"githubToken,omitempty"`
-	Namespace      string            `json:"namespace"      yaml:"namespace,omitempty"`
-	KubeContext    string            `json:"kubeContext"    yaml:"kubeContext,omitempty"`
-	PortRangeStart int               `json:"portRangeStart" yaml:"portRangeStart,omitempty"`
-	PortRangeEnd   int               `json:"portRangeEnd"   yaml:"portRangeEnd,omitempty"`
+	GitHubToken    string `json:"githubToken"    yaml:"githubToken,omitempty"`
+	Namespace      string `json:"namespace"      yaml:"namespace,omitempty"`
+	KubeContext    string `json:"kubeContext"    yaml:"kubeContext,omitempty"`
+	PortRangeStart int    `json:"portRangeStart" yaml:"portRangeStart,omitempty"`
+	PortRangeEnd   int    `json:"portRangeEnd"   yaml:"portRangeEnd,omitempty"`
 	// EnvOverrides allows the user to set or override environment variables
 	// (EDITOR, VISUAL, PAGER, XDG_CONFIG_HOME, XDG_DATA_HOME, etc.)
 	// that are inherited by child processes spawned by the app.
-	EnvOverrides         map[string]string `json:"envOverrides"         yaml:"envOverrides,omitempty"`
+	EnvOverrides map[string]string `json:"envOverrides"         yaml:"envOverrides,omitempty"`
 	// LiteLLMURL is the base URL for the LiteLLM proxy. Defaults to http://litellm:4000.
-	LiteLLMURL           string            `json:"litellmURL"           yaml:"litellmURL,omitempty"`
+	LiteLLMURL string `json:"litellmURL"           yaml:"litellmURL,omitempty"`
 	// GitHubAuthed indicates a GitHub OAuth token is stored in Keychain.
-	GitHubAuthed         bool              `json:"githubAuthed"         yaml:"githubAuthed,omitempty"`
+	GitHubAuthed bool `json:"githubAuthed"         yaml:"githubAuthed,omitempty"`
 	// UpdateChannel is "stable" or "nightly". Empty defaults to "stable".
-	UpdateChannel        string            `json:"updateChannel"        yaml:"updateChannel,omitempty"`
+	UpdateChannel string `json:"updateChannel"        yaml:"updateChannel,omitempty"`
 	// AutoUpdateEnabled opts in to automatic update checks at launch.
-	AutoUpdateEnabled    bool              `json:"autoUpdateEnabled"    yaml:"autoUpdateEnabled,omitempty"`
+	AutoUpdateEnabled bool `json:"autoUpdateEnabled"    yaml:"autoUpdateEnabled,omitempty"`
 	// DefaultManageModel is the default LiteLLM model for manage-phase agents.
-	DefaultManageModel   string            `json:"defaultManageModel"   yaml:"defaultManageModel,omitempty"`
+	DefaultManageModel string `json:"defaultManageModel"   yaml:"defaultManageModel,omitempty"`
 	// DefaultImplementModel is the default LiteLLM model for implement-phase agents.
-	DefaultImplementModel string           `json:"defaultImplementModel" yaml:"defaultImplementModel,omitempty"`
+	DefaultImplementModel string `json:"defaultImplementModel" yaml:"defaultImplementModel,omitempty"`
 	// WizardComplete tracks whether the setup wizard has been completed.
-	WizardComplete       bool              `json:"wizardComplete"       yaml:"wizardComplete,omitempty"`
+	WizardComplete bool `json:"wizardComplete"       yaml:"wizardComplete,omitempty"`
 	// APIServerURL is the base URL for the UNCWORKS API server.
 	// Assigned dynamically by autoStartApiserverForward; empty until first connect.
-	APIServerURL         string            `json:"apiserverURL"         yaml:"apiserverURL,omitempty"`
+	APIServerURL string `json:"apiserverURL"         yaml:"apiserverURL,omitempty"`
 	// LLMAPIKey is the API key for the configured LLM provider (e.g. OpenRouter).
-	LLMAPIKey            string            `json:"llmApiKey"            yaml:"llmApiKey,omitempty"`
+	LLMAPIKey string `json:"llmApiKey"            yaml:"llmApiKey,omitempty"`
 	// LLMKeyConfigured is computed at read time: true when LLMAPIKey is non-empty.
 	// Never persisted — derived from LLMAPIKey in GetSettings.
-	LLMKeyConfigured     bool              `json:"llmKeyConfigured"     yaml:"-"`
+	LLMKeyConfigured bool `json:"llmKeyConfigured"     yaml:"-"`
 	// ShowTrafficLights controls whether the macOS traffic-light buttons are
 	// shown in the title bar. When false (default), the window uses full-bleed
 	// inset mode. Change takes effect on next launch.
-	ShowTrafficLights    bool              `json:"showTrafficLights"    yaml:"showTrafficLights,omitempty"`
+	ShowTrafficLights bool `json:"showTrafficLights"    yaml:"showTrafficLights,omitempty"`
 	// CopilotModel is the model used by the copilot chat panel. Empty means LiteLLM default.
-	CopilotModel         string            `json:"copilotModel"         yaml:"copilotModel,omitempty"`
+	CopilotModel string `json:"copilotModel"         yaml:"copilotModel,omitempty"`
 }
 
 // EnvVarInfo describes a single environment variable — its current value

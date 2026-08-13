@@ -157,7 +157,10 @@ func run() error {
 		ctx, cancel := context.WithTimeout(req.Context(), 3*time.Second)
 		defer cancel()
 		_, err := tc.CheckHealth(ctx, &temporalclient.CheckHealthRequest{})
-		return err
+		if err != nil {
+			return fmt.Errorf("run: %w", err)
+		}
+		return nil
 	})); err != nil {
 		return fmt.Errorf("add healthz check: %w", err)
 	}
@@ -166,7 +169,10 @@ func run() error {
 		ctx, cancel := context.WithTimeout(req.Context(), 3*time.Second)
 		defer cancel()
 		_, err := tc.CheckHealth(ctx, &temporalclient.CheckHealthRequest{})
-		return err
+		if err != nil {
+			return fmt.Errorf("run: %w", err)
+		}
+		return nil
 	})); err != nil {
 		return fmt.Errorf("add readyz check: %w", err)
 	}

@@ -66,11 +66,11 @@ func TestPhaseLabel(t *testing.T) {
 		input int32
 		want  string
 	}{
-		{0, "UNKNOWN"},  // UNSPECIFIED
+		{0, "UNKNOWN"}, // UNSPECIFIED
 		{1, "PENDING"},
 		{2, "RUNNING"},
-		{3, "WAITING"},  // WAITING_FOR_INPUT
-		{4, "DONE"},     // SUCCEEDED
+		{3, "WAITING"}, // WAITING_FOR_INPUT
+		{4, "DONE"},    // SUCCEEDED
 		{5, "FAILED"},
 		{6, "CANCELLED"},
 	}

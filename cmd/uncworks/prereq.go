@@ -7,7 +7,7 @@ import (
 )
 
 type prereqError struct {
-	tool    string
+	tool       string
 	installURL string
 }
 

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -39,6 +41,16 @@ func initLogger() {
 }
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("BFF server error", "err", err)
+		os.Exit(1)
+	}
+}
+
+// run holds the body so every deferred call runs before main exits. os.Exit
+// skips every defer, so calling it inside this function would leak the signal
+// handler's context.
+func run() error {
 	initLogger()
 
 	port := envOrDefault("BFF_PORT", "3000")
@@ -91,7 +103,7 @@ func main() {
 	// Graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	
+
 	go func() {
 		<-ctx.Done()
 		slog.Info("shutting down BFF server...")
@@ -111,10 +123,10 @@ func main() {
 		"allowedOrigin", allowedOrigin,
 		"log_level", os.Getenv("LOG_LEVEL"),
 	)
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		slog.Error("BFF server error", "err", err)
-		os.Exit(1)
+	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("serving: %w", err)
 	}
+	return nil
 }
 
 func envOrDefault(key, fallback string) string {

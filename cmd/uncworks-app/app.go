@@ -72,8 +72,8 @@ func (a *App) startup(ctx context.Context) {
 // macOS GUI apps don't inherit from the user's shell environment.
 func bootstrapPATH() {
 	extra := []string{
-		"/opt/homebrew/bin",           // Homebrew (Apple Silicon)
-		"/usr/local/bin",              // Homebrew (Intel) + Docker Desktop
+		"/opt/homebrew/bin", // Homebrew (Apple Silicon)
+		"/usr/local/bin",    // Homebrew (Intel) + Docker Desktop
 		"/opt/homebrew/sbin",
 		"/usr/local/sbin",
 		"/nix/var/nix/profiles/default/bin", // Nix
@@ -133,16 +133,16 @@ var knownEnvVars = []struct {
 	Key  string
 	Desc string
 }{
-	{"EDITOR",           "Preferred text editor (e.g. nvim, vim, nano)"},
-	{"VISUAL",           "Preferred visual editor (falls back to EDITOR)"},
-	{"PAGER",            "Preferred pager for long output (e.g. less, more)"},
-	{"SHELL",            "Preferred shell for subprocesses"},
-	{"XDG_CONFIG_HOME",  "User config directory (default: ~/.config)"},
-	{"XDG_DATA_HOME",    "User data directory (default: ~/.local/share)"},
-	{"XDG_STATE_HOME",   "User state directory (default: ~/.local/state)"},
-	{"XDG_CACHE_HOME",   "User cache directory (default: ~/.cache)"},
-	{"XDG_RUNTIME_DIR",  "Runtime files directory (sockets, PIDs)"},
-	{"KUBECONFIG",       "Path to kubeconfig file (default: ~/.kube/config)"},
+	{"EDITOR", "Preferred text editor (e.g. nvim, vim, nano)"},
+	{"VISUAL", "Preferred visual editor (falls back to EDITOR)"},
+	{"PAGER", "Preferred pager for long output (e.g. less, more)"},
+	{"SHELL", "Preferred shell for subprocesses"},
+	{"XDG_CONFIG_HOME", "User config directory (default: ~/.config)"},
+	{"XDG_DATA_HOME", "User data directory (default: ~/.local/share)"},
+	{"XDG_STATE_HOME", "User state directory (default: ~/.local/state)"},
+	{"XDG_CACHE_HOME", "User cache directory (default: ~/.cache)"},
+	{"XDG_RUNTIME_DIR", "Runtime files directory (sockets, PIDs)"},
+	{"KUBECONFIG", "Path to kubeconfig file (default: ~/.kube/config)"},
 }
 
 // GetEnvVars returns the curated environment variables with their system

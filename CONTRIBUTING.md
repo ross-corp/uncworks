@@ -6,147 +6,175 @@
 # 1. Install devbox (https://www.jetify.com/devbox)
 curl -fsSL https://get.jetify.com/devbox | bash
 
-# 2. Enter the dev environment (installs Go, Node, kubectl, helm, buf, etc.)
+# 2. Enter the dev environment. This installs Go, Node, kubectl, helm, and buf
 devbox shell
 
-# 3. Install project dependencies and git hooks
+# 3. Install the project dependencies and the git hooks
 task install
 
-# 4. Build all binaries
+# 4. Build every binary
 task build
 ```
 
-> [!NOTE]
-> The macOS desktop app (`cmd/uncworks-app/`) requires Wails: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+The macOS desktop app in `cmd/uncworks-app/` needs Wails. Install it with
+`go install github.com/wailsapp/wails/v2/cmd/wails@latest`.
 
-## Local Cluster
+Run `git commit` from inside `devbox shell`. The hooks call `gofmt`,
+`golangci-lint`, and `npx`, and none of them are on the bare PATH.
 
-UNCWORKS runs on a local k3s cluster managed by Colima:
+## Local cluster
+
+UNCWORKS runs on a local k3s cluster that Colima manages.
 
 ```bash
-task cluster:setup    # Create colima VM + deploy everything (one-time)
-task cluster:status   # Check pod health
-task dev:deploy       # Rebuild images + rollout all deployments
-task dev:web          # Vite dev server (web dashboard only)
+task cluster:setup    # create the Colima VM and deploy everything. Run this once
+task cluster:status   # report pod health
+task dev:deploy       # rebuild the images and roll out every deployment
+task dev:web          # Vite dev server for the web dashboard only
 ```
 
-## Daily Development Cycle
+## Daily cycle
 
 ```bash
-# After editing Go code:
-task dev:deploy       # build images into k8s.io namespace + rollout
+# After you edit Go code:
+task dev:deploy       # build images into the k8s.io namespace and roll out
 
-# After editing web code only:
-cd web && npm run dev  # or: task dev:web
+# After you edit web code only:
+task dev:web
 
-# After editing proto files:
-task proto:gen        # regenerate Go + TypeScript bindings
+# After you edit a proto file:
+task proto:gen        # regenerate the Go and TypeScript bindings
 
-# Run tests before pushing:
-task test:go          # Go unit + contract + layer2
-task test:web         # Vitest
-task test:e2e         # End-to-end (requires running cluster)
+# Before you push:
+task test:go          # Go unit, contract, and layer 2 tests
+task test:web         # Playwright tests
+task test:e2e         # end-to-end tests. Needs a running cluster
 ```
 
 ## Testing
 
 | Command | What it tests |
 |---------|--------------|
-| `task test:go` | Go unit tests across all packages |
+| `task test:go` | Go unit tests across every package |
 | `task test:contract` | API contract tests |
 | `task test:layer2` | Pipeline integration tests |
-| `task test:regression` | Regression suite (tagged `//go:build regression`) |
-| `task test:web` | React component + hook unit tests |
-| `task test:e2e` | End-to-end tests (needs cluster) |
+| `task test:regression` | Regression suite, tagged `//go:build regression` |
+| `task test:web` | Playwright end-to-end tests for the dashboard |
+| `task test:extension` | pi-aot-extension TypeScript tests |
+| `task test:shared` | `@aot/shared` TypeScript tests |
+| `task test:e2e` | End-to-end tests. Needs a cluster |
 
-Run `task --list` to see all available tasks.
+Run `task --list` to see every task.
 
-## Code Style
+Run controller tests with `-p 1`. Parallel test binaries race to extract the same
+envtest etcd binary, and the loser fails with `text file busy`.
 
-**Go:**
-- `golangci-lint run` (config in `.golangci.yml`)
-- Wrap errors: `fmt.Errorf("doing X: %w", err)`
-- Use `slog` for structured logging — no `fmt.Println` or `log.Printf`
-- All exported symbols need godoc comments
+## Code style
 
-**TypeScript/React:**
-- No `any` types without an explicit `// eslint-disable` comment explaining why
-- Hooks expose `{ data, loading, error }` — never swallow errors silently
-- Use Tailwind CSS variables (`text-foreground`, `bg-background`) — no hardcoded colors
+Go:
 
-**Proto:**
-- snake_case fields, PascalCase messages, UPPER_SNAKE enums
-- Zero-value enum entry required: `FOO_UNSPECIFIED = 0`
-- Run `task proto:lint` before pushing proto changes
+- Run `golangci-lint run`. The config is `.golangci.yml`.
+- Wrap every error you return from another package: `fmt.Errorf("doing X: %w", err)`.
+- Use `slog` for structured logging. Do not use `fmt.Println` or `log.Printf`.
+- Give every exported symbol a godoc comment.
 
-## Commit Style
+TypeScript and React:
 
-Conventional commits, no body required:
+- Do not use `any` without an `// eslint-disable` comment that says why.
+- Return `{ data, loading, error }` from a hook. Never swallow an error.
+- Use the Tailwind CSS variables, such as `text-foreground` and `bg-background`.
+  Do not hardcode a color.
+
+Proto:
+
+- Use snake_case fields, PascalCase messages, and UPPER_SNAKE enum values.
+- Give every enum a zero value named `FOO_UNSPECIFIED = 0`.
+- Run `task proto:lint` before you push a proto change.
+
+Documentation:
+
+- Write in Simplified Technical English. Use one instruction per sentence, active
+  voice, and one term for one concept.
+- Do not use em-dashes, emoji, callout blocks, or a bolded label at the start of
+  a sentence or list item.
+- Use Mermaid for every diagram.
+
+## Commit style
+
+Use conventional commits. A body is optional.
 
 ```
 feat: add webhook retry backoff
 fix: handle nil project ref in list handler
-chore: bump temporal SDK to v1.31
+chore: bump temporal SDK to v1.47
 refactor: extract rate limit middleware
 test: add layer2 HITL flow tests
 ```
 
-No merge commits. Rebase onto main before opening a PR.
+Do not create merge commits. Rebase onto `main` before you open a pull request.
 
-## Pull Requests
+## Pull requests
 
-- Keep PRs focused — one logical change per PR
-- All CI checks must pass
-- Add tests for new behavior; don't reduce coverage
-- Update `docs/` if you change user-facing behavior
-- Reference any related OpenSpec change in the PR description
+- Keep each pull request to one logical change.
+- Every CI check MUST pass.
+- Add tests for new behavior. Do not reduce coverage.
+- Update `docs/` when you change user-facing behavior.
+- Name the related OpenSpec change in the description.
 
-## OpenSpec Workflow
+## OpenSpec workflow
 
-Significant changes use [OpenSpec](openspec/) for structured proposals:
+Significant changes go through [OpenSpec](openspec/).
 
 ```bash
-/opsx:propose <change-name>   # create proposal + design + tasks
-/opsx:apply                   # implement tasks
-/opsx:archive                 # archive when done
+openspec new change <name>   # scaffold proposal, design, and tasks
+openspec status <name>       # show task completion
+openspec validate <name>     # validate the artifacts
+openspec archive <name>      # archive when every task is done
 ```
 
-Active changes are in `openspec/changes/`. Archived changes are in `openspec/changes/archive/`.
+Active changes live in `openspec/changes/`. Completed changes live in
+`openspec/changes/archive/`.
 
-## Architecture Overview
+## Repository layout
 
 ```
 cmd/
-  apiserver/          ConnectRPC API server (gRPC + HTTP)
-  controller/         Kubernetes controller (AgentRun CRD reconciler)
-  worker/             Temporal workflow worker
-  uncworks/           CLI tool
-  uncworks-app/       macOS desktop app (Wails — gitignored build output)
+  apiserver/          ConnectRPC API server (gRPC and HTTP)
+  controller/         Kubernetes controller, reconciles AgentRun
+  temporal-worker/    Temporal workflow worker
+  hydration/          Init container, clones the repo
+  sidecar/            RPC gateway inside the agent pod
+  uncworks/           End-user CLI
+  aot/                Internal workspace CLI
+  bff/                Backend-for-frontend for the desktop app
+  uncworks-app/       macOS desktop app (Wails). Build output is gitignored
 
 internal/
-  server/             HTTP/gRPC handlers
-  temporal/           Workflows + activities
+  server/             HTTP and gRPC handlers
+  temporal/           Workflows and activities
   controller/         Reconciliation logic
-  softserve/          Soft-serve git client
-  brain/              LLM inference client
-  ratelimit/          Per-IP rate limiting
+  softserve/          Soft-Serve git client
+  brain/              PostgreSQL state store and semantic search
+  embeddings/         Embedding generation through Ollama
+  litellm/            LiteLLM admin API client
+  github/             GitHub App client, webhooks, pull requests
 
 web/src/
   views/              Page-level React components
   components/         Reusable UI components
-  hooks/              React hooks (data fetching, state)
+  hooks/              React hooks for data fetching and state
   lib/                Utilities
 
 proto/                Protobuf service definitions
-gen/                  Generated code (Go + TypeScript) — do not edit
-
-deploy/helm/aot/      Helm chart for Kubernetes deployment
+gen/                  Generated Go and TypeScript code. Do not edit
+deploy/helm/aot/      Helm chart
 docker/               Dockerfiles
-ci/                   Dagger CI pipeline (Go)
-test/                 Integration + contract + regression tests
+ci/                   Dagger CI pipeline, written in Go
+test/                 Integration, contract, and regression tests
 ```
 
-## Getting Help
+## Getting help
 
-- Open a [GitHub Issue](https://github.com/ross-corp/uncworks/issues) for bugs or feature requests
-- Check `docs/` for guides on specific topics
+- Open a [GitHub issue](https://github.com/ross-corp/uncworks/issues) for a bug
+  or a feature request.
+- Read `docs/` for guides on specific topics.

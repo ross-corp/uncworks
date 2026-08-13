@@ -13,12 +13,13 @@ Chart: `deploy/helm/aot/`. Selected values; see `values.yaml` for the full surfa
 
 | Value | Default | |
 |-------|---------|---|
-| `llm.baseUrl` | `""` | LiteLLM / Ollama / OpenAI base URL |
+| `llm.baseUrl` | `""` | Base URL of LiteLLM, Ollama, or OpenAI |
 | `llm.apiKey` | `""` | |
 
 ## Images
 
-Each: `repository`, `tag` (default empty → `Chart.appVersion`), `pullPolicy` (default `IfNotPresent`).
+Every image takes `repository`, `tag`, and `pullPolicy`. An empty `tag` means
+`Chart.appVersion`. `pullPolicy` defaults to `IfNotPresent`.
 
 | Value | Default repository |
 |-------|--------------------|

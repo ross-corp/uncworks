@@ -233,7 +233,7 @@ func (a *Activities) CreatePR(ctx context.Context, input CreatePRInput) (*Create
 	activity.RecordHeartbeat(ctx, "creating GitHub PR")
 
 	if a.GitHubProvider == nil {
-		return nil, fmt.Errorf("no GitHub token provider configured")
+		return nil, fmt.Errorf("%w: no GitHub token provider configured", errFailed)
 	}
 	token, err := a.GitHubProvider.Token(ctx)
 	if err != nil {
@@ -284,8 +284,13 @@ func (a *Activities) CreatePR(ctx context.Context, input CreatePRInput) (*Create
 		// 4xx errors (except 429 Too Many Requests) will not succeed on retry.
 		// Return a non-retryable ApplicationError to avoid burning the retry budget.
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+			// Constructed, not propagated, so it is never nil and must not be
+			// wrapped: Temporal inspects the error's own type to decide
+			// retryability, and a wrap hides it.
+			//nolint:wrapcheck // the error is constructed here, not passed through
 			return nil, temporalsdk.NewNonRetryableApplicationError(msg, "GitHubAPIError", nil)
 		}
+		//nolint:wrapcheck // the error is constructed here, not passed through
 		return nil, temporalsdk.NewApplicationError(msg, "GitHubAPIError")
 	}
 
@@ -322,7 +327,7 @@ func gitExec(ctx context.Context, client agentv1connect.AgentSidecarServiceClien
 		return "", fmt.Errorf("exec git command: %w", err)
 	}
 	if resp.Msg.ExitCode != 0 {
-		return resp.Msg.Stdout, fmt.Errorf("git command exited with code %d: %s", resp.Msg.ExitCode, resp.Msg.Stderr)
+		return resp.Msg.Stdout, fmt.Errorf("%w: git command exited with code %d: %s", errFailed, resp.Msg.ExitCode, resp.Msg.Stderr)
 	}
 	return resp.Msg.Stdout, nil
 }

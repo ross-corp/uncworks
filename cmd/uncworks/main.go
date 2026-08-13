@@ -47,6 +47,9 @@ Commands:
   stats      Aggregate run counts by phase (alias for runs stats)
   search     Search the knowledge base for past work
   config     Show or edit the CLI configuration
+  cite       Capture and verify pinned external-factual claims (citations.lock)
+  spec       Rubric-lint an OpenSpec change and report what is runnable now
+  gate       Compute the factory-gate verdicts for a pull request
 
 Flags:
   --version  Print the build version and exit
@@ -57,7 +60,7 @@ Run 'uncworks <command> --help' for command-specific flags.
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
+		_, _ = fmt.Fprint(os.Stderr, usage)
 		os.Exit(1)
 	}
 
@@ -103,14 +106,14 @@ func main() {
 	case "approve":
 		// Shortcut: uncworks approve <run-id> → sends "approve" as human input
 		if len(args) == 0 {
-			err = fmt.Errorf("usage: uncworks approve <run-id>")
+			err = fmt.Errorf("%w: usage: uncworks approve <run-id>", errInvalidInput)
 		} else {
 			err = runInput(append([]string{args[0], "approve"}, args[1:]...))
 		}
 	case "reject":
 		// Shortcut: uncworks reject <run-id> [reason] → sends "reject: <reason>" as human input
 		if len(args) == 0 {
-			err = fmt.Errorf("usage: uncworks reject <run-id> [reason]")
+			err = fmt.Errorf("%w: usage: uncworks reject <run-id> [reason]", errInvalidInput)
 		} else {
 			reason := "rejected"
 			if len(args) > 1 {
@@ -134,17 +137,23 @@ func main() {
 		err = runSearch(args)
 	case "config":
 		err = runConfig(args)
+	case "cite":
+		err = runCite(args)
+	case "spec":
+		err = runSpec(args)
+	case "gate":
+		err = runGate(args)
 	case "-h", "--help", "help":
-		fmt.Fprint(os.Stdout, usage)
+		_, _ = fmt.Fprint(os.Stdout, usage)
 	case "-v", "--version", "version":
 		fmt.Printf("uncworks %s (commit %s)\n", Version, Commit)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %q\n\n%s", cmd, usage)
+		_, _ = fmt.Fprintf(os.Stderr, "unknown command: %q\n\n%s", cmd, usage)
 		os.Exit(1)
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }

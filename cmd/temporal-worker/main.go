@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -163,7 +164,7 @@ func run() error {
 	mux.HandleFunc("/readyz", checkTemporal)
 	healthSrv := &http.Server{Addr: healthAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
-		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := healthSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Warn("health probe server stopped", "err", err)
 		}
 	}()

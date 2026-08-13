@@ -387,11 +387,17 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during LLM key provisioning"
-			return err
+			if err != nil {
+				return fmt.Errorf("agent run workflow: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to provision LLM key: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("agent run workflow: %w", err)
+		}
+		return nil
 	}
 	llmKey = keyOutput.Key
 
@@ -419,11 +425,17 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during deployment creation"
-			return err
+			if err != nil {
+				return fmt.Errorf("agent run workflow: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to create deployment: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("agent run workflow: %w", err)
+		}
+		return nil
 	}
 	deploymentName = deployOutput.DeploymentName
 	podName = deployOutput.DeploymentName // used for WaitForHydration label lookup
@@ -444,7 +456,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	if podStatusOutput.Reason == "Evicted" {
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Pod was evicted immediately after creation: %s", podStatusOutput.Message)
-		return fmt.Errorf("pod evicted: %s", podStatusOutput.Message)
+		return fmt.Errorf("%w: pod evicted: %s", errFailed, podStatusOutput.Message)
 	}
 
 	// --- Step 3: Wait for hydration ---
@@ -462,10 +474,10 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		HeartbeatTimeout: 90 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
 			// Increase retries — heartbeat timeouts during worker restarts are transient.
-			MaximumAttempts:    6,
-			InitialInterval:    5 * time.Second,
-			BackoffCoefficient: 1.5,
-			MaximumInterval:    30 * time.Second,
+			MaximumAttempts:        6,
+			InitialInterval:        5 * time.Second,
+			BackoffCoefficient:     1.5,
+			MaximumInterval:        30 * time.Second,
 			NonRetryableErrorTypes: []string{"eviction"},
 		},
 	}
@@ -480,11 +492,17 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during hydration"
-			return err
+			if err != nil {
+				return fmt.Errorf("agent run workflow: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Hydration failed: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("agent run workflow: %w", err)
+		}
+		return nil
 	}
 	podIP = hydrationOutput.PodIP
 
@@ -538,11 +556,17 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during agent start"
-			return err
+			if err != nil {
+				return fmt.Errorf("agent run workflow: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to start agent: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("agent run workflow: %w", err)
+		}
+		return nil
 	}
 
 	state.Message = "Agent running"
@@ -732,60 +756,63 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 					RepoURL:       repoURL,
 				}).Get(ctx, &pushOutput); err != nil {
 					workflow.GetLogger(ctx).Warn("Push changes failed", "error", err)
-				} else if !pushOutput.HasChanges {
-					state.Message = "Agent completed: no changes committed"
-					workflow.GetLogger(ctx).Info("No changes committed; skipping PR creation")
-				} else if input.AutoPR && len(input.Repos) > 0 {
-					owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
-					if err != nil {
-						workflow.GetLogger(ctx).Warn("Failed to parse repo URL for PR", "error", err)
-					} else {
-						baseBranch := input.PRBaseBranch
-						if baseBranch == "" {
-							baseBranch = "main"
-						}
-						prCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-							StartToCloseTimeout: 30 * time.Second,
-							RetryPolicy: &temporal.RetryPolicy{
-								MaximumAttempts: 2,
-							},
-						})
-						// Build PR body with proposal content or prompt summary
-						summary := pushOutput.ProposalContent
-						if summary == "" {
-							// Use first 300 chars of prompt as summary
-							if len(input.Prompt) > 300 {
-								summary = input.Prompt[:300] + "..."
+				} else {
+					switch {
+					case !pushOutput.HasChanges:
+						state.Message = "Agent completed: no changes committed"
+						workflow.GetLogger(ctx).Info("No changes committed; skipping PR creation")
+					case input.AutoPR && len(input.Repos) > 0:
+						owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
+						if err != nil {
+							workflow.GetLogger(ctx).Warn("Failed to parse repo URL for PR", "error", err)
+						} else {
+							baseBranch := input.PRBaseBranch
+							if baseBranch == "" {
+								baseBranch = "main"
+							}
+							prCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+								StartToCloseTimeout: 30 * time.Second,
+								RetryPolicy: &temporal.RetryPolicy{
+									MaximumAttempts: 2,
+								},
+							})
+							// Build PR body with proposal content or prompt summary
+							summary := pushOutput.ProposalContent
+							if summary == "" {
+								// Use first 300 chars of prompt as summary
+								if len(input.Prompt) > 300 {
+									summary = input.Prompt[:300] + "..."
+								} else {
+									summary = input.Prompt
+								}
+							}
+							runURL := fmt.Sprintf("https://uncworks.stork-eel.ts.net/run/%s", input.AgentRunName)
+							prBody := fmt.Sprintf("## Summary\n\n%s\n\n## Changes\n\n%s\n\n## Pipeline\n\n- **Run:** %s\n- **Model:** %s\n\n## Run\n\nView the full agent run: %s\n\n---\n*This PR was automatically created by UNCWORKS.*",
+								summary,
+								pushOutput.DiffStat,
+								input.AgentRunName,
+								input.ModelTier,
+								runURL,
+							)
+							var prOutput CreatePROutput
+							if err := workflow.ExecuteActivity(prCtx, ActivityCreatePR, CreatePRInput{
+								RepoOwner:    owner,
+								RepoName:     repo,
+								BranchName:   branchName,
+								BaseBranch:   baseBranch,
+								Title:        prTitleFrom(pushOutput.CommitMessage, input.Prompt),
+								Body:         prBody,
+								AgentRunName: input.AgentRunName,
+							}).Get(ctx, &prOutput); err != nil {
+								workflow.GetLogger(ctx).Warn("Create PR failed", "error", err)
 							} else {
-								summary = input.Prompt
+								state.PRUrl = prOutput.PRUrl
+								state.Message = fmt.Sprintf("Agent completed: PR created at %s", prOutput.PRUrl)
 							}
 						}
-						runURL := fmt.Sprintf("https://uncworks.stork-eel.ts.net/run/%s", input.AgentRunName)
-						prBody := fmt.Sprintf("## Summary\n\n%s\n\n## Changes\n\n%s\n\n## Pipeline\n\n- **Run:** %s\n- **Model:** %s\n\n## Run\n\nView the full agent run: %s\n\n---\n*This PR was automatically created by UNCWORKS.*",
-							summary,
-							pushOutput.DiffStat,
-							input.AgentRunName,
-							input.ModelTier,
-							runURL,
-						)
-						var prOutput CreatePROutput
-						if err := workflow.ExecuteActivity(prCtx, ActivityCreatePR, CreatePRInput{
-							RepoOwner:    owner,
-							RepoName:     repo,
-							BranchName:   branchName,
-							BaseBranch:   baseBranch,
-							Title:        prTitleFrom(pushOutput.CommitMessage, input.Prompt),
-							Body:         prBody,
-							AgentRunName: input.AgentRunName,
-						}).Get(ctx, &prOutput); err != nil {
-							workflow.GetLogger(ctx).Warn("Create PR failed", "error", err)
-						} else {
-							state.PRUrl = prOutput.PRUrl
-							state.Message = fmt.Sprintf("Agent completed: PR created at %s", prOutput.PRUrl)
-						}
+					case pushOutput.HasChanges:
+						state.Message = fmt.Sprintf("Agent completed: changes pushed to %s", pushOutput.BranchName)
 					}
-				} else if pushOutput.HasChanges {
-					state.Message = fmt.Sprintf("Agent completed: changes pushed to %s", pushOutput.BranchName)
 				}
 			}
 			return nil
@@ -794,6 +821,15 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 			return nil
 		}
 	}
+}
+
+// JuniorApprovalMode maps a parent's approval mode onto its junior. Only an
+// explicit mode carries down; an unset one means the parent gates the aggregate.
+func JuniorApprovalMode(parent string) string {
+	if mode := strings.ToLower(strings.TrimSpace(parent)); mode != "" {
+		return mode
+	}
+	return "none"
 }
 
 // SpawnJuniorInput contains parameters for spawning a child workflow.
@@ -813,6 +849,9 @@ type SpawnJuniorInput struct {
 	LiteLLMBaseURL        string
 	SpecRunID             string
 	GitHubTokenSecretName string
+	// ApprovalMode is the parent's mode. An empty value means the junior runs
+	// with no gate of its own.
+	ApprovalMode string
 }
 
 // SpawnJuniorWorkflow starts a child AgentRunWorkflow for a junior agent.
@@ -845,16 +884,28 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 		SpecRunID:             input.SpecRunID,
 		GitHubTokenSecretName: input.GitHubTokenSecretName,
 		OrchestrationMode:     OrchestrationModeSingle, // juniors always run as single
+		// A junior is a subtask of its parent, and the parent's gate reviews the
+		// aggregate diff. Defaulting a junior to hybrid would ask for one human
+		// approval per subtask before the parent's own gate, so a manual
+		// orchestration with seven subtasks would block on seven signals nobody
+		// knows to send.
+		ApprovalMode: JuniorApprovalMode(input.ApprovalMode),
 	}
 
 	future := workflow.ExecuteChildWorkflow(childCtx, AgentRunWorkflow, childInput)
 
 	if input.Blocking {
-		return future.Get(ctx, nil)
+		if err := future.Get(ctx, nil); err != nil {
+			return fmt.Errorf("spawn junior workflow: %w", err)
+		}
+		return nil
 	}
 
 	// Fire-and-forget: just wait for the child to start
-	return future.GetChildWorkflowExecution().Get(ctx, nil)
+	if err := future.GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+		return fmt.Errorf("waiting for the child workflow to start: %w", err)
+	}
+	return nil
 }
 
 const maxOrchestrationTasks = 7
@@ -946,7 +997,7 @@ func runManualOrchestration(ctx workflow.Context, input WorkflowInput) error {
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Manual orchestration: %d/%d tasks failed: %s",
 			len(failedTasks), len(tasks), strings.Join(failedTasks, ", "))
-		return fmt.Errorf("orchestration failed: %s", strings.Join(failedTasks, ", "))
+		return fmt.Errorf("%w: orchestration failed: %s", errFailed, strings.Join(failedTasks, ", "))
 	}
 
 	state.Phase = "Succeeded"
@@ -1108,7 +1159,7 @@ func runApprovalGate(
 			if !judgeOut.Approved {
 				state.Phase = "Failed"
 				state.Message = "Rejected by LLM judge: " + judgeOut.Reason
-				return fmt.Errorf("run rejected by LLM judge: %s", judgeOut.Reason)
+				return fmt.Errorf("%w: run rejected by LLM judge: %s", errInvalidInput, judgeOut.Reason)
 			}
 			state.Message = "LLM judge approved: " + judgeOut.Reason
 		}
@@ -1149,7 +1200,7 @@ func runApprovalGate(
 			}
 			state.Phase = "Failed"
 			state.Message = "Rejected: " + reason
-			return fmt.Errorf("run rejected by human reviewer: %s", reason)
+			return fmt.Errorf("%w: run rejected by human reviewer: %s", errInvalidInput, reason)
 		}
 		state.Phase = "Succeeded"
 		state.Message = "Approved by human reviewer"

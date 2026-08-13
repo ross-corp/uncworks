@@ -102,7 +102,7 @@ export default function ScheduleListView() {
   return (
     <div className="flex h-full flex-col">
       <div className="h-12 border-b flex items-center px-4 gap-2">
-        <span className="font-semibold flex-1">Schedules</span>
+        <h1 className="font-semibold flex-1 text-base">Schedules</h1>
         <Badge variant="secondary" className="text-xs">{schedules.length}</Badge>
       </div>
 

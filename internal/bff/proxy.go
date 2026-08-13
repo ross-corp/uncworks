@@ -30,13 +30,15 @@ func NewProxy(apiserverURL string) *Proxy {
 		panic("invalid apiserver URL: " + err.Error())
 	}
 
-	rp := httputil.NewSingleHostReverseProxy(target)
-
-	// Customize director to preserve the original host header.
-	origDirector := rp.Director
-	rp.Director = func(req *http.Request) {
-		origDirector(req)
-		req.Host = target.Host
+	// Rewrite replaces Director, which is deprecated. SetURL does what
+	// NewSingleHostReverseProxy did, and SetXForwarded sets the forwarding
+	// headers Director never did.
+	rp := &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(target)
+			r.SetXForwarded()
+			r.Out.Host = target.Host
+		},
 	}
 
 	return &Proxy{
@@ -95,7 +97,8 @@ func (p *Proxy) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Connect to backend.
-	backendConn, err := net.DialTimeout("tcp", backendHost, 10*time.Second)
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	backendConn, err := dialer.DialContext(r.Context(), "tcp", backendHost)
 	if err != nil {
 		slog.Error("bff: websocket backend unreachable", "host", backendHost, "path", r.URL.Path, "error", err)
 		http.Error(w, "websocket proxy: backend unreachable", http.StatusBadGateway)

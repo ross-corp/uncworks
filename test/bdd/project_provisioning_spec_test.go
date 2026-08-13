@@ -70,7 +70,7 @@ func (e *projectTestEnv) getProject(name string) *http.Response {
 func (e *projectTestEnv) listProjects() []map[string]interface{} {
 	resp, err := http.Get(e.BaseURL + "/api/v1/projects") //nolint:noctx
 	Expect(err).NotTo(HaveOccurred())
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	Expect(resp.StatusCode).To(Equal(http.StatusOK))
 	var projects []map[string]interface{}
 	Expect(json.NewDecoder(resp.Body).Decode(&projects)).To(Succeed())
@@ -99,13 +99,13 @@ var _ = Describe("Project Provisioning", func() {
 					"name":        "my-project",
 					"displayName": "My Project",
 				})
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 				Expect(resp.StatusCode).To(Equal(http.StatusCreated))
 			})
 
 			It("returns the project on GET with configRepoReady=false initially", func() {
 				resp := env.getProject("my-project")
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 				Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 				var got map[string]interface{}
@@ -128,7 +128,7 @@ var _ = Describe("Project Provisioning", func() {
 			BeforeEach(func() {
 				for _, name := range []string{"proj-alpha", "proj-beta"} {
 					resp := env.postProject(map[string]interface{}{"name": name})
-					resp.Body.Close()
+					_ = resp.Body.Close()
 					Expect(resp.StatusCode).To(Equal(http.StatusCreated))
 				}
 			})
@@ -148,7 +148,7 @@ var _ = Describe("Project Provisioning", func() {
 		Context("Given a project is created and initially not ready", func() {
 			BeforeEach(func() {
 				resp := env.postProject(map[string]interface{}{"name": "provisioned-project"})
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				Expect(resp.StatusCode).To(Equal(http.StatusCreated))
 			})
 
@@ -167,7 +167,7 @@ var _ = Describe("Project Provisioning", func() {
 
 				It("reflects configRepoReady=true and the repo URL in GET", func() {
 					resp := env.getProject("provisioned-project")
-					defer resp.Body.Close()
+					defer func() { _ = resp.Body.Close() }()
 					Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 					var got map[string]interface{}
@@ -183,7 +183,7 @@ var _ = Describe("Project Provisioning", func() {
 		Context("When fetching a project that does not exist", func() {
 			It("returns 404", func() {
 				resp := env.getProject("does-not-exist")
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 				Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
 			})
 		})
@@ -191,13 +191,13 @@ var _ = Describe("Project Provisioning", func() {
 		Context("When creating a project with a duplicate name", func() {
 			BeforeEach(func() {
 				first := env.postProject(map[string]interface{}{"name": "duplicate-project"})
-				first.Body.Close()
+				_ = first.Body.Close()
 				Expect(first.StatusCode).To(Equal(http.StatusCreated))
 			})
 
 			It("returns 409 Conflict", func() {
 				second := env.postProject(map[string]interface{}{"name": "duplicate-project"})
-				defer second.Body.Close()
+				defer func() { _ = second.Body.Close() }()
 				Expect(second.StatusCode).To(Equal(http.StatusConflict))
 			})
 		})

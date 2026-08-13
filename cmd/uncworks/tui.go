@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	"connectrpc.com/connect"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"connectrpc.com/connect"
 
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
 	apiv1connect "github.com/uncworks/aot/gen/go/api/v1/apiv1connect"
@@ -27,12 +27,12 @@ import (
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 var (
-	styleTitle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
-	styleStatus    = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	styleSelected  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	styleHelp      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	styleBorder    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+	styleTitle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
+	styleStatus   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	styleSelected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	styleHelp     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	styleBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
 )
 
 // ── View types ────────────────────────────────────────────────────────────────
@@ -160,11 +160,11 @@ func relativeTime(t time.Time) string {
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type tuiModel struct {
-	client    apiv1connect.AOTServiceClient
-	view      tuiView
-	width     int
-	height    int
-	err       error
+	client apiv1connect.AOTServiceClient
+	view   tuiView
+	width  int
+	height int
+	err    error
 
 	// run list
 	list    list.Model
@@ -183,8 +183,6 @@ type tuiModel struct {
 	specInput   textarea.Model
 	submitFocus int // 0=repo, 1=branch, 2=spec, 3=submit button
 
-	// help
-	showHelp bool
 }
 
 func newTUIModel(client apiv1connect.AOTServiceClient) tuiModel {
@@ -448,9 +446,9 @@ func (m tuiModel) View() string {
 	case viewSubmit:
 		var sb strings.Builder
 		sb.WriteString(styleTitle.Render("Submit New Agent Run") + "\n\n")
-		sb.WriteString(fmt.Sprintf("  Repository URL:  %s\n", m.repoInput.View()))
-		sb.WriteString(fmt.Sprintf("  Branch:          %s\n", m.branchInput.View()))
-		sb.WriteString(fmt.Sprintf("  Prompt:\n%s\n", m.specInput.View()))
+		_, _ = fmt.Fprintf(&sb, "  Repository URL:  %s\n", m.repoInput.View())
+		_, _ = fmt.Fprintf(&sb, "  Branch:          %s\n", m.branchInput.View())
+		_, _ = fmt.Fprintf(&sb, "  Prompt:\n%s\n", m.specInput.View())
 		submitBtn := "  [ Submit ]"
 		if m.submitFocus == 3 {
 			submitBtn = styleSelected.Render("  [ Submit ]")
@@ -556,7 +554,7 @@ func humanizeErr(err error) string {
 		return "connection refused — is 'uncworks open' running?"
 	}
 	if strings.Contains(msg, "no such host") {
-		return fmt.Sprintf("host not found — check 'uncworks connect' address")
+		return "host not found, check the 'uncworks connect' address"
 	}
 	return msg
 }
@@ -567,11 +565,11 @@ func runTUI(args []string) error {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
 	serverAddr := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks tui [flags]\n\nLaunch the terminal UI.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks tui [flags]\n\nLaunch the terminal UI.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("tui: %w", err)
 	}
 
 	addr := *serverAddr
@@ -593,5 +591,8 @@ func runTUI(args []string) error {
 	model := newTUIModel(client)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	_, err := p.Run()
-	return err
+	if err != nil {
+		return fmt.Errorf("tui: %w", err)
+	}
+	return nil
 }

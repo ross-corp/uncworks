@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -95,7 +96,7 @@ func okHandler(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.Stat
 
 func TestWithAuth_NoKey_PassesThrough(t *testing.T) {
 	h := withAuth(http.HandlerFunc(okHandler), "")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/projects", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -105,7 +106,7 @@ func TestWithAuth_NoKey_PassesThrough(t *testing.T) {
 
 func TestWithAuth_NoToken_Returns401(t *testing.T) {
 	h := withAuth(http.HandlerFunc(okHandler), "secret")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/projects", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -115,7 +116,7 @@ func TestWithAuth_NoToken_Returns401(t *testing.T) {
 
 func TestWithAuth_WrongToken_Returns401(t *testing.T) {
 	h := withAuth(http.HandlerFunc(okHandler), "correct")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/projects", nil)
 	req.Header.Set("Authorization", "Bearer wrong")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -126,7 +127,7 @@ func TestWithAuth_WrongToken_Returns401(t *testing.T) {
 
 func TestWithAuth_ValidBearerToken_Passes(t *testing.T) {
 	h := withAuth(http.HandlerFunc(okHandler), "correct")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/projects", nil)
 	req.Header.Set("Authorization", "Bearer correct")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -137,7 +138,7 @@ func TestWithAuth_ValidBearerToken_Passes(t *testing.T) {
 
 func TestWithAuth_QueryParamToken_Passes(t *testing.T) {
 	h := withAuth(http.HandlerFunc(okHandler), "mykey")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ws?token=mykey", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/ws?token=mykey", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -148,7 +149,7 @@ func TestWithAuth_QueryParamToken_Passes(t *testing.T) {
 func TestWithAuth_HealthzExempt(t *testing.T) {
 	h := withAuth(http.HandlerFunc(okHandler), "secret")
 	for _, path := range []string{"/healthz", "/readyz"} {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -164,7 +165,7 @@ func TestWithAuth_GRPCPathsExempt(t *testing.T) {
 		"/grpc.reflection.v1.ServerReflection/Info",
 		"/grpc.reflection.v1alpha.ServerReflection/Info",
 	} {
-		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, path, nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -175,7 +176,7 @@ func TestWithAuth_GRPCPathsExempt(t *testing.T) {
 
 func TestWithAuth_WebhookExempt(t *testing.T) {
 	h := withAuth(http.HandlerFunc(okHandler), "secret")
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/webhooks/github", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -186,7 +187,7 @@ func TestWithAuth_WebhookExempt(t *testing.T) {
 // --- env helper tests ---
 
 func TestEnvIntOrDefault_UsesDefault(t *testing.T) {
-	os.Unsetenv("TEST_INT_KEY_UNUSED")
+	_ = os.Unsetenv("TEST_INT_KEY_UNUSED")
 	if got := envIntOrDefault("TEST_INT_KEY_UNUSED", 42); got != 42 {
 		t.Errorf("envIntOrDefault with unset key = %d, want 42", got)
 	}
@@ -207,7 +208,7 @@ func TestEnvIntOrDefault_InvalidFallsBack(t *testing.T) {
 }
 
 func TestEnvFloatOrDefault_UsesDefault(t *testing.T) {
-	os.Unsetenv("TEST_FLOAT_UNUSED")
+	_ = os.Unsetenv("TEST_FLOAT_UNUSED")
 	if got := envFloatOrDefault("TEST_FLOAT_UNUSED", 3.14); got != 3.14 {
 		t.Errorf("envFloatOrDefault with unset key = %f, want 3.14", got)
 	}
@@ -221,7 +222,7 @@ func TestEnvFloatOrDefault_ReadsEnv(t *testing.T) {
 }
 
 func TestEnvOrDefault_UsesDefault(t *testing.T) {
-	os.Unsetenv("TEST_STR_UNUSED")
+	_ = os.Unsetenv("TEST_STR_UNUSED")
 	if got := envOrDefault("TEST_STR_UNUSED", "fallback"); got != "fallback" {
 		t.Errorf("envOrDefault with unset key = %q, want %q", got, "fallback")
 	}

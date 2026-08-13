@@ -52,7 +52,8 @@ test.describe("Projects List — empty state", () => {
     await expect(page.locator("text=No projects yet")).toBeVisible();
 
     // The empty state CTA button should be present
-    const cta = page.locator("button", { hasText: "+ new project" });
+    // The header and the empty state both offer this, so take the first.
+    const cta = page.getByRole("button", { name: /\+ new project/i }).first();
     await expect(cta).toBeVisible({ timeout: 5000 });
   });
 
@@ -147,7 +148,7 @@ test.describe("Project Detail — Runs tab empty state", () => {
     await runsTab.click();
 
     await expect(page.locator("text=No runs yet")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator("text=+ New Run")).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("+ New Run").first()).toBeVisible({ timeout: 3000 });
   });
 });
 

@@ -29,7 +29,12 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	var sched aotv1alpha1.Schedule
 	if err := r.Get(ctx, req.NamespacedName, &sched); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		// IgnoreNotFound returns nil for a deleted resource, and wrapping nil
+		// would turn that into a failure. Only wrap what survives it.
+		if err := client.IgnoreNotFound(err); err != nil {
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
+		}
+		return ctrl.Result{}, nil
 	}
 
 	if sched.Spec.Suspend {
@@ -52,7 +57,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if changed {
 			sched.Status.Active = active
 			if updateErr := r.Status().Update(ctx, &sched); updateErr != nil {
-				return ctrl.Result{}, updateErr
+				return ctrl.Result{}, fmt.Errorf("updating schedule status: %w", updateErr)
 			}
 		}
 	}
@@ -85,7 +90,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if missedRun.After(now) {
 		// No missed runs — just update next time and requeue
 		if err := r.Status().Update(ctx, &sched); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 		requeueAfter := time.Until(nextTime) + time.Second
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
@@ -197,7 +202,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	sched.Status.LastResult = aotv1alpha1.ScheduleLastResultRunning
 	sched.Status.Active = append(sched.Status.Active, runID)
 	if err := r.Status().Update(ctx, &sched); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 	}
 
 	requeueAfter := time.Until(nextTime) + time.Second
@@ -247,7 +252,10 @@ func (r *ScheduleReconciler) pruneActiveList(ctx context.Context, sched *aotv1al
 
 // SetupWithManager registers ScheduleReconciler with the controller manager.
 func (r *ScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.Schedule{}).
-		Complete(r)
+		Complete(r); err != nil {
+		return fmt.Errorf("setting up the controller: %w", err)
+	}
+	return nil
 }

@@ -22,7 +22,7 @@ type ServiceInfo struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"displayName"`
 	ClusterPort int    `json:"clusterPort"`
-	LocalPort   int    `json:"localPort"`  // 0 = not forwarded
+	LocalPort   int    `json:"localPort"` // 0 = not forwarded
 	Ready       bool   `json:"ready"`
 	Forwarding  bool   `json:"forwarding"`
 }

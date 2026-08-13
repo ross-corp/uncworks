@@ -1,30 +1,36 @@
 import { test, expect } from "@playwright/test";
+import { mockRuns } from "./helpers";
 
-test.describe("Theme Toggle", () => {
-  test("toggle button exists in footer", async ({ page }) => {
-    await page.goto("/");
-    // Look for sun or moon character in a button
-    const toggle = page.locator("button").filter({ hasText: /[\u2600\u263E]/ });
-    await expect(toggle).toBeVisible({ timeout: 5000 });
+// The sun and moon footer button is gone. Theme is chosen in Settings, with
+// System, Light, and Dark buttons, so that is what this checks.
+
+test.describe("Theme", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockRuns(page, []);
+    await page.goto("/settings");
   });
 
-  test("clicking toggle switches theme", async ({ page }) => {
-    await page.goto("/");
-    const toggle = page.locator("button").filter({ hasText: /[\u2600\u263E]/ });
+  test("Settings offers the three modes", async ({ page }) => {
+    for (const mode of ["System", "Light", "Dark"]) {
+      await expect(page.getByRole("button", { name: mode, exact: true })).toBeVisible();
+    }
+  });
 
-    // Get initial dark class state
-    const initialHasDark = await page.locator("html").evaluate(el => el.classList.contains("dark"));
+  test("choosing Dark and Light switches the root class", async ({ page }) => {
+    const isDark = () => page.locator("html").evaluate((el) => el.classList.contains("dark"));
 
-    // Click toggle
-    await toggle.click();
+    await page.getByRole("button", { name: "Dark", exact: true }).click();
+    await expect.poll(isDark).toBe(true);
 
-    // Verify class changed
-    const afterHasDark = await page.locator("html").evaluate(el => el.classList.contains("dark"));
-    expect(afterHasDark).not.toBe(initialHasDark);
+    await page.getByRole("button", { name: "Light", exact: true }).click();
+    await expect.poll(isDark).toBe(false);
+  });
 
-    // Click again to restore
-    await toggle.click();
-    const restoredHasDark = await page.locator("html").evaluate(el => el.classList.contains("dark"));
-    expect(restoredHasDark).toBe(initialHasDark);
+  test("the choice survives a reload", async ({ page }) => {
+    await page.getByRole("button", { name: "Dark", exact: true }).click();
+    await expect.poll(() => page.locator("html").evaluate((el) => el.classList.contains("dark"))).toBe(true);
+
+    await page.reload();
+    await expect.poll(() => page.locator("html").evaluate((el) => el.classList.contains("dark"))).toBe(true);
   });
 });

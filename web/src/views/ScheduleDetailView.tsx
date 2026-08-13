@@ -163,7 +163,7 @@ export default function ScheduleDetailView() {
       <div className="h-12 border-b flex items-center px-4 gap-2">
         <Link to="/schedules" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Schedules</Link>
         <span className="text-muted-foreground">/</span>
-        <span className="font-semibold flex-1">{schedule.spec.displayName || schedule.metadata.name}</span>
+        <h1 className="font-semibold flex-1 text-base">{schedule.spec.displayName || schedule.metadata.name}</h1>
         {schedule.spec.suspend && (
           <Badge variant="secondary" className="text-xs">suspended</Badge>
         )}

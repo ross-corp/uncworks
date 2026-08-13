@@ -81,7 +81,7 @@ func (f *FileHandler) getDeploymentReplicas(ctx context.Context, runID string) (
 
 	deployName := crd.Status.DeploymentName
 	if deployName == "" {
-		return 0, fmt.Errorf("no deployment name on AgentRun %q status", runID)
+		return 0, fmt.Errorf("%w: no deployment name on AgentRun %q status", errFailed, runID)
 	}
 
 	deploy := &appsv1.Deployment{}
@@ -114,7 +114,7 @@ func (f *FileHandler) getPVCHostPath(ctx context.Context, runID string) (string,
 
 	pvName := pvc.Spec.VolumeName
 	if pvName == "" {
-		return "", fmt.Errorf("PVC %q has no bound PV", pvcName)
+		return "", fmt.Errorf("%w: PVC %q has no bound PV", errFailed, pvcName)
 	}
 
 	pv := &corev1.PersistentVolume{}
@@ -133,7 +133,7 @@ func (f *FileHandler) getPVCHostPath(ctx context.Context, runID string) (string,
 		return pv.Spec.Local.Path, nil
 	}
 
-	return "", fmt.Errorf("PV %q uses an unsupported volume type (not hostPath or local)", pvName)
+	return "", fmt.Errorf("%w: PV %q uses an unsupported volume type (not hostPath or local)", errInvalidInput, pvName)
 }
 
 func (f *FileHandler) handleListFiles(w http.ResponseWriter, r *http.Request) {
@@ -678,7 +678,7 @@ func readLastNLines(path string, n int) ([]string, error) {
 		allLines = append(allLines, scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read last n lines: %w", err)
 	}
 
 	if len(allLines) <= n {

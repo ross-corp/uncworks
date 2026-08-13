@@ -62,7 +62,7 @@ func (a *Activities) WriteTraceSpan(ctx context.Context, input WriteTraceSpanInp
 		return fmt.Errorf("write trace span RPC: %w", rpcErr)
 	}
 	if resp.Msg.ExitCode != 0 {
-		return fmt.Errorf("write trace span exited %d: %s", resp.Msg.ExitCode, resp.Msg.Stderr)
+		return fmt.Errorf("%w: write trace span exited %d: %s", errFailed, resp.Msg.ExitCode, resp.Msg.Stderr)
 	}
 
 	return nil

@@ -1,0 +1,13 @@
+{
+  "records": [
+    {
+      "id": "github-merge-group-event",
+      "source": "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows",
+      "accessed": "2026-08-12",
+      "claim_class": "api",
+      "quote": "Runs your workflow when a pull request is added to a merge queue, which adds the pull request to a merge group.",
+      "snapshot": "citations/github-merge-group-event.snapshot",
+      "sha256": "de7783f6b90224b707abb736147b2659159ef78b2ad7277bd345d3175e5c6405"
+    }
+  ]
+}

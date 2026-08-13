@@ -138,8 +138,8 @@ func run() {
 			Middleware: app.APIProxyMiddleware,
 		},
 		BackgroundColour: &options.RGBA{R: 18, G: 18, B: 18, A: 1},
-		OnStartup:  app.startup,
-		OnShutdown: app.shutdown,
+		OnStartup:        app.startup,
+		OnShutdown:       app.shutdown,
 		OnBeforeClose: func(ctx context.Context) bool {
 			// Hide window instead of quitting; app lives in menu bar.
 			runtime.WindowHide(ctx)

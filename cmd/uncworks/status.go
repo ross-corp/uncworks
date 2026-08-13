@@ -30,14 +30,14 @@ func runStatus(args []string) error {
 	output := fs.String("output", "", `Output format. One of: json`)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks status [flags]\n\nShow health of the UNCWORKS stack.\nExits non-zero if any pod is not ready.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks status [flags]\n\nShow health of the UNCWORKS stack.\nExits non-zero if any pod is not ready.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("status: %w", err)
 	}
 	if *output != "" && *output != "json" {
-		return fmt.Errorf("unsupported output format %q: use 'json'", *output)
+		return fmt.Errorf("%w: unsupported output format %q: use 'json'", errInvalidInput, *output)
 	}
 	if err := checkPrereqs(); err != nil {
 		return err
@@ -49,7 +49,7 @@ func runStatus(args []string) error {
 	if *kubeContext != "" {
 		kubectlArgs = append([]string{"--context", *kubeContext}, kubectlArgs...)
 	}
-	out, err := exec.Command("kubectl", kubectlArgs...).Output()
+	out, err := exec.CommandContext(context.Background(), "kubectl", kubectlArgs...).Output()
 	if err != nil {
 		return fmt.Errorf("kubectl get pods: %w", err)
 	}
@@ -86,7 +86,7 @@ func runStatus(args []string) error {
 		} else {
 			fmt.Printf("No pods found in namespace %q. Is UNCWORKS installed? Run 'uncworks setup'.\n", *namespace)
 		}
-		return fmt.Errorf("%s", msg)
+		return fmt.Errorf("%w: %s", errFailed, msg)
 	}
 
 	// Collect summarised statuses.
@@ -112,7 +112,7 @@ func runStatus(args []string) error {
 
 	if *output != "json" {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "POD\tPHASE\tREADY")
+		_, _ = fmt.Fprintln(w, "POD\tPHASE\tREADY")
 		for _, ps := range statuses {
 			readyStr := "Yes"
 			if !ps.Ready {
@@ -121,9 +121,9 @@ func runStatus(args []string) error {
 					readyStr = "No (" + ps.Reason + ")"
 				}
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", ps.Name, ps.Phase, readyStr)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", ps.Name, ps.Phase, readyStr)
 		}
-		w.Flush()
+		_ = w.Flush()
 	}
 
 	// Check gRPC API connectivity and active run count
@@ -182,10 +182,10 @@ func runStatus(args []string) error {
 	}
 
 	if !allReady {
-		return fmt.Errorf("one or more pods are not ready")
+		return fmt.Errorf("%w: one or more pods are not ready", errUnavailable)
 	}
 	if !apiOK {
-		return fmt.Errorf("API server unreachable: %s", apiMsg)
+		return fmt.Errorf("%w: API server unreachable: %s", errUnavailable, apiMsg)
 	}
 	return nil
 }

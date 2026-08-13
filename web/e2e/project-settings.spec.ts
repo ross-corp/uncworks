@@ -214,9 +214,7 @@ test.describe("Project Settings — Save flow", () => {
     await renameBtn.click();
 
     // The input should appear pre-filled with the current name
-    const renameInput = page
-      .locator("input")
-      .filter({ hasValue: "settings-project" });
+    const renameInput = page.locator('input[value="settings-project"]');
     await expect(renameInput).toBeVisible({ timeout: 3000 });
   });
 
@@ -227,9 +225,7 @@ test.describe("Project Settings — Save flow", () => {
     const renameBtn = page.locator("button", { hasText: "Rename" });
     await renameBtn.click();
 
-    const renameInput = page
-      .locator("input")
-      .filter({ hasValue: "settings-project" });
+    const renameInput = page.locator('input[value="settings-project"]');
     await expect(renameInput).toBeVisible({ timeout: 3000 });
 
     await renameInput.press("Escape");

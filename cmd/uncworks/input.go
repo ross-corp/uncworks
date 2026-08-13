@@ -20,7 +20,7 @@ func runInput(args []string) error {
 	follow := fs.Bool("follow", false, "Stream logs after sending input until the run completes")
 	lastRun := fs.Bool("last", false, "Send input to the most recently WAITING run (auto-detect)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks input <run-id> [<text>] [flags]
+		_, _ = fmt.Fprintln(fs.Output(), `Usage: uncworks input <run-id> [<text>] [flags]
 
 Send a human-in-the-loop response to a paused agent run.
 If <text> is omitted, reads from stdin.
@@ -50,10 +50,10 @@ Flags:`)
 			PhaseFilter: apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT,
 		}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(resp0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs in WAITING_FOR_INPUT phase found")
+			return fmt.Errorf("%w: no runs in WAITING_FOR_INPUT phase found", errNotFound)
 		}
 		id = resp0.Msg.GetAgentRuns()[0].GetId()
 		fmt.Printf("Sending input to waiting run: %s\n", id)
@@ -61,7 +61,7 @@ Flags:`)
 	} else {
 		if fs.NArg() < 1 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 		textOffset = 1
@@ -77,12 +77,12 @@ Flags:`)
 		}
 		text = strings.TrimRight(string(raw), "\n")
 		if text == "" {
-			return fmt.Errorf("input text is empty")
+			return fmt.Errorf("%w: input text is empty", errInvalidInput)
 		}
 	}
 
 	if len(text) > 10000 {
-		return fmt.Errorf("input too long: %d chars (max 10000)", len(text))
+		return fmt.Errorf("%w: input too long: %d chars (max 10000)", errInvalidInput, len(text))
 	}
 
 	client, err := newClient(*server)
@@ -95,7 +95,7 @@ Flags:`)
 	if getErr == nil {
 		phase := getResp.Msg.GetStatus().GetPhase()
 		if phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
-			fmt.Fprintf(os.Stderr, "warning: run %s is in phase %s, not WAITING — input may be ignored\n", id, phaseLabel(phase))
+			_, _ = fmt.Fprintf(os.Stderr, "warning: run %s is in phase %s, not WAITING — input may be ignored\n", id, phaseLabel(phase))
 		} else if prompt := getResp.Msg.GetStatus().GetMessage(); prompt != "" {
 			fmt.Printf("Agent is asking: %s\n", prompt)
 		}
@@ -107,7 +107,7 @@ Flags:`)
 	})
 	_, err = client.SendHumanInput(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	fmt.Printf("Input sent to run %s\n", id)

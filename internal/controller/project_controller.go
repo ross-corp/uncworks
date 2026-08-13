@@ -31,7 +31,10 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, err
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Handle deletion: clean up soft-serve repo
@@ -44,7 +47,7 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			project.Finalizers = removeFinalizer(project.Finalizers, projectFinalizerName)
 			if err := r.Update(ctx, &project); err != nil {
-				return ctrl.Result{}, err
+				return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 			}
 		}
 		return ctrl.Result{}, nil
@@ -56,7 +59,7 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if !containsFinalizer(project.Finalizers, projectFinalizerName) {
 		project.Finalizers = append(project.Finalizers, projectFinalizerName)
 		if err := r.Update(ctx, &project); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -78,7 +81,10 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if statusErr := r.Status().Update(ctx, &project); statusErr != nil {
 				logger.Error(statusErr, "Failed to update status after repo existence check failure")
 			}
-			return ctrl.Result{}, err
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
+			}
+			return ctrl.Result{}, nil
 		}
 
 		if !exists {
@@ -94,7 +100,10 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				if statusErr := r.Status().Update(ctx, &project); statusErr != nil {
 					logger.Error(statusErr, "Failed to update status")
 				}
-				return ctrl.Result{}, err
+				if err != nil {
+					return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
+				}
+				return ctrl.Result{}, nil
 			}
 
 			// Scaffold initial files
@@ -117,7 +126,10 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				if statusErr := r.Status().Update(ctx, &project); statusErr != nil {
 					logger.Error(statusErr, "Failed to update status after scaffold failure")
 				}
-				return ctrl.Result{}, err
+				if err != nil {
+					return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
+				}
+				return ctrl.Result{}, nil
 			}
 		}
 
@@ -132,7 +144,7 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			LastTransitionTime: metav1.Now(),
 		})
 		if err := r.Status().Update(ctx, &project); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 
 		logger.Info("Project config repo ready", "project", project.Name, "url", project.Status.ConfigRepoURL)
@@ -143,9 +155,12 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // SetupWithManager registers ProjectReconciler with the controller manager.
 func (r *ProjectReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.Project{}).
-		Complete(r)
+		Complete(r); err != nil {
+		return fmt.Errorf("setting up the controller: %w", err)
+	}
+	return nil
 }
 
 const projectFinalizerName = "aot.uncworks.io/project-finalizer"

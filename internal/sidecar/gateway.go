@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,13 +22,20 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 	"github.com/uncworks/aot/internal/cudgel"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
 )
 
 // Gateway is the RPC Gateway sidecar server.
@@ -43,7 +51,7 @@ type Gateway struct {
 
 	// stopCh is closed by Stop() to signal background goroutines (e.g.
 	// rate-limit retry sleeps) to abandon their work promptly.
-	stopCh chan struct{}
+	stopCh   chan struct{}
 	stopOnce sync.Once
 }
 
@@ -161,13 +169,23 @@ func (g *Gateway) Start() error {
 	nPath, nHandler := agentv1connect.NewAgentNotificationServiceHandler(g)
 	mux.Handle(nPath, nHandler)
 
+	// The Temporal worker calls this over HTTP/2 without TLS. Protocols
+	// replaces h2c, which is deprecated.
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+
 	g.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", g.port),
-		Handler: h2c.NewHandler(mux, &http2.Server{}),
+		Addr:      fmt.Sprintf(":%d", g.port),
+		Protocols: protocols,
+		Handler:   mux,
 	}
 
 	slog.Info("RPC Gateway listening", "port", g.port)
-	return g.server.ListenAndServe()
+	if err := g.server.ListenAndServe(); err != nil {
+		return fmt.Errorf("start: %w", err)
+	}
+	return nil
 }
 
 // Stop gracefully stops the gateway.
@@ -264,11 +282,14 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 	}
 	currentModelMu.Unlock()
 
-	// Configure git for checkpoint commits
-	gitConfigCmd := exec.Command("git", "config", "user.name", "aot-agent")
+	// Configure git for checkpoint commits. These run on a background context
+	// rather than the request's: StartAgent returns as soon as the process is
+	// spawned, so binding either to the RPC would cancel work the caller is
+	// waiting to have finished.
+	gitConfigCmd := exec.CommandContext(context.Background(), "git", "config", "user.name", "aot-agent")
 	gitConfigCmd.Dir = resolvedDir
 	_ = gitConfigCmd.Run()
-	gitEmailCmd := exec.Command("git", "config", "user.email", "agent@aot.uncworks.io")
+	gitEmailCmd := exec.CommandContext(context.Background(), "git", "config", "user.email", "agent@aot.uncworks.io")
 	gitEmailCmd.Dir = resolvedDir
 	_ = gitEmailCmd.Run()
 
@@ -334,7 +355,10 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	if model := os.Getenv("PI_MODEL"); model != "" {
 		args = append(args, "--model", model)
 	}
-	cmd := exec.Command("pi", args...)
+	// The agent outlives the RPC that started it: StopAgent ends it, not a
+	// cancelled context. Binding it to the request context would kill the agent
+	// the moment StartAgent returned.
+	cmd := exec.CommandContext(context.Background(), "pi", args...)
 	cmd.Dir = resolveWorkDir(req.RepoPath)
 
 	// Inherit current environment and add request-specific vars on top.
@@ -538,7 +562,7 @@ func checkOutputTokenBudget() error {
 	tokenUsageMu.Unlock()
 	budget := maxOutputTokens()
 	if out >= budget {
-		return fmt.Errorf("agent run exceeded output token budget (%d >= %d)", out, budget)
+		return fmt.Errorf("%w: agent run exceeded output token budget (%d >= %d)", errFailed, out, budget)
 	}
 	return nil
 }
@@ -896,7 +920,7 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 			proc.mu.Lock()
 			proc.exitError = llmErr
 			proc.mu.Unlock()
-			return fmt.Errorf("LLM error: %s", llmErr)
+			return fmt.Errorf("%w: LLM error: %s", errFailed, llmErr)
 		}
 	}
 
@@ -906,7 +930,7 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 // restartAgentProcess creates a new agent process using the same command arguments
 // as the original process.
 func restartAgentProcess(origCmd *exec.Cmd) (*AgentProcess, error) {
-	cmd := exec.Command(origCmd.Path, origCmd.Args[1:]...)
+	cmd := exec.CommandContext(context.Background(), origCmd.Path, origCmd.Args[1:]...)
 	cmd.Dir = origCmd.Dir
 	cmd.Env = origCmd.Env
 
@@ -983,7 +1007,7 @@ func restartAgentProcessWithModel(origCmd *exec.Cmd, model string) (*AgentProces
 		newArgs = append(newArgs, "--model", model)
 	}
 
-	cmd := exec.Command(origCmd.Path, newArgs...)
+	cmd := exec.CommandContext(context.Background(), origCmd.Path, newArgs...)
 	cmd.Dir = origCmd.Dir
 	cmd.Env = origCmd.Env
 
@@ -1045,7 +1069,7 @@ func (g *Gateway) StreamOutput(ctx context.Context, _ *connect.Request[agentv1.S
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
+		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%w: no agent process running", errFailed))
 	}
 
 	ch := make(chan *agentv1.AgentOutput, 100)
@@ -1074,11 +1098,14 @@ func (g *Gateway) StreamOutput(ctx context.Context, _ *connect.Request[agentv1.S
 				return nil
 			}
 			if err := stream.Send(output); err != nil {
-				return err
+				return fmt.Errorf("stream output: %w", err)
 			}
 		case <-ctx.Done():
 			// Client disconnected or RPC deadline exceeded.
-			return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("stream output: %w", err)
+			}
+			return nil
 		}
 	}
 }
@@ -1089,7 +1116,7 @@ func (g *Gateway) SendInput(_ context.Context, req *connect.Request[agentv1.Send
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%w: no agent process running", errFailed))
 	}
 
 	// Write the human's answer to the response file.
@@ -1150,7 +1177,7 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%w: no agent process running", errFailed))
 	}
 
 	now := time.Now()
@@ -1266,7 +1293,7 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 	cleanDir := filepath.Clean(workDir)
 	if cleanDir != "/workspace" && !strings.HasPrefix(cleanDir, "/workspace/") {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("working directory %q is outside /workspace", workDir))
+			fmt.Errorf("%w: working directory %q is outside /workspace", errInvalidInput, workDir))
 	}
 	workDir = cleanDir
 
@@ -1328,7 +1355,7 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 // Limit defaults to 10 if unset; clamped to 50 if too large.
 func (g *Gateway) SemanticSearch(ctx context.Context, req *connect.Request[agentv1.SemanticSearchRequest]) (*connect.Response[agentv1.SemanticSearchResponse], error) {
 	if req.Msg.Query == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query must not be empty"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: query must not be empty", errInvalidInput))
 	}
 
 	limit := int(req.Msg.Limit)
@@ -1675,10 +1702,10 @@ var (
 
 	// Token usage accumulators — summed across all message_end events in a run.
 	// Reset by StartAgent; logged at run completion.
-	tokenUsageMu         sync.Mutex
-	runInputTokens       int
-	runOutputTokens      int
-	runCacheReadTokens   int
+	tokenUsageMu       sync.Mutex
+	runInputTokens     int
+	runOutputTokens    int
+	runCacheReadTokens int
 )
 
 // modelContextWindows maps model names to their context window sizes (in tokens).
@@ -2088,7 +2115,7 @@ func isLLMResponseLog(payload string) bool {
 // the commit SHA + diff against the previous checkpoint. Returns ("", nil) if no changes.
 func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 	// 1. git add -A (stage everything including untracked)
-	addCmd := exec.Command("git", "add", "-A")
+	addCmd := exec.CommandContext(context.Background(), "git", "add", "-A")
 	addCmd.Dir = workDir
 	if err := addCmd.Run(); err != nil {
 		slog.Warn("git checkpoint: add failed", "workDir", workDir, "err", err)
@@ -2096,7 +2123,7 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 	}
 
 	// 2. Check if anything to commit
-	statusCmd := exec.Command("git", "status", "--porcelain")
+	statusCmd := exec.CommandContext(context.Background(), "git", "status", "--porcelain")
 	statusCmd.Dir = workDir
 	var statusOut bytes.Buffer
 	statusCmd.Stdout = &statusOut
@@ -2107,7 +2134,7 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 
 	// 3. Commit with checkpoint message
 	msg := fmt.Sprintf("aot-checkpoint: %s", toolName)
-	commitCmd := exec.Command("git", "commit", "--no-verify", "--allow-empty", "-m", msg)
+	commitCmd := exec.CommandContext(context.Background(), "git", "commit", "--no-verify", "--allow-empty", "-m", msg)
 	commitCmd.Dir = workDir
 	commitCmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME=aot-agent",
@@ -2121,7 +2148,7 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 	}
 
 	// 4. Get current SHA
-	shaCmd := exec.Command("git", "rev-parse", "HEAD")
+	shaCmd := exec.CommandContext(context.Background(), "git", "rev-parse", "HEAD")
 	shaCmd.Dir = workDir
 	var shaOut bytes.Buffer
 	shaCmd.Stdout = &shaOut
@@ -2138,9 +2165,9 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 
 	var diffCmd *exec.Cmd
 	if prevSHA != "" {
-		diffCmd = exec.Command("git", "diff", prevSHA+".."+currentSHA)
+		diffCmd = exec.CommandContext(context.Background(), "git", "diff", prevSHA+".."+currentSHA)
 	} else {
-		diffCmd = exec.Command("git", "diff", "HEAD~1..HEAD")
+		diffCmd = exec.CommandContext(context.Background(), "git", "diff", "HEAD~1..HEAD")
 	}
 	diffCmd.Dir = workDir
 	var diffOut bytes.Buffer
@@ -2293,16 +2320,16 @@ func ExtractToolCallSignature(line string) string {
 // that ExecCommand cannot be used to exfiltrate secrets injected by the worker.
 func execSafeEnv() []string {
 	sensitive := map[string]bool{
-		"OPENAI_API_KEY":      true,
-		"ANTHROPIC_API_KEY":   true,
-		"LITELLM_MASTER_KEY":  true,
-		"LITELLM_API_KEY":     true,
-		"GITHUB_TOKEN":        true,
-		"GITHUB_PAT":          true,
-		"AOT_API_KEY":         true,
-		"AWS_ACCESS_KEY_ID":   true,
+		"OPENAI_API_KEY":        true,
+		"ANTHROPIC_API_KEY":     true,
+		"LITELLM_MASTER_KEY":    true,
+		"LITELLM_API_KEY":       true,
+		"GITHUB_TOKEN":          true,
+		"GITHUB_PAT":            true,
+		"AOT_API_KEY":           true,
+		"AWS_ACCESS_KEY_ID":     true,
 		"AWS_SECRET_ACCESS_KEY": true,
-		"GOOGLE_API_KEY":      true,
+		"GOOGLE_API_KEY":        true,
 	}
 	var safe []string
 	for _, kv := range os.Environ() {

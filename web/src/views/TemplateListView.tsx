@@ -84,7 +84,7 @@ export default function TemplateListView() {
   return (
     <div className="flex h-full flex-col">
       <div className="h-12 border-b flex items-center px-4 gap-2">
-        <span className="font-semibold flex-1">Templates</span>
+        <h1 className="font-semibold flex-1 text-base">Templates</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-none">

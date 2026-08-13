@@ -7,6 +7,12 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // The Dagger CI container is far slower to cold-start jsdom and the
+    // component import graph than a local run: one file alone took 170s in CI
+    // (setup 81s, import 43s) against a couple of seconds locally. The 5000ms
+    // default timeout flakes there on a test that does nothing slow, so this
+    // gives real headroom without masking a genuine hang.
+    testTimeout: 15000,
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/__tests__/**/*.test.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
     exclude: ['node_modules', 'e2e/**'],

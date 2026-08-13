@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,7 @@ func setupTestRepo(t *testing.T) string {
 	}
 
 	for _, args := range commands {
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := exec.CommandContext(context.Background(), args[0], args[1:]...)
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@test.com", "GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@test.com")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("setup command %v failed: %v\n%s", args, err, out)
@@ -34,7 +35,7 @@ func setupTestRepo(t *testing.T) string {
 		{"git", "-C", mainDir, "add", "."},
 		{"git", "-C", mainDir, "commit", "-m", "init"},
 	} {
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := exec.CommandContext(context.Background(), args[0], args[1:]...)
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@test.com", "GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@test.com")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("setup command %v failed: %v\n%s", args, err, out)
@@ -63,7 +64,7 @@ func TestFindAOTWorktrees(t *testing.T) {
 
 	// Create an AOT worktree
 	wtDir := filepath.Join(t.TempDir(), "aot-wt")
-	cmd := exec.Command("git", "worktree", "add", "-b", "aot/test-branch", wtDir, "HEAD")
+	cmd := exec.CommandContext(context.Background(), "git", "worktree", "add", "-b", "aot/test-branch", wtDir, "HEAD")
 	cmd.Dir = repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git worktree add: %v\n%s", err, out)

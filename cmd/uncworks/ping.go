@@ -23,11 +23,11 @@ func runPing(args []string) error {
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	quiet := fs.Bool("quiet", false, "Print only the average RTT or 'error' (for scripting)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks ping [flags]\n\nCheck API connectivity and measure round-trip latency.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks ping [flags]\n\nCheck API connectivity and measure round-trip latency.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("ping: %w", err)
 	}
 
 	client, err := newClient(*server)
@@ -132,7 +132,7 @@ func runPing(args []string) error {
 			fmt.Println((total / time.Duration(received)).Round(time.Millisecond))
 		}
 		if failures == sent {
-			return fmt.Errorf("all pings failed")
+			return fmt.Errorf("%w: all pings failed", errFailed)
 		}
 		return nil
 	}
@@ -183,7 +183,7 @@ func runPing(args []string) error {
 	}
 
 	if failures == sent {
-		return fmt.Errorf("all pings failed")
+		return fmt.Errorf("%w: all pings failed", errFailed)
 	}
 	return nil
 }

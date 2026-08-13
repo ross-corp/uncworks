@@ -479,10 +479,10 @@ func TestGetRunGraph_ParentChild(t *testing.T) {
 	// Create child run
 	childResp, err := client.CreateAgentRun(ctx, connect.NewRequest(&apiv1.CreateAgentRunRequest{
 		Spec: &apiv1.AgentRunSpec{
-			Backend:      apiv1.Backend_BACKEND_POD,
-			Repos:        []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
-			Prompt:       "child run",
-			ParentRunId:  parentID,
+			Backend:     apiv1.Backend_BACKEND_POD,
+			Repos:       []*apiv1.Repository{{Url: "https://github.com/example/repo.git"}},
+			Prompt:      "child run",
+			ParentRunId: parentID,
 		},
 	}))
 	if err != nil {

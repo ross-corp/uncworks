@@ -7,9 +7,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
 )
 
 // Symbol is a code symbol returned by a semantic search.
@@ -78,7 +86,7 @@ func (c *HTTPClient) SemanticSearch(ctx context.Context, query string, limit int
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("cudgel /search returned %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: cudgel /search returned %d", errFailed, resp.StatusCode)
 	}
 
 	var symbols []Symbol
@@ -111,7 +119,7 @@ func (c *HTTPClient) GraphTraversal(ctx context.Context, symbol string, depth in
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("cudgel /graph returned %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: cudgel /graph returned %d", errFailed, resp.StatusCode)
 	}
 
 	var edges []Edge

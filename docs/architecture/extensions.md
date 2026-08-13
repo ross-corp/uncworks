@@ -1,6 +1,6 @@
 # Extensions
 
-Two implementations exist; one is wired in.
+Two extension implementations exist. The sidecar loads one of them.
 
 | | `extensions/aot-determinism.ts` | `packages/pi-aot-extension/` |
 |---|---|---|
@@ -8,49 +8,61 @@ Two implementations exist; one is wired in.
 | Transport | File IPC under `/workspace/.aot/input/` | gRPC (`AgentNotificationService`) |
 | Tracing | JSONL audit logging | OpenTelemetry spans per tool call |
 | HITL | `ask_user` writes `question.json`, polls `response.txt` | `waitForHumanInput()` over stdin |
-| Loaded by sidecar | **Yes** — `--extension /opt/aot/extensions/aot-determinism.ts` | No — typechecked, tested, not wired |
+| Loaded by sidecar | Yes, through `--extension /opt/aot/extensions/aot-determinism.ts` | No. It is typechecked and tested, but nothing loads it |
 
-## `aot-determinism.ts` (active)
+## `aot-determinism.ts`, the loaded extension
 
-The policy layer. Copied into the sidecar image via `docker/Dockerfile.sidecar`:
+This is the policy layer. `docker/Dockerfile.sidecar` copies it into the sidecar
+image.
 
 ```dockerfile
 COPY extensions/aot-determinism.ts /opt/aot/extensions/aot-determinism.ts
 ```
 
-And the sidecar appends the flag in `internal/sidecar/gateway.go`:
+The sidecar appends the flag in `internal/sidecar/gateway.go`.
 
 ```go
 const aotExtensionPath = "/opt/aot/extensions/aot-determinism.ts"
 args = append(args, "--extension", aotExtensionPath)
 ```
 
-### Enforces
+### What it enforces
 
-1. **Loop detection** — blocks after 3 consecutive identical tool calls.
-2. **Turn cap** — 50 turns.
-3. **Write validation (plan)** — spec files must use `SHALL`/`MUST`; `tasks.md` ≤ 30 checkboxes.
-4. **Protected paths** — writes outside `/workspace` blocked.
-5. **Role policies** (`PI_ROLE`):
-   - `manage` → only `openspec/` + `.aot/`.
-   - `implement` → no `ask_user`; must surface questions in output.
+1. Loop detection. It blocks the agent after 3 identical tool calls in a row.
+2. A turn cap of 50 turns.
+3. Write validation during the Plan stage. Every spec file MUST use `SHALL` or
+   `MUST`, and `tasks.md` MUST hold no more than 30 checkboxes.
+4. Protected paths. It blocks every write outside `/workspace`.
+5. Role policy, read from `PI_ROLE`. The `manage` role may write only to
+   `openspec/` and `.aot/`. The `implement` role may not call `ask_user`, so it
+   MUST raise a question in its output instead.
 
 ### Custom tools
 
-- `ask_user` — writes `/workspace/.aot/input/question.json`, polls `response.txt`. 5-minute timeout. Manage only.
-- `delegate_task` — writes a marker to `/workspace/.aot/subagents/<id>.json` for dashboard visibility. Handled inline (no subprocess).
+- `ask_user` writes `/workspace/.aot/input/question.json` and polls
+  `response.txt`. It times out after 5 minutes. Only the `manage` role may call
+  it.
+- `delegate_task` writes a marker to `/workspace/.aot/subagents/<id>.json` so the
+  dashboard can show the delegation. It runs inline and starts no subprocess.
 
-## `packages/pi-aot-extension/` (available, dormant)
+## `packages/pi-aot-extension/`, the dormant extension
 
-Class-based harness offering:
+This is a class-based harness. It provides:
 
-- Connect-RPC notifications to the sidecar (`AgentNotificationService.NotifyEvent` for `STARTED`, `TOOL_CALL`, `WAITING_FOR_INPUT`, `LOG`).
+- ConnectRPC notifications to the sidecar, through
+  `AgentNotificationService.NotifyEvent`, for `STARTED`, `TOOL_CALL`,
+  `WAITING_FOR_INPUT`, and `LOG`.
 - OpenTelemetry spans per tool execution with `tool.name` and `agent_run_id`.
-- Stdin-based HITL with buffered promise resolution.
-- Tool registry: `registerTool` / `executeTool` / `getTools`.
+- Human input over stdin, with buffered promise resolution.
+- A tool registry: `registerTool`, `executeTool`, and `getTools`.
 
-CI typechecks it (`tsc --noEmit`) and `task test:extension` runs its tests — but no Dockerfile, Helm chart, or Go code references it at runtime.
+CI typechecks it with `tsc --noEmit`, and `task test:extension` runs its tests.
+No Dockerfile, Helm chart, or Go source references it at runtime.
 
 ## How they relate
 
-`aot-determinism.ts` is the policy layer. `pi-aot-extension` would be the observability / transport layer if wired up. They are complementary in design; only the former is loaded. Activating the latter would layer OTel spans and direct gRPC events on top of the existing policy guardrails.
+`aot-determinism.ts` is the policy layer. `pi-aot-extension` would be the
+observability and transport layer once something loads it. The two are
+complementary, and only the first one runs today. Loading the second one would
+add OpenTelemetry spans and direct gRPC events on top of the existing policy
+guardrails.

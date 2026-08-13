@@ -33,7 +33,12 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	var cr aotv1alpha1.ChainRun
 	if err := r.Get(ctx, req.NamespacedName, &cr); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		// IgnoreNotFound returns nil for a deleted resource, and wrapping nil
+		// would turn that into a failure. Only wrap what survives it.
+		if err := client.IgnoreNotFound(err); err != nil {
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Handle deletion: remove child AgentRuns that have not yet completed.
@@ -57,7 +62,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 			controllerutil.RemoveFinalizer(&cr, chainFinalizerName)
 			if err := r.Update(ctx, &cr); err != nil {
-				return ctrl.Result{}, err
+				return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 			}
 		}
 		return ctrl.Result{}, nil
@@ -69,7 +74,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if !controllerutil.ContainsFinalizer(&cr, chainFinalizerName) {
 		controllerutil.AddFinalizer(&cr, chainFinalizerName)
 		if err := r.Update(ctx, &cr); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -85,7 +90,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		cr.Status.Phase = aotv1alpha1.ChainRunPhaseFailed
 		cr.Status.Message = fmt.Sprintf("chain %q not found: %v", cr.Spec.ChainRef, err)
 		if err := r.Status().Update(ctx, &cr); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -95,7 +100,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		cr.Status.Phase = aotv1alpha1.ChainRunPhaseFailed
 		cr.Status.Message = fmt.Sprintf("invalid chain DAG: %v", err)
 		if err := r.Status().Update(ctx, &cr); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -112,7 +117,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			})
 		}
 		if err := r.Status().Update(ctx, &cr); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
@@ -337,7 +342,7 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	if updated {
 		if err := r.Status().Update(ctx, &cr); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 	}
 
@@ -350,7 +355,10 @@ func (r *ChainRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 // SetupWithManager registers ChainRunReconciler with the controller manager.
 func (r *ChainRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.ChainRun{}).
-		Complete(r)
+		Complete(r); err != nil {
+		return fmt.Errorf("setting up the controller: %w", err)
+	}
+	return nil
 }

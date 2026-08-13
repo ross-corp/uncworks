@@ -1,12 +1,12 @@
 // test/layer2/trace_generation_test.go — Layer 2 tests for trace-related observable behavior.
 //
 // Tracing in this system works at two levels:
-//   1. The AgentRunStatus.TraceID field — an OpenTelemetry trace ID stored on the
-//      CRD status and surfaced via GetAgentRun.
-//   2. The AgentRunStatus.Stage field — the current pipeline stage (planning,
-//      executing, verifying) that maps to stage child spans in the agent's trace.
-//   3. The GetRunGraph RPC — returns the tree of parent/child runs built from the
-//      spec-run-id label and ParentRunID spec field, which mirrors the span hierarchy.
+//  1. The AgentRunStatus.TraceID field — an OpenTelemetry trace ID stored on the
+//     CRD status and surfaced via GetAgentRun.
+//  2. The AgentRunStatus.Stage field — the current pipeline stage (planning,
+//     executing, verifying) that maps to stage child spans in the agent's trace.
+//  3. The GetRunGraph RPC — returns the tree of parent/child runs built from the
+//     spec-run-id label and ParentRunID spec field, which mirrors the span hierarchy.
 //
 // These tests verify observable API behavior only; they do not access the JSONL
 // spans file directly (that is tested in internal/server/traces_test.go).

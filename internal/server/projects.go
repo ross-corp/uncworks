@@ -40,21 +40,21 @@ func (h *ProjectHandler) RegisterProjectHandlers(mux *http.ServeMux) {
 }
 
 type projectResponse struct {
-	Name                 string                       `json:"name"`
-	DisplayName          string                       `json:"displayName"`
-	Description          string                       `json:"description"`
-	Repos                []aotv1alpha1.Repository     `json:"repos"`
-	Devbox               *aotv1alpha1.DevboxConfig    `json:"devbox,omitempty"`
-	Defaults             *aotv1alpha1.ProjectDefaults `json:"defaults,omitempty"`
-	ConfigRepoReady      bool                         `json:"configRepoReady"`
-	ConfigRepoURL        string                       `json:"configRepoURL"`
+	Name            string                       `json:"name"`
+	DisplayName     string                       `json:"displayName"`
+	Description     string                       `json:"description"`
+	Repos           []aotv1alpha1.Repository     `json:"repos"`
+	Devbox          *aotv1alpha1.DevboxConfig    `json:"devbox,omitempty"`
+	Defaults        *aotv1alpha1.ProjectDefaults `json:"defaults,omitempty"`
+	ConfigRepoReady bool                         `json:"configRepoReady"`
+	ConfigRepoURL   string                       `json:"configRepoURL"`
 	// ConfigRepoMessage is set when ConfigRepoReady is false and the controller
 	// has recorded a reason — e.g. "Failed to reach soft-serve: connection refused".
-	ConfigRepoMessage    string                       `json:"configRepoMessage,omitempty"`
-	RunCount             int32                        `json:"runCount"`
-	LastRunID            string                       `json:"lastRunId"`
-	TotalCost            string                       `json:"totalCost"`
-	CreatedAt            string                       `json:"createdAt"`
+	ConfigRepoMessage string `json:"configRepoMessage,omitempty"`
+	RunCount          int32  `json:"runCount"`
+	LastRunID         string `json:"lastRunId"`
+	TotalCost         string `json:"totalCost"`
+	CreatedAt         string `json:"createdAt"`
 }
 
 func projectToResponse(p *aotv1alpha1.Project) projectResponse {

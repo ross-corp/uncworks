@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,7 +12,7 @@ import (
 
 // FindWorktrees finds all git worktrees in the given directory.
 func FindWorktrees(repoDir string) ([]string, error) {
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd := exec.CommandContext(context.Background(), "git", "worktree", "list", "--porcelain")
 	cmd.Dir = repoDir
 	out, err := cmd.Output()
 	if err != nil {
@@ -30,7 +31,7 @@ func FindWorktrees(repoDir string) ([]string, error) {
 
 // FindAOTWorktrees returns only worktrees created by AOT (branches starting with "aot/").
 func FindAOTWorktrees(repoDir string) ([]string, error) {
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd := exec.CommandContext(context.Background(), "git", "worktree", "list", "--porcelain")
 	cmd.Dir = repoDir
 	out, err := cmd.Output()
 	if err != nil {
@@ -64,9 +65,12 @@ func OpenInEditor(dir string) error {
 		return fmt.Errorf("resolve path: %w", err)
 	}
 
-	cmd := exec.Command(editor, absDir)
+	cmd := exec.CommandContext(context.Background(), editor, absDir)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("open in editor: %w", err)
+	}
+	return nil
 }

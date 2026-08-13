@@ -811,7 +811,7 @@ func execInSidecar(ctx context.Context, client agentv1connect.AgentSidecarServic
 	}
 
 	if resp.Msg.ExitCode != 0 {
-		return resp.Msg.Stdout, fmt.Errorf("command exited with code %d: %s", resp.Msg.ExitCode, resp.Msg.Stderr)
+		return resp.Msg.Stdout, fmt.Errorf("%w: command exited with code %d: %s", errFailed, resp.Msg.ExitCode, resp.Msg.Stderr)
 	}
 
 	return resp.Msg.Stdout, nil
@@ -828,7 +828,10 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("poll until agent done: %w", err)
+			}
+			return nil
 		default:
 		}
 
@@ -843,14 +846,14 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 		case agentv1.AgentProcessState_AGENT_PROCESS_STATE_COMPLETED:
 			return nil
 		case agentv1.AgentProcessState_AGENT_PROCESS_STATE_FAILED:
-			return fmt.Errorf("agent failed: %s", status.Msg.Error)
+			return fmt.Errorf("%w: agent failed: %s", errFailed, status.Msg.Error)
 		case agentv1.AgentProcessState_AGENT_PROCESS_STATE_RUNNING,
 			agentv1.AgentProcessState_AGENT_PROCESS_STATE_WAITING_FOR_INPUT:
 			unspecifiedCount = 0
 		default:
 			unspecifiedCount++
 			if unspecifiedCount >= maxUnspecified {
-				return fmt.Errorf("agent never started (UNSPECIFIED state after %d polls)", unspecifiedCount)
+				return fmt.Errorf("%w: agent never started (UNSPECIFIED state after %d polls)", errFailed, unspecifiedCount)
 			}
 		}
 
@@ -858,7 +861,10 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 		// blocking for the full poll interval after the activity context is done.
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("poll until agent done: %w", err)
+			}
+			return nil
 		case <-time.After(pollInterval):
 		}
 	}

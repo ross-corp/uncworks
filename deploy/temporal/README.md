@@ -1,6 +1,7 @@
 # Temporal Deployment
 
-UNCWORKS uses [Temporal](https://temporal.io/) for durable workflow orchestration. Temporal is an **external dependency** — it is not bundled in the UNCWORKS Helm chart.
+UNCWORKS runs its durable workflows on [Temporal](https://temporal.io/).
+Temporal is an external dependency. The UNCWORKS Helm chart does not bundle it.
 
 ## Local Development
 
@@ -74,17 +75,15 @@ Both `cmd/controller` and `cmd/temporal-worker` read these variables.
 
 ## Architecture
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
-│  K8s Controller  │────▶│  Temporal Server  │◀────│ Temporal Worker │
-│ (CRD → Workflow) │     │  (Frontend:7233)  │     │ (Activities)   │
-└─────────────────┘     └──────────────────┘     └────────────────┘
-                              │                         │
-                              ▼                         ▼
-                        ┌──────────┐             ┌──────────┐
-                        │ Postgres │             │ K8s Pods  │
-                        │ temporal │             │ (Agents)  │
-                        └──────────┘             └──────────┘
+```mermaid
+flowchart LR
+    Ctrl["K8s controller\nCRD to workflow"] --> TS["Temporal server\nFrontend :7233"]
+    Worker["Temporal worker\nactivities"] --> TS
+    TS --> PG[("Postgres\ntemporal")]
+    Worker --> Pods["Agent pods"]
 ```
 
-The controller watches AgentRun CRDs and starts/cancels Temporal workflows. The Temporal worker executes workflow logic and activity code (pod creation, sidecar RPC calls). Temporal owns all execution state; the CRD status is synced from the workflow.
+The controller watches the `AgentRun` resources, and starts or cancels the
+matching Temporal workflow. The worker runs the workflow logic and the activity
+code, which creates pods and calls the sidecar. Temporal owns all execution
+state, and the resource status is synced from the workflow.

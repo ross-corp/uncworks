@@ -43,10 +43,13 @@ var images = []imageSpec{
 
 // goBase returns a Go container with the source mounted and modules cached.
 // TODO: Replace with devbox-in-Dagger once Nix daemon-less containers are solved.
-// Versions are kept in sync with devbox.json manually.
+// Versions are kept in sync with go.mod's `go` directive manually: golangci-lint
+// refuses to run when the toolchain that built it is older than the version a
+// module targets, and go build/test/install fail the same way under
+// GOTOOLCHAIN=local, which this container does not override.
 func (m *Ci) goBase(source *dagger.Directory) *dagger.Container {
 	return dag.Container().
-		From("golang:1.25-bookworm").
+		From("golang:1.26-bookworm").
 		WithMountedDirectory("/src", source).
 		WithWorkdir("/src").
 		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
@@ -83,9 +86,16 @@ func (m *Ci) Build(ctx context.Context, source *dagger.Directory) (string, error
 }
 
 // Lint runs golangci-lint with timeout and reduced concurrency for CI runners.
+//
+// The version is pinned rather than @latest, and kept in sync with the
+// golangci-lint devbox resolves (see devbox.json) manually. @latest let CI
+// silently pick up a newer release mid-review that enabled rule coverage no
+// contributor had validated against, turning a locally-clean run red with no
+// code change. A pinned version makes local and CI results agree by
+// construction, the same reasoning as pinning the Go base image above.
 func (m *Ci) Lint(ctx context.Context, source *dagger.Directory) (string, error) {
 	_, err := m.goBase(source).
-		WithExec([]string{"go", "install", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"}).
+		WithExec([]string{"go", "install", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1"}).
 		WithExec([]string{"golangci-lint", "run", "--timeout", "5m", "--concurrency", "2"}).
 		Sync(ctx)
 	if err != nil {
@@ -179,7 +189,9 @@ func (m *Ci) CheckCoverage(ctx context.Context, source *dagger.Directory) (strin
 // All specs use page.route() mocking — no real backend required.
 func (m *Ci) PlaywrightTests(ctx context.Context, source *dagger.Directory) (string, error) {
 	out, err := dag.Container().
-		From("mcr.microsoft.com/playwright:v1.50.0-noble").
+		// Keep this tag in step with web/package.json's @playwright/test version.
+		// A mismatch makes the image ship browsers the test runner refuses.
+		From("mcr.microsoft.com/playwright:v1.62.1-noble").
 		WithMountedDirectory("/src", source).
 		WithWorkdir("/src/web").
 		WithMountedCache("/root/.npm", dag.CacheVolume("npm-cache-playwright")).
@@ -187,6 +199,9 @@ func (m *Ci) PlaywrightTests(ctx context.Context, source *dagger.Directory) (str
 		WithEnvVariable("PLAYWRIGHT_BROWSERS_PATH", "/ms-playwright").
 		WithExec([]string{"bash", "-c", `
 			set -e
+			# Install @bufbuild/protobuf at repo root so gen/ts/ proto files
+			# can resolve it (they live outside any package's node_modules).
+			cd /src && npm install --no-save @bufbuild/protobuf@^2.0.0
 			cd /src/packages/shared && npm ci
 			cd /src/web && npm ci
 		`}).

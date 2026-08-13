@@ -2,6 +2,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"strings"
@@ -22,7 +23,7 @@ func EnsureEnvtestAssets() {
 	}
 
 	for _, bin := range candidates {
-		out, err := exec.Command(bin, "use", "--print", "path").Output()
+		out, err := exec.CommandContext(context.Background(), bin, "use", "--print", "path").Output()
 		if err == nil {
 			path := strings.TrimSpace(string(out))
 			if path != "" {

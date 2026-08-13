@@ -2,9 +2,21 @@ package brain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
+	// errNotFound reports that a named thing is absent.
+	errNotFound = errors.New("not found")
 )
 
 // SearchQuery represents a semantic search request against the knowledge base.
@@ -53,7 +65,7 @@ func (s *Searcher) Search(ctx context.Context, q SearchQuery) ([]SearchResult, e
 		q.Limit = 100
 	}
 	if q.SourceFilter != "" && q.SourceFilter != "code" && q.SourceFilter != "trace" {
-		return nil, fmt.Errorf("invalid SourceFilter %q: must be empty, \"code\", or \"trace\"", q.SourceFilter)
+		return nil, fmt.Errorf("%w: invalid SourceFilter %q: must be empty, \"code\", or \"trace\"", errInvalidInput, q.SourceFilter)
 	}
 
 	var results []SearchResult

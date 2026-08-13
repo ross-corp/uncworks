@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-
 	// isTerminal is used to detect whether stdin is attached to a TTY.
 	// We use a direct syscall so we avoid adding a new dependency.
 )
@@ -27,14 +27,14 @@ func isTTY() bool {
 
 // setupConfig holds all values needed to install UNCWORKS.
 type setupConfig struct {
-	KubeContext   string
-	Namespace     string
-	LLMKey        string
-	GitHubToken   string
-	TemporalHost  string
-	ChartRef      string
-	ChartVersion  string
-	ValuesFile    string
+	KubeContext  string
+	Namespace    string
+	LLMKey       string
+	GitHubToken  string
+	TemporalHost string
+	ChartRef     string
+	ChartVersion string
+	ValuesFile   string
 }
 
 func runSetup(args []string) error {
@@ -49,11 +49,11 @@ func runSetup(args []string) error {
 	valuesFile := fs.String("values", "", "Additional Helm values file")
 	withTemporal := fs.Bool("with-temporal", false, "Deploy a Temporal dev server into the cluster (for local dev)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks setup [flags]\n\nDeploy UNCWORKS into a local Kubernetes cluster.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks setup [flags]\n\nDeploy UNCWORKS into a local Kubernetes cluster.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("setup: %w", err)
 	}
 
 	if err := checkPrereqs(); err != nil {
@@ -119,7 +119,7 @@ func selectContext() (string, error) {
 	contexts, err := ListContexts()
 	if err != nil || len(contexts) == 0 {
 		printNoClusterInstructions()
-		return "", fmt.Errorf("no Kubernetes contexts found")
+		return "", fmt.Errorf("%w: no Kubernetes contexts found", errFailed)
 	}
 
 	// Sort: active first, then alphabetical.
@@ -143,7 +143,7 @@ func selectContext() (string, error) {
 				return ctx.Name, nil
 			}
 		}
-		return "", fmt.Errorf("multiple Kubernetes contexts found but stdin is not a terminal — pass --context to choose one")
+		return "", fmt.Errorf("%w: multiple Kubernetes contexts found but stdin is not a terminal — pass --context to choose one", errFailed)
 	}
 
 	fmt.Println("Available Kubernetes contexts:")
@@ -163,7 +163,7 @@ func selectContext() (string, error) {
 	idx := 0
 	_, err = fmt.Sscanf(line, "%d", &idx)
 	if err != nil || idx < 1 || idx > len(contexts) {
-		return "", fmt.Errorf("invalid selection %q", line)
+		return "", fmt.Errorf("%w: invalid selection %q", errInvalidInput, line)
 	}
 	return contexts[idx-1].Name, nil
 }
@@ -179,13 +179,13 @@ func collectValues(cfg *setupConfig, llmKey, githubToken, temporalHost string) e
 
 	if cfg.LLMKey == "" {
 		if !tty {
-			return fmt.Errorf("--llm-key is required (stdin is not a terminal)")
+			return fmt.Errorf("%w: --llm-key is required (stdin is not a terminal)", errInvalidInput)
 		}
 		cfg.LLMKey = readSecret("LLM API key (OpenRouter/OpenAI): ")
 	}
 	if cfg.GitHubToken == "" {
 		if !tty {
-			return fmt.Errorf("--github-token is required (stdin is not a terminal)")
+			return fmt.Errorf("%w: --github-token is required (stdin is not a terminal)", errInvalidInput)
 		}
 		cfg.GitHubToken = readSecret("GitHub personal access token: ")
 	}
@@ -208,14 +208,14 @@ func resourcePreflight(kubeCtx string) error {
 		return nil
 	}
 
-	minCPU := int64(2000)   // 2 vCPUs
+	minCPU := int64(2000)                   // 2 vCPUs
 	minMem := int64(2 * 1024 * 1024 * 1024) // 2Gi
-	recCPU := int64(4000)   // 4 vCPUs
+	recCPU := int64(4000)                   // 4 vCPUs
 	recMem := int64(4 * 1024 * 1024 * 1024) // 4Gi
 
 	if res.CPUMillicores < minCPU || res.MemoryBytes < minMem {
-		return fmt.Errorf("insufficient cluster resources: have %dm CPU / %dMi memory, need at least 2 CPU / 2Gi",
-			res.CPUMillicores, res.MemoryBytes/1024/1024)
+		return fmt.Errorf("%w: insufficient cluster resources: have %dm CPU / %dMi memory, need at least 2 CPU / 2Gi",
+			errInvalidInput, res.CPUMillicores, res.MemoryBytes/1024/1024)
 	}
 
 	if res.CPUMillicores < recCPU || res.MemoryBytes < recMem {
@@ -224,7 +224,7 @@ func resourcePreflight(kubeCtx string) error {
 		if isTTY() {
 			fmt.Print("Continue anyway? [Y/n]: ")
 			if line := readLine(); strings.ToLower(line) == "n" {
-				return fmt.Errorf("setup cancelled")
+				return fmt.Errorf("%w: setup cancelled", errFailed)
 			}
 		} else {
 			fmt.Println("Non-interactive mode: proceeding despite low resources.")
@@ -259,11 +259,11 @@ func helmInstall(cfg *setupConfig) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpValues)
+	defer func() { _ = os.Remove(tmpValues) }()
 	helmArgs = append(helmArgs, "-f", tmpValues)
 
 	fmt.Printf("Installing UNCWORKS (release: %s, namespace: %s)...\n", defaultReleaseName, cfg.Namespace)
-	cmd := exec.Command("helm", helmArgs...)
+	cmd := exec.CommandContext(context.Background(), "helm", helmArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -278,16 +278,16 @@ func writeTempValues(cfg *setupConfig) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var sb strings.Builder
 	if cfg.LLMKey != "" {
-		sb.WriteString(fmt.Sprintf("llm:\n  apiKey: %q\n", cfg.LLMKey))
+		_, _ = fmt.Fprintf(&sb, "llm:\n  apiKey: %q\n", cfg.LLMKey)
 	}
 	if cfg.GitHubToken != "" {
 		// GitHub token goes into a k8s Secret; we pass it as a values override
 		// that the helm chart uses to create the secret.
-		sb.WriteString(fmt.Sprintf("github:\n  token: %q\n", cfg.GitHubToken))
+		_, _ = fmt.Fprintf(&sb, "github:\n  token: %q\n", cfg.GitHubToken)
 	}
 	if _, err := f.WriteString(sb.String()); err != nil {
 		return "", err
@@ -328,25 +328,24 @@ spec:
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err := f.WriteString(manifest); err != nil {
 		return err
 	}
-	f.Close()
-
+	_ = f.Close()
 	// Ensure namespace exists.
 	nsCreateArgs := []string{"create", "namespace", namespace}
 	if kubeCtx != "" {
 		nsCreateArgs = append([]string{"--context", kubeCtx}, nsCreateArgs...)
 	}
-	cmd := exec.Command("kubectl", nsCreateArgs...)
+	cmd := exec.CommandContext(context.Background(), "kubectl", nsCreateArgs...)
 	_ = cmd.Run() // ignore error if namespace already exists
 
 	kubectlArgs := []string{"apply", "--namespace", namespace, "-f", f.Name()}
 	if kubeCtx != "" {
 		kubectlArgs = append([]string{"--context", kubeCtx}, kubectlArgs...)
 	}
-	cmd = exec.Command("kubectl", kubectlArgs...)
+	cmd = exec.CommandContext(context.Background(), "kubectl", kubectlArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -401,13 +400,13 @@ func readSecret(label string) string {
 		return readLine()
 	}
 	// Disable echo via stty so the secret is not visible as the user types.
-	sttyOff := exec.Command("stty", "-echo")
+	sttyOff := exec.CommandContext(context.Background(), "stty", "-echo")
 	sttyOff.Stdin = os.Stdin
 	_ = sttyOff.Run()
 
 	val := readLine()
 
-	sttyOn := exec.Command("stty", "echo")
+	sttyOn := exec.CommandContext(context.Background(), "stty", "echo")
 	sttyOn.Stdin = os.Stdin
 	_ = sttyOn.Run()
 	fmt.Println() // newline after masked input
