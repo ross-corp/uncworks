@@ -161,7 +161,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_agent_states_phase ON agent_states(phase);
 	`)
 	if err != nil {
-		return err
+		return fmt.Errorf("migrate: %w", err)
 	}
 
 	// Knowledge system tables: run artifacts
@@ -199,7 +199,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_run_spans_run_id ON run_spans(agent_run_id);
 	`)
 	if err != nil {
-		return err
+		return fmt.Errorf("migrate: %w", err)
 	}
 
 	// Knowledge system tables: vector embeddings (requires pgvector extension)
@@ -294,7 +294,10 @@ func (s *Store) SaveState(ctx context.Context, state *AgentState) error {
 			updated_at   = EXCLUDED.updated_at,
 			completed_at = EXCLUDED.completed_at
 	`, state.ID, state.AgentRunID, state.Phase, state.Message, state.Prompt, state.RepoURL, state.Branch, state.TraceID, state.CreatedAt, state.UpdatedAt, state.CompletedAt)
-	return err
+	if err != nil {
+		return fmt.Errorf("save state: %w", err)
+	}
+	return nil
 }
 
 // GetState retrieves an agent state by agent run ID.
@@ -311,7 +314,10 @@ func (s *Store) GetState(ctx context.Context, agentRunID string) (*AgentState, e
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("agent state not found: %s", agentRunID)
 	}
-	return state, err
+	if err != nil {
+		return state, fmt.Errorf("get state: %w", err)
+	}
+	return state, nil
 }
 
 // UpdatePhase updates the phase and message for an agent run.
@@ -320,7 +326,7 @@ func (s *Store) UpdatePhase(ctx context.Context, agentRunID, phase, message stri
 		UPDATE agent_states SET phase = $2, message = $3, updated_at = NOW() WHERE agent_run_id = $1
 	`, agentRunID, phase, message)
 	if err != nil {
-		return err
+		return fmt.Errorf("update phase: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("agent state not found: %s", agentRunID)
@@ -340,7 +346,7 @@ func (s *Store) ListByPhase(ctx context.Context, phase string) ([]*AgentState, e
 		FROM agent_states WHERE phase = $1 ORDER BY created_at LIMIT $2
 	`, phase, defaultListByPhaseLimit)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list by phase: %w", err)
 	}
 	defer rows.Close()
 
@@ -352,11 +358,14 @@ func (s *Store) ListByPhase(ctx context.Context, phase string) ([]*AgentState, e
 			&st.Prompt, &st.RepoURL, &st.Branch, &st.TraceID,
 			&st.CreatedAt, &st.UpdatedAt, &st.CompletedAt,
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("list by phase: %w", err)
 		}
 		states = append(states, st)
 	}
-	return states, rows.Err()
+	if err := rows.Err(); err != nil {
+		return states, fmt.Errorf("list by phase: %w", err)
+	}
+	return states, nil
 }
 
 // --- Run Data Persistence (Knowledge System) ---
@@ -366,7 +375,10 @@ func (s *Store) SaveRunLog(ctx context.Context, agentRunID, content string) erro
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO run_logs (agent_run_id, content) VALUES ($1, $2)
 	`, agentRunID, content)
-	return err
+	if err != nil {
+		return fmt.Errorf("save run log: %w", err)
+	}
+	return nil
 }
 
 // SaveRunDiff persists a file diff from an agent run.
@@ -374,7 +386,10 @@ func (s *Store) SaveRunDiff(ctx context.Context, agentRunID, spanID, filePath, p
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO run_diffs (agent_run_id, span_id, file_path, patch) VALUES ($1, $2, $3, $4)
 	`, agentRunID, spanID, filePath, patch)
-	return err
+	if err != nil {
+		return fmt.Errorf("save run diff: %w", err)
+	}
+	return nil
 }
 
 // SaveRunSpan persists a trace span from an agent run.
@@ -393,7 +408,10 @@ func (s *Store) SaveRunSpan(ctx context.Context, agentRunID string, span TraceSp
 		INSERT INTO run_spans (agent_run_id, parent_id, name, type, start_time, end_time, metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, agentRunID, parentID, span.Name, span.Type, span.StartTime, span.EndTime, metadataJSON)
-	return err
+	if err != nil {
+		return fmt.Errorf("save run span: %w", err)
+	}
+	return nil
 }
 
 // SaveRunSpans batch-inserts trace spans for an agent run using pgx.CopyFrom.
@@ -449,7 +467,7 @@ func (s *Store) GetRunLogs(ctx context.Context, agentRunID string) (string, erro
 		SELECT content FROM run_logs WHERE agent_run_id = $1 ORDER BY created_at
 	`, agentRunID)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get run logs: %w", err)
 	}
 	defer rows.Close()
 
@@ -458,7 +476,7 @@ func (s *Store) GetRunLogs(ctx context.Context, agentRunID string) (string, erro
 	for rows.Next() {
 		var content string
 		if err := rows.Scan(&content); err != nil {
-			return "", err
+			return "", fmt.Errorf("get run logs: %w", err)
 		}
 		if !first {
 			sb.WriteByte('\n')
@@ -476,7 +494,7 @@ func (s *Store) GetRunDiffs(ctx context.Context, agentRunID string) ([]RunDiff, 
 		FROM run_diffs WHERE agent_run_id = $1 ORDER BY created_at
 	`, agentRunID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get run diffs: %w", err)
 	}
 	defer rows.Close()
 
@@ -485,14 +503,17 @@ func (s *Store) GetRunDiffs(ctx context.Context, agentRunID string) ([]RunDiff, 
 		var d RunDiff
 		var spanID *string
 		if err := rows.Scan(&d.ID, &d.AgentRunID, &spanID, &d.FilePath, &d.Patch, &d.CreatedAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get run diffs: %w", err)
 		}
 		if spanID != nil {
 			d.SpanID = *spanID
 		}
 		diffs = append(diffs, d)
 	}
-	return diffs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return diffs, fmt.Errorf("get run diffs: %w", err)
+	}
+	return diffs, nil
 }
 
 // GetRunSpans retrieves all trace spans for an agent run.
@@ -502,7 +523,7 @@ func (s *Store) GetRunSpans(ctx context.Context, agentRunID string) ([]TraceSpan
 		FROM run_spans WHERE agent_run_id = $1 ORDER BY start_time
 	`, agentRunID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get run spans: %w", err)
 	}
 	defer rows.Close()
 
@@ -513,7 +534,7 @@ func (s *Store) GetRunSpans(ctx context.Context, agentRunID string) ([]TraceSpan
 		var spanType *string
 		var metadataJSON []byte
 		if err := rows.Scan(&sp.ID, &sp.AgentRunID, &parentID, &sp.Name, &spanType, &sp.StartTime, &sp.EndTime, &metadataJSON, &sp.CreatedAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get run spans: %w", err)
 		}
 		if parentID != nil {
 			sp.ParentID = *parentID
@@ -529,7 +550,10 @@ func (s *Store) GetRunSpans(ctx context.Context, agentRunID string) ([]TraceSpan
 		}
 		spans = append(spans, sp)
 	}
-	return spans, rows.Err()
+	if err := rows.Err(); err != nil {
+		return spans, fmt.Errorf("get run spans: %w", err)
+	}
+	return spans, nil
 }
 
 // --- Vector Embedding Storage (Knowledge System) ---
@@ -559,7 +583,10 @@ func (s *Store) SaveCodeChunks(ctx context.Context, chunks []CodeChunkRecord) er
 			return fmt.Errorf("insert code chunk: %w", err)
 		}
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("save code chunks: %w", err)
+	}
+	return nil
 }
 
 // SaveTraceChunks batch-inserts embedded trace chunks into pgvector atomically.
@@ -587,7 +614,10 @@ func (s *Store) SaveTraceChunks(ctx context.Context, chunks []TraceChunkRecord) 
 			return fmt.Errorf("insert trace chunk: %w", err)
 		}
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("save trace chunks: %w", err)
+	}
+	return nil
 }
 
 // --- Vector Search (Knowledge System) ---
@@ -633,7 +663,7 @@ func (s *Store) SearchCodeChunks(ctx context.Context, queryVec []float32, repoUR
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("search code chunks: %w", err)
 	}
 	defer rows.Close()
 
@@ -641,11 +671,14 @@ func (s *Store) SearchCodeChunks(ctx context.Context, queryVec []float32, repoUR
 	for rows.Next() {
 		var r CodeChunkResult
 		if err := rows.Scan(&r.ID, &r.AgentRunID, &r.ChunkText, &r.FilePath, &r.Language, &r.NodeType, &r.RepoURL, &r.Boost, &r.Similarity, &r.CreatedAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("search code chunks: %w", err)
 		}
 		results = append(results, r)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return results, fmt.Errorf("search code chunks: %w", err)
+	}
+	return results, nil
 }
 
 // SearchTraceChunks performs a cosine similarity search on trace_chunks.
@@ -689,7 +722,7 @@ func (s *Store) SearchTraceChunks(ctx context.Context, queryVec []float32, repoU
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("search trace chunks: %w", err)
 	}
 	defer rows.Close()
 
@@ -697,11 +730,14 @@ func (s *Store) SearchTraceChunks(ctx context.Context, queryVec []float32, repoU
 	for rows.Next() {
 		var r TraceChunkResult
 		if err := rows.Scan(&r.ID, &r.AgentRunID, &r.ChunkText, &r.ChunkType, &r.Severity, &r.RepoURL, &r.Similarity, &r.CreatedAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("search trace chunks: %w", err)
 		}
 		results = append(results, r)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return results, fmt.Errorf("search trace chunks: %w", err)
+	}
+	return results, nil
 }
 
 // --- Helpers ---

@@ -32,7 +32,11 @@ func (g *GitHubClient) getToken(ctx context.Context) (string, error) {
 	if g.provider == nil {
 		return "", fmt.Errorf("GITHUB_TOKEN not configured")
 	}
-	return g.provider.Token(ctx)
+	token, err := g.provider.Token(ctx)
+	if err != nil {
+		return "", fmt.Errorf("get token: %w", err)
+	}
+	return token, nil
 }
 
 // --- request / response types ---

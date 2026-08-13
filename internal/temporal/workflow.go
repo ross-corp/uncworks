@@ -387,11 +387,17 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during LLM key provisioning"
-			return err
+			if err != nil {
+				return fmt.Errorf("agent run workflow: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to provision LLM key: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("agent run workflow: %w", err)
+		}
+		return nil
 	}
 	llmKey = keyOutput.Key
 
@@ -419,11 +425,17 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during deployment creation"
-			return err
+			if err != nil {
+				return fmt.Errorf("agent run workflow: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to create deployment: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("agent run workflow: %w", err)
+		}
+		return nil
 	}
 	deploymentName = deployOutput.DeploymentName
 	podName = deployOutput.DeploymentName // used for WaitForHydration label lookup
@@ -480,11 +492,17 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during hydration"
-			return err
+			if err != nil {
+				return fmt.Errorf("agent run workflow: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Hydration failed: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("agent run workflow: %w", err)
+		}
+		return nil
 	}
 	podIP = hydrationOutput.PodIP
 
@@ -538,11 +556,17 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during agent start"
-			return err
+			if err != nil {
+				return fmt.Errorf("agent run workflow: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to start agent: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("agent run workflow: %w", err)
+		}
+		return nil
 	}
 
 	state.Message = "Agent running"
@@ -853,11 +877,17 @@ func SpawnJuniorWorkflow(ctx workflow.Context, input SpawnJuniorInput) error {
 	future := workflow.ExecuteChildWorkflow(childCtx, AgentRunWorkflow, childInput)
 
 	if input.Blocking {
-		return future.Get(ctx, nil)
+		if err := future.Get(ctx, nil); err != nil {
+			return fmt.Errorf("spawn junior workflow: %w", err)
+		}
+		return nil
 	}
 
 	// Fire-and-forget: just wait for the child to start
-	return future.GetChildWorkflowExecution().Get(ctx, nil)
+	if err := future.GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+		return fmt.Errorf("waiting for the child workflow to start: %w", err)
+	}
+	return nil
 }
 
 const maxOrchestrationTasks = 7

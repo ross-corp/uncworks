@@ -172,7 +172,10 @@ func (g *Gateway) Start() error {
 	}
 
 	slog.Info("RPC Gateway listening", "port", g.port)
-	return g.server.ListenAndServe()
+	if err := g.server.ListenAndServe(); err != nil {
+		return fmt.Errorf("start: %w", err)
+	}
+	return nil
 }
 
 // Stop gracefully stops the gateway.
@@ -1085,11 +1088,14 @@ func (g *Gateway) StreamOutput(ctx context.Context, _ *connect.Request[agentv1.S
 				return nil
 			}
 			if err := stream.Send(output); err != nil {
-				return err
+				return fmt.Errorf("stream output: %w", err)
 			}
 		case <-ctx.Done():
 			// Client disconnected or RPC deadline exceeded.
-			return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("stream output: %w", err)
+			}
+			return nil
 		}
 	}
 }

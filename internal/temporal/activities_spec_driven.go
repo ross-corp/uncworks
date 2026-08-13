@@ -828,7 +828,10 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("poll until agent done: %w", err)
+			}
+			return nil
 		default:
 		}
 
@@ -858,7 +861,10 @@ func pollUntilAgentDone(ctx context.Context, client agentv1connect.AgentSidecarS
 		// blocking for the full poll interval after the activity context is done.
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("poll until agent done: %w", err)
+			}
+			return nil
 		case <-time.After(pollInterval):
 		}
 	}

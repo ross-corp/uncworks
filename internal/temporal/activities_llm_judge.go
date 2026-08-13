@@ -149,7 +149,7 @@ func callChatCompletion(ctx context.Context, baseURL, apiKey, model, prompt stri
 	url := strings.TrimRight(baseURL, "/") + "/v1/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("call chat completion: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if apiKey != "" {

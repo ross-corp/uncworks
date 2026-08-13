@@ -34,7 +34,7 @@ func runStatus(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("status: %w", err)
 	}
 	if *output != "" && *output != "json" {
 		return fmt.Errorf("unsupported output format %q: use 'json'", *output)

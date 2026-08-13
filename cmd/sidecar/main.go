@@ -161,7 +161,7 @@ func fetchModelsFromProxy(baseURL, apiKey string) ([]piModel, error) {
 
 	resp, err := client.ListModels(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch models from proxy: %w", err)
 	}
 
 	var models []piModel

@@ -105,7 +105,10 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 			activity.RecordHeartbeat(ctx, fmt.Sprintf("waiting for pod: %v", err))
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				if err := ctx.Err(); err != nil {
+					return nil, fmt.Errorf("wait for hydration: %w", err)
+				}
+				return nil, nil
 			case <-time.After(2 * time.Second):
 			}
 			continue
@@ -113,6 +116,7 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 
 		// Check for eviction specifically
 		if pod.Status.Reason == "Evicted" {
+			//nolint:wrapcheck // the error is constructed here, not passed through
 			return nil, temporalsdk.NewApplicationError(
 				fmt.Sprintf("pod was evicted before hydration completed: %s", pod.Status.Message),
 				"eviction",
@@ -141,6 +145,7 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 		if pod.Status.Phase == corev1.PodFailed {
 			// Check if pod failed due to eviction
 			if pod.Status.Reason == "Evicted" {
+				//nolint:wrapcheck // the error is constructed here, not passed through
 				return nil, temporalsdk.NewApplicationError(
 					fmt.Sprintf("pod was evicted before hydration completed: %s", pod.Status.Message),
 					"eviction",
@@ -159,7 +164,10 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return nil, fmt.Errorf("wait for hydration: %w", err)
+			}
+			return nil, nil
 		case <-time.After(2 * time.Second):
 		}
 	}
@@ -218,7 +226,10 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("start agent: %w", err)
+			}
+			return nil
 		case <-time.After(2 * time.Second):
 		}
 	}

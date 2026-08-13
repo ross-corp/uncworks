@@ -297,11 +297,17 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during LLM key provisioning"
-			return err
+			if err != nil {
+				return fmt.Errorf("spec driven pipeline: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to provision LLM key: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("spec driven pipeline: %w", err)
+		}
+		return nil
 	}
 	llmKey = keyOutput.Key
 
@@ -330,11 +336,17 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during deployment creation"
-			return err
+			if err != nil {
+				return fmt.Errorf("spec driven pipeline: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Failed to create deployment: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("spec driven pipeline: %w", err)
+		}
+		return nil
 	}
 	deploymentName = deployOutput.DeploymentName
 	podName = deployOutput.DeploymentName
@@ -385,11 +397,17 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during hydration"
-			return err
+			if err != nil {
+				return fmt.Errorf("spec driven pipeline: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Hydration failed: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("spec driven pipeline: %w", err)
+		}
+		return nil
 	}
 	podIP = hydrationOutput.PodIP
 
@@ -495,11 +513,17 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		if temporal.IsCanceledError(err) {
 			state.Phase = "Cancelled"
 			state.Message = "Cancelled during planning"
-			return err
+			if err != nil {
+				return fmt.Errorf("spec driven pipeline: %w", err)
+			}
+			return nil
 		}
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Planning failed: %v", err)
-		return err
+		if err != nil {
+			return fmt.Errorf("spec driven pipeline: %w", err)
+		}
+		return nil
 	}
 
 	changeName := planOutput.ChangeName
@@ -600,11 +624,17 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			if temporal.IsCanceledError(err) {
 				state.Phase = "Cancelled"
 				state.Message = "Cancelled during execution"
-				return err
+				if err != nil {
+					return fmt.Errorf("spec driven pipeline: %w", err)
+				}
+				return nil
 			}
 			state.Phase = "Failed"
 			state.Message = fmt.Sprintf("Execution failed: %v", err)
-			return err
+			if err != nil {
+				return fmt.Errorf("spec driven pipeline: %w", err)
+			}
+			return nil
 		}
 
 		// Poll for agent completion (reuse existing polling logic).
@@ -682,7 +712,10 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 			if temporal.IsCanceledError(err) {
 				state.Phase = "Cancelled"
 				state.Message = "Cancelled during verification"
-				return err
+				if err != nil {
+					return fmt.Errorf("spec driven pipeline: %w", err)
+				}
+				return nil
 			}
 			// Verification activity failure is not a run failure — treat as verify fail.
 			workflow.GetLogger(ctx).Warn("Verification activity error", "error", err)

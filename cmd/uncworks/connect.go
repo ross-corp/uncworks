@@ -28,7 +28,7 @@ Flags:`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("connect: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()

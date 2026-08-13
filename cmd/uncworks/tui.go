@@ -569,7 +569,7 @@ func runTUI(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("tui: %w", err)
 	}
 
 	addr := *serverAddr
@@ -591,5 +591,8 @@ func runTUI(args []string) error {
 	model := newTUIModel(client)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	_, err := p.Run()
-	return err
+	if err != nil {
+		return fmt.Errorf("tui: %w", err)
+	}
+	return nil
 }

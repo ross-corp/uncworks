@@ -217,7 +217,7 @@ func (ci *CIAutofix) fetchAndCondenseCILogs(ctx context.Context, owner, repo str
 	logsURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/actions/runs/%d/logs", owner, repo, runID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, logsURL, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("fetch and condense ci logs: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -252,14 +252,14 @@ func (ci *CIAutofix) resolveActionsRunID(ctx context.Context, owner, repo string
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/actions/runs?check_suite_id=%d", owner, repo, checkSuiteID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("resolve actions run id: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := ci.HTTPClient.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("resolve actions run id: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -281,7 +281,7 @@ func (ci *CIAutofix) resolveActionsRunID(ctx context.Context, owner, repo string
 func extractTextFromZip(data []byte) (string, error) {
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("extract text from zip: %w", err)
 	}
 
 	var sb strings.Builder
@@ -353,7 +353,7 @@ func condenseCIErrors(raw string) string {
 func (ci *CIAutofix) getFixAttemptCount(ctx context.Context, branch string) (int, error) {
 	var list aotv1alpha1.AgentRunList
 	if err := ci.K8sClient.List(ctx, &list, client.InNamespace(ci.Namespace)); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get fix attempt count: %w", err)
 	}
 
 	count := 0
@@ -449,14 +449,14 @@ func (ci *CIAutofix) resolvePRNumber(ctx context.Context, owner, repo, branch, t
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls?head=%s:%s&state=open", owner, repo, owner, branch)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("resolve pr number: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := ci.HTTPClient.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("resolve pr number: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

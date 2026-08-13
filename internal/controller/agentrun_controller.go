@@ -92,7 +92,10 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, err
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Handle deletion with finalizer
@@ -103,7 +106,7 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 			controllerutil.RemoveFinalizer(&agentRun, finalizerName)
 			if err := r.Update(ctx, &agentRun); err != nil {
-				return ctrl.Result{}, err
+				return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 			}
 		}
 		return ctrl.Result{}, nil
@@ -115,7 +118,7 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if !controllerutil.ContainsFinalizer(&agentRun, finalizerName) {
 		controllerutil.AddFinalizer(&agentRun, finalizerName)
 		if err := r.Update(ctx, &agentRun); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -154,7 +157,10 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			agentRun.Annotations[annotationArchived] = "true"
 			if err := r.Update(ctx, &agentRun); err != nil {
 				logger.Error(err, "Failed to annotate AgentRun as archived after status.archived cleanup")
-				return ctrl.Result{}, err
+				if err != nil {
+					return ctrl.Result{}, fmt.Errorf("reconcile: %w", err)
+				}
+				return ctrl.Result{}, nil
 			}
 		}
 		return ctrl.Result{}, nil
@@ -196,7 +202,10 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		// Persist the resolved fields back so the spec reflects what was actually used.
 		if err := r.Update(ctx, agentRun); err != nil {
 			logger.Error(err, "Failed to persist resolved project defaults")
-			return ctrl.Result{}, err
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("start workflow: %w", err)
+			}
+			return ctrl.Result{}, nil
 		}
 	}
 
@@ -279,12 +288,12 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 	}
 	agentRun.Annotations[annotationWorkflowID] = workflowID
 	if err := r.Update(ctx, agentRun); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("start workflow: %w", err)
 	}
 
 	// Re-fetch to get the latest resourceVersion after the annotation update
 	if err := r.Get(ctx, client.ObjectKeyFromObject(agentRun), agentRun); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("start workflow: %w", err)
 	}
 
 	// Update status
@@ -301,7 +310,7 @@ func (r *AgentRunReconciler) startWorkflow(ctx context.Context, agentRun *aotv1a
 		LastTransitionTime: now,
 	})
 	if err := r.Status().Update(ctx, agentRun); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("start workflow: %w", err)
 	}
 	r.emitPhaseEvent(agentRun, apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED)
 	return ctrl.Result{RequeueAfter: reconcileInterval}, nil
@@ -404,7 +413,7 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 
 	if updated {
 		if err := r.Status().Update(ctx, agentRun); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("sync workflow state: %w", err)
 		}
 		eventType := apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_PHASE_CHANGED
 		if isTerminal(newPhase) {
@@ -481,7 +490,7 @@ func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *
 	})
 
 	if err := r.Status().Update(ctx, agentRun); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("sync from description: %w", err)
 	}
 	r.emitPhaseEvent(agentRun, apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED)
 	return ctrl.Result{}, nil
@@ -680,7 +689,10 @@ func (r *AgentRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return fmt.Errorf("register archive cleanup runnable: %w", err)
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&aotv1alpha1.AgentRun{}).
-		Complete(r)
+		Complete(r); err != nil {
+		return fmt.Errorf("setting up the controller: %w", err)
+	}
+	return nil
 }

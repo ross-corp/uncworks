@@ -27,7 +27,7 @@ func runPing(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("ping: %w", err)
 	}
 
 	client, err := newClient(*server)

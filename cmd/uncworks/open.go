@@ -27,7 +27,7 @@ func runOpen(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("open: %w", err)
 	}
 	if err := checkPrereqs(); err != nil {
 		return err
@@ -122,5 +122,8 @@ func openBrowser(url string) error {
 	default:
 		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("open browser: %w", err)
+	}
+	return nil
 }

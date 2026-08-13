@@ -53,7 +53,7 @@ func runSetup(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("setup: %w", err)
 	}
 
 	if err := checkPrereqs(); err != nil {

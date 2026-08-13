@@ -69,5 +69,8 @@ func OpenInEditor(dir string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("open in editor: %w", err)
+	}
+	return nil
 }

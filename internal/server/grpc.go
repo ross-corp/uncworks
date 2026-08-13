@@ -488,7 +488,7 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 		Payload:    run.Status.Phase.String(),
 	}
 	if err := stream.Send(initialEvent); err != nil {
-		return err
+		return fmt.Errorf("watch agent run: %w", err)
 	}
 
 	// If already terminal, close immediately
@@ -512,7 +512,7 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 				return nil
 			}
 			if err := stream.Send(event); err != nil {
-				return err
+				return fmt.Errorf("watch agent run: %w", err)
 			}
 			if event.Type == apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_COMPLETED {
 				return nil
@@ -851,7 +851,7 @@ func generateRunName() (string, error) {
 	for i := range suffix {
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("generate run name: %w", err)
 		}
 		suffix[i] = chars[n.Int64()]
 	}

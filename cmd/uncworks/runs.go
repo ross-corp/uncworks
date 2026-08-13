@@ -373,7 +373,7 @@ func runRunsWatch(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs watch: %w", err)
 	}
 	if *titleShortW != "" && *titleContains == "" {
 		*titleContains = *titleShortW
@@ -2716,7 +2716,7 @@ func runRunsUI(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs ui: %w", err)
 	}
 
 	var id string
@@ -2861,7 +2861,7 @@ func runRunsVerify(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs verify: %w", err)
 	}
 
 	var id string
@@ -3092,7 +3092,10 @@ func runRunsDiff(args []string) error {
 		diffCmd := exec.CommandContext(context.Background(), "git", diffArgs...)
 		diffCmd.Stdout = os.Stdout
 		diffCmd.Stderr = os.Stderr
-		return diffCmd.Run()
+		if err := diffCmd.Run(); err != nil {
+			return fmt.Errorf("runs diff: %w", err)
+		}
+		return nil
 	}
 
 	statFlagStr := ""
@@ -3189,7 +3192,10 @@ func runRunsCommits(args []string) error {
 		logCmd := exec.CommandContext(context.Background(), "git", logArgs...)
 		logCmd.Stdout = os.Stdout
 		logCmd.Stderr = os.Stderr
-		return logCmd.Run()
+		if err := logCmd.Run(); err != nil {
+			return fmt.Errorf("runs commits: %w", err)
+		}
+		return nil
 	}
 
 	fmt.Printf("To view commits:\n")
@@ -3505,7 +3511,7 @@ func runRunsRetryFailed(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs retry failed: %w", err)
 	}
 
 	var sinceTime time.Time
@@ -4139,7 +4145,7 @@ func runRunsHistogram(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs histogram: %w", err)
 	}
 
 	d, err := parseSinceDuration(*since)
@@ -4362,7 +4368,7 @@ func runRunsCount(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs count: %w", err)
 	}
 
 	var sinceTime time.Time
@@ -4587,7 +4593,7 @@ func runRunsSummary(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs summary: %w", err)
 	}
 
 	d, err := parseSinceDuration(*since)
@@ -4834,7 +4840,7 @@ func runRunsWait(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs wait: %w", err)
 	}
 
 	if *lastRun && fs.NArg() == 0 {
@@ -5053,7 +5059,7 @@ func runRunsTop(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs top: %w", err)
 	}
 	if *jsonOut {
 		*oneShot = true
@@ -5600,7 +5606,7 @@ func runRunsGroup(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs group: %w", err)
 	}
 	switch *by {
 	case "project", "feature", "tag", "model":
@@ -5857,7 +5863,11 @@ func parseSinceDuration(s string) (time.Duration, error) {
 		}
 		return time.Duration(days) * 24 * time.Hour, nil
 	}
-	return time.ParseDuration(s)
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("parse since duration: %w", err)
+	}
+	return d, nil
 }
 
 // ── search ────────────────────────────────────────────────────────────────────
@@ -5878,7 +5888,7 @@ func runRunsSearch(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs search: %w", err)
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
@@ -6046,7 +6056,7 @@ func runRunsTimeline(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs timeline: %w", err)
 	}
 
 	d, err := parseSinceDuration(*since)
@@ -6226,7 +6236,7 @@ func runRunsCompare(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs compare: %w", err)
 	}
 	if fs.NArg() != 2 {
 		fs.Usage()
@@ -6425,7 +6435,7 @@ func runRunsEnv(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs env: %w", err)
 	}
 
 	c, err := newClient(*server)
@@ -6503,7 +6513,7 @@ func runRunsSlow(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs slow: %w", err)
 	}
 
 	d, err := parseSinceDuration(*since)
@@ -6638,7 +6648,7 @@ func runRunsScore(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs score: %w", err)
 	}
 
 	c, err := newClient(*server)
@@ -6759,7 +6769,10 @@ func runRunsScore(args []string) error {
 		}
 		_, _ = fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", r.Window, r.Total, r.Done, r.Failed, rateStr)
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("runs score: %w", err)
+	}
+	return nil
 }
 
 // ── tally ─────────────────────────────────────────────────────────────────────
@@ -6779,7 +6792,7 @@ func runRunsTally(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs tally: %w", err)
 	}
 	if *days < 1 {
 		return fmt.Errorf("--days must be >= 1")
@@ -6901,7 +6914,10 @@ func runRunsTally(args []string) error {
 		}
 		_, _ = fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", d, b.Total, b.Done, b.Failed, bar)
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("runs tally: %w", err)
+	}
+	return nil
 }
 
 func runRunsCost(args []string) error {
@@ -7340,7 +7356,7 @@ Reads key from OPENROUTER_API_KEY environment variable.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("runs credits: %w", err)
 	}
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")

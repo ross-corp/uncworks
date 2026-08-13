@@ -18,7 +18,7 @@ func runConfig(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config: %w", err)
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
@@ -66,7 +66,7 @@ func runConfigSetServer(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set server: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
@@ -100,7 +100,7 @@ func runConfigSetWebURL(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set web url: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
@@ -127,7 +127,7 @@ func runConfigSetModel(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set model: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
@@ -161,7 +161,7 @@ func runConfigSetStringField(args []string, cmd, field string, setter func(*Conf
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set string field: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
@@ -195,7 +195,7 @@ func runConfigSetAutoPush(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config set auto push: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
@@ -228,7 +228,7 @@ func runConfigUnset(args []string) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("config unset: %w", err)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
@@ -285,7 +285,10 @@ func runConfigEdit(args []string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("config edit: %w", err)
+	}
+	return nil
 }
 
 func runConfigReset(args []string) error {

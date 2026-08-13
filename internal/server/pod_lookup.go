@@ -20,7 +20,7 @@ func lookupRunningPod(ctx context.Context, k8sClient runtimeclient.Client, names
 		Namespace: namespace,
 		Name:      runID,
 	}, crd); err != nil {
-		return "", err
+		return "", fmt.Errorf("lookup running pod: %w", err)
 	}
 
 	deployName := crd.Status.PodName

@@ -273,7 +273,10 @@ func runCudgel(ctx context.Context, bin string, args ...string) (string, error) 
 		if errors.As(err, &exitErr) {
 			return strings.TrimSpace(string(out)), fmt.Errorf("exit %d: %s", exitErr.ExitCode(), strings.TrimSpace(string(exitErr.Stderr)))
 		}
-		return "", err
+		if err != nil {
+			return "", fmt.Errorf("cudgel: %w", err)
+		}
+		return "", nil
 	}
 	return strings.TrimSpace(string(out)), nil
 }

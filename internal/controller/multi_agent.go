@@ -61,7 +61,7 @@ func ListJuniors(ctx context.Context, k8sClient client.Client, parentName, names
 		"aot.uncworks.io/parent": parentName,
 		"aot.uncworks.io/role":   "junior",
 	}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list juniors: %w", err)
 	}
 	return list.Items, nil
 }

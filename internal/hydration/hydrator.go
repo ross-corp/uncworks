@@ -435,7 +435,10 @@ func (h *Hydrator) cloneRepo(ctx context.Context, repoURL, bareDir string) error
 	if _, err := h.runner.Run(ctx, h.config.WorkspaceDir, "git", args...); err != nil {
 		// Clean up partial clone so retries start fresh
 		_ = os.RemoveAll(bareDir)
-		return err
+		if err != nil {
+			return fmt.Errorf("clone repo: %w", err)
+		}
+		return nil
 	}
 	return nil
 }
@@ -483,7 +486,10 @@ func (h *Hydrator) createWorktree(ctx context.Context, bareDir, worktreeDir, bra
 		worktreeBranch = fmt.Sprintf("aot/%s-local", branch)
 	}
 	_, err := h.runner.Run(ctx, bareDir, "git", "worktree", "add", "-b", worktreeBranch, worktreeDir, branch)
-	return err
+	if err != nil {
+		return fmt.Errorf("create worktree: %w", err)
+	}
+	return nil
 }
 
 func (h *Hydrator) setupDevbox(ctx context.Context) error {
@@ -500,7 +506,10 @@ func (h *Hydrator) setupDevbox(ctx context.Context) error {
 
 	// Install devbox packages
 	_, err := h.runner.Run(ctx, worktreeDir, "devbox", "install")
-	return err
+	if err != nil {
+		return fmt.Errorf("setup devbox: %w", err)
+	}
+	return nil
 }
 
 // PrimaryWorktreePath returns the path to the first repo's worktree.

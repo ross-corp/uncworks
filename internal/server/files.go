@@ -678,7 +678,7 @@ func readLastNLines(path string, n int) ([]string, error) {
 		allLines = append(allLines, scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read last n lines: %w", err)
 	}
 
 	if len(allLines) <= n {

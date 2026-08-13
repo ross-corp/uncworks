@@ -284,8 +284,13 @@ func (a *Activities) CreatePR(ctx context.Context, input CreatePRInput) (*Create
 		// 4xx errors (except 429 Too Many Requests) will not succeed on retry.
 		// Return a non-retryable ApplicationError to avoid burning the retry budget.
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+			// Constructed, not propagated, so it is never nil and must not be
+			// wrapped: Temporal inspects the error's own type to decide
+			// retryability, and a wrap hides it.
+			//nolint:wrapcheck // the error is constructed here, not passed through
 			return nil, temporalsdk.NewNonRetryableApplicationError(msg, "GitHubAPIError", nil)
 		}
+		//nolint:wrapcheck // the error is constructed here, not passed through
 		return nil, temporalsdk.NewApplicationError(msg, "GitHubAPIError")
 	}
 
