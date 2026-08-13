@@ -86,9 +86,16 @@ func (m *Ci) Build(ctx context.Context, source *dagger.Directory) (string, error
 }
 
 // Lint runs golangci-lint with timeout and reduced concurrency for CI runners.
+//
+// The version is pinned rather than @latest, and kept in sync with the
+// golangci-lint devbox resolves (see devbox.json) manually. @latest let CI
+// silently pick up a newer release mid-review that enabled rule coverage no
+// contributor had validated against, turning a locally-clean run red with no
+// code change. A pinned version makes local and CI results agree by
+// construction, the same reasoning as pinning the Go base image above.
 func (m *Ci) Lint(ctx context.Context, source *dagger.Directory) (string, error) {
 	_, err := m.goBase(source).
-		WithExec([]string{"go", "install", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"}).
+		WithExec([]string{"go", "install", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1"}).
 		WithExec([]string{"golangci-lint", "run", "--timeout", "5m", "--concurrency", "2"}).
 		Sync(ctx)
 	if err != nil {
