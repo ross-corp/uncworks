@@ -343,7 +343,7 @@ func isRunID(s string) bool {
 		return false
 	}
 	for _, c := range s[3:] {
-		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') {
 			return false
 		}
 	}
@@ -1078,12 +1078,13 @@ func runRunsList(args []string) error {
 		diffFooter = fmt.Sprintf("  ·  +%d -%d lines", totalAdd, totalDel)
 	}
 
-	if nextCursor != "" && !*all {
+	switch {
+	case nextCursor != "" && !*all:
 		fmt.Fprintf(os.Stderr, "next-cursor: %s\n", nextCursor)
-		fmt.Printf("Showing %d run(s)%s%s — use --all or --limit to see more\n", len(runs), phaseSummary(), diffFooter)
-	} else if *all {
+		fmt.Printf("Showing %d run(s)%s%s, use --all or --limit to see more\n", len(runs), phaseSummary(), diffFooter)
+	case *all:
 		fmt.Printf("Showing all %d run(s)%s%s\n", len(runs), phaseSummary(), diffFooter)
-	} else if len(runs) > 0 {
+	case len(runs) > 0:
 		isFiltered := !sinceTime.IsZero() || *repoURL != "" || *titleContains != "" ||
 			*activeOnly || *runningOnly || *failedOnly || *pendingOnly || *waitingOnly || *doneOnly || *cancelledOnly ||
 			*project != "" || *feature != "" || *tag != "" || *phase != ""
@@ -1757,17 +1758,18 @@ func runRunsLogs(args []string) error {
 		case apiv1.AgentRunEventType_AGENT_RUN_EVENT_TYPE_LOG:
 			payload := ev.GetPayload()
 			if payload != "" {
-				if grepNeedle != "" {
+				switch {
+				case grepNeedle != "":
 					for _, line := range strings.Split(payload, "\n") {
 						if strings.Contains(strings.ToLower(line), grepNeedle) {
 							fmt.Printf("%s%s\n", tsPrefix, line)
 						}
 					}
-				} else if tsPrefix != "" {
+				case tsPrefix != "":
 					for _, line := range strings.Split(strings.TrimRight(payload, "\n"), "\n") {
 						fmt.Printf("%s%s\n", tsPrefix, line)
 					}
-				} else {
+				default:
 					fmt.Print(payload)
 				}
 			}
@@ -2594,10 +2596,10 @@ func runRunsStats(args []string) error {
 					continue
 				}
 				prevTotal++
-				ph := phaseLabel(r.GetStatus().GetPhase())
-				if ph == "DONE" {
+				switch phaseLabel(r.GetStatus().GetPhase()) {
+				case "DONE":
 					prevDone++
-				} else if ph == "FAILED" {
+				case "FAILED":
 					prevFailed++
 				}
 			}
@@ -2895,7 +2897,11 @@ func runRunsVerify(args []string) error {
 	}
 	url := base + "/api/v1/runs/" + id + "/verification"
 
-	resp, err := http.Get(url) //nolint:gosec
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("build verification request: %w", err)
+	}
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
 		return fmt.Errorf("fetch verification: %w", err)
 	}
@@ -3349,7 +3355,11 @@ func runRunsRetry(args []string) error {
 			}
 		}
 		if *wait && len(newIDs) > 0 {
-			waitArgs := append(newIDs, "--server="+*server)
+			// Copy rather than append onto newIDs: appending to a slice and
+			// assigning the result elsewhere shares the backing array.
+			waitArgs := make([]string, 0, len(newIDs)+1)
+			waitArgs = append(waitArgs, newIDs...)
+			waitArgs = append(waitArgs, "--server="+*server)
 			return runRunsWait(waitArgs)
 		}
 		return nil
@@ -4253,11 +4263,12 @@ func runRunsHistogram(args []string) error {
 		nBlocks := len(runeBlocks)
 		var sb strings.Builder
 		for _, n := range counts {
-			if n == 0 {
+			switch {
+			case n == 0:
 				sb.WriteRune(' ')
-			} else if maxCount == 0 {
+			case maxCount == 0:
 				sb.WriteRune(runeBlocks[0])
-			} else {
+			default:
 				idx := int(float64(n)/float64(maxCount)*float64(nBlocks-1) + 0.5)
 				if idx >= nBlocks {
 					idx = nBlocks - 1
@@ -4480,7 +4491,8 @@ func runRunsCount(args []string) error {
 		return enc.Encode(out)
 	}
 
-	if *byPhase {
+	switch {
+	case *byPhase:
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "PHASE\tCOUNT")
 		for _, ph := range []string{"RUNNING", "PENDING", "WAITING", "DONE", "FAILED", "CANCELLED", "UNKNOWN"} {
@@ -4490,7 +4502,7 @@ func runRunsCount(args []string) error {
 		}
 		w.Flush()
 		fmt.Printf("Total: %d\n", count)
-	} else if *byFeature {
+	case *byFeature:
 		type pair struct {
 			k string
 			v int
@@ -4512,7 +4524,7 @@ func runRunsCount(args []string) error {
 		}
 		w.Flush()
 		fmt.Printf("Total: %d\n", count)
-	} else if *byTag {
+	case *byTag:
 		type pair struct {
 			k string
 			v int
@@ -4534,7 +4546,7 @@ func runRunsCount(args []string) error {
 		}
 		w.Flush()
 		fmt.Printf("Total: %d\n", count)
-	} else if *byProject {
+	case *byProject:
 		type pair struct {
 			k string
 			v int
@@ -4556,7 +4568,7 @@ func runRunsCount(args []string) error {
 		}
 		w.Flush()
 		fmt.Printf("Total: %d\n", count)
-	} else {
+	default:
 		fmt.Println(count)
 	}
 	return nil
@@ -6251,7 +6263,7 @@ func runRunsCompare(args []string) error {
 		}
 		return "—"
 	}
-	getDur := func(r *apiv1.AgentRun) string { return runDuration(r) }
+	getDur := runDuration
 	getBranch := func(r *apiv1.AgentRun) string {
 		if repos := r.GetSpec().GetRepos(); len(repos) > 0 {
 			return repos[0].GetBranch()
@@ -6737,11 +6749,12 @@ func runRunsScore(args []string) error {
 		if r.Done+r.Failed > 0 {
 			rateStr = fmt.Sprintf("%.1f%%", r.Rate)
 			if useColor {
-				if r.Rate >= 80 {
+				switch {
+				case r.Rate >= 80:
 					rateStr = "\033[32m" + rateStr + "\033[0m"
-				} else if r.Rate >= 50 {
+				case r.Rate >= 50:
 					rateStr = "\033[33m" + rateStr + "\033[0m"
-				} else {
+				default:
 					rateStr = "\033[31m" + rateStr + "\033[0m"
 				}
 			}
@@ -6879,11 +6892,12 @@ func runRunsTally(args []string) error {
 		}
 		bar := strings.Repeat("█", barLen)
 		if useColor && b.Total > 0 {
-			if b.Failed > b.Done {
+			switch {
+			case b.Failed > b.Done:
 				bar = "\033[31m" + bar + "\033[0m"
-			} else if b.Failed > 0 {
+			case b.Failed > 0:
 				bar = "\033[33m" + bar + "\033[0m"
-			} else {
+			default:
 				bar = "\033[32m" + bar + "\033[0m"
 			}
 		}

@@ -2,6 +2,7 @@
 package main
 
 import (
+	gocontext "context"
 	"flag"
 	"fmt"
 	"os"
@@ -46,7 +47,7 @@ func runOpen(args []string) error {
 		pfArgs = append([]string{"--context", *context}, pfArgs...)
 	}
 
-	cmd := exec.Command("kubectl", pfArgs...)
+	cmd := exec.CommandContext(gocontext.Background(), "kubectl", pfArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

@@ -21,8 +21,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
@@ -161,9 +159,16 @@ func (g *Gateway) Start() error {
 	nPath, nHandler := agentv1connect.NewAgentNotificationServiceHandler(g)
 	mux.Handle(nPath, nHandler)
 
+	// The Temporal worker calls this over HTTP/2 without TLS. Protocols
+	// replaces h2c, which is deprecated.
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+
 	g.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", g.port),
-		Handler: h2c.NewHandler(mux, &http2.Server{}),
+		Addr:      fmt.Sprintf(":%d", g.port),
+		Protocols: protocols,
+		Handler:   mux,
 	}
 
 	slog.Info("RPC Gateway listening", "port", g.port)

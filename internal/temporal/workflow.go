@@ -732,60 +732,63 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 					RepoURL:       repoURL,
 				}).Get(ctx, &pushOutput); err != nil {
 					workflow.GetLogger(ctx).Warn("Push changes failed", "error", err)
-				} else if !pushOutput.HasChanges {
-					state.Message = "Agent completed: no changes committed"
-					workflow.GetLogger(ctx).Info("No changes committed; skipping PR creation")
-				} else if input.AutoPR && len(input.Repos) > 0 {
-					owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
-					if err != nil {
-						workflow.GetLogger(ctx).Warn("Failed to parse repo URL for PR", "error", err)
-					} else {
-						baseBranch := input.PRBaseBranch
-						if baseBranch == "" {
-							baseBranch = "main"
-						}
-						prCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-							StartToCloseTimeout: 30 * time.Second,
-							RetryPolicy: &temporal.RetryPolicy{
-								MaximumAttempts: 2,
-							},
-						})
-						// Build PR body with proposal content or prompt summary
-						summary := pushOutput.ProposalContent
-						if summary == "" {
-							// Use first 300 chars of prompt as summary
-							if len(input.Prompt) > 300 {
-								summary = input.Prompt[:300] + "..."
+				} else {
+					switch {
+					case !pushOutput.HasChanges:
+						state.Message = "Agent completed: no changes committed"
+						workflow.GetLogger(ctx).Info("No changes committed; skipping PR creation")
+					case input.AutoPR && len(input.Repos) > 0:
+						owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
+						if err != nil {
+							workflow.GetLogger(ctx).Warn("Failed to parse repo URL for PR", "error", err)
+						} else {
+							baseBranch := input.PRBaseBranch
+							if baseBranch == "" {
+								baseBranch = "main"
+							}
+							prCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+								StartToCloseTimeout: 30 * time.Second,
+								RetryPolicy: &temporal.RetryPolicy{
+									MaximumAttempts: 2,
+								},
+							})
+							// Build PR body with proposal content or prompt summary
+							summary := pushOutput.ProposalContent
+							if summary == "" {
+								// Use first 300 chars of prompt as summary
+								if len(input.Prompt) > 300 {
+									summary = input.Prompt[:300] + "..."
+								} else {
+									summary = input.Prompt
+								}
+							}
+							runURL := fmt.Sprintf("https://uncworks.stork-eel.ts.net/run/%s", input.AgentRunName)
+							prBody := fmt.Sprintf("## Summary\n\n%s\n\n## Changes\n\n%s\n\n## Pipeline\n\n- **Run:** %s\n- **Model:** %s\n\n## Run\n\nView the full agent run: %s\n\n---\n*This PR was automatically created by UNCWORKS.*",
+								summary,
+								pushOutput.DiffStat,
+								input.AgentRunName,
+								input.ModelTier,
+								runURL,
+							)
+							var prOutput CreatePROutput
+							if err := workflow.ExecuteActivity(prCtx, ActivityCreatePR, CreatePRInput{
+								RepoOwner:    owner,
+								RepoName:     repo,
+								BranchName:   branchName,
+								BaseBranch:   baseBranch,
+								Title:        prTitleFrom(pushOutput.CommitMessage, input.Prompt),
+								Body:         prBody,
+								AgentRunName: input.AgentRunName,
+							}).Get(ctx, &prOutput); err != nil {
+								workflow.GetLogger(ctx).Warn("Create PR failed", "error", err)
 							} else {
-								summary = input.Prompt
+								state.PRUrl = prOutput.PRUrl
+								state.Message = fmt.Sprintf("Agent completed: PR created at %s", prOutput.PRUrl)
 							}
 						}
-						runURL := fmt.Sprintf("https://uncworks.stork-eel.ts.net/run/%s", input.AgentRunName)
-						prBody := fmt.Sprintf("## Summary\n\n%s\n\n## Changes\n\n%s\n\n## Pipeline\n\n- **Run:** %s\n- **Model:** %s\n\n## Run\n\nView the full agent run: %s\n\n---\n*This PR was automatically created by UNCWORKS.*",
-							summary,
-							pushOutput.DiffStat,
-							input.AgentRunName,
-							input.ModelTier,
-							runURL,
-						)
-						var prOutput CreatePROutput
-						if err := workflow.ExecuteActivity(prCtx, ActivityCreatePR, CreatePRInput{
-							RepoOwner:    owner,
-							RepoName:     repo,
-							BranchName:   branchName,
-							BaseBranch:   baseBranch,
-							Title:        prTitleFrom(pushOutput.CommitMessage, input.Prompt),
-							Body:         prBody,
-							AgentRunName: input.AgentRunName,
-						}).Get(ctx, &prOutput); err != nil {
-							workflow.GetLogger(ctx).Warn("Create PR failed", "error", err)
-						} else {
-							state.PRUrl = prOutput.PRUrl
-							state.Message = fmt.Sprintf("Agent completed: PR created at %s", prOutput.PRUrl)
-						}
+					case pushOutput.HasChanges:
+						state.Message = fmt.Sprintf("Agent completed: changes pushed to %s", pushOutput.BranchName)
 					}
-				} else if pushOutput.HasChanges {
-					state.Message = fmt.Sprintf("Agent completed: changes pushed to %s", pushOutput.BranchName)
 				}
 			}
 			return nil

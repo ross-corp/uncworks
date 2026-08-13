@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -75,7 +76,7 @@ func nodeAllocatable(kubeContext string) (clusterResources, error) {
 	if kubeContext != "" {
 		args = append([]string{"--context", kubeContext}, args...)
 	}
-	out, err := exec.Command("kubectl", args...).Output()
+	out, err := exec.CommandContext(context.Background(), "kubectl", args...).Output()
 	if err != nil {
 		return clusterResources{}, fmt.Errorf("kubectl get nodes: %w", err)
 	}

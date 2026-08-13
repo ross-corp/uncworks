@@ -17,8 +17,6 @@ import (
 	"connectrpc.com/grpchealth"
 	"connectrpc.com/grpcreflect"
 	"connectrpc.com/validate"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -29,6 +27,7 @@ import (
 	temporalclient "go.temporal.io/sdk/client"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
@@ -179,8 +178,8 @@ func main() {
 	metricsReg := prometheus.NewRegistry()
 	metricsReg.MustRegister(
 		server.NewMetricsCollector(k8sClient, namespace),
-		prometheus.NewGoCollector(),
-		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
 	mux.Handle("GET /metrics", promhttp.HandlerFor(metricsReg, promhttp.HandlerOpts{}))
 
@@ -267,9 +266,17 @@ func main() {
 	finalHandler = withAuth(finalHandler, apiKey)
 	finalHandler = withCORS(finalHandler, allowedOrigins)
 
+	// gRPC clients speak HTTP/2 without TLS. Protocols replaces h2c, which is
+	// deprecated, and it accepts HTTP/1.1 on the same listener so a browser and
+	// a gRPC client can share the port.
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           h2c.NewHandler(finalHandler, &http2.Server{}),
+		Protocols:         protocols,
+		Handler:           finalHandler,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      120 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,

@@ -257,6 +257,7 @@ func TestProxyWebSocket_Returns101(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(frontend.URL, "http") + "/api/v1/runs/test/exec"
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, 101, resp.StatusCode)
 	defer func() { _ = conn.Close() }()
 

@@ -4,6 +4,8 @@ package stubs
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"testing"
 
@@ -14,7 +16,7 @@ import (
 func TestLiteLLMStub_DefaultResponse(t *testing.T) {
 	stub := NewLiteLLMStub(t)
 
-	resp, err := http.Post(stub.URL()+"/chat/completions", "application/json",
+	resp, err := postJSON(t, stub.URL()+"/chat/completions",
 		bytes.NewBufferString(`{"model":"gpt-4","messages":[{"role":"user","content":"hello"}]}`))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -34,7 +36,7 @@ func TestLiteLLMStub_RecordsRequests(t *testing.T) {
 	stub := NewLiteLLMStub(t)
 
 	body := `{"model":"test-model","messages":[{"role":"user","content":"what is 2+2?"}]}`
-	resp, err := http.Post(stub.URL()+"/chat/completions", "application/json", bytes.NewBufferString(body))
+	resp, err := postJSON(t, stub.URL()+"/chat/completions", bytes.NewBufferString(body))
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -54,7 +56,7 @@ func TestLiteLLMStub_SequencedResponses(t *testing.T) {
 	)
 
 	post := func() string {
-		resp, err := http.Post(stub.URL()+"/chat/completions", "application/json",
+		resp, err := postJSON(t, stub.URL()+"/chat/completions",
 			bytes.NewBufferString(`{"model":"m","messages":[]}`))
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -80,7 +82,7 @@ func TestLiteLLMStub_FallsBackToLastWhenExhausted(t *testing.T) {
 	)
 
 	for i := 0; i < 3; i++ {
-		resp, err := http.Post(stub.URL()+"/chat/completions", "application/json",
+		resp, err := postJSON(t, stub.URL()+"/chat/completions",
 			bytes.NewBufferString(`{"model":"m","messages":[]}`))
 		require.NoError(t, err)
 		var cr CompletionResponse
@@ -101,4 +103,18 @@ func TestDefaultCompletion_Shape(t *testing.T) {
 	assert.Equal(t, "assistant", c.Choices[0].Message.Role)
 	assert.Equal(t, "hello world", c.Choices[0].Message.Content)
 	assert.Equal(t, "stop", c.Choices[0].FinishReason)
+}
+
+// postJSON issues a context-bound POST. A bare http.Post has no context, so a
+// request outlives the test that started it.
+func postJSON(t *testing.T, url string, body io.Reader) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, url, body)
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("posting to %s: %w", url, err)
+	}
+	return resp, nil
 }

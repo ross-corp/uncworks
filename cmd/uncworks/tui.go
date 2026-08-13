@@ -183,8 +183,6 @@ type tuiModel struct {
 	specInput   textarea.Model
 	submitFocus int // 0=repo, 1=branch, 2=spec, 3=submit button
 
-	// help
-	showHelp bool
 }
 
 func newTUIModel(client apiv1connect.AOTServiceClient) tuiModel {
@@ -448,9 +446,9 @@ func (m tuiModel) View() string {
 	case viewSubmit:
 		var sb strings.Builder
 		sb.WriteString(styleTitle.Render("Submit New Agent Run") + "\n\n")
-		sb.WriteString(fmt.Sprintf("  Repository URL:  %s\n", m.repoInput.View()))
-		sb.WriteString(fmt.Sprintf("  Branch:          %s\n", m.branchInput.View()))
-		sb.WriteString(fmt.Sprintf("  Prompt:\n%s\n", m.specInput.View()))
+		_, _ = fmt.Fprintf(&sb, "  Repository URL:  %s\n", m.repoInput.View())
+		_, _ = fmt.Fprintf(&sb, "  Branch:          %s\n", m.branchInput.View())
+		_, _ = fmt.Fprintf(&sb, "  Prompt:\n%s\n", m.specInput.View())
 		submitBtn := "  [ Submit ]"
 		if m.submitFocus == 3 {
 			submitBtn = styleSelected.Render("  [ Submit ]")
@@ -556,7 +554,7 @@ func humanizeErr(err error) string {
 		return "connection refused — is 'uncworks open' running?"
 	}
 	if strings.Contains(msg, "no such host") {
-		return fmt.Sprintf("host not found — check 'uncworks connect' address")
+		return "host not found, check the 'uncworks connect' address"
 	}
 	return msg
 }

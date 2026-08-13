@@ -384,10 +384,11 @@ func (r *AgentRunReconciler) syncWorkflowState(ctx context.Context, agentRun *ao
 	if isTerminal(newPhase) {
 		condStatus := metav1.ConditionTrue
 		condReason := "Succeeded"
-		if newPhase == aotv1alpha1.AgentRunPhaseFailed {
+		switch newPhase {
+		case aotv1alpha1.AgentRunPhaseFailed:
 			condStatus = metav1.ConditionFalse
 			condReason = "Failed"
-		} else if newPhase == aotv1alpha1.AgentRunPhaseCancelled {
+		case aotv1alpha1.AgentRunPhaseCancelled:
 			condStatus = metav1.ConditionFalse
 			condReason = "Cancelled"
 		}
@@ -463,10 +464,11 @@ func (r *AgentRunReconciler) syncFromDescription(ctx context.Context, agentRun *
 	// Record Completed condition
 	condStatus := metav1.ConditionTrue
 	condReason := "Succeeded"
-	if agentRun.Status.Phase == aotv1alpha1.AgentRunPhaseFailed {
+	switch agentRun.Status.Phase {
+	case aotv1alpha1.AgentRunPhaseFailed:
 		condStatus = metav1.ConditionFalse
 		condReason = "Failed"
-	} else if agentRun.Status.Phase == aotv1alpha1.AgentRunPhaseCancelled {
+	case aotv1alpha1.AgentRunPhaseCancelled:
 		condStatus = metav1.ConditionFalse
 		condReason = "Cancelled"
 	}

@@ -13,9 +13,6 @@ import (
 	aotgithub "github.com/uncworks/aot/internal/github"
 )
 
-// maxSpecBodyBytes caps the request body for spec push operations at 1 MB.
-const maxSpecBodyBytes = 1 << 20
-
 // GitHubClient communicates with the GitHub Contents API.
 type GitHubClient struct {
 	provider   aotgithub.TokenProvider

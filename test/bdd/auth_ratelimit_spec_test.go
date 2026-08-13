@@ -88,9 +88,9 @@ func doRequests(handler http.Handler, n int, ip string) []int {
 
 var _ = Describe("Auth Boundary", func() {
 	var (
-		handler    http.Handler
-		baseInner  http.Handler
-		apiKey     = "test-secret-key"
+		handler   http.Handler
+		baseInner http.Handler
+		apiKey    = "test-secret-key"
 	)
 
 	BeforeEach(func() {

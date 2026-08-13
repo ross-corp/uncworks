@@ -281,12 +281,12 @@ func writeTempValues(cfg *setupConfig) (string, error) {
 
 	var sb strings.Builder
 	if cfg.LLMKey != "" {
-		sb.WriteString(fmt.Sprintf("llm:\n  apiKey: %q\n", cfg.LLMKey))
+		_, _ = fmt.Fprintf(&sb, "llm:\n  apiKey: %q\n", cfg.LLMKey)
 	}
 	if cfg.GitHubToken != "" {
 		// GitHub token goes into a k8s Secret; we pass it as a values override
 		// that the helm chart uses to create the secret.
-		sb.WriteString(fmt.Sprintf("github:\n  token: %q\n", cfg.GitHubToken))
+		_, _ = fmt.Fprintf(&sb, "github:\n  token: %q\n", cfg.GitHubToken)
 	}
 	if _, err := f.WriteString(sb.String()); err != nil {
 		return "", err
