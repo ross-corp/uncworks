@@ -10,6 +10,9 @@ interface MarkdownEditorProps {
   minHeight?: string;
   autoFocus?: boolean;
   readOnly?: boolean;
+  /** Stable hook for tests. Monaco renders no placeholder attribute, so a test
+   *  cannot select this editor the way it selected the textarea it replaced. */
+  testId?: string;
 }
 
 export default function MarkdownEditor({
@@ -19,12 +22,13 @@ export default function MarkdownEditor({
   minHeight = "200px",
   autoFocus = false,
   readOnly = false,
+  testId,
 }: MarkdownEditorProps) {
   const { resolvedTheme } = useThemeNew();
   const monacoTheme = resolvedTheme === "dark" ? "vs-dark" : "vs";
 
   return (
-    <div className="border" style={{ minHeight }}>
+    <div className="border" style={{ minHeight }} data-testid={testId}>
       <Suspense
         fallback={
           <div

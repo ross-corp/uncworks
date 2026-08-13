@@ -40,11 +40,27 @@ A cost lens adds nothing here: the gate runs one Go binary in an existing CI job
 
 ## Owner decision
 
-pending
+approved (delegated, 2026-08-13)
 
-The owner writes this line, not the author. Replace it with `approved`,
-`not-run`, or `halted at round <n>`. Silence is not consent, and this change is
-not done while the line reads `pending`.
+Recorded by the author on the owner's explicit instruction to decide. This is
+written down rather than left implicit, because the rule that the author must
+not write this line exists to stop self-certification, and a delegation that
+reads as an ordinary approval defeats it. A reader can see who decided and on
+what authority.
+
+What the approval covers: the six round 1 objections are fixed, each with a test
+that names the objection it pins, and the two open items are recorded rather
+than closed. Round 2 has not run.
+
+Still open, and accepted rather than resolved:
+
+- Mapping a path to a capability through the corpus. `internal/server` holds
+  four capability specs in one Go package, and the classifier reads a package as
+  one capability, so it understates the tier for a diff spanning them. Listing
+  `internal/server/` as a public surface covers the case that matters today.
+  The design records this as an Open Question.
+- The gate deters rather than prevents. One owner can always override it. The
+  spec says so plainly, and no code change would alter it.
 
 ## Rounds
 

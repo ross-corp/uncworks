@@ -293,7 +293,7 @@ export default function NewRunView() {
       {/* Header */}
       <div className="h-12 border-b flex items-center px-4 gap-2">
         <div className="flex items-center gap-3 flex-1">
-          <span className="font-semibold text-base">New Run</span>
+          <h1 className="font-semibold text-base">New Run</h1>
           {/* Prompt / Spec mode toggle — segmented control in header */}
           <div className="flex gap-0.5 bg-muted/50 rounded-md p-0.5">
             {(["prompt", "spec"] as const).map((m) => (
@@ -416,6 +416,7 @@ export default function NewRunView() {
                     placeholder="What should the agent do?"
                     minHeight={mode === "spec" ? "60px" : "120px"}
                     autoFocus
+                    testId="prompt-editor"
                   />
                   {prompt.trim().length > 10 && (
                     <div className="flex justify-end mt-1">
@@ -438,7 +439,8 @@ export default function NewRunView() {
                     <MarkdownEditor
                       value={specContent}
                       onChange={set.specContent}
-                      placeholder="Paste or write your spec..."
+                      testId="spec-editor"
+                    placeholder="Paste or write your spec..."
                       minHeight="180px"
                     />
                     {specContent.trim().length > 10 && (

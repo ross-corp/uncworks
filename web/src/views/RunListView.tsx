@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { usePoll } from "../hooks/usePoll";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -183,6 +183,7 @@ export default function RunListView() {
   const [selected, setSelected] = useState(0);
   const [filter, setFilter] = useState("");
   const [filterField, setFilterField] = useState<FilterField>(null);
+  const filterInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [activeProject, setActiveProject] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("unified");
@@ -446,7 +447,15 @@ export default function RunListView() {
         return;
       }
       const filterDef = FILTER_KEYS[e.key];
-      if (filterDef) { e.preventDefault(); setFilterField(filterDef.field); return; }
+      if (filterDef) {
+        e.preventDefault();
+        setFilterField(filterDef.field);
+        // Focus the box too. The footer advertises "/ name", but selecting the
+        // field without focusing left the user pressing / and then reaching for
+        // the mouse before they could type.
+        filterInputRef.current?.focus();
+        return;
+      }
 
       switch (e.key) {
         case "j": setSelected((s) => Math.min(s + 1, navList.length - 1)); break;
@@ -645,7 +654,7 @@ export default function RunListView() {
       <div className="border-b px-4 space-y-2 pb-2">
         <div className="h-12 flex items-center gap-2">
           <div className="flex items-center gap-3 flex-1">
-            <span className="font-semibold text-base">Runs</span>
+            <h1 className="font-semibold text-base">Runs</h1>
             <span className="text-muted-foreground text-xs">
               {viewMode === "unified" ? unifiedRuns.length : filtered.length}
             </span>
@@ -728,6 +737,7 @@ export default function RunListView() {
               </span>
             )}
             <input
+              ref={filterInputRef}
               className={`w-full bg-muted/30 border border-border/50 rounded-md text-sm outline-none px-2 py-1 focus:border-border transition-colors ${filterField ? "pl-14" : ""}`}
               placeholder={filterField ? (activeFilterDef?.placeholder ?? "filter...") : "filter runs..."}
               value={filter}

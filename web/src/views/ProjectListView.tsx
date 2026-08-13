@@ -79,7 +79,7 @@ export default function ProjectListView() {
       {/* Header */}
       <div className="h-12 border-b flex items-center px-4 gap-2">
         <div className="flex items-center gap-3 flex-1">
-          <span className="font-semibold">Projects</span>
+          <h1 className="font-semibold text-base">Projects</h1>
           <span className="text-muted-foreground text-xs">({projects.length})</span>
         </div>
         <div className="flex items-center gap-2">

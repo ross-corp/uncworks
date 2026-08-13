@@ -1,15 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { heading, mockRuns } from "./helpers";
 
-// Helper: mock the /api/v1/runs endpoint with sample runs
-function mockRunsApi(page: import("@playwright/test").Page, runs: unknown[] = []) {
-  return page.route("**/api/v1/runs", (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(runs),
-    });
-  });
-}
+// mockRuns stubs both REST and ConnectRPC. The app lists runs over ConnectRPC,
+// so stubbing only /api/v1/runs left every row missing and this whole file red.
+const mockRunsApi = mockRuns;
 
 const SAMPLE_RUNS = [
   {
@@ -57,13 +51,12 @@ const SAMPLE_RUNS = [
 ];
 
 test.describe("Run List View", () => {
-  test("page loads and shows AOT header", async ({ page }) => {
+  test("page loads and shows the product header", async ({ page }) => {
     await mockRunsApi(page, SAMPLE_RUNS);
     await page.goto("/");
 
-    await expect(page.locator("text=AOT")).toBeVisible();
-    // Header should also show the run count
-    await expect(page.locator("text=Runs")).toBeVisible();
+    await expect(page.getByText("UNCWORKS").first()).toBeVisible();
+    await expect(heading(page, "Runs")).toBeVisible();
   });
 
   test("shows runs in the list", async ({ page }) => {
@@ -139,30 +132,26 @@ test.describe("Run List View", () => {
     await expect(page.getByTestId("run-row-run-1")).toHaveClass(/bg-accent/);
   });
 
-  test("/ opens filter mode, typing filters the list, Esc clears", async ({ page }) => {
+  test("/ filters by name, and Esc clears the filter", async ({ page }) => {
     await mockRunsApi(page, SAMPLE_RUNS);
     await page.goto("/");
     await expect(page.getByTestId("run-row-run-1")).toBeVisible();
 
-    // Press / to enter filter mode
+    // The filter box is always present. Pressing / focuses it and selects the
+    // name field, which is what the placeholder change reports.
+    const filterInput = page.getByRole("textbox", { name: /filter/i }).or(
+      page.locator("input[placeholder^='filter']"),
+    ).first();
     await page.keyboard.press("/");
-
-    // Filter input should appear
-    const filterInput = page.locator("input[placeholder='/ filter runs...']");
     await expect(filterInput).toBeVisible();
     await expect(filterInput).toBeFocused();
 
-    // Type to filter — "alpha" should show only Alpha Run
     await filterInput.fill("alpha");
     await expect(page.getByTestId("run-row-run-1")).toBeVisible();
-    await expect(page.getByTestId("run-row-run-2")).not.toBeVisible();
-    await expect(page.getByTestId("run-row-run-3")).not.toBeVisible();
+    await expect(page.getByTestId("run-row-run-2")).toBeHidden();
+    await expect(page.getByTestId("run-row-run-3")).toBeHidden();
 
-    // Esc clears filter and exits filter mode
     await page.keyboard.press("Escape");
-    await expect(filterInput).not.toBeVisible();
-
-    // All runs should be visible again
     await expect(page.getByTestId("run-row-run-1")).toBeVisible();
     await expect(page.getByTestId("run-row-run-2")).toBeVisible();
     await expect(page.getByTestId("run-row-run-3")).toBeVisible();
@@ -174,10 +163,9 @@ test.describe("Run List View", () => {
     await expect(page.getByTestId("run-row-run-1")).toBeVisible();
 
     await page.keyboard.press("/");
-    const filterInput = page.locator("input[placeholder='/ filter runs...']");
-    await filterInput.fill("nonexistent-query");
+    await page.locator("input[placeholder^='filter']").first().fill("nonexistent-query");
 
-    await expect(page.locator("text=No runs match filter")).toBeVisible();
+    await expect(page.getByText("No runs match filter")).toBeVisible();
   });
 
   test("n navigates to /new", async ({ page }) => {
@@ -219,21 +207,19 @@ test.describe("Run List View", () => {
     await expect(page).toHaveURL(/\/run\/run-2/);
   });
 
-  test("table header columns are visible", async ({ page }) => {
+  test("the phase filter buttons are visible", async ({ page }) => {
     await mockRunsApi(page, SAMPLE_RUNS);
     await page.goto("/");
 
-    await expect(page.locator("text=Name").first()).toBeVisible();
-    await expect(page.locator("text=Status").first()).toBeVisible();
-    await expect(page.locator("text=Stage").first()).toBeVisible();
-    await expect(page.locator("text=Model").first()).toBeVisible();
-    await expect(page.locator("text=Age").first()).toBeVisible();
+    for (const phase of ["running", "waiting", "failed", "succeeded"]) {
+      await expect(page.getByRole("button", { name: phase, exact: true })).toBeVisible();
+    }
   });
 
   test("footer shortcuts are visible", async ({ page }) => {
     await mockRunsApi(page, SAMPLE_RUNS);
     await page.goto("/");
 
-    await expect(page.locator("text=j/k navigate")).toBeVisible();
+    await expect(page.getByText("j/k nav")).toBeVisible();
   });
 });
