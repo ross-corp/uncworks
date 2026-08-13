@@ -13,7 +13,7 @@ flowchart TD
     P -->|SpecsValid=true| Loop
     subgraph Loop["Execute + Verify (bounded)"]
         E["2. Execute (implement)"] --> V["3. Verify (manage + automated)"]
-        V -->|fail · retries left| E
+        V -->|fail, retries left| E
     end
     Loop -->|pass| Approval
     Loop -->|retries exhausted| Fail
@@ -29,24 +29,27 @@ Activity `PlanRun`:
 2. `openspec new change "<name>"` scaffolds `/workspace/openspec/changes/<name>/`.
 3. `openspec status --change "<name>" --json` confirms the scaffold.
 4. `openspec instructions {proposal,specs,tasks} --change "<name>" --json` for templates.
-5. `StartAgent` with `stage=plan`, `PI_ROLE=manage`, prompt assembled from the user task + templates + exact file paths.
-6. `openspec validate "<name>" --json` — structural validity.
-7. `openspec status --change "<name>" --json` — all artifacts present.
+5. Call `StartAgent` with `stage=plan` and `PI_ROLE=manage`. The prompt combines
+   the user task, the templates, and the exact file paths.
+6. Run `openspec validate "<name>" --json` to confirm structural validity.
+7. Run `openspec status --change "<name>" --json` to confirm every artifact is
+   present.
 
-`SpecsValid=false` terminates the pipeline immediately.
+A `SpecsValid=false` result stops the pipeline at once.
 
-Rules enforced by the determinism extension during plan:
+The determinism extension enforces four rules during Plan.
 
-- Spec requirement text must contain `SHALL` or `MUST`.
-- Scenarios use `WHEN/THEN`.
-- `tasks.md` ≤ 30 checkboxes.
-- Writes blocked outside `openspec/` and `.aot/`.
+- Every spec requirement MUST contain `SHALL` or `MUST`.
+- Every scenario MUST use `WHEN` and `THEN`.
+- `tasks.md` MUST hold no more than 30 checkboxes.
+- The agent MUST NOT write outside `openspec/` and `.aot/`.
 
 ## 2. Execute
 
-`implement` agent reads the spec, writes code, ticks `tasks.md`. Cannot use `ask_user`.
+The `implement` agent reads the spec, writes the code, and checks off each
+finished item in `tasks.md`. It cannot call `ask_user`.
 
-Retry prompt prefix:
+A retry prepends the failure report to the prompt.
 
 ```
 PREVIOUS ATTEMPT FAILED VERIFICATION:
@@ -55,18 +58,19 @@ PREVIOUS ATTEMPT FAILED VERIFICATION:
 
 ## 3. Verify
 
-Five gates in order:
+Five gates run in order.
 
 | # | Gate | What |
 |---|------|------|
-| 1 | Task completion | `openspec list --json` — only enforced when the run has `openspecChange` set |
+| 1 | Task completion | `openspec list --json`. Runs only when the run sets `openspecChange` |
 | 2 | Structural validation | `openspec validate "<name>" --json` |
-| 2b | File existence | Backtick paths in `THEN ... exist` lines |
-| 3 | Test commands | Backtick commands on `WHEN/THEN` lines with action keywords (run, test, build, compile, lint…) |
-| 4 | LLM judge | Manage agent emits `{ pass, salvageable, criteria[] }` against git diff + specs |
-| 5 | Archive | `openspec archive "<name>" --yes` (non-fatal on failure) |
+| 2b | File existence | Every backtick-wrapped path on a `THEN ... exist` line resolves |
+| 3 | Test commands | Every backtick-wrapped command on a `WHEN` or `THEN` line with an action keyword such as run, test, build, compile, or lint |
+| 4 | LLM judge | The manage agent emits `{ pass, salvageable, criteria[] }` for the git diff and the specs |
+| 5 | Archive | `openspec archive "<name>" --yes`. A failure here is logged, not fatal |
 
-The judge's `salvageable: false` ends the pipeline immediately — no retry.
+A judge verdict of `salvageable: false` ends the pipeline at once, with no
+retry.
 
 ## Defaults
 
@@ -88,10 +92,11 @@ The judge's `salvageable: false` ends the pipeline immediately — no retry.
   "automatedChecks": [
     {"name": "task_completion", "pass": false, "output": "5/7 tasks complete"}
   ],
-  "llmVerdict": {"pass": false, "salvageable": true, "criteria": [/* ... */]},
+  "llmVerdict": {"pass": false, "salvageable": true, "criteria": []},
   "failureReport": "task completion: 5/7 tasks complete",
   "executionTimeMs": 12500
 }
 ```
 
-Written to the change directory; also persisted onto the CRD status as `verificationResult` for the UI.
+The pipeline writes this to the change directory, and copies it onto the
+resource status as `verificationResult` so the UI can read it.

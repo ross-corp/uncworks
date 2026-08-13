@@ -27,53 +27,37 @@ helm install aot deploy/helm/aot \
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    User(("User"))
+    subgraph K8s["Kubernetes cluster"]
+        Web["Web (nginx)"] --> API["API server"]
+        API -->|gRPC| TS["Temporal server (external)"]
+        Ctrl["Controller"] --> TS
+        Worker["Worker (Temporal)"] --> TS
+        Worker --> Pods
+        subgraph Pods["Agent pods"]
+            Init["init"] --> Agent["agent"]
+            Agent --> Side["sidecar"]
+        end
+    end
+    User --> Web
+    Side --> LLM["LLM endpoint (external)"]
 ```
-                    ┌─────────────────────────────────────────────┐
-                    │                Kubernetes Cluster            │
-                    │                                             │
-  User ──────────▶ │  ┌─────────┐     ┌────────────┐            │
-                    │  │   Web   │────▶│ API Server │            │
-                    │  │ (nginx) │     └─────┬──────┘            │
-                    │  └─────────┘           │                    │
-                    │                        │ gRPC               │
-                    │                        ▼                    │
-                    │  ┌──────────────────────────────┐          │
-  ┌──────────┐     │  │        Temporal Server        │          │
-  │ Temporal │◀────│  │        (external)              │          │
-  │ (ext.)   │────▶│  └──────────────────────────────┘          │
-  └──────────┘     │       ▲                ▲                    │
-                    │       │                │                    │
-                    │  ┌────┴─────┐   ┌─────┴──────┐            │
-                    │  │Controller│   │   Worker    │            │
-                    │  │          │   │ (Temporal)  │            │
-                    │  └──────────┘   └─────┬──────┘            │
-                    │                       │                    │
-                    │                       ▼                    │
-                    │              ┌─────────────────┐          │
-                    │              │   Agent Pods     │          │
-  ┌──────────┐     │              │ ┌─────┐ ┌─────┐ │          │
-  │   LLM    │◀────│              │ │Init │▶│Agent│ │          │
-  │ (ext.)   │     │              │ └─────┘ └──┬──┘ │          │
-  └──────────┘     │              │         ┌──┴──┐ │          │
-                    │              │         │Side │ │          │
-                    │              │         │car  │ │          │
-                    │              │         └─────┘ │          │
-                    │              └─────────────────┘          │
-                    └─────────────────────────────────────────────┘
 
-  External dependencies (not managed by this chart):
-    • Temporal Server — workflow orchestration
-    • LLM endpoint   — AI model inference (Ollama, LiteLLM, OpenAI)
-```
+The chart does not manage these external dependencies:
+
+- Temporal Server, for workflow orchestration
+- An LLM endpoint, such as Ollama, LiteLLM, or OpenAI
 
 ### Components
 
 | Component | Description |
 |-----------|-------------|
-| **Controller** | Watches AgentRun CRDs and reconciles state with Temporal workflows |
-| **Worker** | Temporal worker that executes agent workflows, spawning agent pods |
-| **API Server** | ConnectRPC API for creating/managing agent runs |
-| **Web Dashboard** | SolidJS UI proxied through nginx to the API server |
+| Controller | Watches the `AgentRun` resources and reconciles their state with the Temporal workflows |
+| Worker | Runs the agent workflows and spawns the agent pods |
+| API Server | Serves the ConnectRPC API for creating and managing runs |
+| Web Dashboard | React UI that nginx proxies to the API server |
 
 ## Configuration
 

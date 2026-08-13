@@ -1,6 +1,8 @@
 # Architecture overview
 
-Everything runs inside one Kubernetes cluster except cloud LLM providers. One workflow drives one pod; the pod owns one PVC; the sidecar fronts `pi-coding-agent`.
+Everything runs inside one Kubernetes cluster, except the cloud LLM providers.
+One workflow drives one pod. The pod owns one PVC. The sidecar fronts
+`pi-coding-agent`.
 
 ```mermaid
 flowchart TD
@@ -35,17 +37,17 @@ flowchart TD
 
 ## Pieces
 
-| Layer | What |
+| Layer | What it does |
 |------|------|
-| Web | React SPA, nginx-proxied to the API. Runs list, run detail (Overview, Logs, Files, Verify, Traces), project pages. |
-| API server | `AOTService` over ConnectRPC + REST endpoints for files, logs, traces, projects, archives, debug, webhooks, spec push/pull. |
-| Controller | Watches `AgentRun` and `Project` CRDs. Thin: starts/queries Temporal workflows; reconciles project soft-serve repos. |
-| Temporal worker | All business logic. Activities: provision LLM key, create deployment, hydrate, plan, execute, verify, push, PR, persist, embed, cleanup. |
-| LiteLLM | Per-run scoped virtual keys with budget caps and model allowlists. Routes to Ollama or OpenRouter. |
-| Ollama | Local inference. Off by default in the `values.local.yaml` preset. |
-| Soft-Serve | In-cluster git server hosting per-project config repos with OpenSpec scaffolding. |
-| Hydration init | Bare-clones repos into `.bare/`, creates a worktree per repo on a new `aot/<branch>`, runs `devbox install`. |
-| Sidecar | ConnectRPC (h2c) on `:50052`. Spawns `pi`, parses JSONL events, captures per-tool-call git diffs as trace spans, manages HITL via files in `.aot/input/`. |
+| Web | React SPA that nginx proxies to the API. It serves the runs list, the run detail tabs (Overview, Logs, Files, Verify, Traces), and the project pages. |
+| API server | Serves `AOTService` over ConnectRPC, plus REST endpoints for files, logs, traces, projects, archives, debug, webhooks, and spec push and pull. |
+| Controller | Watches the `AgentRun` and `Project` resources. It stays thin: it starts and queries Temporal workflows, and reconciles the project's soft-serve repo. |
+| Temporal worker | Holds all business logic. Its activities provision an LLM key, create the deployment, hydrate, plan, execute, verify, push, open a pull request, persist, embed, and clean up. |
+| LiteLLM | Issues one scoped virtual key per run, with a budget cap and a model allowlist. Routes to Ollama or OpenRouter. |
+| Ollama | Local inference. The `values.local.yaml` preset disables it. |
+| Soft-Serve | In-cluster git server. It hosts one config repo per project, scaffolded with OpenSpec. |
+| Hydration init container | Bare-clones each repo into `.bare/`, creates one worktree per repo on a new `aot/<branch>`, and runs `devbox install`. |
+| Sidecar | Serves ConnectRPC over h2c on `:50052`. It spawns `pi`, parses the JSONL events, captures a git diff per tool call as a trace span, and handles human input through files in `.aot/input/`. |
 
 ## Run lifecycle
 
@@ -79,16 +81,34 @@ flowchart TD
     Done["Cleanup (deferred):\nPersistRunData → EmbedRunData → RevokeKey → ScaleDownDeployment"]
 ```
 
-Cleanup is deferred: `llmKey` and `deploymentName` are captured in workflow scope and a `defer` runs the teardown activities on a disconnected context regardless of exit path — success, failure, cancellation. This is what guarantees we don't leak LLM keys or running pods.
+Cleanup is deferred. The workflow captures `llmKey` and `deploymentName` in its
+own scope, and a `defer` runs the teardown activities on a disconnected context.
+The teardown runs on every exit path: success, failure, and cancellation. This is
+what stops the platform from leaking LLM keys and running pods.
 
 ## Projects
 
-`Project` CRDs are organizational. On create the controller scaffolds a soft-serve repo `project-<name>` with OpenSpec directory structure, then sets `status.configRepoReady`. Runs reference projects via `projectRef`; empty run fields inherit from `project.defaults`. Specs in the project's config repo are addressable via `specRef`.
+The `Project` resource is organizational. When you create one, the controller
+scaffolds a soft-serve repo named `project-<name>` with the OpenSpec directory
+structure, then sets `status.configRepoReady`. A run points at a project through
+`projectRef`, and any empty run field inherits from `project.defaults`. A spec in
+the project's config repo is addressable through `specRef`.
 
 ## CI autofix
 
-GitHub webhook → if `check_run.completed` with `failure` on an `aot/*` branch and the run isn't out of retries (max 3, default), fetch CI logs from the Actions API, condense to error lines, create a spec-driven run that skips PLAN and pushes to the same branch. Debounced 30s to coalesce simultaneous failures. After exhaustion: a "manual intervention required" comment on the PR.
+A GitHub webhook drives the autofix loop. When a `check_run.completed` event
+reports `failure` on an `aot/*` branch, and the run has retries left, the
+platform fetches the CI logs from the Actions API, condenses them to the error
+lines, and creates a spec-driven run that skips PLAN and pushes to the same
+branch. The default retry limit is 3.
+
+The trigger is debounced for 30 seconds so simultaneous failures coalesce into
+one run. When the retries run out, the platform comments on the pull request
+that manual intervention is required.
 
 ## Webhook-triggered runs
 
-GitHub `push` events with new or modified `*.cs.md` (CodeSpeak spec) files in repos on the allowlist auto-create runs. HMAC-SHA256 validates the signature; `GITHUB_WEBHOOK_SECRET` is the secret, `GITHUB_WEBHOOK_REPOS` is the comma-separated allowlist.
+A GitHub `push` event that adds or modifies a `*.cs.md` CodeSpeak spec file
+creates a run, if the repository is on the allowlist. HMAC-SHA256 validates the
+signature. `GITHUB_WEBHOOK_SECRET` holds the secret, and
+`GITHUB_WEBHOOK_REPOS` holds the comma-separated allowlist.

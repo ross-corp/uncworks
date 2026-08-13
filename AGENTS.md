@@ -1,132 +1,179 @@
 # AGENTS.md
 
-This file provides guidance to AI coding agents when working with code in this repository.
+This file tells an AI coding agent how to work in this repository.
 
-## Project Overview
+## Project overview
 
-UNCWORKS is a Kubernetes-native platform for running AI coding agents. Users submit a prompt + git repo, and UNCWORKS provisions an isolated workspace, runs the agent, and streams results in real time. The core abstraction is the `AgentRun` CRD.
+UNCWORKS is a Kubernetes-native platform for running AI coding agents. A user
+submits a prompt and a git repository. The platform provisions an isolated
+workspace, runs the agent, and streams the result in real time. The core
+abstraction is the `AgentRun` custom resource.
 
 ## Commands
 
-All commands use [Task](https://taskfile.dev/) (see `Taskfile.yml`). Enter the dev environment first with `devbox shell`.
+Every command runs through [Task](https://taskfile.dev/). See `Taskfile.yml` and
+`tasks/`. Enter the toolchain first with `devbox shell`.
+
+`tasks/homelab.yml` is machine-specific and is not tracked. Copy
+`tasks/homelab.yml.example` if you need it. The include is optional, so `task`
+works without it.
 
 ### Build
+
 ```bash
-task build          # all Go binaries to ./bin/
+task build          # all Go binaries into ./bin/
 task build:web      # web dashboard (Vite)
 task build:app      # native macOS app (Wails v2, macOS only)
-task build:uncworks # cross-compile uncworks CLI (linux/darwin amd64+arm64)
-task proto:gen      # regenerate Go + TypeScript code from .proto files
-task proto:lint     # lint protobuf definitions
-task proto:breaking # check for breaking proto changes vs main
+task build:uncworks # cross-compile the uncworks CLI (linux and darwin, amd64 and arm64)
+task proto:gen      # regenerate Go and TypeScript code from .proto files
+task proto:lint     # lint the protobuf definitions
+task proto:breaking # check for breaking proto changes against main
 ```
+
+`cmd/bff` embeds `cmd/bff/dist`. A tracked placeholder file satisfies the embed
+pattern, so `go build ./...` works before you build the web bundle. Do not delete
+it.
 
 ### Test
+
 ```bash
-task test              # all tests in parallel (Go + web + extension + layer2)
-task test:go           # Go unit + integration tests (api/... internal/...)
-task test:unit         # Go unit only — fast, no Docker
-task test:contract     # ConnectRPC + protovalidate contract tests
+task test              # all tests in parallel (Go, web, extension, layer 2)
+task test:go           # Go unit and integration tests (api/... internal/...)
+task test:unit         # Go unit only. Fast, and needs no Docker
+task test:contract     # ConnectRPC and protovalidate contract tests
 task test:temporal     # Temporal workflow tests
 task test:layer2       # Layer 2 pipeline tests (LLM stubbed, no cluster)
-task test:regression   # Regression suite — gates releases and PRs to main
-task test:web          # Playwright tests for web dashboard
+task test:regression   # Regression suite. Gates releases and PRs to main
+task test:web          # Playwright tests for the web dashboard
 task test:extension    # pi-aot-extension TypeScript tests
 task test:shared       # @aot/shared TypeScript tests
-task test:e2e          # Go E2E tests (requires running cluster)
-task test:e2e:full     # setup soft-serve → E2E → Playwright → teardown
+task test:e2e          # Go E2E tests. Needs a running cluster
+task test:e2e:full     # set up soft-serve, run E2E, run Playwright, tear down
 ```
 
-Single Go test: `go test ./internal/server/... -run TestCreateAgentRun -count=1`
+Run one Go test with
+`go test ./internal/server/... -run TestCreateAgentRun -count=1`.
 
-Controller tests require envtest (auto-resolved via `internal/testutil.EnsureEnvtestAssets()`). If `KUBEBUILDER_ASSETS` is not set, install with: `go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest`
+Controller tests need envtest. `internal/testutil.EnsureEnvtestAssets()` resolves
+the assets automatically. Set `KUBEBUILDER_ASSETS` yourself only if that fails.
+Install the resolver with
+`go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest`.
+
+Run controller tests with `-p 1`. Parallel test binaries race to extract the same
+envtest etcd binary, and the loser fails with `text file busy`.
 
 ### Lint
+
 ```bash
-task lint           # golangci-lint + TypeScript type checks (all packages)
+task lint           # golangci-lint plus TypeScript type checks
 ```
 
-Linting uses [golangci-lint](https://golangci-lint.run/) v2 (config: `.golangci.yml`). Enabled linters: govet, errcheck, staticcheck, unused, ineffassign, gocritic, misspell. Formatter: gofmt. Generated code in `gen/go/` is excluded.
+Linting uses [golangci-lint](https://golangci-lint.run/) v2. The config is
+`.golangci.yml`. Enabled linters: govet, errcheck, staticcheck, unused,
+ineffassign, gocritic, misspell, bodyclose, noctx, sqlclosecheck, rowserrcheck,
+err113, and wrapcheck. The formatter is gofmt. Generated code under `gen/go/` is
+excluded.
 
-### Local Dev Cluster (colima-uncworks)
+### Local dev cluster (colima-uncworks)
+
 ```bash
-task dev:web          # start Vite HMR dev server for web dashboard
-task dev:images       # build all images into colima-uncworks k8s.io namespace
-task dev:deploy       # build images + kubectl rollout restart + status
-task dev:install      # install all Go + npm workspace dependencies
-task dev:hooks:install # install git hooks via lefthook
+task dev:web          # start the Vite HMR dev server
+task dev:images       # build all images into the colima-uncworks k8s.io namespace
+task dev:deploy       # build images, restart the rollout, report status
+task dev:install      # install all Go and npm dependencies
+task dev:hooks:install # install git hooks through lefthook
 ```
 
-### Kubernetes / Cluster Operations
+### Kubernetes operations
+
 ```bash
-task k8s:crd          # apply AgentRun CRD to cluster
-task k8s:deps         # deploy all infra deps (CRDs, storage, Ollama, LiteLLM, soft-serve)
-task k8s:images       # build images via docker + import into k0s (sudo required)
-task k8s:deploy:all   # build web + import images + rollout all deployments
-task cluster:setup    # install systemd units + build/import images + start all services
-task cluster:status   # show health of all UNCWORKS services and ports
-task cluster:teardown # stop all UNCWORKS services and remove systemd units
-task cluster:logs     # combined logs from all UNCWORKS services
-task cluster:temporal:dev  # start Temporal dev server (SQLite, no external deps)
+task k8s:crd          # apply the AgentRun CRD
+task k8s:deps         # deploy CRDs, storage, Ollama, LiteLLM, and soft-serve
+task k8s:images       # build images with docker and import them into k0s (needs sudo)
+task k8s:deploy:all   # build web, import images, roll out every deployment
+task cluster:setup    # install systemd units, build and import images, start services
+task cluster:status   # report the health of every service and port
+task cluster:teardown # stop every service and remove the systemd units
+task cluster:logs     # combined logs from every service
+task cluster:temporal:dev  # start the Temporal dev server (SQLite, no external deps)
 ```
 
 ## Architecture
 
-Two gRPC APIs define all communication:
+Two gRPC APIs define all communication.
 
-- **`proto/api.proto`** — Client API (`AOTService` on `:50055`): CreateAgentRun, GetAgentRun, ListAgentRuns, WatchAgentRun (server-streaming), CancelAgentRun, SendHumanInput
-- **`proto/agent.proto`** — Sidecar API (`AgentSidecarService` on `:50052`): StartAgent, StreamOutput, SendInput, GetStatus, StopAgent. Plus `AgentNotificationService` for sidecar→control-plane async events.
+`proto/api.proto` is the client API. `AOTService` listens on `:50055` and serves
+CreateAgentRun, GetAgentRun, ListAgentRuns, WatchAgentRun (server-streaming),
+CancelAgentRun, and SendHumanInput.
 
-Generated code lives in `gen/go/`. Proto generation: `task proto:gen` (runs `buf generate`).
+`proto/agent.proto` is the sidecar API. `AgentSidecarService` listens on `:50052`
+and serves StartAgent, StreamOutput, SendInput, GetStatus, and StopAgent. The
+same file defines `AgentNotificationService`, which carries asynchronous events
+from the sidecar to the control plane.
+
+Generated code lives in `gen/go/`. Regenerate it with `task proto:gen`, which
+runs `buf generate`.
 
 ### Go binaries (`cmd/`)
 
 | Binary | Role |
 |--------|------|
-| `apiserver` | ConnectRPC server + REST endpoints (`:50055`) |
-| `controller` | K8s controller — watches AgentRun CRDs, creates pods |
-| `hydration` | Init-container — git clone + devbox setup |
-| `sidecar` | RPC Gateway — bridges agent process to control plane (`:50052`) |
-| `temporal-worker` | Temporal activity worker — executes pipeline stages |
+| `apiserver` | ConnectRPC server and REST endpoints (`:50055`) |
+| `controller` | Watches `AgentRun` resources and creates pods |
+| `hydration` | Init container. Clones the repo and runs devbox setup |
+| `sidecar` | RPC gateway. Bridges the agent process to the control plane (`:50052`) |
+| `temporal-worker` | Temporal activity worker. Executes pipeline stages |
 | `uncworks` | End-user CLI (`uncworks setup`, `uncworks open`, `uncworks tui`) |
-| `aot` | Internal CLI — workspace tooling (`aot open`) |
-| `bff` | BFF server for the macOS desktop app |
+| `aot` | Internal CLI for workspace tooling (`aot open`) |
+| `bff` | Backend-for-frontend server for the macOS desktop app |
 | `uncworks-app` | macOS desktop app (Wails v2) |
 
 ### Key Go packages (`internal/`)
 
-- **`server/`** — gRPC `AOTService` implementation + WebSocket event hub
-- **`controller/`** — K8s reconciler for AgentRun CRD. `multi_agent.go` handles `spawn_junior` child AgentRuns
-- **`brain/`** — PostgreSQL state store (pgx). Agent state, metadata, priority queue
-- **`hydration/`** — Git bare clone → worktree creation → devbox setup
-- **`sidecar/`** — RPC Gateway running inside agent pods
-- **`bff/`** — Desktop app BFF proxy, cache, SPA serving
-- **`cli/`** — `aot open` implementation
-- **`embeddings/`** — Embedding generation for knowledge search (Ollama)
-- **`eventbus/`** — In-memory pub/sub for SSE/WebSocket real-time events
-- **`github/`** — GitHub App/PAT client, webhook handling, PR creation
-- **`litellm/`** — LiteLLM admin API client, key provisioning/revocation
-- **`softserve/`** — Soft-serve Git client, project config repo scaffolding
-- **`testutil/`** — Shared test helpers (auto-resolves envtest assets)
+- `server/` implements the gRPC `AOTService` and the WebSocket event hub.
+- `controller/` reconciles the `AgentRun` resource. `multi_agent.go` handles
+  `spawn_junior` child runs.
+- `brain/` is the PostgreSQL state store (pgx). It holds agent state, metadata,
+  and the priority queue.
+- `hydration/` creates a bare git clone, then a worktree, then runs devbox setup.
+- `sidecar/` is the RPC gateway that runs inside agent pods.
+- `bff/` proxies for the desktop app, caches responses, and serves the SPA.
+- `cli/` implements `aot open`.
+- `embeddings/` generates embeddings for knowledge search through Ollama.
+- `eventbus/` is an in-memory publish and subscribe bus for SSE and WebSocket
+  events.
+- `github/` is the GitHub App and PAT client. It handles webhooks and creates
+  pull requests.
+- `litellm/` is the LiteLLM admin API client. It provisions and revokes keys.
+- `softserve/` is the Soft-Serve git client and project config repo scaffolder.
+- `testutil/` holds shared test helpers and resolves envtest assets.
 
-### CRD types (`api/v1alpha1/`)
+### Custom resources (`api/v1alpha1/`)
 
-CRDs: `AgentRun`, `Project`, `Chain`, `Schedule`, `RunTemplate`. `AgentRun` is the primary resource with spec (repos, prompt, modelTier, orchestrationMode, pipelineConfig, autoPush, autoPR) and status (phase, stage, verificationResult, prUrl, totalCost). Phases: Pending → Running → Succeeded/Failed/Cancelled. WaitingForInput for HITL.
+The resources are `AgentRun`, `Project`, `Chain`, `Schedule`, and `RunTemplate`.
+
+`AgentRun` is the primary resource. Its spec carries repos, prompt, modelTier,
+orchestrationMode, pipelineConfig, autoPush, and autoPR. Its status carries
+phase, stage, verificationResult, prUrl, and totalCost. The phases are Pending,
+Running, and then Succeeded, Failed, or Cancelled. A run waiting on a human sits
+in WaitingForInput.
 
 ### TypeScript packages (`packages/`)
 
-- **`@aot/shared`** — gRPC client wrapper + reactive agent state store
-- **`@aot/pi-extension`** — Agent harness extension: `ask_human` tool (HITL), `spawn_junior` tool (multi-agent), OTel tracing
+- `@aot/shared` is the gRPC client wrapper and the reactive agent state store.
+- `@aot/pi-extension` is the agent harness extension. It provides the
+  `ask_human` tool for human-in-the-loop, the `spawn_junior` tool for
+  multi-agent runs, and OpenTelemetry tracing.
 
-### Workspace Layout
+### Workspace layout
 
-Each agent run gets a persistent workspace on a PVC mounted at `/workspace`:
+Each run gets a persistent workspace on a PVC mounted at `/workspace`.
 
 ```
 /workspace/
 ├── <repo-name>/            # Git worktree (checked-out working copy)
 ├── .aot/
-│   ├── logs/agent.log     # Agent stdout/stderr
+│   ├── logs/agent.log     # Agent stdout and stderr
 │   ├── traces/spans.jsonl # Execution trace spans
 │   └── metadata.json      # Run metadata snapshot
 ├── .devcontainer/
@@ -135,58 +182,81 @@ Each agent run gets a persistent workspace on a PVC mounted at `/workspace`:
 └── devbox.json            # Composed devbox config
 ```
 
-- `<repo-name>/` contains git worktree checkouts of specified repositories
-- `.aot/logs/agent.log` is tee'd from agent stdout/stderr by the sidecar
-- `.aot/traces/spans.jsonl` records tool calls, LLM interactions, and git diffs as JSONL
-- `.aot/metadata.json` snapshots the run spec (repos, prompt, model tier, etc.)
-- `.devcontainer/devcontainer.json` enables VS Code Remote attachment
-- After completion (Deployment replicas=0), these files remain on the PVC and are served by the API
+The sidecar tees agent stdout and stderr into `.aot/logs/agent.log`.
+`.aot/traces/spans.jsonl` records tool calls, LLM interactions, and git diffs as
+JSONL. `.aot/metadata.json` snapshots the run spec.
+`.devcontainer/devcontainer.json` lets VS Code Remote attach.
+
+The files stay on the PVC after the run completes and the deployment scales to
+zero replicas. The API serves them from there.
 
 ### Web dashboard (`web/`)
 
-React 19 + React Router 7 + Vite + Tailwind CSS. Connects to API server via ConnectRPC and WebSocket/SSE for real-time updates.
+React 19, React Router 7, Vite, and Tailwind CSS. It reaches the API server over
+ConnectRPC, and receives real-time updates over WebSocket and SSE.
 
-## Data Flow
+## Data flow
 
-1. Client calls `CreateAgentRun` via gRPC (or `kubectl apply`)
-2. Controller sees new AgentRun CRD, creates Pod (init-container + agent + sidecar)
-3. Init-container clones repo, creates worktree, runs `devbox install`
-4. Agent container executes prompt in workspace
-5. Sidecar streams output back to control plane via gRPC
-6. Clients watch via `WatchAgentRun` (gRPC stream) or WebSocket
+1. A client calls `CreateAgentRun` over gRPC, or applies the resource with
+   `kubectl`.
+2. The controller sees the new `AgentRun` and creates a pod with an init
+   container, an agent container, and a sidecar.
+3. The init container clones the repo, creates a worktree, and runs
+   `devbox install`.
+4. The agent container executes the prompt inside the workspace.
+5. The sidecar streams output back to the control plane over gRPC.
+6. Clients watch through `WatchAgentRun` or over WebSocket.
 
-## Git Hooks & Releases
+## Git hooks and releases
 
-Git hooks are managed by [Lefthook](https://lefthook.dev/) (config: `lefthook.yml`). Hooks install automatically on `devbox shell` entry, or manually via `task dev:hooks:install`.
+[Lefthook](https://lefthook.dev/) manages the git hooks. The config is
+`lefthook.yml`. Hooks install when you enter `devbox shell`, or when you run
+`task dev:hooks:install`.
 
-- **pre-commit**: gofmt, golangci-lint (new changes only), buf lint, TypeScript type checks
-- **commit-msg**: Enforces [Conventional Commits](https://www.conventionalcommits.org/) via commitlint
-- **pre-push**: Go tests, buf breaking change detection
+- pre-commit runs gofmt, golangci-lint against new changes only, buf lint, and
+  the TypeScript type checks.
+- commit-msg enforces [Conventional Commits](https://www.conventionalcommits.org/)
+  through commitlint.
+- pre-push runs the Go tests and buf breaking-change detection.
 
-Releases use [Release Please](https://github.com/googleapis/release-please). Conventional commit messages on `main` automatically generate changelogs and version bumps. The CI workflow (`ci.yml`) runs Release Please after each merge to `main`. Every passing push to `main` also auto-tags a pre-release: `vX.Y.Z-pre.YYYYMMDD.sha7`.
+Run `git commit` from inside `devbox shell`. The hooks call `gofmt`,
+`golangci-lint`, and `npx`, and none of them are on the bare PATH.
+
+Releases use [Release Please](https://github.com/googleapis/release-please).
+Conventional commit messages on `main` generate the changelog and the version
+bump. The CI workflow runs Release Please after each merge to `main`. Every
+passing push to `main` also tags a pre-release as
+`vX.Y.Z-pre.YYYYMMDD.sha7`.
 
 ## Conventions
 
-- **Diagrams**: Always use Mermaid in markdown. Never use ASCII box-drawing diagrams.
-- **Testing**: Use Ginkgo/Gomega for BDD-style tests. Controller tests use envtest. gRPC tests use real listeners on `127.0.0.1:0`.
-- **Go module**: `github.com/uncworks/aot`
-- **CRD group**: `aot.uncworks.io/v1alpha1`
-- **Labels**: `aot.uncworks.io/parent`, `aot.uncworks.io/role`, `aot.uncworks.io/managed`
-- **Ports**: API server `:50055` (ConnectRPC + REST). Sidecar `:50052`.
-- **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `ci:`, `chore:`).
+- Use Mermaid for every diagram in markdown. Never use ASCII box drawings.
+- Write tests with Ginkgo and Gomega. Controller tests use envtest. gRPC tests
+  use real listeners on `127.0.0.1:0`.
+- The Go module is `github.com/uncworks/aot`.
+- The resource group is `aot.uncworks.io/v1alpha1`.
+- The labels are `aot.uncworks.io/parent`, `aot.uncworks.io/role`, and
+  `aot.uncworks.io/managed`.
+- The API server listens on `:50055` and the sidecar on `:50052`.
+- Write commit messages as [Conventional Commits](https://www.conventionalcommits.org/):
+  `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `ci:`, `chore:`.
+- Write documentation in Simplified Technical English. Use one instruction per
+  sentence, active voice, and one term for one concept. Do not use em-dashes, do
+  not use emoji, and do not open a sentence or a list item with a bolded label.
 
 ## OpenSpec
 
-OpenSpec is the change management system for this repo. It enforces a spec-driven workflow: propose → design → spec → implement → archive.
+OpenSpec is the change management system for this repository. It enforces a
+spec-driven workflow: propose, design, spec, implement, archive.
 
 ### Directory layout
 
 ```
 openspec/
-├── config.yaml          # schema and project context config
-├── specs/               # global specs (source of truth, ~70+ domains)
+├── config.yaml          # schema and project context
+├── specs/               # the spec corpus, and the source of truth
 └── changes/
-    ├── <name>/          # active change
+    ├── <name>/          # an active change
     │   ├── proposal.md
     │   ├── design.md
     │   ├── specs/
@@ -194,59 +264,45 @@ openspec/
     └── archive/         # completed changes
 ```
 
-### Common commands
+### Commands
 
 ```bash
 openspec list                    # list active changes
 openspec new change <name>       # scaffold a new change
 openspec status <name>           # show task completion for a change
-openspec show <name>             # display full change details
-openspec validate <name>         # validate artifacts
-openspec archive <name>          # merge specs into openspec/specs/, move to archive
+openspec show <name>             # display the full change
+openspec validate <name>         # validate the artifacts
+openspec archive <name>          # merge specs into openspec/specs/ and archive
 openspec view                    # interactive dashboard
 ```
 
 ### Workflow
 
-1. **Propose** — `openspec new change <name>`, fill in `proposal.md`
-2. **Design** — fill in `design.md` with technical decisions
-3. **Spec** — add behavioral specs under `specs/`
-4. **Apply** — implement via `tasks.md`; use `/opsx:apply` skill or work tasks manually
-5. **Archive** — `openspec archive <name>` when all tasks are done
+1. Propose. Run `openspec new change <name>` and fill in `proposal.md`.
+2. Design. Fill in `design.md` with the technical decisions.
+3. Spec. Add behavioral specs under `specs/`.
+4. Apply. Implement the work in `tasks.md`.
+5. Archive. Run `openspec archive <name>` when every task is done.
 
-### Active changes (as of last update)
+Run `openspec list` to see the active changes. Do not rely on a list in this
+file, because it goes stale.
 
-`deployment-modes`, `keybindings`
-
-## Multi-Agent Claude Code Workflow
-
-UNCWORKS uses Claude Code subagents for parallel exploration and implementation. Key principles:
+## Multi-agent workflow
 
 ### How subagents are used
 
-- **Parallel exploration**: Spin up subagents to investigate different parts of the codebase simultaneously, then merge findings before writing code.
-- **Thin vertical slices**: Each subagent works on a scoped, independently verifiable unit. Avoid big-bang changes.
-- **Stop on invalidation**: If new information discovered by one subagent invalidates the plan, stop all others and re-plan.
+- Explore in parallel. Start subagents to investigate different parts of the
+  codebase at the same time, then merge the findings before you write code.
+- Work in thin vertical slices. Each subagent takes a scoped unit that can be
+  verified on its own. Avoid one large change.
+- Stop on invalidation. If one subagent finds something that invalidates the
+  plan, stop the others and re-plan.
 
 ### Agent roles in the platform
 
-UNCWORKS itself runs two agent roles via `PI_ROLE` env var:
+UNCWORKS runs two agent roles, selected by the `PI_ROLE` environment variable.
 
 | Role | Responsibility |
 |---|---|
-| `manage` | PLAN stage: reads repo, runs `openspec` CLI, writes specs and tasks. VERIFY stage: checks task completion, validates implementation. |
-| `implement` | EXECUTE stage: reads specs from workspace, writes code, runs tests. |
-
-### Skills available for this repo
-
-Invoke via `/skill-name` in Claude Code:
-
-| Skill | When to use |
-|---|---|
-| `/uncworks-deploy` | Build images + rollout to colima-uncworks dev cluster |
-| `/uncworks-image-push` | Build images into k8s.io namespace (no rollout) |
-| `/uncworks-run-tests` | Choose and run the right test suite for what changed |
-| `/uncworks-release` | Understand the release process (Release Please) |
-| `/uncworks-new-change` | Create a new OpenSpec change |
-| `/uncworks-audit-openspec` | List and categorize active OpenSpec changes |
-| `/uncworks-rebuild-app` | Rebuild and reinstall the macOS desktop app |
+| `manage` | PLAN stage: read the repo, run the `openspec` CLI, write specs and tasks. VERIFY stage: check task completion and validate the implementation. |
+| `implement` | EXECUTE stage: read the specs from the workspace, write code, run tests. |

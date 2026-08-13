@@ -1,51 +1,66 @@
 # Spec-driven pipeline
 
-Three stages — Plan, Execute, Verify — with a retry loop on Verify failure. Two agent roles, one source of truth (the OpenSpec change directory).
+The pipeline runs three stages: Plan, Execute, and Verify. A Verify failure
+retries Execute. Two agent roles share one source of truth, which is the OpenSpec
+change directory.
 
 ## Stages
 
-### Plan — `manage` agent
+### Plan, run by the `manage` agent
 
-1. `openspec init --tools pi --force` in `/workspace` (if needed).
-2. `openspec new change "<name>"` scaffolds `/workspace/openspec/changes/<name>/`.
-3. Templates fetched via `openspec instructions {proposal,specs,tasks} --json`.
-4. Agent writes `proposal.md`, `design.md`, spec files, `tasks.md` — read-only outside `openspec/` and `.aot/`.
-5. `openspec validate` and `openspec status` confirm structural integrity.
+1. Run `openspec init --tools pi --force` in `/workspace` if the directory is not
+   initialized.
+2. Run `openspec new change "<name>"`, which scaffolds
+   `/workspace/openspec/changes/<name>/`.
+3. Fetch the templates with `openspec instructions {proposal,specs,tasks} --json`.
+4. Write `proposal.md`, `design.md`, the spec files, and `tasks.md`. The role is
+   read-only outside `openspec/` and `.aot/`.
+5. Run `openspec validate` and `openspec status` to confirm the artifacts are
+   structurally sound.
 
-Spec requirements must use `SHALL` or `MUST`. Scenarios use `WHEN/THEN`. `tasks.md` is capped at 30 checkboxes — enforced by the determinism extension.
+Every spec requirement MUST use `SHALL` or `MUST`. Every scenario MUST use
+`WHEN` and `THEN`. `tasks.md` MUST hold no more than 30 checkboxes. The
+determinism extension enforces the cap.
 
-### Execute — `implement` agent
+### Execute, run by the `implement` agent
 
-Reads the spec, writes code, ticks `tasks.md` items as `[x]`. No `ask_user` from this role — questions must surface in output. On retry, the prompt is prefixed with the previous failure report.
+The agent reads the spec, writes the code, and marks each finished `tasks.md`
+item as `[x]`. This role cannot call `ask_user`, so a question has to appear in
+the output. On a retry, the prompt carries the previous failure report as a
+prefix.
 
-### Verify — `manage` agent + automated gates
+### Verify, run by the `manage` agent and the automated gates
 
-Five gates, evaluated in order:
+Five gates run in order.
 
-| Gate | What |
+| Gate | What it checks |
 |------|------|
-| Task completion | All `tasks.md` items checked (only when `openspecChange` is set on the run) |
-| Structural validation | `openspec validate "<name>" --json` |
-| File existence | Backtick-wrapped paths in `THEN ... exist` lines must resolve |
-| Test commands | Backtick-wrapped commands on `WHEN/THEN` lines with keywords (`run`, `test`, `build`, …) get executed |
-| LLM judge | Manage agent evaluates each scenario against the diff and emits a JSON verdict |
+| Task completion | Every `tasks.md` item is checked. Runs only when the run sets `openspecChange` |
+| Structural validation | `openspec validate "<name>" --json` exits zero |
+| File existence | Every backtick-wrapped path on a `THEN ... exist` line resolves |
+| Test commands | Every backtick-wrapped command on a `WHEN` or `THEN` line with a keyword such as `run`, `test`, or `build` is executed |
+| LLM judge | The manage agent evaluates each scenario against the diff and emits a JSON verdict |
 
-The judge can mark a verdict **salvageable** — meaning the failure is recoverable on retry. Non-salvageable failures terminate the pipeline immediately.
+The judge can mark a verdict salvageable, which means a retry can recover from
+the failure. A failure that is not salvageable stops the pipeline at once.
 
-On overall pass, `openspec archive "<name>" --yes` moves the change to the archive. Archive failure is logged, not fatal.
+When every gate passes, `openspec archive "<name>" --yes` moves the change into
+the archive. An archive failure is logged and does not fail the run.
 
 ## Roles
 
-| Role | Stage | What it can touch |
+| Role | Stage | What it can write |
 |------|-------|-------------------|
-| `manage` | plan, verify | `/workspace/openspec/`, `/workspace/.aot/` only |
-| `implement` | execute | Repo source code |
+| `manage` | plan, verify | `/workspace/openspec/` and `/workspace/.aot/` only |
+| `implement` | execute | The repository source |
 
-Loaded via `PI_ROLE` env var by the determinism extension.
+The determinism extension reads the role from the `PI_ROLE` environment variable.
 
 ## Retry
 
-Verify failure with retries left → Execute again, prompt prefixed with the failure report. `MaxRetries` on the Execute stage is the bound (default 3). When exhausted, the run fails with the last report.
+A Verify failure with retries left runs Execute again, with the failure report as
+a prompt prefix. `MaxRetries` on the Execute stage bounds the loop and defaults
+to 3. When the retries run out, the run fails and reports the last failure.
 
 ## Config
 
@@ -56,11 +71,11 @@ pipelineConfig:
   verify:  { model: default-cloud, timeoutSeconds: 180, maxRetries: 1, onFailure: fail  }
 ```
 
-`onFailure`: `retry`, `fail`, or `skip`.
+`onFailure` takes `retry`, `fail`, or `skip`.
 
 ## Output
 
-Verify writes a `VerificationResult` JSON to the change directory:
+Verify writes a `VerificationResult` as JSON into the change directory.
 
 ```json
 {
@@ -71,10 +86,11 @@ Verify writes a `VerificationResult` JSON to the change directory:
   "automatedChecks": [
     {"name": "task_completion", "pass": false, "output": "5/7 tasks complete"}
   ],
-  "llmVerdict": {"pass": false, "salvageable": true, "criteria": [/* ... */]},
+  "llmVerdict": {"pass": false, "salvageable": true, "criteria": []},
   "failureReport": "...",
   "executionTimeMs": 12500
 }
 ```
 
-Visible in the UI's Verify tab and via `GET /api/v1/runs/{id}/verification`.
+The UI shows it in the Verify tab. `GET /api/v1/runs/{id}/verification` returns
+the same document.

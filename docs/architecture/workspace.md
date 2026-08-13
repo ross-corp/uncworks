@@ -1,6 +1,7 @@
 # Workspace and hydration
 
-One PVC per run, mounted at `/workspace`. The hydration init container provisions it before the sidecar and agent start.
+Each run gets one PVC, mounted at `/workspace`. The hydration init container
+provisions it before the sidecar and the agent start.
 
 ## Layout
 
@@ -26,7 +27,7 @@ One PVC per run, mounted at `/workspace`. The hydration init container provision
     subagents/delegate-*.json      delegation markers
     verification/<change>-result.json   fallback location
   .devcontainer/devcontainer.json
-  uncspace.yaml                    workspace manifest (repos ↔ paths)
+  uncspace.yaml                    workspace manifest, repo to path
   devbox.json                      root config; auto-composed if not explicit
   spec/main.cs.md                  CodeSpeak spec (when specContent provided)
   codespeak.json                   ditto
@@ -58,32 +59,44 @@ sequenceDiagram
     end
 ```
 
-### Env
+### Environment variables
 
-| Var | Purpose |
+| Variable | Purpose |
 |-----|---------|
-| `AOT_REPOS` | JSON `[{url, branch, path}, ...]` for multi-repo |
-| `AOT_REPO_URL`, `AOT_BRANCH` | Single-repo fallback |
-| `AOT_WORKSPACE_DIR` | Workspace root (default `/workspace`) |
-| `AOT_DEVBOX_CONFIG` | Path inside repo to a specific devbox.json |
+| `AOT_REPOS` | JSON array of `{url, branch, path}` for a multi-repo run |
+| `AOT_REPO_URL`, `AOT_BRANCH` | Fallback for a single-repo run |
+| `AOT_WORKSPACE_DIR` | Workspace root. Defaults to `/workspace` |
+| `AOT_DEVBOX_CONFIG` | Path inside the repo to a specific `devbox.json` |
 | `AOT_SPEC_CONTENT` | CodeSpeak spec body |
 | `AOT_AGENT_RUN_ID` | Run id |
-| `AOT_PROMPT` | Original prompt (metadata only) |
-| `AOT_MODEL_TIER` | Model tier (metadata only) |
+| `AOT_PROMPT` | The original prompt. Metadata only |
+| `AOT_MODEL_TIER` | The model tier. Metadata only |
 
 ## Bare + worktree
 
-`git clone --bare` puts objects in `.bare/<repo>/`. `git worktree add -b aot/<branch>` creates the working copy at `/workspace/<repo>/` on a fresh branch.
+`git clone --bare` puts the objects in `.bare/<repo>/`.
+`git worktree add -b aot/<branch>` creates the working copy at
+`/workspace/<repo>/` on a fresh branch.
 
-This isolates agent changes from source branches (pushes go to `aot/<run-id>`) and lets multiple worktrees share one bare clone if multi-worktree flows are added later.
+This isolates the agent's changes from the source branches, because every push
+goes to `aot/<run-id>`. It also lets several worktrees share one bare clone, so a
+multi-worktree flow stays cheap to add later.
 
 ## Devbox
 
-- **Explicit**: `AOT_DEVBOX_CONFIG` → `devbox install` against that path in the primary repo.
-- **Auto-compose**: scan all repos for `devbox.json`, generate a root `/workspace/devbox.json` with `include` directives, then `devbox install` once from the root.
+Set `AOT_DEVBOX_CONFIG` to run `devbox install` against that path in the primary
+repo.
+
+Leave it unset to compose the config automatically. The hydrator scans every repo
+for a `devbox.json`, writes a root `/workspace/devbox.json` with `include`
+directives, and runs `devbox install` once from the root.
 
 ## OpenSpec
 
-`/workspace/openspec/` lives at the workspace root, not inside any repo — spec artifacts are shared across repos in multi-repo runs. Plan stage runs `openspec init` (idempotent) and `openspec new change`. Verify uses `openspec validate`, `status`, `list`, and `archive`.
+`/workspace/openspec/` sits at the workspace root rather than inside a repo, so
+the spec artifacts are shared across every repo in a multi-repo run. The Plan
+stage runs `openspec init`, which is idempotent, and then `openspec new change`.
+The Verify stage runs `openspec validate`, `status`, `list`, and `archive`.
 
-`uncspace.yaml` records the repo → worktree-path mapping so specs can reference files across repos with workspace-relative paths.
+`uncspace.yaml` records which worktree path belongs to which repo, so a spec can
+reference a file in another repo through a workspace-relative path.

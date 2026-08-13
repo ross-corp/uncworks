@@ -61,7 +61,8 @@ The LiteLLM master key grants full admin API access (key provisioning, deletion,
 
 1. Stored as a Kubernetes Secret (`litellm-master-key`)
 2. Only accessible to the controller and Temporal worker (via `LITELLM_MASTER_KEY` env var)
-3. Never mounted into agent pods — agents only receive their per-run virtual key
+3. It is never mounted into an agent pod. An agent receives only its own
+   per-run virtual key
 
 ```bash
 # Rotate the master key

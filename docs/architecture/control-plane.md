@@ -1,31 +1,34 @@
 # Control plane
 
-Three services: API server, controller, Temporal worker. The controller is intentionally thin — all business logic lives in the workflow.
+The control plane is three services: the API server, the controller, and the
+Temporal worker. The controller stays thin, because all business logic lives in
+the workflow.
 
 ## API server
 
-ConnectRPC + REST on `:50055`. Same mux serves both. Browser-friendly (HTTP/JSON callable).
+The API server serves ConnectRPC and REST on `:50055`. One mux serves both. A
+browser can call it directly over HTTP and JSON.
 
 ### `AOTService` RPCs
 
 | Method | Kind | Notes |
 |--------|------|-------|
-| `CreateAgentRun` | unary | Creates the CRD. Generates `ar-XXXXXX` ID + LLM-derived display name. |
-| `GetAgentRun` | unary | CRD + live Temporal query state. Populates children for orchestrated runs. |
-| `ListAgentRuns` | unary | Filters: phase, parent, spec-run, stage, project, feature, tag. Newest-first. Archived excluded unless `X-Include-Archived: true`. |
-| `WatchAgentRun` | server stream | Emits current state, then live `AgentRunEvent`s until terminal. |
-| `CancelAgentRun` | unary | Cancels the Temporal workflow. |
-| `SendHumanInput` | unary | Signals the workflow with the user's answer (HITL question, or approve/reject). |
-| `GetRunGraph` | unary | DAG of parent/child runs via `aot.uncworks.io/spec-run-id`. |
-| `SearchPastWork` | unary | Vector similarity over the knowledge store (requires PG + embedder). |
+| `CreateAgentRun` | unary | Creates the resource. Generates an `ar-XXXXXX` id and an LLM-derived display name |
+| `GetAgentRun` | unary | Returns the resource plus live Temporal query state. Populates the children of an orchestrated run |
+| `ListAgentRuns` | unary | Filters on phase, parent, spec-run, stage, project, feature, and tag. Newest first. Excludes archived runs unless the request sets `X-Include-Archived: true` |
+| `WatchAgentRun` | server stream | Emits the current state, then every `AgentRunEvent` until the run is terminal |
+| `CancelAgentRun` | unary | Cancels the Temporal workflow |
+| `SendHumanInput` | unary | Signals the workflow with the user's answer, either to a question or to an approval |
+| `GetRunGraph` | unary | Returns the parent and child run graph, grouped by `aot.uncworks.io/spec-run-id` |
+| `SearchPastWork` | unary | Runs a vector similarity search over the knowledge store. Needs PostgreSQL and the embedder |
 
-### REST
+### REST endpoints
 
 | Path | Purpose |
 |------|---------|
 | `GET /api/v1/runs/{id}/files` | Directory listing |
 | `GET /api/v1/runs/{id}/files/content?path=` | File content |
-| `GET /api/v1/runs/{id}/logs` | Human-readable `agent.log` |
+| `GET /api/v1/runs/{id}/logs` | Plain-text `agent.log` |
 | `GET /api/v1/runs/{id}/logs/structured` | `agent.jsonl` |
 | `GET /api/v1/runs/{id}/logs/thinking` | Reasoning blocks extracted from JSONL |
 | `GET /api/v1/runs/{id}/verification` | Verify JSON |
@@ -33,20 +36,20 @@ ConnectRPC + REST on `:50055`. Same mux serves both. Browser-friendly (HTTP/JSON
 | `GET /api/v1/runs/{id}/traces/{spanId}/diff` | Per-span diff |
 | `GET /api/v1/runs/{id}/traces/watch` | SSE stream |
 | `POST /api/v1/runs/{id}/archive`, `/bulk-archive` | Archive |
-| `POST/DELETE /api/v1/runs/{id}/debug` | Debug session (scales pod to 1) |
-| `GET /api/v1/runs/{id}/exec`, `/connect` | WebSocket shell / pod connect |
-| `/api/v1/projects/...` | Project CRUD + config repo files |
-| `POST /api/v1/specs/push`, `GET /api/v1/specs/pull` | GitHub spec round-trip |
-| `POST /api/v1/classify` | LLM-based project/feature/tag classification |
+| `POST/DELETE /api/v1/runs/{id}/debug` | Debug session. Scales the pod back to one replica |
+| `GET /api/v1/runs/{id}/exec`, `/connect` | WebSocket shell and pod connect |
+| `/api/v1/projects/...` | Project create, read, update, delete, and config repo files |
+| `POST /api/v1/specs/push`, `GET /api/v1/specs/pull` | GitHub spec round trip |
+| `POST /api/v1/classify` | LLM classification of project, feature, and tags |
 | `POST /api/v1/webhooks/github` | GitHub webhook |
 
-### Env
+### Environment variables
 
 | Variable | Purpose |
 |----------|---------|
-| `LITELLM_BASE_URL` | LiteLLM proxy (default `http://litellm.aot.svc.cluster.local:4000`) |
-| `AOT_API_KEY` | Required header for client calls when set |
-| Allowed origins | CORS, configured via Helm |
+| `LITELLM_BASE_URL` | LiteLLM proxy. Defaults to `http://litellm.aot.svc.cluster.local:4000` |
+| `AOT_API_KEY` | When set, every client call MUST carry it as a header |
+| Allowed origins | CORS allowlist, configured through Helm |
 
 ## Controller
 
@@ -65,24 +68,30 @@ stateDiagram-v2
     Cancelled --> [*]
 ```
 
-Reconcile:
+Each reconcile does one of three things.
 
-1. CRD without workflow annotation → build `WorkflowInput`, `ExecuteWorkflow`, annotate, set phase `Running`.
-2. CRD with annotation → `QueryWorkflow("get-state")`, map phase to CRD status, update if changed. Falls back to `DescribeWorkflowExecution` for terminal detection if query fails.
-3. Deletion → finalizer `aot.uncworks.io/workflow-cleanup` cancels the workflow first.
+1. A resource with no workflow annotation gets a `WorkflowInput`, a call to
+   `ExecuteWorkflow`, the annotation, and phase `Running`.
+2. A resource with the annotation gets a `QueryWorkflow("get-state")` call. The
+   controller maps the workflow phase onto the resource status and writes it back
+   when it changed. When the query fails, the controller falls back to
+   `DescribeWorkflowExecution` to detect a terminal state.
+3. A deleted resource runs the `aot.uncworks.io/workflow-cleanup` finalizer,
+   which cancels the workflow first.
 
-Reconcile interval: 30s.
+The reconcile interval is 30 seconds.
 
-| Label / annotation | Use |
+| Label or annotation | Use |
 |--------------------|-----|
-| `aot.uncworks.io/spec-run-id` | Groups parent + children |
-| `aot.uncworks.io/run-role` | `senior` / `junior` |
-| `aot.uncworks.io/parent-run` | Child → parent link |
+| `aot.uncworks.io/spec-run-id` | Groups a parent run with its children |
+| `aot.uncworks.io/run-role` | Either `senior` or `junior` |
+| `aot.uncworks.io/parent-run` | Links a child run to its parent |
 | `aot.uncworks.io/workflow-id` | Temporal handle |
 
 ## Temporal worker
 
-One queue: `aot-agent-runs`. One workflow: `AgentRunWorkflow`. Activities, grouped:
+The worker serves one queue, `aot-agent-runs`, and one workflow,
+`AgentRunWorkflow`. Its activities group as follows.
 
 | Lifecycle | LLM | Sidecar | Pipeline | Persist |
 |-----------|-----|---------|----------|---------|
@@ -91,4 +100,6 @@ One queue: `aot-agent-runs`. One workflow: `AgentRunWorkflow`. Activities, group
 | `ScaleDownDeployment` (deferred) | | `ForwardHumanInput` | `LLMJudgeChanges` | `HydrateContext` |
 | | | `StopAgent` | | `EnrichRunTags` |
 
-Deferred cleanup pattern: `llmKey` and `deploymentName` are captured; a `defer` block with a disconnected context guarantees `RevokeLLMKey` + `ScaleDownDeployment` run on success, failure, or cancel.
+Cleanup is deferred. The workflow captures `llmKey` and `deploymentName`, then a
+`defer` block on a disconnected context runs `RevokeLLMKey` and
+`ScaleDownDeployment`. This happens on success, on failure, and on cancellation.

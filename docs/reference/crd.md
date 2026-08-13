@@ -1,79 +1,82 @@
-# CRDs
+# Custom resources
 
-Two: `AgentRun` (one run) and `Project` (organizational defaults).
+There are two custom resources. `AgentRun` describes one run. `Project` holds
+organizational defaults.
 
-Source: `api/v1alpha1/types.go`, `api/v1alpha1/project_types.go`.
+The Go source is `api/v1alpha1/types.go` and `api/v1alpha1/project_types.go`.
 
 ## AgentRun
 
-`aot.dev/v1alpha1` · Kind `AgentRun` · namespaced.
+Group and version `aot.uncworks.io/v1alpha1`. Kind `AgentRun`. Namespaced.
 
 ### Spec
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
 | `backend` | `BackendType` | `Pod` | Only `Pod` is supported. |
-| `repos` | `[]Repository` | — | At least one for most runs. |
-| `prompt` | `string` | — | Required (single/manual); auto-derived for spec-driven when `specContent` set. |
+| `repos` | `[]Repository` | none | At least one for most runs. |
+| `prompt` | `string` | none | Required for `single` and `manual`. A spec-driven run derives it from `specContent`. |
 | `modelTier` | `string` | `default` | LiteLLM model name. |
-| `manageModelTier`, `implementModelTier` | `string` | — | Per-role override; fall back to `modelTier`. |
-| `maxBudget` | `float64` | — | USD cap, enforced by LiteLLM virtual key. |
-| `ttlSeconds` | `int32` | `3600` | Agent killed when exceeded. |
-| `image` | `string` | — | Override default agent image. |
-| `envVars` | `map[string]string` | — | Extra env on the agent. |
-| `devboxConfig` | `string` | — | Path inside repo to devbox.json. |
+| `manageModelTier`, `implementModelTier` | `string` | none | Overrides `modelTier` for that role. |
+| `maxBudget` | `float64` | none | Spend cap in USD. The LiteLLM virtual key enforces it. |
+| `ttlSeconds` | `int32` | `3600` | The platform kills the agent when it exceeds this. |
+| `image` | `string` | none | Overrides the default agent image. |
+| `envVars` | `map[string]string` | none | Extra environment variables for the agent. |
+| `devboxConfig` | `string` | none | Path inside the repo to a `devbox.json`. |
 | `orchestrationMode` | `OrchestrationMode` | `single` | See below. |
-| `orchestration` | `*Orchestration` | — | Required for `manual`. |
-| `specContent` | `string` | — | CodeSpeak `.cs.md` body. Auto-upgrades to spec-driven. |
-| `specSource` | `string` | — | `editor` / `webhook:github:<repo>/<path>` / `github:<owner/repo/path>` / `ci-autofix:<owner/repo>#<sha>`. |
-| `specRef` | `string` | — | Spec in project's config repo (requires `projectRef`). Resolves to `openspec/specs/{specRef}/spec.md`. |
-| `projectRef` | `string` | — | `Project` to inherit defaults from. |
-| `specRunID` | `string` | — | Groups orchestrated runs. |
-| `parentRunID` | `string` | — | Child → parent link. |
-| `displayName` | `string` | — | Auto-generated from prompt by LLM. |
-| `workspaceName` | `string` | — | Workspace preset. |
-| `pipelineConfig` | `*PipelineConfig` | — | Per-stage settings. |
-| `autoPush` | `bool` | `false` | Push to `aot/<run-id>` on success. |
-| `autoPR` | `bool` | `false` | Open PR; requires `autoPush`. |
-| `prBaseBranch` | `string` | `main` | PR target. |
-| `project`, `feature` | `string` | — | Labels for filtering. |
-| `tags` | `[]string` | — | Comma-joined into the `aot.uncworks.io/tags` annotation. |
-| `approvalMode` | `string` | `""` → `hybrid` | `none` / `hitl` / `llm-judge` / `hybrid`. See below. |
-| `openspecChange` | `string` | — | When set, Verify runs `openspec list --change <name>` as a task-completion gate; ad-hoc runs without it skip the gate. |
+| `orchestration` | `*Orchestration` | none | Required for `manual`. |
+| `specContent` | `string` | none | The body of a CodeSpeak `.cs.md` file. Setting it selects `spec-driven`. |
+| `specSource` | `string` | none | One of `editor`, `webhook:github:<repo>/<path>`, `github:<owner/repo/path>`, or `ci-autofix:<owner/repo>#<sha>`. |
+| `specRef` | `string` | none | Names a spec in the project's config repo, and needs `projectRef`. It resolves to `openspec/specs/{specRef}/spec.md`. |
+| `projectRef` | `string` | none | The `Project` this run inherits defaults from. |
+| `specRunID` | `string` | none | Groups orchestrated runs. |
+| `parentRunID` | `string` | none | Links a child run to its parent. |
+| `displayName` | `string` | none | An LLM generates it from the prompt. |
+| `workspaceName` | `string` | none | Workspace preset. |
+| `pipelineConfig` | `*PipelineConfig` | none | Per-stage settings. |
+| `autoPush` | `bool` | `false` | Pushes to `aot/<run-id>` when the run succeeds. |
+| `autoPR` | `bool` | `false` | Opens a pull request. It needs `autoPush`. |
+| `prBaseBranch` | `string` | `main` | The branch the pull request targets. |
+| `project`, `feature` | `string` | none | Labels for filtering. |
+| `tags` | `[]string` | none | Joined with commas into the `aot.uncworks.io/tags` annotation. |
+| `approvalMode` | `string` | empty, which means `hybrid` | One of `none`, `hitl`, `llm-judge`, or `hybrid`. See below. |
+| `openspecChange` | `string` | none | When set, Verify runs `openspec list --change <name>` as a task-completion gate. A run that leaves it empty skips the gate. |
 
 ### Repository
 
 | Field | Notes |
 |-------|-------|
 | `url` | Required. HTTPS or SSH. |
-| `branch` | Default branch if empty. |
-| `path` | Defaults to repo name from URL. |
+| `branch` | The repo's default branch when empty. |
+| `path` | Defaults to the repo name taken from the URL. |
 
 ### Orchestration modes
 
 | Mode | Behavior |
 |------|----------|
-| `single` | One agent, one prompt. Default when `specContent` not set. |
-| `auto` | Senior decomposes. Currently falls back to single-run execution. |
-| `manual` | Up to 7 explicit `orchestration.tasks[]`; each a junior agent. |
-| `spec-driven` | Full Plan/Execute/Verify. Auto-selected when `specContent` set. |
+| `single` | One agent and one prompt. This is the default when `specContent` is empty. |
+| `auto` | A senior agent decomposes the work. This currently falls back to single-run execution. |
+| `manual` | Up to 7 entries in `orchestration.tasks[]`. Each one gets a junior agent. |
+| `spec-driven` | The full Plan, Execute, and Verify pipeline. Setting `specContent` selects it. |
 
-`OrchestrationTask`: `{ name, prompt, repoUrls? }`.
+An `OrchestrationTask` carries `name`, `prompt`, and an optional `repoUrls`.
 
 ### Approval modes
 
-`approvalMode` controls what gates run before flipping to `Succeeded`. Default (empty) is `hybrid`.
+`approvalMode` decides which gates run before a run reaches `Succeeded`. An empty
+value means `hybrid`.
 
 | Mode | LLM judge | Human |
 |------|-----------|-------|
-| `none` | — | — |
-| `llm-judge` | yes | — |
-| `hitl` | — | yes |
-| `hybrid` (default) | yes | yes (after judge) |
+| `none` | no | no |
+| `llm-judge` | yes | no |
+| `hitl` | no | yes |
+| `hybrid`, the default | yes | yes, after the judge |
 
-The judge always uses `deepseek-v3.1` (cheap, dedicated) regardless of the run's model.
+The judge always uses `deepseek-v3.1`, whatever model the run uses. This keeps
+the judge's cost independent of the run's cost.
 
-### PipelineConfig / StageConfig
+### PipelineConfig and StageConfig
 
 ```yaml
 pipelineConfig:
@@ -82,24 +85,26 @@ pipelineConfig:
   verify:  { model, timeoutSeconds, maxRetries, onFailure }
 ```
 
-Stage defaults: model `default-cloud`; timeouts 300 / 900 / 180 s; max retries 2 / 3 / 1; `onFailure` `fail` / `retry` / `fail`. `onFailure` ∈ `{retry, fail, skip}`.
+Every stage defaults to model `default-cloud`. The timeouts are 300, 900, and 180
+seconds. The retry limits are 2, 3, and 1. The `onFailure` defaults are `fail`,
+`retry`, and `fail`. `onFailure` accepts `retry`, `fail`, or `skip`.
 
 ### Status
 
 | Field | Notes |
 |-------|-------|
 | `phase` | See enum below. |
-| `message` | Human-readable status; updated as the workflow progresses. |
+| `message` | Plain-text status. The workflow updates it as it progresses. |
 | `podName`, `deploymentName` | Pod handles. |
 | `traceID` | OpenTelemetry trace id. |
 | `worktreePath` | On-pod worktree path. |
 | `startedAt`, `completedAt`, `retainUntil` | Timestamps. |
-| `logOutput` | Persisted up to 1 MB before pod deletion. |
-| `debugActive` | Debug session live. |
-| `stage` | `planning` / `executing` / `verifying`; empty otherwise. |
-| `retryCount` | Execute/verify retries so far. |
-| `verificationResult` | JSON verdict from Verify; written even for non-spec-driven runs when the LLM judge runs. |
-| `prUrl`, `parentPRUrl` | PR URLs. |
+| `logOutput` | Up to 1 MB of logs, persisted before the pod is deleted. |
+| `debugActive` | True while a debug session is open. |
+| `stage` | One of `planning`, `executing`, or `verifying`. Empty at any other time. |
+| `retryCount` | How many Execute and Verify retries have run. |
+| `verificationResult` | The JSON verdict from Verify. It is written whenever the LLM judge runs, including on runs that are not spec-driven. |
+| `prUrl`, `parentPRUrl` | Pull request URLs. |
 | `archived` | Hidden from default listings when true. |
 | `totalCost`, `totalAdditions`, `totalDeletions` | Aggregates. |
 | `ciFixAttempts`, `lastCIStatus` | CI autofix state. |
@@ -109,14 +114,14 @@ Stage defaults: model `default-cloud`; timeouts 300 / 900 / 180 s; max retries 2
 
 | | |
 |---|---|
-| `Pending` | CRD created, workflow not yet started. |
-| `Running` | Active. Covers everything from pod provisioning through agent + approval gate. |
-| `WaitingForInput` | Paused: HITL question, or final human approval. |
-| `Succeeded` / `Failed` / `Cancelled` | Terminal. |
+| `Pending` | The resource exists and the workflow has not started. |
+| `Running` | Active. This covers pod provisioning, the agent's work, and the approval gate. |
+| `WaitingForInput` | Paused on a question to the human, or on the final approval. |
+| `Succeeded`, `Failed`, `Cancelled` | Terminal states. |
 
-### Labels / annotations
+### Labels and annotations
 
-Auto-set by the API server:
+The API server sets these.
 
 | Key | Value |
 |-----|-------|
@@ -124,44 +129,48 @@ Auto-set by the API server:
 | `aot.uncworks.io/feature` | `spec.feature` |
 | `aot.uncworks.io/repo` | First repo name |
 | `aot.uncworks.io/spec-run-id` | `spec.specRunID` |
-| `aot.uncworks.io/tags` (annotation) | Comma-joined `spec.tags[]` |
-| `aot.uncworks.io/pr-branch`, `ci-fix-sha`, `ci-fix-attempt` (annotations) | CI autofix state |
+| `aot.uncworks.io/tags`, an annotation | `spec.tags[]` joined with commas |
+| `aot.uncworks.io/pr-branch`, `ci-fix-sha`, `ci-fix-attempt`, all annotations | CI autofix state |
 
-`kubectl get agentruns`: Backend, Phase, Age.
+`kubectl get agentruns` prints Backend, Phase, and Age.
 
 ---
 
 ## Project
 
-`aot.dev/v1alpha1` · Kind `Project` · namespaced.
+Group and version `aot.uncworks.io/v1alpha1`. Kind `Project`. Namespaced.
 
 ### Spec
 
 | Field | Notes |
 |-------|-------|
 | `displayName`, `description` | |
-| `repos` | `Repository[]` — inherited via `projectRef`. |
-| `devbox.packages[]` | `go@1.22`, `nodejs@20`, etc. |
-| `defaults` | `ProjectDefaults` (below). Run-level fields override. |
-| `ide` | `IDEConfig` (enable, image, idle timeout). |
-| `ssh` | `SSHConfig` (enable, authorized keys). |
+| `repos` | `Repository[]`, inherited through `projectRef`. |
+| `devbox.packages[]` | Devbox package names, such as `go@1.22` and `nodejs@20`. |
+| `defaults` | A `ProjectDefaults`, described below. A field set on the run wins. |
+| `ide` | An `IDEConfig`, with enable, image, and idle timeout. |
+| `ssh` | An `SSHConfig`, with enable and authorized keys. |
 
-`ProjectDefaults`: `modelTier`, `manageModelTier`, `implementModelTier`, `ttlSeconds`, `orchestrationMode`, `autoPush`, `autoPR`, `prBaseBranch`.
+A `ProjectDefaults` carries `modelTier`, `manageModelTier`, `implementModelTier`,
+`ttlSeconds`, `orchestrationMode`, `autoPush`, `autoPR`, and `prBaseBranch`.
 
 ### Status
 
 | Field | Notes |
 |-------|-------|
-| `configRepoReady` | Soft-serve scaffold complete. |
-| `configRepoURL` | e.g. `ssh://soft-serve:23231/project-<name>`. |
+| `configRepoReady` | True once the soft-serve scaffold is complete. |
+| `configRepoURL` | For example `ssh://soft-serve:23231/project-<name>`. |
 | `ideActive`, `idePodName` | |
 | `runCount`, `lastRunId`, `lastRunAt`, `totalCost` | Aggregates. |
 | `conditions` | |
 
-`kubectl get projects`: DisplayName, Repos, ConfigReady, Age.
+`kubectl get projects` prints DisplayName, Repos, ConfigReady, and Age.
 
 ### Lifecycle
 
-On create: finalizer `project.aot.dev/finalizer`, create soft-serve repo `project-<name>` with OpenSpec scaffolding, set `configRepoReady` + `configRepoURL`.
+On create, the controller adds the `project.aot.dev/finalizer` finalizer, creates
+the soft-serve repo `project-<name>` with the OpenSpec scaffolding, and sets
+`configRepoReady` and `configRepoURL`.
 
-On delete: best-effort soft-serve repo deletion, then remove finalizer.
+On delete, the controller tries to delete the soft-serve repo, then removes the
+finalizer. A failed deletion does not block the delete.

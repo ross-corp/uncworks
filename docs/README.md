@@ -2,20 +2,20 @@
 
 ## Getting started
 
-- [Quick start](getting-started.md) — local cluster + first run
+- [Quick start](getting-started.md). Local cluster and first run.
 
 ## Guides
 
-- [Creating runs](guides/creating-runs.md) — modes, models, approval gates
-- [Spec-driven pipeline](guides/spec-driven.md) — Plan / Execute / Verify
-- [Model configuration](guides/models.md) — LiteLLM, Ollama, OpenRouter
+- [Creating runs](guides/creating-runs.md). Modes, models, and approval gates.
+- [Spec-driven pipeline](guides/spec-driven.md). Plan, Execute, and Verify.
+- [Model configuration](guides/models.md). LiteLLM, Ollama, and OpenRouter.
 
 ## Reference
 
-- [API](reference/api.md) — ConnectRPC + REST
-- [CRDs](reference/crd.md) — `AgentRun`, `Project`
-- [Determinism extension](reference/extension.md) — agent guardrails
-- [Helm values](reference/helm-values.md)
+- [API](reference/api.md). ConnectRPC and REST.
+- [Custom resources](reference/crd.md). `AgentRun` and `Project`.
+- [Determinism extension](reference/extension.md). Agent guardrails.
+- [Helm values](reference/helm-values.md).
 
 ## Architecture
 

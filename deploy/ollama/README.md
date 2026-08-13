@@ -68,4 +68,5 @@ kubectl exec -it deploy/ollama -- ollama run qwen2.5:0.5b "Hello"
 | qwen2.5:0.5b | ~1GB | ~400MB |
 | llama3.1:8b | ~8GB | ~4.7GB |
 
-If resources are limited, skip Ollama — the LiteLLM fallback chain routes to OpenRouter free tier automatically.
+Skip Ollama when the cluster is short on resources. The LiteLLM fallback chain
+routes to the OpenRouter free tier on its own.
