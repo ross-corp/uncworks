@@ -5,6 +5,10 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # A verdict computed on the pull-request SHA was computed against a base the
+  # queue may have moved past, so the required checks are recomputed here on the
+  # commit that actually lands.
+  merge_group:
 
 permissions:
   contents: read
@@ -20,6 +24,33 @@ jobs:
           version: latest
           module: ./ci
           call: all --source .
+
+  gate:
+    name: Factory Gate
+    runs-on: ubuntu-latest
+    # Reporting only until the owner marks factory/tier and factory/citations
+    # required in branch protection. See openspec/changes/factory-gate.
+    continue-on-error: true
+    if: github.event_name != 'push'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The gate diffs the head against the base, so it needs both.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Compute the factory-gate verdicts
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || 'main' }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          go run ./cmd/uncworks gate check \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --branch "$HEAD_BRANCH"
 
   release:
     name: Release Please

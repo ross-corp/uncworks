@@ -49,6 +49,7 @@ Commands:
   config     Show or edit the CLI configuration
   cite       Capture and verify pinned external-factual claims (citations.lock)
   spec       Rubric-lint an OpenSpec change and report what is runnable now
+  gate       Compute the factory-gate verdicts for a pull request
 
 Flags:
   --version  Print the build version and exit
@@ -140,6 +141,8 @@ func main() {
 		err = runCite(args)
 	case "spec":
 		err = runSpec(args)
+	case "gate":
+		err = runGate(args)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, usage)
 	case "-v", "--version", "version":
