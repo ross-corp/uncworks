@@ -24,6 +24,13 @@ import (
 	"time"
 )
 
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+)
+
 // Symbol is a single code symbol returned by a search.
 type Symbol struct {
 	Name    string  `json:"name"`
@@ -271,7 +278,7 @@ func runCudgel(ctx context.Context, bin string, args ...string) (string, error) 
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return strings.TrimSpace(string(out)), fmt.Errorf("exit %d: %s", exitErr.ExitCode(), strings.TrimSpace(string(exitErr.Stderr)))
+			return strings.TrimSpace(string(out)), fmt.Errorf("%w: exit %d: %s", errFailed, exitErr.ExitCode(), strings.TrimSpace(string(exitErr.Stderr)))
 		}
 		if err != nil {
 			return "", fmt.Errorf("cudgel: %w", err)
@@ -307,7 +314,7 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		slog.Info("cudgel-shim starting", "addr", addr, "binary", s.cudgelBin)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server exited", "err", err)
 			os.Exit(1)
 		}

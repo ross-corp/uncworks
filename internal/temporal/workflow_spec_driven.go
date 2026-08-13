@@ -370,7 +370,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 	if podStatusOutput.Reason == "Evicted" {
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Pod was evicted immediately after creation: %s", podStatusOutput.Message)
-		return fmt.Errorf("pod evicted: %s", podStatusOutput.Message)
+		return fmt.Errorf("%w: pod evicted: %s", errFailed, podStatusOutput.Message)
 	}
 
 	// --- Wait for hydration ---
@@ -549,7 +549,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		})
 		state.Phase = "Failed"
 		state.Message = errMsg
-		return fmt.Errorf("%s", errMsg)
+		return fmt.Errorf("%w: %s", errFailed, errMsg)
 	}
 
 	// --- Trace: close PLAN span with success ---
@@ -574,7 +574,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if checkCancel() || state.Phase == "Cancelled" {
-			return fmt.Errorf("cancelled by user")
+			return fmt.Errorf("%w: cancelled by user", errFailed)
 		}
 
 		// --- EXECUTE ---
@@ -660,7 +660,7 @@ func runSpecDrivenPipeline(ctx workflow.Context, input WorkflowInput) error {
 		})
 
 		if state.Phase == "Cancelled" {
-			return fmt.Errorf("cancelled by user")
+			return fmt.Errorf("%w: cancelled by user", errFailed)
 		}
 
 		// --- VERIFY ---
@@ -956,7 +956,7 @@ func postVerifyPushAndPR(ctx workflow.Context, input WorkflowInput, state *Workf
 
 	// Parse owner/repo from the first repo URL
 	if len(input.Repos) == 0 {
-		return fmt.Errorf("no repos configured, cannot create PR")
+		return fmt.Errorf("%w: no repos configured, cannot create PR", errFailed)
 	}
 	owner, repo, err := parseGitHubOwnerRepo(input.Repos[0].URL)
 	if err != nil {
@@ -1046,12 +1046,12 @@ func parseGitHubOwnerRepo(repoURL string) (owner, repo string, err error) {
 		// git@github.com:owner/repo.git
 		parts := strings.SplitN(repoURL, ":", 2)
 		if len(parts) != 2 {
-			return "", "", fmt.Errorf("invalid SSH URL: %s", repoURL)
+			return "", "", fmt.Errorf("%w: invalid SSH URL: %s", errInvalidInput, repoURL)
 		}
 		pathStr := strings.TrimSuffix(parts[1], ".git")
 		segments := strings.SplitN(pathStr, "/", 2)
 		if len(segments) != 2 {
-			return "", "", fmt.Errorf("cannot parse owner/repo from SSH URL: %s", repoURL)
+			return "", "", fmt.Errorf("%w: cannot parse owner/repo from SSH URL: %s", errFailed, repoURL)
 		}
 		return segments[0], segments[1], nil
 	}
@@ -1065,7 +1065,7 @@ func parseGitHubOwnerRepo(repoURL string) (owner, repo string, err error) {
 	pathStr = strings.TrimPrefix(pathStr, "/")
 	segments := strings.SplitN(pathStr, "/", 3)
 	if len(segments) < 2 {
-		return "", "", fmt.Errorf("cannot parse owner/repo from URL path: %s", u.Path)
+		return "", "", fmt.Errorf("%w: cannot parse owner/repo from URL path: %s", errFailed, u.Path)
 	}
 	return segments[0], segments[1], nil
 }

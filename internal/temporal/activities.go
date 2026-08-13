@@ -4,6 +4,7 @@ package temporal
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -31,6 +32,17 @@ import (
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 	aotgithub "github.com/uncworks/aot/internal/github"
 	"github.com/uncworks/aot/internal/litellm"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = stderrors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = stderrors.New("invalid input")
+	// errNotFound reports that a named thing is absent.
+	errNotFound = stderrors.New("not found")
 )
 
 const sidecarPort = 50052
@@ -130,7 +142,8 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 						slog.Info("hydration complete", "agentRun", input.AgentRunName, "podIP", pod.Status.PodIP, "pod", pod.Name)
 						return &WaitForHydrationOutput{PodIP: pod.Status.PodIP, PodName: pod.Name}, nil
 					}
-					return nil, fmt.Errorf("hydration failed with exit code %d: %s",
+					return nil, fmt.Errorf("%w: hydration failed with exit code %d: %s",
+						errFailed,
 						initStatus.State.Terminated.ExitCode,
 						initStatus.State.Terminated.Message)
 				}
@@ -151,7 +164,7 @@ func (a *Activities) WaitForHydration(ctx context.Context, input WaitForHydratio
 					"eviction",
 				)
 			}
-			return nil, fmt.Errorf("pod failed before hydration completed: %s", pod.Status.Message)
+			return nil, fmt.Errorf("%w: pod failed before hydration completed: %s", errFailed, pod.Status.Message)
 		}
 
 		// Log debug message every 10 iterations (~20 seconds)
@@ -218,7 +231,7 @@ func (a *Activities) StartAgent(ctx context.Context, input StartAgentInput) erro
 		}))
 		if err == nil {
 			if !resp.Msg.Started {
-				return fmt.Errorf("agent did not start: %s", resp.Msg.Error)
+				return fmt.Errorf("%w: agent did not start: %s", errFailed, resp.Msg.Error)
 			}
 			return nil
 		}
@@ -643,7 +656,7 @@ func (a *Activities) findPod(ctx context.Context, namespace, agentRunName, podNa
 		if len(podList.Items) > 0 {
 			return &podList.Items[0], nil
 		}
-		return nil, fmt.Errorf("no pod found with label aot.uncworks.io/agentrun=%s", agentRunName)
+		return nil, fmt.Errorf("%w: no pod found with label aot.uncworks.io/agentrun=%s", errFailed, agentRunName)
 	}
 	// Fallback: direct pod name lookup (deprecated bare-pod path)
 	var pod corev1.Pod
@@ -798,7 +811,7 @@ type ScaleDownDeploymentInput struct {
 func (a *Activities) ScaleDownDeployment(ctx context.Context, input ScaleDownDeploymentInput) error {
 	if !strings.HasPrefix(input.DeploymentName, "agentrun-") {
 		slog.Warn("ScaleDownDeployment: refusing to scale down non-agent deployment", "deployment", input.DeploymentName)
-		return fmt.Errorf("safety check: deployment %q does not have agentrun- prefix", input.DeploymentName)
+		return fmt.Errorf("%w: safety check: deployment %q does not have agentrun- prefix", errFailed, input.DeploymentName)
 	}
 	var deployment appsv1.Deployment
 	if err := a.K8sClient.Get(ctx, client.ObjectKey{
@@ -920,11 +933,11 @@ type ArchiveAndCleanupInput struct {
 func (a *Activities) ArchiveAndCleanup(ctx context.Context, input ArchiveAndCleanupInput) error {
 	if !strings.HasPrefix(input.DeploymentName, "agentrun-") {
 		slog.Warn("ArchiveAndCleanup: refusing to delete non-agent deployment", "deployment", input.DeploymentName)
-		return fmt.Errorf("safety check: deployment %q does not have agentrun- prefix", input.DeploymentName)
+		return fmt.Errorf("%w: safety check: deployment %q does not have agentrun- prefix", errFailed, input.DeploymentName)
 	}
 	if input.PVCName != "" && !strings.HasPrefix(input.PVCName, "aot-ws-") {
 		slog.Warn("ArchiveAndCleanup: refusing to delete non-agent PVC", "pvc", input.PVCName)
-		return fmt.Errorf("safety check: PVC %q does not have aot-ws- prefix", input.PVCName)
+		return fmt.Errorf("%w: safety check: PVC %q does not have aot-ws- prefix", errFailed, input.PVCName)
 	}
 	slog.Info("cleanup started", "agentRunName", input.DeploymentName, "deploymentName", input.DeploymentName)
 

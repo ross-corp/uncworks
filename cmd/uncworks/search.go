@@ -45,7 +45,7 @@ Flags:`)
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
-		return fmt.Errorf("search query argument required")
+		return fmt.Errorf("%w: search query argument required", errInvalidInput)
 	}
 	query := fs.Arg(0)
 
@@ -79,14 +79,14 @@ Flags:`)
 		case "all":
 			searchReq.SourceFilter = apiv1.SourceFilter_SOURCE_FILTER_ALL
 		default:
-			return fmt.Errorf("--source %q: must be code, trace, source-code, or all", *source)
+			return fmt.Errorf("%w: --source %q: must be code, trace, source-code, or all", errInvalidInput, *source)
 		}
 	}
 
 	req := connect.NewRequest(searchReq)
 	resp, err := client.SearchPastWork(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	results := resp.Msg.GetResults()

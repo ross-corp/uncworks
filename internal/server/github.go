@@ -30,7 +30,7 @@ func NewGitHubClient(provider aotgithub.TokenProvider) *GitHubClient {
 // getToken retrieves the current token from the provider.
 func (g *GitHubClient) getToken(ctx context.Context) (string, error) {
 	if g.provider == nil {
-		return "", fmt.Errorf("GITHUB_TOKEN not configured")
+		return "", fmt.Errorf("%w: GITHUB_TOKEN not configured", errNotFound)
 	}
 	token, err := g.provider.Token(ctx)
 	if err != nil {
@@ -241,7 +241,7 @@ func setAuthHeaders(req *http.Request, token string) {
 func splitRepo(fullRepo string) (string, string, error) {
 	parts := strings.SplitN(fullRepo, "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("repo must be in owner/repo format, got %q", fullRepo)
+		return "", "", fmt.Errorf("%w: repo must be in owner/repo format, got %q", errInvalidInput, fullRepo)
 	}
 	return parts[0], parts[1], nil
 }

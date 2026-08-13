@@ -61,7 +61,7 @@ func ActiveContext() (KubeContext, error) {
 			return ctx, nil
 		}
 	}
-	return KubeContext{}, fmt.Errorf("no active kubeconfig context found")
+	return KubeContext{}, fmt.Errorf("%w: no active kubeconfig context found", errFailed)
 }
 
 // clusterResources holds allocatable CPU (millicores) and memory (bytes) for a cluster.

@@ -133,7 +133,7 @@ type chatCompletionResponse struct {
 // callChatCompletion sends a single chat completion request to the LiteLLM proxy.
 func callChatCompletion(ctx context.Context, baseURL, apiKey, model, prompt string) (*llmJudgeVerdict, error) {
 	if baseURL == "" {
-		return nil, fmt.Errorf("LiteLLM base URL not configured")
+		return nil, fmt.Errorf("%w: LiteLLM base URL not configured", errNotFound)
 	}
 
 	reqBody, err := json.Marshal(chatCompletionRequest{
@@ -165,7 +165,7 @@ func callChatCompletion(ctx context.Context, baseURL, apiKey, model, prompt stri
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("chat completion returned %d: %s", resp.StatusCode, truncate(string(body), 200))
+		return nil, fmt.Errorf("%w: chat completion returned %d: %s", errFailed, resp.StatusCode, truncate(string(body), 200))
 	}
 
 	var completion chatCompletionResponse
@@ -173,7 +173,7 @@ func callChatCompletion(ctx context.Context, baseURL, apiKey, model, prompt stri
 		return nil, fmt.Errorf("failed to parse completion response: %w", err)
 	}
 	if len(completion.Choices) == 0 {
-		return nil, fmt.Errorf("no choices in completion response")
+		return nil, fmt.Errorf("%w: no choices in completion response", errFailed)
 	}
 
 	content := strings.TrimSpace(completion.Choices[0].Message.Content)

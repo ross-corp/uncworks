@@ -2,9 +2,19 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errNotFound reports that a named thing is absent.
+	errNotFound = errors.New("not found")
 )
 
 // AppProvider mints installation tokens from a GitHub App private key.
@@ -27,5 +37,5 @@ func (a *AppProvider) Token(_ context.Context) (string, error) {
 		return a.cached, nil
 	}
 	// TODO: JWT -> installation token exchange
-	return "", fmt.Errorf("GitHub App token provider not yet implemented (appID=%d)", a.AppID)
+	return "", fmt.Errorf("%w: GitHub App token provider not yet implemented (appID=%d)", errFailed, a.AppID)
 }

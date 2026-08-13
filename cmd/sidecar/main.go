@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -94,7 +95,7 @@ func main() {
 	gw := sidecar.NewGateway(port)
 
 	go func() {
-		if err := gw.Start(); err != nil && err != http.ErrServerClosed {
+		if err := gw.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("gateway failed", "err", err)
 			os.Exit(1)
 		}

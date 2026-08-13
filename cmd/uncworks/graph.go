@@ -30,7 +30,7 @@ func runGraph(args []string) error {
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+		return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 	}
 	id := fs.Arg(0)
 
@@ -45,7 +45,7 @@ func runGraph(args []string) error {
 		req := connect.NewRequest(&apiv1.GetRunGraphRequest{Id: id})
 		resp, err := client.GetRunGraph(context.Background(), req)
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 
 		if *jsonOut {

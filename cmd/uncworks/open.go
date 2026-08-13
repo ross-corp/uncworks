@@ -120,7 +120,7 @@ func openBrowser(url string) error {
 	case "windows":
 		cmd = exec.CommandContext(gocontext.Background(), "start", url)
 	default:
-		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+		return fmt.Errorf("%w: unsupported OS: %s", errInvalidInput, runtime.GOOS)
 	}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("open browser: %w", err)

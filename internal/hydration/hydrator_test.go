@@ -155,7 +155,7 @@ func TestHydrator_DefaultBranchFromHEAD(t *testing.T) {
 
 func TestHydrator_CloneFailure(t *testing.T) {
 	runner := NewMockRunner()
-	runner.On("git", MockResult{Err: fmt.Errorf("clone failed")})
+	runner.On("git", MockResult{Err: fmt.Errorf("%w: clone failed", errFailed)})
 
 	config := &Config{
 		Repos:        []RepoConfig{{URL: "https://github.com/example/repo.git", Branch: "main"}},
@@ -834,7 +834,7 @@ func TestHydrator_CloneRepo_WithoutToken(t *testing.T) {
 
 func TestHydrator_ComposeDevbox_InstallFailure(t *testing.T) {
 	runner := NewMockRunner()
-	runner.On("devbox", MockResult{Err: fmt.Errorf("devbox install failed")})
+	runner.On("devbox", MockResult{Err: fmt.Errorf("%w: devbox install failed", errFailed)})
 	tmpDir := t.TempDir()
 
 	dir := filepath.Join(tmpDir, "repo1")
@@ -1076,7 +1076,7 @@ func TestSeedCodebaseContext_WorkerAgentUsesK10(t *testing.T) {
 
 func TestSeedCodebaseContext_GracefulDegradation(t *testing.T) {
 	t.Setenv("CUDGEL_ENDPOINT", "http://cudgel:8080")
-	mc := &mockCudgelClient{err: fmt.Errorf("connection refused")}
+	mc := &mockCudgelClient{err: fmt.Errorf("%w: connection refused", errInvalidInput)}
 	h, workspace := newHydratorWithCudgel(t, mc)
 
 	// Should not return an error

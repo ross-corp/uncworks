@@ -4,6 +4,7 @@ package brain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -311,8 +312,8 @@ func (s *Store) GetState(ctx context.Context, agentRunID string) (*AgentState, e
 		&state.Prompt, &state.RepoURL, &state.Branch, &state.TraceID,
 		&state.CreatedAt, &state.UpdatedAt, &state.CompletedAt,
 	)
-	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("agent state not found: %s", agentRunID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: agent state not found: %s", errNotFound, agentRunID)
 	}
 	if err != nil {
 		return state, fmt.Errorf("get state: %w", err)
@@ -329,7 +330,7 @@ func (s *Store) UpdatePhase(ctx context.Context, agentRunID, phase, message stri
 		return fmt.Errorf("update phase: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("agent state not found: %s", agentRunID)
+		return fmt.Errorf("%w: agent state not found: %s", errNotFound, agentRunID)
 	}
 	return nil
 }
@@ -561,7 +562,7 @@ func (s *Store) GetRunSpans(ctx context.Context, agentRunID string) ([]TraceSpan
 // SaveCodeChunks batch-inserts embedded code chunks into pgvector atomically.
 func (s *Store) SaveCodeChunks(ctx context.Context, chunks []CodeChunkRecord) error {
 	if !s.pgvectorReady {
-		return fmt.Errorf("pgvector not available")
+		return fmt.Errorf("%w: pgvector not available", errFailed)
 	}
 	if len(chunks) == 0 {
 		return nil
@@ -592,7 +593,7 @@ func (s *Store) SaveCodeChunks(ctx context.Context, chunks []CodeChunkRecord) er
 // SaveTraceChunks batch-inserts embedded trace chunks into pgvector atomically.
 func (s *Store) SaveTraceChunks(ctx context.Context, chunks []TraceChunkRecord) error {
 	if !s.pgvectorReady {
-		return fmt.Errorf("pgvector not available")
+		return fmt.Errorf("%w: pgvector not available", errFailed)
 	}
 	if len(chunks) == 0 {
 		return nil
@@ -625,7 +626,7 @@ func (s *Store) SaveTraceChunks(ctx context.Context, chunks []TraceChunkRecord) 
 // SearchCodeChunks performs a cosine similarity search on code_chunks.
 func (s *Store) SearchCodeChunks(ctx context.Context, queryVec []float32, repoURL string, limit int, createdAfter, createdBefore *time.Time) ([]CodeChunkResult, error) {
 	if !s.pgvectorReady {
-		return nil, fmt.Errorf("pgvector not available")
+		return nil, fmt.Errorf("%w: pgvector not available", errFailed)
 	}
 	if limit <= 0 {
 		limit = 10
@@ -684,7 +685,7 @@ func (s *Store) SearchCodeChunks(ctx context.Context, queryVec []float32, repoUR
 // SearchTraceChunks performs a cosine similarity search on trace_chunks.
 func (s *Store) SearchTraceChunks(ctx context.Context, queryVec []float32, repoURL string, limit int, createdAfter, createdBefore *time.Time) ([]TraceChunkResult, error) {
 	if !s.pgvectorReady {
-		return nil, fmt.Errorf("pgvector not available")
+		return nil, fmt.Errorf("%w: pgvector not available", errFailed)
 	}
 	if limit <= 0 {
 		limit = 10

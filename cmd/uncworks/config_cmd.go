@@ -22,7 +22,7 @@ func runConfig(args []string) error {
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
-		return fmt.Errorf("subcommand required")
+		return fmt.Errorf("%w: subcommand required", errInvalidInput)
 	}
 	switch fs.Arg(0) {
 	case "show":
@@ -55,7 +55,7 @@ func runConfig(args []string) error {
 	default:
 		_, _ = fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n", fs.Arg(0))
 		fs.Usage()
-		return fmt.Errorf("unknown subcommand %q", fs.Arg(0))
+		return fmt.Errorf("%w: unknown subcommand %q", errInvalidInput, fs.Arg(0))
 	}
 }
 
@@ -70,7 +70,7 @@ func runConfigSetServer(args []string) error {
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("address argument required")
+		return fmt.Errorf("%w: address argument required", errInvalidInput)
 	}
 	addr := fs.Arg(0)
 	if addr == "local" {
@@ -104,7 +104,7 @@ func runConfigSetWebURL(args []string) error {
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("URL argument required")
+		return fmt.Errorf("%w: URL argument required", errInvalidInput)
 	}
 	url := fs.Arg(0)
 	cfg, err := loadConfig()
@@ -131,7 +131,7 @@ func runConfigSetModel(args []string) error {
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("model tier argument required")
+		return fmt.Errorf("%w: model tier argument required", errInvalidInput)
 	}
 	tier := fs.Arg(0)
 	if tier == "default" || tier == "none" {
@@ -165,7 +165,7 @@ func runConfigSetStringField(args []string, cmd, field string, setter func(*Conf
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("value argument required")
+		return fmt.Errorf("%w: value argument required", errInvalidInput)
 	}
 	val := fs.Arg(0)
 	if val == "none" || val == "default" {
@@ -199,7 +199,7 @@ func runConfigSetAutoPush(args []string) error {
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("value argument required (true or false)")
+		return fmt.Errorf("%w: value argument required (true or false)", errInvalidInput)
 	}
 	cfg, err := loadConfig()
 	if err != nil {
@@ -211,7 +211,7 @@ func runConfigSetAutoPush(args []string) error {
 	case "false", "no", "0", "off":
 		cfg.DefaultAutoPush = false
 	default:
-		return fmt.Errorf("invalid value %q: must be true or false", fs.Arg(0))
+		return fmt.Errorf("%w: invalid value %q: must be true or false", errInvalidInput, fs.Arg(0))
 	}
 	if err := saveConfig(cfg); err != nil {
 		return err
@@ -232,7 +232,7 @@ func runConfigUnset(args []string) error {
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("field argument required")
+		return fmt.Errorf("%w: field argument required", errInvalidInput)
 	}
 	cfg, err := loadConfig()
 	if err != nil {
@@ -253,7 +253,7 @@ func runConfigUnset(args []string) error {
 	case "auto-push", "default-auto-push":
 		cfg.DefaultAutoPush = false
 	default:
-		return fmt.Errorf("unknown field %q: must be server, web-url, model, project, feature, or auto-push", field)
+		return fmt.Errorf("%w: unknown field %q: must be server, web-url, model, project, feature, or auto-push", errInvalidInput, field)
 	}
 	if err := saveConfig(cfg); err != nil {
 		return err

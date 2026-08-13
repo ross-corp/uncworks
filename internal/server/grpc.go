@@ -63,7 +63,7 @@ var runIDPattern = regexp.MustCompile(`^ar-[a-z0-9]{4,10}$`)
 
 func validateRunID(id string) error {
 	if !runIDPattern.MatchString(id) {
-		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid run ID format: %q", id))
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: invalid run ID format: %q", errInvalidInput, id))
 	}
 	return nil
 }
@@ -162,7 +162,7 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		if ip != "" && !s.createAgentRunRateLimiter.Allow(ip) {
 			slog.Warn("CreateAgentRun rate limit exceeded", "ip", ip)
 			return nil, connect.NewError(connect.CodeResourceExhausted,
-				fmt.Errorf("rate limit exceeded for CreateAgentRun"))
+				fmt.Errorf("%w: rate limit exceeded for CreateAgentRun", errUnavailable))
 		}
 	}
 
@@ -173,18 +173,19 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		} else if active >= s.maxConcurrentRuns {
 			slog.Warn("CreateAgentRun: concurrent run limit reached", "active", active, "max", s.maxConcurrentRuns)
 			return nil, connect.NewError(connect.CodeResourceExhausted,
-				fmt.Errorf("concurrent run limit reached (%d/%d active); try again later", active, s.maxConcurrentRuns))
+				fmt.Errorf("%w: concurrent run limit reached (%d/%d active), try again later",
+					errUnavailable, active, s.maxConcurrentRuns))
 		}
 	}
 
 	if req.Msg.Spec == nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("spec is required"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: spec is required", errInvalidInput))
 	}
 	if req.Msg.Spec.Prompt == "" && req.Msg.Spec.SpecContent == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("prompt is required"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: prompt is required", errInvalidInput))
 	}
 	if len(req.Msg.Spec.Prompt) > 32*1024 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("prompt exceeds 32KB limit"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: prompt exceeds 32KB limit", errInvalidInput))
 	}
 
 	// Validate model_tier
@@ -212,7 +213,7 @@ func (s *AOTServiceHandler) CreateAgentRun(ctx context.Context, req *connect.Req
 		"qwen3-coder-free":  true,
 	}
 	if !validTiers[req.Msg.Spec.ModelTier] {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown model_tier %q", req.Msg.Spec.ModelTier))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: unknown model_tier %q", errInvalidInput, req.Msg.Spec.ModelTier))
 	}
 
 	name, err := generateRunName()
@@ -284,7 +285,7 @@ func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Reques
 		Namespace: s.Namespace,
 		Name:      req.Msg.Id,
 	}, crd); err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("%w: agent run %q not found", errNotFound, req.Msg.Id))
 	}
 
 	run := crdToProto(crd)
@@ -334,20 +335,20 @@ func (s *AOTServiceHandler) GetAgentRun(ctx context.Context, req *connect.Reques
 func (s *AOTServiceHandler) ListAgentRuns(ctx context.Context, req *connect.Request[apiv1.ListAgentRunsRequest]) (*connect.Response[apiv1.ListAgentRunsResponse], error) {
 	// Validate Limit: must be between 0 and 100
 	if req.Msg.Limit > 100 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit must be between 0 and 100, got %d", req.Msg.Limit))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: limit must be between 0 and 100, got %d", errInvalidInput, req.Msg.Limit))
 	}
 
 	// Validate TagFilter: max 64 characters
 	if len(req.Msg.TagFilter) > 64 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("tag_filter must be at most 64 characters, got %d", len(req.Msg.TagFilter)))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: tag_filter must be at most 64 characters, got %d", errInvalidInput, len(req.Msg.TagFilter)))
 	}
 
 	// Validate FeatureFilter and ProjectFilter: max 128 characters each
 	if len(req.Msg.FeatureFilter) > 128 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("feature_filter must be at most 128 characters, got %d", len(req.Msg.FeatureFilter)))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: feature_filter must be at most 128 characters, got %d", errInvalidInput, len(req.Msg.FeatureFilter)))
 	}
 	if len(req.Msg.ProjectFilter) > 128 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("project_filter must be at most 128 characters, got %d", len(req.Msg.ProjectFilter)))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: project_filter must be at most 128 characters, got %d", errInvalidInput, len(req.Msg.ProjectFilter)))
 	}
 
 	if req.Msg.ParentRunId != "" {
@@ -476,7 +477,7 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 		Namespace: s.Namespace,
 		Name:      req.Msg.Id,
 	}, crd); err != nil {
-		return connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
+		return connect.NewError(connect.CodeNotFound, fmt.Errorf("%w: agent run %q not found", errNotFound, req.Msg.Id))
 	}
 
 	run := crdToProto(crd)
@@ -498,7 +499,7 @@ func (s *AOTServiceHandler) WatchAgentRun(ctx context.Context, req *connect.Requ
 
 	// Subscribe to event bus
 	if s.EventBus == nil {
-		return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("event streaming not configured"))
+		return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("%w: event streaming not configured", errNotFound))
 	}
 	ch, subID := s.EventBus.Subscribe(req.Msg.Id)
 	defer s.EventBus.Unsubscribe(req.Msg.Id, subID)
@@ -526,7 +527,7 @@ func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Req
 	if s.cancelAgentRunRateLimiter != nil {
 		ip := stripPort(req.Peer().Addr)
 		if ip != "" && !s.cancelAgentRunRateLimiter.Allow(ip) {
-			return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("rate limit exceeded"))
+			return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("%w: rate limit exceeded", errFailed))
 		}
 	}
 
@@ -538,7 +539,7 @@ func (s *AOTServiceHandler) CancelAgentRun(ctx context.Context, req *connect.Req
 		Namespace: s.Namespace,
 		Name:      req.Msg.Id,
 	}, crd); err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("%w: agent run %q not found", errNotFound, req.Msg.Id))
 	}
 
 	// Cancel via Temporal workflow
@@ -571,7 +572,7 @@ func (s *AOTServiceHandler) GetRunGraph(ctx context.Context, req *connect.Reques
 		Namespace: s.Namespace,
 		Name:      req.Msg.Id,
 	}, rootCRD); err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.Id))
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("%w: agent run %q not found", errNotFound, req.Msg.Id))
 	}
 
 	// Determine the spec-run-id to query
@@ -637,15 +638,15 @@ func (s *AOTServiceHandler) SendHumanInput(ctx context.Context, req *connect.Req
 		Namespace: s.Namespace,
 		Name:      req.Msg.AgentRunId,
 	}, crd); err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("agent run %q not found", req.Msg.AgentRunId))
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("%w: agent run %q not found", errNotFound, req.Msg.AgentRunId))
 	}
 
 	if crd.Status.Phase != aotv1alpha1.AgentRunPhaseWaitingForInput {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("agent is not waiting for input"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%w: agent is not waiting for input", errFailed))
 	}
 
 	if s.TemporalClient == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("temporal not configured"))
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("%w: temporal not configured", errNotFound))
 	}
 
 	workflowID := fmt.Sprintf("agentrun-%s", req.Msg.AgentRunId)
@@ -660,7 +661,7 @@ func (s *AOTServiceHandler) SendHumanInput(ctx context.Context, req *connect.Req
 // SearchPastWork searches the knowledge base for relevant past work using natural language.
 func (s *AOTServiceHandler) SearchPastWork(ctx context.Context, req *connect.Request[apiv1.SearchPastWorkRequest]) (*connect.Response[apiv1.SearchPastWorkResponse], error) {
 	if req.Msg.Query == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query is required"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: query is required", errInvalidInput))
 	}
 
 	// Build limit before branching — both paths use it.
@@ -679,7 +680,7 @@ func (s *AOTServiceHandler) SearchPastWork(ctx context.Context, req *connect.Req
 	}
 
 	if s.BrainSearcher == nil || s.Embedder == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("knowledge system not configured"))
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("%w: knowledge system not configured", errNotFound))
 	}
 
 	// Embed the query

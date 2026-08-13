@@ -250,7 +250,7 @@ func (wh *WebhookHandler) fetchFileContent(ctx context.Context, repo, path, sha 
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("github api returned %d", resp.StatusCode)
+		return "", fmt.Errorf("%w: github api returned %d", errFailed, resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)

@@ -148,7 +148,7 @@ Return JSON only, no explanation:
 // callLiteLLM calls the LiteLLM chat completion endpoint and parses a classifyResponse.
 func (h *ClassifyRunHandler) callLiteLLM(ctx context.Context, prompt string) (*classifyResponse, error) {
 	if h.LiteLLMBaseURL == "" {
-		return nil, fmt.Errorf("LITELLM_BASE_URL not configured")
+		return nil, fmt.Errorf("%w: LITELLM_BASE_URL not configured", errNotFound)
 	}
 
 	reqBody := map[string]interface{}{
@@ -187,7 +187,7 @@ func (h *ClassifyRunHandler) callLiteLLM(ctx context.Context, prompt string) (*c
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, fmt.Errorf("LLM returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("%w: LLM returned status %d: %s", errFailed, resp.StatusCode, string(body))
 	}
 
 	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 8192))
@@ -207,7 +207,7 @@ func (h *ClassifyRunHandler) callLiteLLM(ctx context.Context, prompt string) (*c
 		return nil, fmt.Errorf("parse LLM response: %w", err)
 	}
 	if len(llmResp.Choices) == 0 {
-		return nil, fmt.Errorf("LLM returned no choices")
+		return nil, fmt.Errorf("%w: LLM returned no choices", errFailed)
 	}
 
 	content := strings.TrimSpace(llmResp.Choices[0].Message.Content)

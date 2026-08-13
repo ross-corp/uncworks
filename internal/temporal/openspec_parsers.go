@@ -12,7 +12,7 @@ import (
 func parseOpenSpecJSON(raw string) (json.RawMessage, error) {
 	idx := strings.Index(raw, "{")
 	if idx < 0 {
-		return nil, fmt.Errorf("no JSON found in output: %q", truncate(raw, 200))
+		return nil, fmt.Errorf("%w: no JSON found in output: %q", errFailed, truncate(raw, 200))
 	}
 	jsonStr := raw[idx:]
 	// Validate it's actual JSON

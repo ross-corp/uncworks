@@ -5,6 +5,7 @@ package hydration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -17,6 +18,17 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/uncworks/aot/internal/cudgel"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
+	// errNotFound reports that a named thing is absent.
+	errNotFound = errors.New("not found")
 )
 
 // RepoConfig describes a single repository to hydrate.
@@ -132,13 +144,13 @@ func validateRepoPath(path string) error {
 		return nil // empty means "derive from URL"
 	}
 	if filepath.IsAbs(path) {
-		return fmt.Errorf("repository path must be relative, got %q", path)
+		return fmt.Errorf("%w: repository path must be relative, got %q", errInvalidInput, path)
 	}
 	if strings.Contains(path, "..") {
-		return fmt.Errorf("path traversal not allowed in repository path %q", path)
+		return fmt.Errorf("%w: path traversal not allowed in repository path %q", errInvalidInput, path)
 	}
 	if clean := filepath.Clean(path); strings.HasPrefix(clean, "..") {
-		return fmt.Errorf("repository path would escape workspace: %q", path)
+		return fmt.Errorf("%w: repository path would escape workspace: %q", errInvalidInput, path)
 	}
 	return nil
 }
@@ -499,7 +511,7 @@ func (h *Hydrator) setupDevbox(ctx context.Context) error {
 	devboxPath := filepath.Join(worktreeDir, h.config.DevboxConfig)
 	if _, err := os.Stat(devboxPath); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("devbox config not found: %s", devboxPath)
+			return fmt.Errorf("%w: devbox config not found: %s", errNotFound, devboxPath)
 		}
 		return fmt.Errorf("check devbox config: %w", err)
 	}

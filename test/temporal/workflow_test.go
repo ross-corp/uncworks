@@ -6,6 +6,7 @@ package temporal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -15,6 +16,17 @@ import (
 	"go.temporal.io/sdk/testsuite"
 
 	aottemporal "github.com/uncworks/aot/internal/temporal"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
+	// errUnavailable reports that a dependency did not answer.
+	errUnavailable = errors.New("unavailable")
 )
 
 func defaultInput() aottemporal.WorkflowInput {
@@ -182,7 +194,7 @@ func TestWorkflow_CompensationOnFailure(t *testing.T) {
 		&aottemporal.WaitForHydrationOutput{PodIP: "10.244.0.5", WorkspacePath: "/workspace"}, nil,
 	)
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(
-		fmt.Errorf("agent process failed to start"),
+		fmt.Errorf("%w: agent process failed to start", errFailed),
 	)
 	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -239,7 +251,7 @@ func TestWorkflow_ConsecutiveStatusErrors(t *testing.T) {
 	env.OnActivity((*aottemporal.Activities).StartAgent, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	// GetAgentStatus always fails (all retries exhausted)
 	env.OnActivity((*aottemporal.Activities).GetAgentStatus, mock.Anything, mock.Anything, mock.Anything).Return(
-		nil, fmt.Errorf("connection refused"),
+		nil, fmt.Errorf("%w: connection refused", errInvalidInput),
 	)
 	env.OnActivity((*aottemporal.Activities).ScaleDownDeployment, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -276,7 +288,7 @@ func TestWorkflow_TransientStatusError(t *testing.T) {
 			callCount++
 			// Fail first 3 polls, then succeed with completed
 			if callCount <= 3 {
-				return nil, fmt.Errorf("transient network error")
+				return nil, fmt.Errorf("%w: transient network error", errUnavailable)
 			}
 			return &aottemporal.GetAgentStatusOutput{State: "AGENT_PROCESS_STATE_COMPLETED"}, nil
 		},

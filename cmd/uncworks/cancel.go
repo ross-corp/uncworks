@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -10,6 +11,19 @@ import (
 	"connectrpc.com/connect"
 
 	apiv1 "github.com/uncworks/aot/gen/go/api/v1"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
+	// errNotFound reports that a named thing is absent.
+	errNotFound = errors.New("not found")
+	// errUnavailable reports that a dependency did not answer.
+	errUnavailable = errors.New("unavailable")
 )
 
 func runCancel(args []string) error {
@@ -37,13 +51,13 @@ func runCancel(args []string) error {
 			PhaseFilter: apiv1.AgentRunPhase_AGENT_RUN_PHASE_RUNNING,
 		}))
 		if listErr != nil {
-			return fmt.Errorf("%s", humanizeErr(listErr))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(listErr))
 		}
 		if len(resp.Msg.GetAgentRuns()) == 0 {
 			// Fall back to any active run.
 			resp2, listErr2 := client.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 			if listErr2 != nil || len(resp2.Msg.GetAgentRuns()) == 0 {
-				return fmt.Errorf("no active runs found to cancel")
+				return fmt.Errorf("%w: no active runs found to cancel", errFailed)
 			}
 			ids = []string{resp2.Msg.GetAgentRuns()[0].GetId()}
 		} else {
@@ -53,7 +67,7 @@ func runCancel(args []string) error {
 
 	if len(ids) == 0 {
 		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+		return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 	}
 
 	var errs []string
@@ -70,7 +84,7 @@ func runCancel(args []string) error {
 		for _, e := range errs {
 			_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", e)
 		}
-		return fmt.Errorf("%d cancellation(s) failed", len(errs))
+		return fmt.Errorf("%w: %d cancellation(s) failed", errFailed, len(errs))
 	}
 	return nil
 }

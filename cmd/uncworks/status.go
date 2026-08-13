@@ -37,7 +37,7 @@ func runStatus(args []string) error {
 		return fmt.Errorf("status: %w", err)
 	}
 	if *output != "" && *output != "json" {
-		return fmt.Errorf("unsupported output format %q: use 'json'", *output)
+		return fmt.Errorf("%w: unsupported output format %q: use 'json'", errInvalidInput, *output)
 	}
 	if err := checkPrereqs(); err != nil {
 		return err
@@ -86,7 +86,7 @@ func runStatus(args []string) error {
 		} else {
 			fmt.Printf("No pods found in namespace %q. Is UNCWORKS installed? Run 'uncworks setup'.\n", *namespace)
 		}
-		return fmt.Errorf("%s", msg)
+		return fmt.Errorf("%w: %s", errFailed, msg)
 	}
 
 	// Collect summarised statuses.
@@ -182,10 +182,10 @@ func runStatus(args []string) error {
 	}
 
 	if !allReady {
-		return fmt.Errorf("one or more pods are not ready")
+		return fmt.Errorf("%w: one or more pods are not ready", errUnavailable)
 	}
 	if !apiOK {
-		return fmt.Errorf("API server unreachable: %s", apiMsg)
+		return fmt.Errorf("%w: API server unreachable: %s", errUnavailable, apiMsg)
 	}
 	return nil
 }

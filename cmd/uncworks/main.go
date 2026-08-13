@@ -106,14 +106,14 @@ func main() {
 	case "approve":
 		// Shortcut: uncworks approve <run-id> → sends "approve" as human input
 		if len(args) == 0 {
-			err = fmt.Errorf("usage: uncworks approve <run-id>")
+			err = fmt.Errorf("%w: usage: uncworks approve <run-id>", errInvalidInput)
 		} else {
 			err = runInput(append([]string{args[0], "approve"}, args[1:]...))
 		}
 	case "reject":
 		// Shortcut: uncworks reject <run-id> [reason] → sends "reject: <reason>" as human input
 		if len(args) == 0 {
-			err = fmt.Errorf("usage: uncworks reject <run-id> [reason]")
+			err = fmt.Errorf("%w: usage: uncworks reject <run-id> [reason]", errInvalidInput)
 		} else {
 			reason := "rejected"
 			if len(args) > 1 {

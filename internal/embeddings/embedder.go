@@ -6,11 +6,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
 )
 
 const (
@@ -91,7 +101,7 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("embed request failed (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("%w: embed request failed (status %d): %s", errFailed, resp.StatusCode, string(body))
 	}
 
 	var embedResp embedResponse
@@ -100,12 +110,12 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	}
 
 	if len(embedResp.Embeddings) == 0 {
-		return nil, fmt.Errorf("no embeddings returned")
+		return nil, fmt.Errorf("%w: no embeddings returned", errFailed)
 	}
 
 	raw := embedResp.Embeddings[0]
 	if len(raw) != EmbeddingDim {
-		return nil, fmt.Errorf("unexpected embedding dimension: got %d, want %d", len(raw), EmbeddingDim)
+		return nil, fmt.Errorf("%w: unexpected embedding dimension: got %d, want %d", errInvalidInput, len(raw), EmbeddingDim)
 	}
 
 	result := make([]float32, len(raw))

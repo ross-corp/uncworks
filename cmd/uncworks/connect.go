@@ -32,7 +32,7 @@ Flags:`)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("address argument required")
+		return fmt.Errorf("%w: address argument required", errInvalidInput)
 	}
 	addr := fs.Arg(0)
 	if addr == "local" {

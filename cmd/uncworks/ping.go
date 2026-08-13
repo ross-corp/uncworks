@@ -132,7 +132,7 @@ func runPing(args []string) error {
 			fmt.Println((total / time.Duration(received)).Round(time.Millisecond))
 		}
 		if failures == sent {
-			return fmt.Errorf("all pings failed")
+			return fmt.Errorf("%w: all pings failed", errFailed)
 		}
 		return nil
 	}
@@ -183,7 +183,7 @@ func runPing(args []string) error {
 	}
 
 	if failures == sent {
-		return fmt.Errorf("all pings failed")
+		return fmt.Errorf("%w: all pings failed", errFailed)
 	}
 	return nil
 }

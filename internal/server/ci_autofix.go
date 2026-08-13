@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,6 +18,20 @@ import (
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	aotgithub "github.com/uncworks/aot/internal/github"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
+	// errNotFound reports that a named thing is absent.
+	errNotFound = errors.New("not found")
+	// errUnavailable reports that a dependency did not answer, or that a limit
+	// is currently exhausted.
+	errUnavailable = errors.New("unavailable")
 )
 
 // checkRunPayload represents the GitHub check_run webhook payload.
@@ -140,7 +155,7 @@ func (ci *CIAutofix) HandleCheckRunEvent(ctx context.Context, body []byte) (bool
 func (ci *CIAutofix) createFixRun(ctx context.Context, repoFullName, branch, sha string, checkSuiteID int64, attempt int) error {
 	parts := strings.SplitN(repoFullName, "/", 2)
 	if len(parts) != 2 {
-		return fmt.Errorf("invalid repo name: %s", repoFullName)
+		return fmt.Errorf("%w: invalid repo name: %s", errInvalidInput, repoFullName)
 	}
 	owner, repo := parts[0], parts[1]
 
@@ -200,7 +215,7 @@ func (ci *CIAutofix) createFixRun(ctx context.Context, repoFullName, branch, sha
 // fetchAndCondenseCILogs fetches CI logs from GitHub Actions and condenses them.
 func (ci *CIAutofix) fetchAndCondenseCILogs(ctx context.Context, owner, repo string, checkSuiteID int64) (string, error) {
 	if ci.GitHubProvider == nil {
-		return "", fmt.Errorf("no GitHub token provider")
+		return "", fmt.Errorf("%w: no GitHub token provider", errFailed)
 	}
 	token, err := ci.GitHubProvider.Token(ctx)
 	if err != nil {
@@ -229,7 +244,7 @@ func (ci *CIAutofix) fetchAndCondenseCILogs(ctx context.Context, owner, repo str
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub API returned %d for logs", resp.StatusCode)
+		return "", fmt.Errorf("%w: GitHub API returned %d for logs", errFailed, resp.StatusCode)
 	}
 
 	// Read zip (capped at 50MB)
@@ -272,7 +287,7 @@ func (ci *CIAutofix) resolveActionsRunID(ctx context.Context, owner, repo string
 		return 0, err
 	}
 	if len(result.WorkflowRuns) == 0 {
-		return 0, fmt.Errorf("no workflow runs found for check_suite %d", checkSuiteID)
+		return 0, fmt.Errorf("%w: no workflow runs found for check_suite %d", errFailed, checkSuiteID)
 	}
 	return result.WorkflowRuns[0].ID, nil
 }
@@ -467,7 +482,7 @@ func (ci *CIAutofix) resolvePRNumber(ctx context.Context, owner, repo, branch, t
 		return 0, err
 	}
 	if len(prs) == 0 {
-		return 0, fmt.Errorf("no open PR found for branch %s", branch)
+		return 0, fmt.Errorf("%w: no open PR found for branch %s", errFailed, branch)
 	}
 	return prs[0].Number, nil
 }

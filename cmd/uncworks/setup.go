@@ -119,7 +119,7 @@ func selectContext() (string, error) {
 	contexts, err := ListContexts()
 	if err != nil || len(contexts) == 0 {
 		printNoClusterInstructions()
-		return "", fmt.Errorf("no Kubernetes contexts found")
+		return "", fmt.Errorf("%w: no Kubernetes contexts found", errFailed)
 	}
 
 	// Sort: active first, then alphabetical.
@@ -143,7 +143,7 @@ func selectContext() (string, error) {
 				return ctx.Name, nil
 			}
 		}
-		return "", fmt.Errorf("multiple Kubernetes contexts found but stdin is not a terminal — pass --context to choose one")
+		return "", fmt.Errorf("%w: multiple Kubernetes contexts found but stdin is not a terminal — pass --context to choose one", errFailed)
 	}
 
 	fmt.Println("Available Kubernetes contexts:")
@@ -163,7 +163,7 @@ func selectContext() (string, error) {
 	idx := 0
 	_, err = fmt.Sscanf(line, "%d", &idx)
 	if err != nil || idx < 1 || idx > len(contexts) {
-		return "", fmt.Errorf("invalid selection %q", line)
+		return "", fmt.Errorf("%w: invalid selection %q", errInvalidInput, line)
 	}
 	return contexts[idx-1].Name, nil
 }
@@ -179,13 +179,13 @@ func collectValues(cfg *setupConfig, llmKey, githubToken, temporalHost string) e
 
 	if cfg.LLMKey == "" {
 		if !tty {
-			return fmt.Errorf("--llm-key is required (stdin is not a terminal)")
+			return fmt.Errorf("%w: --llm-key is required (stdin is not a terminal)", errInvalidInput)
 		}
 		cfg.LLMKey = readSecret("LLM API key (OpenRouter/OpenAI): ")
 	}
 	if cfg.GitHubToken == "" {
 		if !tty {
-			return fmt.Errorf("--github-token is required (stdin is not a terminal)")
+			return fmt.Errorf("%w: --github-token is required (stdin is not a terminal)", errInvalidInput)
 		}
 		cfg.GitHubToken = readSecret("GitHub personal access token: ")
 	}
@@ -214,8 +214,8 @@ func resourcePreflight(kubeCtx string) error {
 	recMem := int64(4 * 1024 * 1024 * 1024) // 4Gi
 
 	if res.CPUMillicores < minCPU || res.MemoryBytes < minMem {
-		return fmt.Errorf("insufficient cluster resources: have %dm CPU / %dMi memory, need at least 2 CPU / 2Gi",
-			res.CPUMillicores, res.MemoryBytes/1024/1024)
+		return fmt.Errorf("%w: insufficient cluster resources: have %dm CPU / %dMi memory, need at least 2 CPU / 2Gi",
+			errInvalidInput, res.CPUMillicores, res.MemoryBytes/1024/1024)
 	}
 
 	if res.CPUMillicores < recCPU || res.MemoryBytes < recMem {
@@ -224,7 +224,7 @@ func resourcePreflight(kubeCtx string) error {
 		if isTTY() {
 			fmt.Print("Continue anyway? [Y/n]: ")
 			if line := readLine(); strings.ToLower(line) == "n" {
-				return fmt.Errorf("setup cancelled")
+				return fmt.Errorf("%w: setup cancelled", errFailed)
 			}
 		} else {
 			fmt.Println("Non-interactive mode: proceeding despite low resources.")

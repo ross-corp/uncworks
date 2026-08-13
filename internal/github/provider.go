@@ -25,7 +25,7 @@ func NewPATProvider(token string) *PATProvider {
 // Token returns the configured personal access token.
 func (p *PATProvider) Token(_ context.Context) (string, error) {
 	if p.token == "" {
-		return "", fmt.Errorf("GITHUB_TOKEN not configured")
+		return "", fmt.Errorf("%w: GITHUB_TOKEN not configured", errNotFound)
 	}
 	return p.token, nil
 }

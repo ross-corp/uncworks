@@ -173,7 +173,7 @@ func (m *mockRepoManager) ReadFile(repo, path string) (string, error) {
 			return c, nil
 		}
 	}
-	return "", fmt.Errorf("not found")
+	return "", fmt.Errorf("%w: not found", errNotFound)
 }
 
 func (m *mockRepoManager) WriteFile(repo, path, content, _ string) error {

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -26,6 +27,15 @@ import (
 	agentv1 "github.com/uncworks/aot/gen/go/agent/v1"
 	"github.com/uncworks/aot/gen/go/agent/v1/agentv1connect"
 	"github.com/uncworks/aot/internal/cudgel"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errInvalidInput reports a caller mistake: a bad argument, flag, or value.
+	errInvalidInput = errors.New("invalid input")
 )
 
 // Gateway is the RPC Gateway sidecar server.
@@ -552,7 +562,7 @@ func checkOutputTokenBudget() error {
 	tokenUsageMu.Unlock()
 	budget := maxOutputTokens()
 	if out >= budget {
-		return fmt.Errorf("agent run exceeded output token budget (%d >= %d)", out, budget)
+		return fmt.Errorf("%w: agent run exceeded output token budget (%d >= %d)", errFailed, out, budget)
 	}
 	return nil
 }
@@ -910,7 +920,7 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 			proc.mu.Lock()
 			proc.exitError = llmErr
 			proc.mu.Unlock()
-			return fmt.Errorf("LLM error: %s", llmErr)
+			return fmt.Errorf("%w: LLM error: %s", errFailed, llmErr)
 		}
 	}
 
@@ -1059,7 +1069,7 @@ func (g *Gateway) StreamOutput(ctx context.Context, _ *connect.Request[agentv1.S
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
+		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%w: no agent process running", errFailed))
 	}
 
 	ch := make(chan *agentv1.AgentOutput, 100)
@@ -1106,7 +1116,7 @@ func (g *Gateway) SendInput(_ context.Context, req *connect.Request[agentv1.Send
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%w: no agent process running", errFailed))
 	}
 
 	// Write the human's answer to the response file.
@@ -1167,7 +1177,7 @@ func (g *Gateway) NotifyEvent(_ context.Context, req *connect.Request[agentv1.No
 	g.mu.RUnlock()
 
 	if proc == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no agent process running"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%w: no agent process running", errFailed))
 	}
 
 	now := time.Now()
@@ -1283,7 +1293,7 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 	cleanDir := filepath.Clean(workDir)
 	if cleanDir != "/workspace" && !strings.HasPrefix(cleanDir, "/workspace/") {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("working directory %q is outside /workspace", workDir))
+			fmt.Errorf("%w: working directory %q is outside /workspace", errInvalidInput, workDir))
 	}
 	workDir = cleanDir
 
@@ -1345,7 +1355,7 @@ func (g *Gateway) ExecCommand(ctx context.Context, req *connect.Request[agentv1.
 // Limit defaults to 10 if unset; clamped to 50 if too large.
 func (g *Gateway) SemanticSearch(ctx context.Context, req *connect.Request[agentv1.SemanticSearchRequest]) (*connect.Response[agentv1.SemanticSearchResponse], error) {
 	if req.Msg.Query == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query must not be empty"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: query must not be empty", errInvalidInput))
 	}
 
 	limit := int(req.Msg.Limit)

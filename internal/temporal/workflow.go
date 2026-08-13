@@ -456,7 +456,7 @@ func AgentRunWorkflow(ctx workflow.Context, input WorkflowInput) error {
 	if podStatusOutput.Reason == "Evicted" {
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Pod was evicted immediately after creation: %s", podStatusOutput.Message)
-		return fmt.Errorf("pod evicted: %s", podStatusOutput.Message)
+		return fmt.Errorf("%w: pod evicted: %s", errFailed, podStatusOutput.Message)
 	}
 
 	// --- Step 3: Wait for hydration ---
@@ -979,7 +979,7 @@ func runManualOrchestration(ctx workflow.Context, input WorkflowInput) error {
 		state.Phase = "Failed"
 		state.Message = fmt.Sprintf("Manual orchestration: %d/%d tasks failed: %s",
 			len(failedTasks), len(tasks), strings.Join(failedTasks, ", "))
-		return fmt.Errorf("orchestration failed: %s", strings.Join(failedTasks, ", "))
+		return fmt.Errorf("%w: orchestration failed: %s", errFailed, strings.Join(failedTasks, ", "))
 	}
 
 	state.Phase = "Succeeded"
@@ -1141,7 +1141,7 @@ func runApprovalGate(
 			if !judgeOut.Approved {
 				state.Phase = "Failed"
 				state.Message = "Rejected by LLM judge: " + judgeOut.Reason
-				return fmt.Errorf("run rejected by LLM judge: %s", judgeOut.Reason)
+				return fmt.Errorf("%w: run rejected by LLM judge: %s", errInvalidInput, judgeOut.Reason)
 			}
 			state.Message = "LLM judge approved: " + judgeOut.Reason
 		}
@@ -1182,7 +1182,7 @@ func runApprovalGate(
 			}
 			state.Phase = "Failed"
 			state.Message = "Rejected: " + reason
-			return fmt.Errorf("run rejected by human reviewer: %s", reason)
+			return fmt.Errorf("%w: run rejected by human reviewer: %s", errInvalidInput, reason)
 		}
 		state.Phase = "Succeeded"
 		state.Message = "Approved by human reviewer"

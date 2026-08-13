@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -12,6 +13,15 @@ import (
 
 	aotv1alpha1 "github.com/uncworks/aot/api/v1alpha1"
 	"github.com/uncworks/aot/internal/softserve"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
+	// errNotFound reports that a named thing is absent.
+	errNotFound = errors.New("not found")
 )
 
 // mockRepoManager implements softserve.RepoManager for testing.
@@ -34,7 +44,7 @@ func newMockRepoManager() *mockRepoManager {
 
 func (m *mockRepoManager) CreateRepo(name string) error {
 	if m.failCreate {
-		return fmt.Errorf("mock: create failed")
+		return fmt.Errorf("%w: mock: create failed", errFailed)
 	}
 	m.createdRepos = append(m.createdRepos, name)
 	m.existsMap[name] = true
@@ -57,7 +67,7 @@ func (m *mockRepoManager) CloneURL(name string) string {
 
 func (m *mockRepoManager) ScaffoldAndPush(scaffold softserve.ScaffoldProject) error {
 	if m.failScaffold {
-		return fmt.Errorf("mock: scaffold failed")
+		return fmt.Errorf("%w: mock: scaffold failed", errFailed)
 	}
 	m.scaffolded = append(m.scaffolded, scaffold)
 	return nil
@@ -69,7 +79,7 @@ func (m *mockRepoManager) ReadFile(repoName, filePath string) (string, error) {
 			return content, nil
 		}
 	}
-	return "", fmt.Errorf("file not found: %s/%s", repoName, filePath)
+	return "", fmt.Errorf("%w: file not found: %s/%s", errNotFound, repoName, filePath)
 }
 
 func (m *mockRepoManager) WriteFile(repoName, filePath, content, commitMsg string) error {

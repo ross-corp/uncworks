@@ -251,7 +251,7 @@ func runRuns(args []string) error {
 	case "children":
 		if len(rest) == 0 {
 			_, _ = fmt.Fprintln(os.Stderr, "usage: uncworks runs children <parent-run-id>")
-			return fmt.Errorf("parent run ID required")
+			return fmt.Errorf("%w: parent run ID required", errInvalidInput)
 		}
 		return runRunsList(append([]string{"--parent-run-id", rest[0], "--all"}, rest[1:]...))
 	case "commits", "log":
@@ -379,7 +379,7 @@ func runRunsWatch(args []string) error {
 		*titleContains = *titleShortW
 	}
 	if *interval < 1 {
-		return fmt.Errorf("--interval must be >= 1")
+		return fmt.Errorf("%w: --interval must be >= 1", errInvalidInput)
 	}
 
 	listArgs := []string{"--limit", fmt.Sprintf("%d", *limit), "--relative"}
@@ -532,7 +532,7 @@ func runRunsList(args []string) error {
 		}
 	}
 	if phaseShorthands > 1 {
-		return fmt.Errorf("--running, --failed, --pending, --waiting, --done, and --cancelled are mutually exclusive")
+		return fmt.Errorf("%w: --running, --failed, --pending, --waiting, --done, and --cancelled are mutually exclusive", errFailed)
 	}
 	if *runningOnly && *phase == "" {
 		*phase = "RUNNING"
@@ -590,7 +590,7 @@ func runRunsList(args []string) error {
 		case "CANCELLED":
 			phaseEnum = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
 		default:
-			return fmt.Errorf("invalid phase value %q, must be one of: RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED", *phase)
+			return fmt.Errorf("%w: invalid phase value %q, must be one of: RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED", errInvalidInput, *phase)
 		}
 		listReq.PhaseFilter = phaseEnum
 	}
@@ -622,7 +622,7 @@ func runRunsList(args []string) error {
 		}
 		resp, err := client.ListAgentRuns(context.Background(), req)
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		page := resp.Msg.GetAgentRuns()
 		runs = append(runs, page...)
@@ -780,7 +780,7 @@ func runRunsList(args []string) error {
 				return strings.ToLower(runs[i].GetSpec().GetProject()) < strings.ToLower(runs[j].GetSpec().GetProject())
 			})
 		default:
-			return fmt.Errorf("--sort %q: must be started, phase, elapsed, title, model, or project", *sortBy)
+			return fmt.Errorf("%w: --sort %q: must be started, phase, elapsed, title, model, or project", errInvalidInput, *sortBy)
 		}
 	}
 	if len(runs) == 0 && !*jsonOut && !*idsOnly {
@@ -1130,10 +1130,10 @@ func runRunsGet(args []string) error {
 		}
 		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(r0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		latestID := r0.Msg.GetAgentRuns()[0].GetId()
 		var filtered []string
@@ -1147,7 +1147,7 @@ func runRunsGet(args []string) error {
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+		return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 	}
 
 	// Support multiple IDs: print each separated by a blank line.
@@ -1231,7 +1231,7 @@ func runRunsGet(args []string) error {
 	req := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id})
 	resp, err := client.GetAgentRun(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	// If --wait and run is active, wait for it to complete.
@@ -1249,7 +1249,7 @@ func runRunsGet(args []string) error {
 			_ = runRunsWait(append(waitArgs, "--quiet"))
 			resp2, err2 := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
 			if err2 != nil {
-				return fmt.Errorf("%s", humanizeErr(err2))
+				return fmt.Errorf("%w: %s", errFailed, humanizeErr(err2))
 			}
 			resp = resp2
 		}
@@ -1331,7 +1331,7 @@ func runRunsGet(args []string) error {
 				val = r.GetStatus().GetMessage()
 			}
 		default:
-			return fmt.Errorf("unknown field %q: must be id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt, message, stage, age, created-at, created-at-iso, started-at, started-at-iso, completed-at, completed-at-iso, parent, tags, or question", *field)
+			return fmt.Errorf("%w: unknown field %q: must be id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt, message, stage, age, created-at, created-at-iso, started-at, started-at-iso, completed-at, completed-at-iso, parent, tags, or question", errInvalidInput, *field)
 		}
 		fmt.Println(val)
 		return nil
@@ -1553,16 +1553,16 @@ func runRunsTail(args []string) error {
 		}
 		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		if len(resp.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		id = resp.Msg.GetAgentRuns()[0].GetId()
 	} else {
 		if fs.NArg() != 1 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
@@ -1577,7 +1577,7 @@ func runRunsTail(args []string) error {
 	}
 	resp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 	r := resp.Msg
 	fmt.Printf("\n─── summary ───────────────────────────────────────────────────────────────\n")
@@ -1639,18 +1639,18 @@ func runRunsLogs(args []string) error {
 		}
 		resp2, err2 := c2.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err2 != nil {
-			return fmt.Errorf("%s", humanizeErr(err2))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err2))
 		}
 		if runs := resp2.Msg.GetAgentRuns(); len(runs) > 0 {
 			id = runs[0].GetId()
 			fmt.Printf("Latest run: %s\n", id)
 		} else {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 	} else {
 		if fs.NArg() != 1 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
@@ -1669,7 +1669,7 @@ func runRunsLogs(args []string) error {
 	getReq := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id})
 	getResp, err := client.GetAgentRun(context.Background(), getReq)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	// Automatically use stored logs for terminal runs (no need to stream).
@@ -1738,7 +1738,7 @@ func runRunsLogs(args []string) error {
 	req := connect.NewRequest(&apiv1.WatchAgentRunRequest{Id: id})
 	stream, err := client.WatchAgentRun(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	grepNeedle := ""
@@ -1782,7 +1782,7 @@ func runRunsLogs(args []string) error {
 		}
 	}
 	if err := stream.Err(); err != nil && err != io.EOF {
-		return fmt.Errorf("stream error: %s", humanizeErr(err))
+		return fmt.Errorf("%w: stream error: %s", errFailed, humanizeErr(err))
 	}
 
 	// Resolve final phase.
@@ -1836,15 +1836,15 @@ func runRunsArchive(args []string, archived bool) error {
 		}
 		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		if len(resp.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		ids = []string{resp.Msg.GetAgentRuns()[0].GetId()}
 	} else if len(ids) == 0 {
 		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+		return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 	}
 
 	body, _ := json.Marshal(map[string]bool{"archived": archived})
@@ -1880,7 +1880,7 @@ func runRunsArchive(args []string, archived bool) error {
 		for _, e := range errs {
 			_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", e)
 		}
-		return fmt.Errorf("%d operation(s) failed", len(errs))
+		return fmt.Errorf("%w: %d operation(s) failed", errFailed, len(errs))
 	}
 	return nil
 }
@@ -1922,7 +1922,7 @@ func runRunsArchiveDone(args []string) error {
 		})
 		resp, err := client.ListAgentRuns(context.Background(), req)
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			if !minAgeThreshold.IsZero() {
@@ -2015,7 +2015,7 @@ func runRunsArchiveFailed(args []string) error {
 		})
 		resp, err := client.ListAgentRuns(context.Background(), req)
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			if !minAgeThreshold.IsZero() {
@@ -2090,7 +2090,7 @@ func runRunsPrune(args []string) error {
 		os.Exit(2)
 	}
 	if *failedOnly && *doneOnly {
-		return fmt.Errorf("--failed and --done are mutually exclusive")
+		return fmt.Errorf("%w: --failed and --done are mutually exclusive", errFailed)
 	}
 
 	threshold := time.Now().Add(-*olderThan)
@@ -2124,7 +2124,7 @@ func runRunsPrune(args []string) error {
 			})
 			resp, err := client.ListAgentRuns(context.Background(), req)
 			if err != nil {
-				return fmt.Errorf("%s", humanizeErr(err))
+				return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 			}
 			for _, r := range resp.Msg.GetAgentRuns() {
 				completedAt := r.GetStatus().GetCompletedAt()
@@ -2214,7 +2214,7 @@ func runRunsStats(args []string) error {
 		os.Exit(2)
 	}
 	if *format != "table" && *format != "json" {
-		return fmt.Errorf("invalid format %q: must be table or json", *format)
+		return fmt.Errorf("%w: invalid format %q: must be table or json", errInvalidInput, *format)
 	}
 
 	var sinceTime time.Time
@@ -2263,7 +2263,7 @@ func runRunsStats(args []string) error {
 		}
 		resp, err := c.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		modelNeedle := strings.ToLower(*modelFilter)
 		passedSinceStats := false
@@ -2653,16 +2653,16 @@ func runRunsOpen(args []string) error {
 		}
 		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(r0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		id = r0.Msg.GetAgentRuns()[0].GetId()
 	} else {
 		if fs.NArg() != 1 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
@@ -2675,7 +2675,7 @@ func runRunsOpen(args []string) error {
 	req := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id})
 	resp, err := client.GetAgentRun(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	r := resp.Msg
@@ -2685,7 +2685,7 @@ func runRunsOpen(args []string) error {
 		if repos := r.GetSpec().GetRepos(); len(repos) > 0 && r.GetSpec().GetAutoPush() {
 			fmt.Printf("Run %s: no PR created — branch was pushed from %s\n", id, repos[0].GetUrl())
 		} else {
-			return fmt.Errorf("run %s has no PR — was --auto-pr used?", id)
+			return fmt.Errorf("%w: run %s has no PR — was --auto-pr used?", errFailed, id)
 		}
 		return nil
 	}
@@ -2727,16 +2727,16 @@ func runRunsUI(args []string) error {
 		}
 		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(r0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		id = r0.Msg.GetAgentRuns()[0].GetId()
 	} else {
 		if fs.NArg() == 0 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
@@ -2750,7 +2750,7 @@ func runRunsUI(args []string) error {
 		base = cfg.WebURL
 	}
 	if base == "" {
-		return fmt.Errorf("web_url not configured — run: uncworks config set-web-url <url>")
+		return fmt.Errorf("%w: web_url not configured — run: uncworks config set-web-url <url>", errNotFound)
 	}
 	base = strings.TrimRight(base, "/")
 	url := base + "/run/" + id
@@ -2787,16 +2787,16 @@ func runRunsInspect(args []string) error {
 		}
 		resp0, err0 := client0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(resp0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		id = resp0.Msg.GetAgentRuns()[0].GetId()
 	} else {
 		if fs.NArg() != 1 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
@@ -2808,7 +2808,7 @@ func runRunsInspect(args []string) error {
 
 	resp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 	r := resp.Msg
 	phase := r.GetStatus().GetPhase()
@@ -2872,16 +2872,16 @@ func runRunsVerify(args []string) error {
 		}
 		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(r0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		id = r0.Msg.GetAgentRuns()[0].GetId()
 	} else {
 		if fs.NArg() == 0 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
@@ -2892,7 +2892,7 @@ func runRunsVerify(args []string) error {
 	}
 	base := strings.TrimRight(cfg.WebURL, "/")
 	if base == "" {
-		return fmt.Errorf("web_url not configured — run: uncworks config set-web-url <url>")
+		return fmt.Errorf("%w: web_url not configured — run: uncworks config set-web-url <url>", errNotFound)
 	}
 	url := base + "/api/v1/runs/" + id + "/verification"
 
@@ -2910,10 +2910,10 @@ func runRunsVerify(args []string) error {
 		return fmt.Errorf("reading response: %w", err)
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("no verification result found for run %s (not a spec-driven run, or not yet completed)", id)
+		return fmt.Errorf("%w: no verification result found for run %s (not a spec-driven run, or not yet completed)", errFailed, id)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return fmt.Errorf("%w: API error %d: %s", errFailed, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	if *jsonOut {
@@ -3019,16 +3019,16 @@ func runRunsDiff(args []string) error {
 		}
 		resp0, err0 := client0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(resp0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		id = resp0.Msg.GetAgentRuns()[0].GetId()
 	} else {
 		if fs.NArg() != 1 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
@@ -3041,13 +3041,13 @@ func runRunsDiff(args []string) error {
 	req := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id})
 	resp, err := client.GetAgentRun(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 	r := resp.Msg
 
 	repos := r.GetSpec().GetRepos()
 	if len(repos) == 0 {
-		return fmt.Errorf("run %s has no repository configured", id)
+		return fmt.Errorf("%w: run %s has no repository configured", errFailed, id)
 	}
 	repoURL := repos[0].GetUrl()
 	baseBranch := repos[0].GetBranch()
@@ -3057,7 +3057,7 @@ func runRunsDiff(args []string) error {
 
 	prURL := r.GetStatus().GetPrUrl()
 	if prURL == "" && !r.GetSpec().GetAutoPush() {
-		return fmt.Errorf("run %s has no PR and --auto-push was not set", id)
+		return fmt.Errorf("%w: run %s has no PR and --auto-push was not set", errFailed, id)
 	}
 
 	agentBranch := fmt.Sprintf("aot/%s", id)
@@ -3134,16 +3134,16 @@ func runRunsCommits(args []string) error {
 		}
 		resp0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(resp0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		id = resp0.Msg.GetAgentRuns()[0].GetId()
 	} else {
 		if fs.NArg() != 1 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
@@ -3156,13 +3156,13 @@ func runRunsCommits(args []string) error {
 	req := connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id})
 	resp, err := client.GetAgentRun(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 	r := resp.Msg
 
 	repos := r.GetSpec().GetRepos()
 	if len(repos) == 0 {
-		return fmt.Errorf("run %s has no repository configured", id)
+		return fmt.Errorf("%w: run %s has no repository configured", errFailed, id)
 	}
 	baseBranch := repos[0].GetBranch()
 	if baseBranch == "" {
@@ -3278,7 +3278,7 @@ func runRunsRetry(args []string) error {
 		}
 		*prompt = strings.TrimSpace(string(raw))
 		if *prompt == "" {
-			return fmt.Errorf("prompt is empty (editor produced no content)")
+			return fmt.Errorf("%w: prompt is empty (editor produced no content)", errInvalidInput)
 		}
 	}
 	if *lastRun && fs.NArg() == 0 {
@@ -3288,10 +3288,10 @@ func runRunsRetry(args []string) error {
 		}
 		r0, err0 := c0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(r0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		latestRetryID := r0.Msg.GetAgentRuns()[0].GetId()
 		var filtered []string
@@ -3305,7 +3305,7 @@ func runRunsRetry(args []string) error {
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+		return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 	}
 
 	// Multi-ID support: retry each and collect new IDs.
@@ -3379,13 +3379,13 @@ func runRunsRetry(args []string) error {
 
 	getResp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	orig := getResp.Msg
 	spec := orig.GetSpec()
 	if spec == nil {
-		return fmt.Errorf("run %s has no spec", id)
+		return fmt.Errorf("%w: run %s has no spec", errFailed, id)
 	}
 
 	newSpec := &apiv1.AgentRunSpec{
@@ -3422,7 +3422,7 @@ func runRunsRetry(args []string) error {
 		for _, kv := range envFlags {
 			parts := strings.SplitN(kv, "=", 2)
 			if len(parts) != 2 {
-				return fmt.Errorf("--env %q: must be KEY=VALUE", kv)
+				return fmt.Errorf("%w: --env %q: must be KEY=VALUE", errInvalidInput, kv)
 			}
 			envVars[parts[0]] = parts[1]
 		}
@@ -3435,7 +3435,7 @@ func runRunsRetry(args []string) error {
 		for _, kv := range addEnvFlags {
 			parts := strings.SplitN(kv, "=", 2)
 			if len(parts) != 2 {
-				return fmt.Errorf("--add-env %q: must be KEY=VALUE", kv)
+				return fmt.Errorf("%w: --add-env %q: must be KEY=VALUE", errInvalidInput, kv)
 			}
 			newSpec.EnvVars[parts[0]] = parts[1]
 		}
@@ -3450,7 +3450,7 @@ func runRunsRetry(args []string) error {
 
 	createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	newRun := createResp.Msg.GetAgentRun()
@@ -3542,7 +3542,7 @@ func runRunsRetryFailed(args []string) error {
 		}
 		resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			if !sinceTime.IsZero() {
@@ -3709,7 +3709,7 @@ func runRunsCancelAll(args []string) error {
 		})
 		resp, err := client.ListAgentRuns(context.Background(), req)
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			phase := r.GetStatus().GetPhase()
@@ -3832,7 +3832,7 @@ func runRunsLatest(args []string) error {
 	}
 
 	if *n < 1 {
-		return fmt.Errorf("--n must be >= 1")
+		return fmt.Errorf("%w: --n must be >= 1", errInvalidInput)
 	}
 	listReq := &apiv1.ListAgentRunsRequest{
 		Limit:         int32(*n),
@@ -3857,7 +3857,7 @@ func runRunsLatest(args []string) error {
 
 	resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 	runs := resp.Msg.GetAgentRuns()
 	if len(runs) == 0 {
@@ -3948,7 +3948,7 @@ func runRunsExport(args []string) error {
 		case "CANCELLED":
 			listReq.PhaseFilter = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
 		default:
-			return fmt.Errorf("invalid phase %q", *phase)
+			return fmt.Errorf("%w: invalid phase %q", errInvalidInput, *phase)
 		}
 	}
 
@@ -3958,7 +3958,7 @@ func runRunsExport(args []string) error {
 		listReq.Cursor = cursor
 		resp, err := client.ListAgentRuns(context.Background(), connect.NewRequest(listReq))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		for _, r := range resp.Msg.GetAgentRuns() {
 			if !sinceTime.IsZero() {
@@ -4398,7 +4398,7 @@ func runRunsCount(args []string) error {
 		case "CANCELLED":
 			wantPhase = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
 		default:
-			return fmt.Errorf("invalid phase %q: must be RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED", *phaseFilter)
+			return fmt.Errorf("%w: invalid phase %q: must be RUNNING, DONE, FAILED, PENDING, WAITING, CANCELLED", errInvalidInput, *phaseFilter)
 		}
 	}
 
@@ -4850,10 +4850,10 @@ func runRunsWait(args []string) error {
 		}
 		resp0, err0 := client0.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(resp0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		latestID := resp0.Msg.GetAgentRuns()[0].GetId()
 		newArgs := []string{latestID, "--server=" + *server}
@@ -4880,7 +4880,7 @@ func runRunsWait(args []string) error {
 
 	if fs.NArg() == 0 {
 		fs.Usage()
-		return fmt.Errorf("run ID argument required")
+		return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 	}
 
 	// Multi-run support: fan out goroutines when multiple IDs given.
@@ -4946,7 +4946,7 @@ func runRunsWait(args []string) error {
 	req := connect.NewRequest(&apiv1.WatchAgentRunRequest{Id: id})
 	stream, err := client.WatchAgentRun(ctx, req)
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	var finalPayload string
@@ -4974,16 +4974,16 @@ func runRunsWait(args []string) error {
 	}
 	if err := stream.Err(); err != nil {
 		if ctx.Err() != nil {
-			return fmt.Errorf("timed out after %s waiting for run %s", *timeout, id)
+			return fmt.Errorf("%w: timed out after %s waiting for run %s", errUnavailable, *timeout, id)
 		}
-		return fmt.Errorf("stream error: %s", humanizeErr(err))
+		return fmt.Errorf("%w: stream error: %s", errFailed, humanizeErr(err))
 	}
 	_ = finalType
 
 	// Get final status to determine exit code.
 	getResp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 	phase := getResp.Msg.GetStatus().GetPhase()
 	msg := getResp.Msg.GetStatus().GetMessage()
@@ -5027,15 +5027,15 @@ func runRunsWait(args []string) error {
 		runHook(*onFailure, "RUN_MESSAGE="+msg)
 		sendNotify("UNCWORKS: run failed", id)
 		if finalPayload != "" {
-			return fmt.Errorf("run %s failed: %s", id, finalPayload)
+			return fmt.Errorf("%w: run %s failed: %s", errFailed, id, finalPayload)
 		}
-		return fmt.Errorf("run %s failed", id)
+		return fmt.Errorf("%w: run %s failed", errFailed, id)
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
 		runHook(*onFailure, "RUN_MESSAGE=cancelled")
 		sendNotify("UNCWORKS: run cancelled", id)
-		return fmt.Errorf("run %s was cancelled", id)
+		return fmt.Errorf("%w: run %s was cancelled", errFailed, id)
 	default:
-		return fmt.Errorf("run %s ended in unexpected phase: %s", id, phaseLabel(phase))
+		return fmt.Errorf("%w: run %s ended in unexpected phase: %s", errInvalidInput, id, phaseLabel(phase))
 	}
 }
 
@@ -5277,7 +5277,7 @@ func runRunsMultiTail(args []string) error {
 			})
 			listResp, listErr := client.ListAgentRuns(context.Background(), listReq)
 			if listErr != nil {
-				return fmt.Errorf("%s", humanizeErr(listErr))
+				return fmt.Errorf("%w: %s", errFailed, humanizeErr(listErr))
 			}
 			for _, r := range listResp.Msg.GetAgentRuns() {
 				ph := r.GetStatus().GetPhase()
@@ -5299,7 +5299,7 @@ func runRunsMultiTail(args []string) error {
 			fmt.Println("No active runs to tail.")
 		} else {
 			fs.Usage()
-			return fmt.Errorf("at least one run ID required")
+			return fmt.Errorf("%w: at least one run ID required", errInvalidInput)
 		}
 		return nil
 	}
@@ -5410,7 +5410,7 @@ Flags:`)
 	}
 	if fs.NArg() != 1 {
 		fs.Usage()
-		return fmt.Errorf("JSON file argument required (use '-' to read from stdin)")
+		return fmt.Errorf("%w: JSON file argument required (use '-' to read from stdin)", errInvalidInput)
 	}
 
 	var raw []byte
@@ -5447,7 +5447,7 @@ Flags:`)
 		return fmt.Errorf("parsing %s: %w", fs.Arg(0), err)
 	}
 	if len(specs) == 0 {
-		return fmt.Errorf("no run specs found in %s", fs.Arg(0))
+		return fmt.Errorf("%w: no run specs found in %s", errNotFound, fs.Arg(0))
 	}
 
 	// Auto-detect repo from git if not specified in any spec.
@@ -5503,10 +5503,10 @@ Flags:`)
 			repo = defaultRepo
 		}
 		if repo == "" {
-			return fmt.Errorf("spec %d: repo is required (no git remote detected)", i+1)
+			return fmt.Errorf("%w: spec %d: repo is required (no git remote detected)", errInvalidInput, i+1)
 		}
 		if s.Prompt == "" {
-			return fmt.Errorf("spec %d: prompt is required", i+1)
+			return fmt.Errorf("%w: spec %d: prompt is required", errInvalidInput, i+1)
 		}
 		branch := s.Branch
 		if branch == "" {
@@ -5577,7 +5577,7 @@ Flags:`)
 			}
 		}
 		if failed > 0 {
-			return fmt.Errorf("%d/%d run(s) failed", failed, len(createdIDs))
+			return fmt.Errorf("%w: %d/%d run(s) failed", errFailed, failed, len(createdIDs))
 		}
 		fmt.Printf("All %d run(s) completed successfully.\n", len(createdIDs))
 	}
@@ -5611,7 +5611,7 @@ func runRunsGroup(args []string) error {
 	switch *by {
 	case "project", "feature", "tag", "model":
 	default:
-		return fmt.Errorf("--by must be one of: project, feature, tag, model")
+		return fmt.Errorf("%w: --by must be one of: project, feature, tag, model", errInvalidInput)
 	}
 
 	var sinceTime time.Time
@@ -5859,7 +5859,7 @@ func parseSinceDuration(s string) (time.Duration, error) {
 		n := strings.TrimSuffix(s, "d")
 		var days int
 		if _, err := fmt.Sscanf(n, "%d", &days); err != nil || days <= 0 {
-			return 0, fmt.Errorf("invalid duration %q: days must be a positive integer", s)
+			return 0, fmt.Errorf("%w: invalid duration %q: days must be a positive integer", errInvalidInput, s)
 		}
 		return time.Duration(days) * 24 * time.Hour, nil
 	}
@@ -5892,7 +5892,7 @@ func runRunsSearch(args []string) error {
 	}
 	if fs.NArg() == 0 {
 		fs.Usage()
-		return fmt.Errorf("search term required")
+		return fmt.Errorf("%w: search term required", errInvalidInput)
 	}
 	query := strings.ToLower(strings.Join(fs.Args(), " "))
 
@@ -6083,7 +6083,7 @@ func runRunsTimeline(args []string) error {
 		case "CANCELLED":
 			phaseF = apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED
 		default:
-			return fmt.Errorf("--phase must be DONE, FAILED, or CANCELLED")
+			return fmt.Errorf("%w: --phase must be DONE, FAILED, or CANCELLED", errInvalidInput)
 		}
 		terminalOnly = false
 	}
@@ -6240,7 +6240,7 @@ func runRunsCompare(args []string) error {
 	}
 	if fs.NArg() != 2 {
 		fs.Usage()
-		return fmt.Errorf("exactly two run IDs required")
+		return fmt.Errorf("%w: exactly two run IDs required", errInvalidInput)
 	}
 	id1, id2 := fs.Arg(0), fs.Arg(1)
 
@@ -6251,11 +6251,11 @@ func runRunsCompare(args []string) error {
 
 	r1resp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id1}))
 	if err != nil {
-		return fmt.Errorf("fetching %s: %s", id1, humanizeErr(err))
+		return fmt.Errorf("%w: fetching %s: %s", errFailed, id1, humanizeErr(err))
 	}
 	r2resp, err := client.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id2}))
 	if err != nil {
-		return fmt.Errorf("fetching %s: %s", id2, humanizeErr(err))
+		return fmt.Errorf("%w: fetching %s: %s", errFailed, id2, humanizeErr(err))
 	}
 	r1, r2 := r1resp.Msg, r2resp.Msg
 
@@ -6447,23 +6447,23 @@ func runRunsEnv(args []string) error {
 	if *lastRun {
 		resp0, err0 := c.ListAgentRuns(context.Background(), connect.NewRequest(&apiv1.ListAgentRunsRequest{Limit: 1}))
 		if err0 != nil {
-			return fmt.Errorf("%s", humanizeErr(err0))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err0))
 		}
 		if len(resp0.Msg.GetAgentRuns()) == 0 {
-			return fmt.Errorf("no runs found")
+			return fmt.Errorf("%w: no runs found", errNotFound)
 		}
 		id = resp0.Msg.GetAgentRuns()[0].GetId()
 	} else {
 		if fs.NArg() != 1 {
 			fs.Usage()
-			return fmt.Errorf("run ID argument required")
+			return fmt.Errorf("%w: run ID argument required", errInvalidInput)
 		}
 		id = fs.Arg(0)
 	}
 
 	resp, err := c.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{Id: id}))
 	if err != nil {
-		return fmt.Errorf("%s", humanizeErr(err))
+		return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 	}
 
 	envVars := resp.Msg.GetSpec().GetEnvVars()
@@ -6795,7 +6795,7 @@ func runRunsTally(args []string) error {
 		return fmt.Errorf("runs tally: %w", err)
 	}
 	if *days < 1 {
-		return fmt.Errorf("--days must be >= 1")
+		return fmt.Errorf("%w: --days must be >= 1", errInvalidInput)
 	}
 
 	c, err := newClient(*server)
@@ -6968,7 +6968,7 @@ func runRunsCost(args []string) error {
 			Cursor:        cursor,
 		}))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		done := false
 		for _, r := range resp.Msg.GetAgentRuns() {
@@ -7071,7 +7071,7 @@ func runRunsVelocity(args []string) error {
 			Cursor:        cursor,
 		}))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		done := false
 		for _, r := range resp.Msg.GetAgentRuns() {
@@ -7156,7 +7156,7 @@ func runRunsPercentiles(args []string) error {
 			Cursor:        cursor,
 		}))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		done := false
 		for _, r := range resp.Msg.GetAgentRuns() {
@@ -7262,7 +7262,7 @@ func runRunsAnomalies(args []string) error {
 			Cursor:        cursor,
 		}))
 		if err != nil {
-			return fmt.Errorf("%s", humanizeErr(err))
+			return fmt.Errorf("%w: %s", errFailed, humanizeErr(err))
 		}
 		done := false
 		for _, r := range resp.Msg.GetAgentRuns() {
@@ -7361,7 +7361,7 @@ Reads key from OPENROUTER_API_KEY environment variable.`)
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
-		return fmt.Errorf("OPENROUTER_API_KEY environment variable is not set")
+		return fmt.Errorf("%w: OPENROUTER_API_KEY environment variable is not set", errFailed)
 	}
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
@@ -7382,7 +7382,7 @@ Reads key from OPENROUTER_API_KEY environment variable.`)
 		return fmt.Errorf("reading response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("OpenRouter API error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return fmt.Errorf("%w: OpenRouter API error %d: %s", errFailed, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	if *jsonOut {

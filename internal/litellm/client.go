@@ -6,11 +6,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+)
+
+// Sentinel errors, so a caller can match on what went wrong rather than
+// on a message.
+var (
+	// errFailed reports an operation that did not complete.
+	errFailed = errors.New("failed")
 )
 
 // defaultHTTPTimeout is the per-request timeout for all LiteLLM Admin API calls.
@@ -121,7 +129,7 @@ func (c *Client) GenerateKey(ctx context.Context, req GenerateKeyRequest) (*Gene
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		// safeBody redacts any sk-* tokens to prevent key material in error logs.
-		return nil, fmt.Errorf("key/generate returned %d: %s", resp.StatusCode, safeBody(respBody))
+		return nil, fmt.Errorf("%w: key/generate returned %d: %s", errFailed, resp.StatusCode, safeBody(respBody))
 	}
 
 	var result GenerateKeyResponse
@@ -153,7 +161,7 @@ func (c *Client) DeleteKey(ctx context.Context, keys []string) (*DeleteKeyRespon
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("key/delete returned %d: %s", resp.StatusCode, safeBody(respBody))
+		return nil, fmt.Errorf("%w: key/delete returned %d: %s", errFailed, resp.StatusCode, safeBody(respBody))
 	}
 
 	var result DeleteKeyResponse
@@ -192,7 +200,7 @@ func (c *Client) ListModels(ctx context.Context) (*ListModelsResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("/v1/models returned %d: %s", resp.StatusCode, safeBody(respBody))
+		return nil, fmt.Errorf("%w: /v1/models returned %d: %s", errFailed, resp.StatusCode, safeBody(respBody))
 	}
 
 	var result ListModelsResponse
