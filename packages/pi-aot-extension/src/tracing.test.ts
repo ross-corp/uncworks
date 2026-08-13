@@ -6,16 +6,16 @@ import {
   SimpleSpanProcessor,
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
-import { Resource } from "@opentelemetry/resources";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import { AOTExtension } from "./extension";
 
 describe("OTel Tracing", () => {
   it("should emit spans for tool calls with correct status", async () => {
     const exporter = new InMemorySpanExporter();
     const provider = new NodeTracerProvider({
-      resource: new Resource({ "service.name": "test" }),
+      resource: resourceFromAttributes({ "service.name": "test" }),
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
     });
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
     provider.register();
 
     const ext = new AOTExtension({

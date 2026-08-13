@@ -1,7 +1,7 @@
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-grpc";
-import { Resource } from "@opentelemetry/resources";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import type { SpanExporter } from "@opentelemetry/sdk-trace-node";
 
 export interface TracingConfig {
@@ -13,12 +13,10 @@ export interface TracingConfig {
 
 /** Initialize OpenTelemetry tracing for the agent harness. */
 export function initTracing(config: TracingConfig): NodeTracerProvider {
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     "service.name": config.serviceName,
     "agent_run.id": config.agentRunId,
   });
-
-  const provider = new NodeTracerProvider({ resource });
 
   const exporter =
     config.exporter ??
@@ -26,7 +24,11 @@ export function initTracing(config: TracingConfig): NodeTracerProvider {
       url: config.collectorEndpoint ?? "http://localhost:4317",
     });
 
-  provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+  // SDK 2.x takes span processors in the constructor. addSpanProcessor is gone.
+  const provider = new NodeTracerProvider({
+    resource,
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  });
   provider.register();
 
   return provider;

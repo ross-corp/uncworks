@@ -179,7 +179,9 @@ func (m *Ci) CheckCoverage(ctx context.Context, source *dagger.Directory) (strin
 // All specs use page.route() mocking — no real backend required.
 func (m *Ci) PlaywrightTests(ctx context.Context, source *dagger.Directory) (string, error) {
 	out, err := dag.Container().
-		From("mcr.microsoft.com/playwright:v1.50.0-noble").
+		// Keep this tag in step with web/package.json's @playwright/test version.
+		// A mismatch makes the image ship browsers the test runner refuses.
+		From("mcr.microsoft.com/playwright:v1.62.1-noble").
 		WithMountedDirectory("/src", source).
 		WithWorkdir("/src/web").
 		WithMountedCache("/root/.npm", dag.CacheVolume("npm-cache-playwright")).
@@ -187,6 +189,9 @@ func (m *Ci) PlaywrightTests(ctx context.Context, source *dagger.Directory) (str
 		WithEnvVariable("PLAYWRIGHT_BROWSERS_PATH", "/ms-playwright").
 		WithExec([]string{"bash", "-c", `
 			set -e
+			# Install @bufbuild/protobuf at repo root so gen/ts/ proto files
+			# can resolve it (they live outside any package's node_modules).
+			cd /src && npm install --no-save @bufbuild/protobuf@^2.0.0
 			cd /src/packages/shared && npm ci
 			cd /src/web && npm ci
 		`}).

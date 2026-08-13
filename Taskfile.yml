@@ -24,9 +24,13 @@ includes:
   cluster:
     taskfile: tasks/cluster.yml
     dir: "{{.ROOT_DIR}}"
+  # tasks/homelab.yml is machine-specific and is not tracked. Copy
+  # tasks/homelab.yml.example to create it. Every task command fails when a
+  # missing include is required, so this one is optional.
   homelab:
     taskfile: tasks/homelab.yml
     dir: "{{.ROOT_DIR}}"
+    optional: true
 
 tasks:
   default:

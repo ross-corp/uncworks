@@ -1,10 +1,10 @@
 {
   "private": true,
   "dependencies": {
-    "@bufbuild/protobuf": "^2.0.0"
+    "@bufbuild/protobuf": "^2.13.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.0.0",
-    "@commitlint/config-conventional": "^19.0.0"
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0"
   }
 }
