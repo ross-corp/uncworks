@@ -1,46 +1,29 @@
 import { test, expect } from "@playwright/test";
+import { mockRun } from "./helpers";
+
+// The positive half of this file, "at least one of implement, manage, or system
+// is visible", needed a live run and asserted whichever label happened to
+// appear. The label set is a pure mapping, so it is pinned by a unit test in
+// src/lib/__tests__/role-styles.test.ts instead. What is left here is the part
+// that needs a browser: the deprecated labels must not reach the page.
+
+const RUN = {
+  id: "feed-run-1",
+  name: "feed-run",
+  spec: { backend: "Pod", repos: [], prompt: "p", modelTier: "default", displayName: "Feed Run" },
+  status: { phase: "Running", message: "" },
+  createdAt: new Date().toISOString(),
+};
 
 test.describe("Activity Feed", () => {
-  test("shows role labels with semantic names", async ({ page }) => {
-    await page.goto("/");
-    const firstRun = page.locator("[data-testid='run-row']").first();
-    if (await firstRun.isVisible()) {
-      await firstRun.click();
-    }
-    // The logs tab should be active by default
-    // Check for role labels - at least one should be visible
-    const feed = page.locator(".overflow-y-auto");
-    await expect(feed).toBeVisible({ timeout: 5000 });
+  test("does not show the deprecated role labels", async ({ page }) => {
+    await mockRun(page, RUN);
+    await page.goto(`/run/${RUN.id}`);
 
-    // Check that labels use full names (not abbreviated)
-    // "implement" should appear, not "impl" or "neph"
-    const implLabel = page.locator("text=implement");
-    const manageLabel = page.locator("text=manage");
-    const systemLabel = page.locator("text=system");
+    await expect(page.getByTestId("detail-tab-logs")).toBeVisible();
 
-    // At least one of these should be visible (depending on run data)
-    const anyVisible = await Promise.any([
-      implLabel.first().isVisible({ timeout: 3000 }),
-      manageLabel.first().isVisible({ timeout: 3000 }),
-      systemLabel.first().isVisible({ timeout: 3000 }),
-    ]).catch(() => false);
-
-    expect(anyVisible).toBeTruthy();
-  });
-
-  test("does not show deprecated labels", async ({ page }) => {
-    await page.goto("/");
-    const firstRun = page.locator("[data-testid='run-row']").first();
-    if (await firstRun.isVisible()) {
-      await firstRun.click();
-    }
-
-    // Wait for feed to load
-    await page.waitForTimeout(2000);
-
-    // These old labels should NOT appear
-    const pageText = await page.textContent("body");
-    expect(pageText).not.toContain(">neph<");
-    expect(pageText).not.toContain(">unc<");
+    const body = (await page.textContent("body")) ?? "";
+    expect(body).not.toContain(">neph<");
+    expect(body).not.toContain(">unc<");
   });
 });

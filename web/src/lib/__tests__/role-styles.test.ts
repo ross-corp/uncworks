@@ -78,3 +78,31 @@ describe("displaySpanName", () => {
     expect(displaySpanName("uncle.foo")).toBe("uncle.foo");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Label vocabulary
+//
+// This replaces the e2e assertion that "at least one of implement, manage, or
+// system is visible", which needed a live run and passed on whichever label
+// happened to appear. The label set is a pure mapping, so it belongs here.
+// ---------------------------------------------------------------------------
+describe("ROLE_STYLES labels", () => {
+  it("labels every role with its full semantic name", () => {
+    for (const [role, style] of Object.entries(ROLE_STYLES)) {
+      expect(style.label).toBe(role);
+    }
+  });
+
+  it("uses no abbreviation or product codename", () => {
+    const banned = ["neph", "unc", "impl", "mgr", "sys"];
+    for (const style of Object.values(ROLE_STYLES)) {
+      expect(banned).not.toContain(style.label);
+    }
+  });
+
+  it("covers every role the activity feed can emit", () => {
+    for (const role of ["manage", "implement", "system", "user", "delegate"]) {
+      expect(ROLE_STYLES).toHaveProperty(role);
+    }
+  });
+});

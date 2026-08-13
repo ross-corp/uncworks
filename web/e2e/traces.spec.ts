@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mockRun } from "./helpers";
 
 // Sample run for mocking
 const SAMPLE_RUN = {
@@ -11,10 +12,10 @@ const SAMPLE_RUN = {
     ttlSeconds: 900,
     modelTier: "default",
     displayName: "Trace Test Run",
-    orchestrationMode: "spec",
+    orchestrationMode: "spec-driven",
   },
   status: {
-    phase: "Completed",
+    phase: "Succeeded",
     message: "",
     podName: "pod-trace-1",
     traceID: "trace-1",
@@ -120,98 +121,44 @@ const DIFF_DATA = {
   ],
 };
 
-function mockTraceApis(page: import("@playwright/test").Page) {
-  return Promise.all([
-    // List runs
-    page.route("**/api/v1/runs", (route) => {
-      if (route.request().url().includes("/traces")) return;
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([SAMPLE_RUN]),
-      });
-    }),
-    // Get single run
-    page.route("**/api/v1/runs/run-trace-1", (route) => {
-      if (route.request().url().includes("/traces")) return;
-      if (route.request().url().includes("/logs")) return;
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(SAMPLE_RUN),
-      });
-    }),
-    // Structured logs
-    page.route("**/api/v1/runs/run-trace-1/logs/structured", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
-    }),
-    // Traces endpoint
-    page.route("**/api/v1/runs/run-trace-1/traces", (route) => {
-      if (route.request().url().includes("/diff")) return;
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(SAMPLE_SPANS),
-      });
-    }),
-    // Diff endpoint for the tool span with hasDiff=true
-    page.route(
-      "**/api/v1/runs/run-trace-1/traces/tool-exec-1/diff",
-      (route) => {
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(DIFF_DATA),
-        });
-      }
-    ),
-    // Diff endpoint for spans without diff
-    page.route("**/api/v1/runs/run-trace-1/traces/*/diff", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ files: [] }),
-      });
-    }),
-  ]);
+// The run itself comes over ConnectRPC; only the trace and diff endpoints are
+// REST. The previous version mocked REST alone, so the view never had a run and
+// the traces tab it tried to click did not exist.
+async function mockTraceApis(page: import("@playwright/test").Page) {
+  await mockRun(page, SAMPLE_RUN);
+  await page.route("**/api/v1/runs/run-trace-1/traces", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(SAMPLE_SPANS) }),
+  );
+  // One handler, because Playwright matches the most recently registered route
+  // first: a wildcard registered after the specific one shadows it, and every
+  // span then returned an empty diff.
+  await page.route("**/api/v1/runs/run-trace-1/traces/*/diff", (route) => {
+    const body = route.request().url().includes("/tool-exec-1/") ? DIFF_DATA : { files: [] };
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
 }
 
 test.describe("Traces", () => {
   test("clicking a span row shows detail panel", async ({ page }) => {
-    // Navigate to a run detail page
-    await page.goto("/");
-    // Click the first run in the list
-    const firstRun = page.locator("[data-testid='run-row']").first();
-    if (await firstRun.isVisible()) {
-      await firstRun.click();
-    }
-    // Switch to traces tab
-    await page.locator("[data-testid='detail-tab-traces']").click();
+    await mockTraceApis(page);
+    await page.goto("/run/run-trace-1");
+    await page.getByTestId("detail-tab-traces").click();
 
-    // If spans exist, click the first one
-    const spanRow = page
-      .locator("[data-testid='trace-timeline'] button")
-      .first();
-    if (await spanRow.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await spanRow.click();
-      // Verify detail panel appears (look for metadata or close button)
-      await expect(page.locator("text=Duration")).toBeVisible({
-        timeout: 3000,
-      });
-    }
+    // The first buttons in the timeline are its toolbar (EXPAND ALL, filters),
+    // so click a span by name rather than by position.
+    const timeline = page.getByTestId("trace-timeline");
+    await expect(timeline).toBeVisible({ timeout: 5000 });
+
+    const spanRow = timeline.getByRole("button", { name: /PLAN/ }).first();
+    await spanRow.click();
+
+    await expect(page.getByTestId("span-detail")).toBeVisible({ timeout: 3000 });
   });
 
   test("trace timeline shows span count", async ({ page }) => {
-    await page.goto("/");
-    const firstRun = page.locator("[data-testid='run-row']").first();
-    if (await firstRun.isVisible()) {
-      await firstRun.click();
-    }
-    await page.locator("[data-testid='detail-tab-traces']").click();
+    await mockTraceApis(page);
+    await page.goto("/run/run-trace-1");
+    await page.getByTestId("detail-tab-traces").click();
     // Should show "N spans" or "No trace spans recorded"
     const timeline = page.locator("[data-testid='trace-timeline']");
     await expect(timeline).toBeVisible({ timeout: 5000 });
@@ -312,6 +259,9 @@ test.describe("Traces", () => {
     const timeline = page.getByTestId("trace-timeline");
     await expect(timeline).toBeVisible({ timeout: 5000 });
 
+    // Child spans start collapsed under their stage.
+    await timeline.getByRole("button", { name: "EXPAND ALL" }).click();
+
     // Click the tool span that has hasDiff=true (implement.bash)
     const bashSpan = timeline
       .locator("button", { hasText: "implement.bash" })
@@ -319,16 +269,15 @@ test.describe("Traces", () => {
     await expect(bashSpan).toBeVisible({ timeout: 3000 });
     await bashSpan.click();
 
-    // Detail panel should open and show diff data
-    // Wait for diff to load (it fetches from the diff endpoint)
-    await expect(page.locator("text=Duration")).toBeVisible({ timeout: 3000 });
+    // Detail panel should open and then load the diff.
+    await expect(page.getByTestId("span-detail")).toBeVisible({ timeout: 3000 });
 
     // Should show the file paths from the diff
-    await expect(page.locator("text=main.go")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator("text=util.go")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("main.go").first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("util.go").first()).toBeVisible({ timeout: 5000 });
 
     // Diff content should show green/red lines
-    await expect(page.locator("text=Changes")).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("Changes").first()).toBeVisible({ timeout: 3000 });
   });
 
   // --- Task 5.4: Token display in detail panel ---

@@ -2,6 +2,7 @@
 // for NewRunView not covered by new-run.spec.ts.
 // All API calls are mocked via page.route() — no real backend needed.
 import { test, expect } from "@playwright/test";
+import { fillEditor, heading, waitForEditor } from "./helpers";
 
 function mockApis(page: import("@playwright/test").Page) {
   return Promise.all([
@@ -56,11 +57,11 @@ test.describe("New Run — Spec mode validation", () => {
     await page.goto("/new");
 
     // Switch to Spec mode
-    const specTab = page.locator("button", { hasText: "Spec" });
+    const specTab = page.getByRole("button", { name: /^spec$/i });
     await specTab.click();
 
     // Both textareas are empty — Run button should be disabled
-    const runBtn = page.locator("button", { hasText: "Run" }).last();
+    const runBtn = page.getByRole("button", { name: /^run$/i });
     await expect(runBtn).toBeDisabled();
   });
 
@@ -70,16 +71,14 @@ test.describe("New Run — Spec mode validation", () => {
     await mockApis(page);
     await page.goto("/new");
 
-    const specTab = page.locator("button", { hasText: "Spec" });
+    const specTab = page.getByRole("button", { name: /^spec$/i });
+    await waitForEditor(page, "prompt-editor");
     await specTab.click();
 
-    // Fill only the spec textarea (prompt stays empty)
-    const specTextarea = page.locator(
-      "textarea[placeholder='Paste your spec (markdown)...']"
-    );
-    await specTextarea.fill("## Task\n- Do something");
+    // Fill only the spec editor; the prompt stays empty.
+    await fillEditor(page, "spec-editor", "## Task");
 
-    const runBtn = page.locator("button", { hasText: "Run" }).last();
+    const runBtn = page.getByRole("button", { name: /^run$/i });
     await expect(runBtn).toBeEnabled({ timeout: 3000 });
   });
 
@@ -89,15 +88,12 @@ test.describe("New Run — Spec mode validation", () => {
     await mockApis(page);
     await page.goto("/new");
 
-    const specTab = page.locator("button", { hasText: "Spec" });
+    const specTab = page.getByRole("button", { name: /^spec$/i });
     await specTab.click();
 
-    const promptTextarea = page.locator(
-      "textarea[placeholder='What should the agent do?']"
-    );
-    await promptTextarea.fill("Run the spec against the codebase");
+    await fillEditor(page, "prompt-editor", "Run the spec against the codebase");
 
-    const runBtn = page.locator("button", { hasText: "Run" }).last();
+    const runBtn = page.getByRole("button", { name: /^run$/i });
     await expect(runBtn).toBeEnabled({ timeout: 3000 });
   });
 });
@@ -110,33 +106,25 @@ test.describe("New Run — submit error handling", () => {
 
     await page.goto("/new");
 
-    const textarea = page.locator(
-      "textarea[placeholder='What should the agent do?']"
-    );
-    await textarea.fill("This should fail on the backend");
+    await fillEditor(page, "prompt-editor", "This should fail on the backend");
 
-    const runBtn = page.locator("button", { hasText: "Run" }).last();
+    const runBtn = page.getByRole("button", { name: /^run$/i });
     await expect(runBtn).toBeEnabled();
 
-    // Attempt submit; the mock will fail
-    await textarea.press("Control+Enter");
+    // Attempt submit; the mock will fail.
+    await page.keyboard.press("Control+Enter");
 
-    // The page must not navigate away and must still show "New Run"
-    await expect(page.locator("text=New Run").first()).toBeVisible({
-      timeout: 5000,
-    });
+    // The page must not navigate away.
+    await expect(heading(page, "New Run")).toBeVisible({ timeout: 5000 });
   });
 
   test("Run button is re-enabled after a failed submission", async ({ page }) => {
     await mockApis(page);
     await page.goto("/new");
 
-    const textarea = page.locator(
-      "textarea[placeholder='What should the agent do?']"
-    );
-    await textarea.fill("Trigger a failure");
+    await fillEditor(page, "prompt-editor", "Trigger a failure");
 
-    const runBtn = page.locator("button", { hasText: "Run" }).last();
+    const runBtn = page.getByRole("button", { name: /^run$/i });
     await runBtn.click();
 
     // After the failed submission, the button should be enabled again (submitting=false)

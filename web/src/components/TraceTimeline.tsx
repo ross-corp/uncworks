@@ -409,7 +409,9 @@ export function SpanDetail({
   const agg = pipelineAgg ?? stageAgg;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    // The unit test for RunDetailView already stubs this component under this
+    // name, so the e2e suite uses the same hook rather than matching a label.
+    <div className="flex flex-col h-full overflow-hidden" data-testid="span-detail">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30 flex-shrink-0">
         <div className="min-w-0 flex-1">

@@ -1,6 +1,7 @@
 // e2e/error-states.spec.ts — Tests for API error states (5xx responses).
 // All API calls are mocked via page.route() — no real backend needed.
 import { test, expect } from "@playwright/test";
+import { heading } from "./helpers";
 
 // ---------------------------------------------------------------------------
 // Run List: API returns 500
@@ -8,12 +9,13 @@ import { test, expect } from "@playwright/test";
 test.describe("Run List — API error", () => {
   test("shows toast or error when /api/v1/runs returns 500", async ({ page }) => {
     await page.route("**/api/v1/runs", (route) => {
-      route.fulfill({
-        status: 500,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "internal server error" }),
-      });
+      route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "internal server error" }) });
     });
+    // The run list is a ConnectRPC call, so failing REST alone left the app
+    // perfectly healthy and the test asserting nothing.
+    await page.route("**/aot.api.v1.AOTService/**", (route) =>
+      route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ code: "internal", message: "boom" }) }),
+    );
 
     await page.goto("/");
 
@@ -29,7 +31,7 @@ test.describe("Run List — API error", () => {
 
     // If no toast/inline error, at minimum the header should be visible and the app
     // must not show a blank white page (JS crash).
-    const header = page.locator("text=Runs");
+    const header = heading(page, "Runs");
     await expect(header).toBeVisible({ timeout: 8000 });
     expect(errorVisible || await header.isVisible()).toBe(true);
   });
@@ -38,11 +40,14 @@ test.describe("Run List — API error", () => {
     await page.route("**/api/v1/runs", (route) => {
       route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
     });
+    await page.route("**/aot.api.v1.AOTService/**", (route) =>
+      route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ code: "internal", message: "boom" }) }),
+    );
 
     await page.goto("/");
 
     // App shell should still be visible even with a backend error
-    await expect(page.locator("text=Runs")).toBeVisible({ timeout: 8000 });
+    await expect(heading(page, "Runs")).toBeVisible({ timeout: 8000 });
   });
 });
 
@@ -112,7 +117,7 @@ test.describe("Projects List — API error", () => {
     await page.goto("/projects");
 
     // The Projects heading should still render (layout did not crash)
-    await expect(page.locator("text=Projects")).toBeVisible({ timeout: 8000 });
+    await expect(heading(page, "Projects")).toBeVisible({ timeout: 8000 });
 
     // An error should be surfaced — via toast or inline text
     const errorVisible = await Promise.any([
