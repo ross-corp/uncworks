@@ -59,19 +59,64 @@ export function heading(page: Page, name: string | RegExp): Locator {
  * fail to decode, and the view renders "No runs yet" with no error anywhere.
  * That silence is what made this suite look like a UI regression.
  */
+const PHASE_ENUM: Record<string, string> = {
+  Pending: "AGENT_RUN_PHASE_PENDING",
+  Running: "AGENT_RUN_PHASE_RUNNING",
+  WaitingForInput: "AGENT_RUN_PHASE_WAITING_FOR_INPUT",
+  Succeeded: "AGENT_RUN_PHASE_SUCCEEDED",
+  Failed: "AGENT_RUN_PHASE_FAILED",
+  Cancelled: "AGENT_RUN_PHASE_CANCELLED",
+};
+
+const BACKEND_ENUM: Record<string, string> = { Pod: "BACKEND_POD" };
+
+const ORCH_ENUM: Record<string, string> = {
+  single: "ORCHESTRATION_MODE_SINGLE",
+  auto: "ORCHESTRATION_MODE_AUTO",
+  manual: "ORCHESTRATION_MODE_MANUAL",
+  "spec-driven": "ORCHESTRATION_MODE_SPEC_DRIVEN",
+};
+
+/**
+ * sanitize turns a friendly fixture into valid protobuf JSON.
+ *
+ * The list and the detail view both arrive over ConnectRPC, so the response is
+ * decoded as protobuf JSON. That decoder is strict in two ways a fixture author
+ * would not expect, and either one empties the view with no error anywhere:
+ *
+ *  - A Timestamp cannot be "". One `startedAt: ""` fails the whole message.
+ *  - An enum must be its declared constant. `phase: "Running"` is not a value;
+ *    `AGENT_RUN_PHASE_RUNNING` is. A fixture using the friendly name decoded to
+ *    the zero value, which is why runs showed as queued.
+ *
+ * Fixtures stay readable and this does the translation.
+ */
 function sanitize(runs: unknown[]): unknown[] {
   const timestamps = ["startedAt", "completedAt", "retainUntil", "lastRunAt"];
   return runs.map((run) => {
     if (typeof run !== "object" || run === null) return run;
     const copy = { ...(run as Record<string, unknown>) };
+
     const status = copy.status;
     if (typeof status === "object" && status !== null) {
       const s = { ...(status as Record<string, unknown>) };
       for (const field of timestamps) {
         if (s[field] === "") delete s[field];
       }
+      if (typeof s.phase === "string" && PHASE_ENUM[s.phase]) s.phase = PHASE_ENUM[s.phase];
       copy.status = s;
     }
+
+    const spec = copy.spec;
+    if (typeof spec === "object" && spec !== null) {
+      const sp = { ...(spec as Record<string, unknown>) };
+      if (typeof sp.backend === "string" && BACKEND_ENUM[sp.backend]) sp.backend = BACKEND_ENUM[sp.backend];
+      if (typeof sp.orchestrationMode === "string" && ORCH_ENUM[sp.orchestrationMode]) {
+        sp.orchestrationMode = ORCH_ENUM[sp.orchestrationMode];
+      }
+      copy.spec = sp;
+    }
+
     for (const field of timestamps) {
       if (copy[field] === "") delete copy[field];
     }
@@ -100,7 +145,32 @@ export async function mockRuns(page: Page, runs: unknown[] = []): Promise<void> 
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ runs, agentRuns: runs, nextCursor: "" }),
+      body: JSON.stringify({ agentRuns: runs, nextCursor: "" }),
     }),
+  );
+}
+
+/**
+ * mockRun stubs one run's detail view.
+ *
+ * The detail view fetches over ConnectRPC (GetAgentRun) and only the traces
+ * endpoint is REST, so stubbing /api/v1/runs/:id alone left the view empty.
+ */
+export async function mockRun(page: Page, run: Record<string, unknown>): Promise<void> {
+  const [clean] = sanitize([run]) as Array<Record<string, unknown>>;
+  const id = String(clean.id ?? "");
+
+  await page.route("**/aot.api.v1.AOTService/**", (route) => {
+    const url = route.request().url();
+    const body = url.endsWith("/GetAgentRun")
+      ? clean
+      : { agentRuns: [clean], nextCursor: "" };
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.route(`**/api/v1/runs/${id}/**`, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+  );
+  await page.route("**/api/v1/runs", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([clean]) }),
   );
 }
