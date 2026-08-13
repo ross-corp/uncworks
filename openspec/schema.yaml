@@ -1,0 +1,333 @@
+# The uncworks spec-driven schema.
+#
+# openspec's built-in `spec-driven` schema generates proposal, design, spec, and
+# tasks. This file adds two artifacts to that set and tightens the authoring
+# rules for the rest.
+#
+# `uncworks spec check` enforces every rule below that a program can decide. Run
+# `uncworks spec rules` for the list it enforces in this build. A rule stated
+# here and absent there is a rule nobody enforces, so keep the two in step.
+name: uncworks-spec-driven
+version: 1
+description: >
+  The uncworks change workflow: propose, pin the citations, design, shape the
+  tasks, review adversarially, then apply.
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    template: templates/proposal.md
+    requires: []
+    instruction: |
+      State WHY the change is needed.
+
+      Sections, all required:
+
+      - Why: one or two sentences on the problem. What breaks today, and why now.
+      - What Changes: a bullet list. Name new capabilities, modifications, and
+        removals. Mark a breaking change with `- **BREAKING**`.
+      - Non-goals: required as a `### Non-goals` block under What Changes when
+        the change touches more than one capability. This is the boundary that
+        stops scope drift, and an explicit out-list reads as a decision while a
+        silent omission reads as an oversight.
+      - Behavior: what the change must do, and what must still hold when it
+        lands. Write each entry so a command or an observation can decide it.
+        This is the rubric every later artifact is reviewed against, and the
+        adversarial review reads it directly. An entry nothing can decide is not
+        acceptance criteria.
+      - Impact: affected code, APIs, dependencies, and systems. Enumerate every
+        action that mutates shared state, is hard to reverse, or needs
+        confirmation: `helm upgrade`, `openspec archive`, `git push`, a schema
+        migration, a network write, or the removal of a public surface. Each one
+        becomes a human checkpoint in tasks.md. Name the gating signal if one
+        exists: a feature flag, a config toggle, or a staged sequence.
+
+      Before you write, survey the existing modules that match the proposal's own
+      vocabulary. Name the closest one by path in What Changes, and say what is
+      reused against what is introduced. If nothing fits, say so. Building
+      parallel infrastructure beside an established pattern is a default-reject.
+
+      Shape the change so it lands incrementally, with each capability
+      reviewable and verifiable on its own. If it is genuinely atomic, say so in
+      Impact and say why.
+
+      Voice: Simplified Technical English, one instruction per sentence, active
+      voice, one term for one concept. Carry every normative statement with an
+      RFC 2119 keyword rather than with bold. No em-dash. No list item opens
+      with a bolded label.
+
+      Every external-factual claim carries an inline `[cite: <id>]` reference to
+      its citations.lock record. A lock the prose never points at makes a reader
+      diff two files by hand.
+
+  - id: citations
+    generates: citations.lock
+    template: templates/citations.lock
+    requires: [proposal]
+    instruction: |
+      Pin every external-factual claim the proposal makes, so the gate is a pure
+      function of the repository rather than of what a website says today.
+
+      This artifact is REQUIRED for every change, including a change that cites
+      nothing. An absent lock cannot distinguish "there was nothing to cite"
+      from "nobody looked". A lock with an empty `records` list says the first
+      one, on the record.
+
+      An external-factual claim is one whose truth lives outside this repository
+      and can change without a commit here: a price, a product's availability,
+      an external API's behavior, a version or release date, a rate limit, a
+      cited paper or RFC, a quoted upstream policy. A claim about this
+      repository is NOT external, because a command decides that one.
+
+      Steps:
+
+      1. Re-read the proposal and list every external-factual claim, including
+         the ones in Why used as justification. A claim that motivates the
+         change is exactly the one worth pinning, because the whole change rests
+         on it.
+      2. Give each record an id that reads as what it backs. `openrouter-pricing`
+         tells a reader what the record is for. `claim-3` does not, and the id
+         is what the prose cites.
+      3. Run `uncworks cite capture <url> --id <id> --quote <text> --class <class>`.
+         Capture fails closed when the live source does not state the quote.
+         That failure is the feature: it means the claim is wrong, the quote is
+         paraphrased, or the URL moved. Fix the claim. Do not widen the quote
+         until it passes.
+      4. Quote the narrowest span that carries the claim. A quote wide enough to
+         survive any rewording anchors nothing.
+      5. Run `uncworks cite verify` and `uncworks spec check`. The first checks
+         the pins. The second checks that every record is cited in prose and
+         every `[cite: id]` names a record that exists.
+
+      One thing no program can decide: whether every external-factual claim in
+      the prose is pinned at all. Recognising which sentence asserts an external
+      fact is a judgment, and a script that pretended to make it would give
+      false assurance. That stays with the author and with the review.
+
+      Never hand-edit citations.lock to make the gate pass. The snapshot and its
+      sha256 are the evidence, and editing around them leaves a lock that
+      verifies and proves nothing.
+
+  - id: design
+    generates: design.md
+    template: templates/design.md
+    requires: [proposal]
+    instruction: |
+      State HOW to implement the change.
+
+      Sections, all required:
+
+      - Context: the current state, the constraints, and the existing patterns
+        being extended or paralleled. Cite paths. If you introduce a new
+        pattern, say why the closest existing one was insufficient.
+      - Goals / Non-Goals: what this design achieves and what it excludes.
+      - Decisions: each key choice, with its rationale. Every entry MUST carry a
+        line beginning `- Alternative rejected:` naming at least one alternative
+        and why it lost. A decision with no recorded rejected alternative is an
+        assumption. `uncworks spec check` reads the marker as a stated fact.
+      - Rollout & Gating: which phase ships first, what gate must pass before
+        the next one, and where the kill switch is. Name any feature flag,
+        config toggle, or capability gate that scopes the rollout.
+      - Risks / Trade-offs: each risk paired with its mitigation. Flag the risks
+        that map to a human checkpoint in tasks.md.
+      - Migration Plan: the deploy steps and the rollback. Every step that
+        mutates shared state, is hard to reverse, or needs elevated permissions
+        MUST be preceded by a verification step and followed by a confirmation
+        step.
+      - Open Questions: what is still unresolved.
+
+      Adversarial review is NOT a section here. It is its own artifact, because
+      findings recorded as prose inside a design cannot be read as a set: nobody
+      can ask "what survived?" of a paragraph. State the rubric sources in
+      Decisions and Rollout & Gating. review.md cites them.
+
+      Same voice contract as the proposal, and it binds harder here, because a
+      design document is mostly requirements.
+
+  - id: specs
+    generates: specs/<capability>/spec.md
+    requires: [design]
+    instruction: |
+      Add the behavioral specs, one directory per capability. These merge into
+      openspec/specs/ when the change is archived, so they are the durable
+      record, not a scratch pad.
+
+      Every requirement heading is `### Requirement: <text>` and its text MUST
+      contain SHALL or MUST.
+
+      Every scenario heading is `#### Scenario: <name>`, exactly. Do not put a
+      marker in the heading: openspec's archive step matches `#### Scenario:`
+      strictly, and a heading like `#### Scenario [negative]:` makes archive drop
+      the scenario without saying so.
+
+      Every scenario declares its polarity on a body line:
+
+          #### Scenario: Capture rejects a non-anchoring quote
+          - **POLARITY** negative
+          - **WHEN** the author's quote is not a substring of the fetched bytes
+          - **THEN** capture exits non-zero and writes no snapshot
+
+      Every requirement MUST carry at least one declared-negative scenario. A
+      requirement nothing can fail is not testable, and the negative scenario is
+      what states the boundary.
+
+      The lint reads the declared marker rather than guessing from the prose, so
+      the verdict does not depend on how a THEN happens to be worded.
+
+  - id: tasks
+    generates: tasks.md
+    template: templates/tasks.md
+    requires: [design]
+    instruction: |
+      Break the work into phases and tasks. The apply step parses the checkbox
+      format, so a line that is not `- [ ] X.Y ...` is not tracked.
+
+      Group tasks under `## <n>. Phase name` headings. Each phase MUST be
+      coherent enough to review or ship on its own.
+
+      Every non-Rollout phase declares its shape:
+
+      - `- **SHAPE** graph` models orchestrator-worker fan-out. Each subtask MAY
+        carry a trailing `` `deps:` `` naming other subtasks in the SAME phase,
+        because a cross-phase edge means the boundary is drawn in the wrong
+        place. Each subtask SHOULD carry a trailing `` `writes:` `` naming the
+        paths it may modify, which is what an orchestrator compares before it
+        fans out. A graph with more than one task MUST declare
+        `- **MERGE** <task id>`, naming the one subtask that reads every
+        sibling's output and owns the merged result. Without it the merge is
+        read out of file order, which is what the declared graph exists to stop.
+      - `- **SHAPE** loop` models a real back-edge: the same tasks re-run on the
+        next iteration against changed state. N distinct one-shot steps are a
+        graph with a dependency chain, not a loop. Before you write `loop`, name
+        the task iteration 2 starts from. If there is not one, it is not a loop.
+
+      A loop declares both bounds, because they fail differently:
+
+      - `- **STOP**` is the success exit and MUST be decidable by running
+        something. Write the command in backticks, or a predicate over a
+        command's output. "the settings are coherent" is not a stop condition,
+        because nothing can evaluate it. The verifier MUST also sit outside the
+        blast radius of the work: a loop that may edit its own tests has no stop
+        condition at all.
+      - `- **MAX-ITERS** <n>` caps the iterations.
+      - `- **TERMINAL**` names how the loop ends WITHOUT success, using the
+        vocabulary in the adversarial-review skill: CAPPED, STALLED, or
+        CHURNING. MAX-ITERS alone is insufficient, because a loop that stalls
+        burns the whole cap before anyone notices. A cap hit is reported as open
+        work, never as a pass.
+
+      Gate on judgment, not on distrust. A human gate costs a context switch and
+      trains the owner to click through, so it MUST earn its place.
+
+      - Gate where the failure mode is "every check passes and the wrong thing
+        was built". Do NOT gate where the failure mode is "the code is broken",
+        because a command already answers that.
+      - An action is impactful when it is irreversible, outward-facing, or
+        mutates state the owner cannot reconstruct: `helm upgrade`, `git push`,
+        `openspec archive`, a schema migration, a delete outside scratch space,
+        a network write. These MUST carry an owner gate.
+      - An action is NOT impactful merely because it writes. `git add` and
+        `gofmt` are deterministic and revertible, so gating them is ceremony.
+      - A precondition a command can decide is NOT a gate. `task test:go`,
+        `uncworks spec check`, and `golangci-lint run` all exit non-zero on
+        their own. Name the command in the Apply task's own line. Do not spend a
+        checkbox asking the owner to confirm a program's exit code.
+      - Where a gate is earned, write it as two tasks:
+        `- [ ] X.N Apply: <impactful action>, gated on <command> exiting 0` and
+        `- [ ] X.N+1 Confirm: <the judgment only a human can make>`.
+        A Confirm task states a judgment, not a re-run. "Confirm the tests pass"
+        is not a gate. "Confirm the migrated values are the ones you intended to
+        keep" is.
+      - A gate is a boundary between runs, not a pause inside one. If a phase
+        needs sign-off partway through, split it into two phases.
+
+      Every non-Rollout phase MUST end with an adversarial-review task before
+      its rollout tasks. That task runs `uncworks spec check` and appends a
+      round block to review.md. Do not restate the findings in tasks.md: the
+      review artifact holds them, and two copies drift.
+
+      A graph phase that fans out to more than five siblings MUST name a pilot
+      subtask that runs the same work over a strictly smaller input, and that
+      pilot MUST complete before the rest. A fan-out that fails at scale costs
+      the whole batch. A pilot costs one item.
+
+      Do not collide with the extractor. A task's prose MUST NOT repeat a marker
+      label, and MUST NOT open with a kind verb. The field pass takes each
+      backtick-delimited marker in order, and the kind pass strips a leading
+      `Apply` or `Confirm`.
+
+  - id: review
+    generates: review.md
+    template: templates/review.md
+    requires: [tasks]
+    instruction: |
+      Record the adversarial review as data, not as prose. This is the artifact
+      the owner reads to answer "what was challenged, what survived, and what is
+      still open".
+
+      Steps:
+
+      1. Fill in `## Rubric` by naming its sources. Do not restate them. An
+         objection that cites no rubric item is out of scope and is discarded.
+      2. Run the deterministic lint FIRST and record it: `uncworks spec check`
+         and `uncworks cite verify`. It is mandatory, it is cheap, and it runs
+         whatever the owner decides below. It is evidence, never approval.
+      3. Write `## Recommendation` BEFORE running any critic. Say whether model
+         critique should run for this change, and name the concrete risk it
+         would catch, or say plainly that there is none. Both answers are fine.
+         An absent recommendation is not, because the owner must be deciding
+         against an argument rather than a blank.
+      4. STOP and elicit the owner's decision. You MUST NOT write
+         `## Owner decision` yourself, and you MUST NOT read silence as consent.
+         Skipping the review is the owner's call, so `NOT-RUN` is not
+         self-certifiable.
+      5. If the owner approves running it, execute the bounded loop from the
+         adversarial-review skill and record every round: the lens, the finding,
+         the concrete failing scenario, and the verdict. A finding with no
+         reproducible scenario does not belong in the table.
+      6. Record the terminal state and the surviving-objection trend. CLEAN
+         means no objection survived. It is not owner approval and it is not
+         peer approval. CAPPED, STALLED, and CHURNING all hand back with open
+         work, and each MUST list its open objections.
+
+      This artifact is revised, never regenerated. A later phase appends a round
+      block. Rewriting the file loses the trend, which is the one thing that
+      distinguishes converging from churning.
+
+apply:
+  requires: [tasks, review]
+  tracks: tasks.md
+  instruction: |
+    Drive the work from `uncworks spec next`, not from reading tasks.md in file
+    order. The file declares a dependency graph and a phase shape, and reading
+    top to bottom ignores both, which makes the declaration decoration.
+
+    The loop:
+
+    1. Run `uncworks spec next <change>`. It names the active phase, its shape,
+       and the subtasks whose dependencies are complete.
+    2. Do that ready set. When it reports "runnable concurrently", first read the
+       write-set conflicts it prints. A ready set whose write sets intersect MUST
+       run in one context, because two subtasks that write one file produce a
+       merge conflict rather than parallel progress.
+    3. Mark each finished subtask `- [x]` in tasks.md.
+    4. Repeat. A cycle error means the dependencies are wrong: fix tasks.md
+       rather than retrying.
+
+    Route any fan-out on what the work needs. Implementation subtasks that share
+    this repository want shared context, so they can see each other's edits.
+    Anything adversarial or verifying wants fresh context with a read-only tool
+    set, because a reviewer that shares the implementer's context inherits the
+    implementer's reasoning. Work that must agree wants shared context. Work that
+    must disagree must not have it.
+
+    Stop at an owner gate. An `Apply:` task is impactful and a `Confirm:` task is
+    a judgment only the owner can make, so neither is yours to check off.
+
+    Narrate each ready set before you mark it done. Read the diff for the files
+    you touched and say, in a few lines: what changed by file in behavior rather
+    than in line counts, which Behavior criterion each edit serves, anything in
+    the diff that no criterion asked for, and anything a criterion asked for that
+    the diff does not yet do. The last two are the point. A diff that satisfies
+    every criterion and also does something nobody asked for is the failure a
+    passing check cannot see.

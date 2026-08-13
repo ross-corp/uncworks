@@ -278,14 +278,57 @@ openspec view                    # interactive dashboard
 
 ### Workflow
 
-1. Propose. Run `openspec new change <name>` and fill in `proposal.md`.
-2. Design. Fill in `design.md` with the technical decisions.
-3. Spec. Add behavioral specs under `specs/`.
-4. Apply. Implement the work in `tasks.md`.
-5. Archive. Run `openspec archive <name>` when every task is done.
+`openspec/schema.yaml` is the authority. It extends openspec's built-in
+`spec-driven` schema with two artifacts and tightens the authoring rules.
+Templates live in `openspec/templates/`.
+
+1. Propose. Run `openspec new change <name>` and fill in `proposal.md`. The
+   `## Behavior` section carries the acceptance criteria, and it is the rubric
+   every later artifact is reviewed against.
+2. Pin the citations. Capture every external-factual claim into
+   `citations.lock` with `uncworks cite capture`. Every change carries a lock,
+   including one that cites nothing.
+3. Design. Fill in `design.md`. Every Decision names a rejected alternative.
+4. Spec. Add behavioral specs under `specs/`. Every requirement carries at least
+   one declared-negative scenario.
+5. Shape the tasks. Every non-Rollout phase declares `SHAPE loop` or
+   `SHAPE graph`, and ends with an adversarial-review task.
+6. Review. Record the adversarial review in `review.md`. The owner writes the
+   decision, not the author.
+7. Apply. Drive the work from `uncworks spec next`, not from the top of
+   `tasks.md`.
+8. Archive. Run `openspec archive <name>` when every task is done.
 
 Run `openspec list` to see the active changes. Do not rely on a list in this
 file, because it goes stale.
+
+### Deterministic checks
+
+```bash
+uncworks spec check [<change>]   # the rubric lint. Exits 1 on an error finding
+uncworks spec next  [<change>]   # the runnable set in the active phase
+uncworks spec status             # task completion
+uncworks spec graph <change>     # the phases and edges as Mermaid
+uncworks spec rules              # what the rubric enforces in this build
+
+uncworks cite capture <url> --id <id> --quote <text> --class <class>
+uncworks cite verify [<lockdir>] # offline. No network, same verdict every time
+uncworks cite recheck            # re-run the live checks over the pinned records
+```
+
+Both commands are pure functions of the files on disk, which is what lets them
+gate a commit. Neither calls an LLM.
+
+The four changes that were in flight when these rules landed predate them and do
+not pass `uncworks spec check` yet.
+
+### Skills
+
+| Skill | When to use it |
+|---|---|
+| `spec-driven` | Drive the change workflow end to end |
+| `citation-verification` | Pin an external-factual claim |
+| `adversarial-review` | Run the critic loop at a phase's review gate |
 
 ## Multi-agent workflow
 
