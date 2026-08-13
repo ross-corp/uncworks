@@ -47,6 +47,7 @@ Commands:
   stats      Aggregate run counts by phase (alias for runs stats)
   search     Search the knowledge base for past work
   config     Show or edit the CLI configuration
+  cite       Capture and verify pinned external-factual claims (citations.lock)
 
 Flags:
   --version  Print the build version and exit
@@ -134,6 +135,8 @@ func main() {
 		err = runSearch(args)
 	case "config":
 		err = runConfig(args)
+	case "cite":
+		err = runCite(args)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, usage)
 	case "-v", "--version", "version":
