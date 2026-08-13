@@ -23,7 +23,7 @@ func runPing(args []string) error {
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	quiet := fs.Bool("quiet", false, "Print only the average RTT or 'error' (for scripting)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks ping [flags]\n\nCheck API connectivity and measure round-trip latency.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks ping [flags]\n\nCheck API connectivity and measure round-trip latency.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {

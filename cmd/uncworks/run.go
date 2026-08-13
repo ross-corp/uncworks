@@ -55,7 +55,7 @@ func runRun(args []string) error {
 	outputID := fs.Bool("output-id", false, "Print only the run ID (for scripting)")
 	dryRun := fs.Bool("dry-run", false, "Preview the run spec without actually creating the run")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
+		_, _ = fmt.Fprintln(fs.Output(), `Usage: uncworks run --repo <url> --prompt <text> [flags]
 
 Submit a new agent run and print the run ID.
 
@@ -117,8 +117,8 @@ Flags:`)
 		}
 		tmpPath := tmpf.Name()
 		_ = tmpf.Close()
-		defer os.Remove(tmpPath)
-		editorCmd := exec.Command(editor, tmpPath)
+		defer func() { _ = os.Remove(tmpPath) }()
+		editorCmd := exec.CommandContext(context.Background(), editor, tmpPath)
 		editorCmd.Stdin = os.Stdin
 		editorCmd.Stdout = os.Stdout
 		editorCmd.Stderr = os.Stderr
@@ -137,14 +137,14 @@ Flags:`)
 
 	// Auto-detect repo from git origin if not specified.
 	if *repo == "" {
-		if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+		if out, err := exec.CommandContext(context.Background(), "git", "remote", "get-url", "origin").Output(); err == nil {
 			*repo = strings.TrimSpace(string(out))
 		}
 	}
 
 	// Auto-detect current branch if not specified.
 	if *branch == "" {
-		if out, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+		if out, err := exec.CommandContext(context.Background(), "git", "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
 			b := strings.TrimSpace(string(out))
 			if b != "" && b != "HEAD" {
 				*branch = b
@@ -343,7 +343,7 @@ Flags:`)
 		if !*notify {
 			return
 		}
-		_ = exec.Command("osascript", "-e",
+		_ = exec.CommandContext(context.Background(), "osascript", "-e",
 			fmt.Sprintf(`display notification %q with title %q`, body, title)).Run()
 	}
 

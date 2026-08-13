@@ -2,6 +2,7 @@
 package main
 
 import (
+	gocontext "context"
 	"flag"
 	"fmt"
 	"os/exec"
@@ -18,7 +19,7 @@ func runTeardown(args []string) error {
 	context := fs.String("context", "", "Kubeconfig context to use")
 	yes := fs.Bool("yes", false, "Skip confirmation prompt")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks teardown [flags]\n\nUninstall UNCWORKS from the current cluster.\nThis is a destructive operation. Use --yes to skip the confirmation prompt.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks teardown [flags]\n\nUninstall UNCWORKS from the current cluster.\nThis is a destructive operation. Use --yes to skip the confirmation prompt.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -49,7 +50,7 @@ func runTeardown(args []string) error {
 		helmArgs = append(helmArgs, "--kube-context", *context)
 	}
 	fmt.Printf("Uninstalling release %q from namespace %q...\n", defaultReleaseName, *namespace)
-	cmd := exec.Command("helm", helmArgs...)
+	cmd := exec.CommandContext(gocontext.Background(), "helm", helmArgs...)
 	cmd.Stdout = nil
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("helm uninstall: %w\n%s", err, out)
@@ -62,7 +63,7 @@ func runTeardown(args []string) error {
 		if *context != "" {
 			kubectlArgs = append([]string{"--context", *context}, kubectlArgs...)
 		}
-		cmd := exec.Command("kubectl", kubectlArgs...)
+		cmd := exec.CommandContext(gocontext.Background(), "kubectl", kubectlArgs...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("kubectl delete pvc: %w\n%s", err, out)
 		}

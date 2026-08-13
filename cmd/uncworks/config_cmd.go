@@ -14,7 +14,7 @@ import (
 func runConfig(args []string) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show             Print the current CLI configuration\n  set-server       Set the gRPC server address\n  set-web-url      Set the web dashboard URL (used by 'runs ui')\n  set-model        Set the default model tier (used when --model-tier is not specified)\n  set-project      Set the default project name (used when --project is not specified)\n  set-feature      Set the default feature name (used when --feature is not specified)\n  unset <field>    Clear a config field (server, web-url, model, project, feature)\n  path             Print the config file path\n  edit             Open the config file in $EDITOR\n  reset            Reset the config to defaults\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks config <subcommand> [flags]\n\nSubcommands:\n  show             Print the current CLI configuration\n  set-server       Set the gRPC server address\n  set-web-url      Set the web dashboard URL (used by 'runs ui')\n  set-model        Set the default model tier (used when --model-tier is not specified)\n  set-project      Set the default project name (used when --project is not specified)\n  set-feature      Set the default feature name (used when --feature is not specified)\n  unset <field>    Clear a config field (server, web-url, model, project, feature)\n  path             Print the config file path\n  edit             Open the config file in $EDITOR\n  reset            Reset the config to defaults\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -53,7 +53,7 @@ func runConfig(args []string) error {
 	case "reset":
 		return runConfigReset(fs.Args()[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n", fs.Arg(0))
+		_, _ = fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n", fs.Arg(0))
 		fs.Usage()
 		return fmt.Errorf("unknown subcommand %q", fs.Arg(0))
 	}
@@ -62,7 +62,7 @@ func runConfig(args []string) error {
 func runConfigSetServer(args []string) error {
 	fs := flag.NewFlagSet("config set-server", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-server <address>\n\nSet the gRPC server address. Use 'local' to reset to port-forward mode.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks config set-server <address>\n\nSet the gRPC server address. Use 'local' to reset to port-forward mode.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -96,7 +96,7 @@ func runConfigSetServer(args []string) error {
 func runConfigSetWebURL(args []string) error {
 	fs := flag.NewFlagSet("config set-web-url", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-web-url <url>\n\nSet the UNCWORKS web dashboard base URL (e.g. http://192.168.1.10:30080).\nUsed by 'uncworks runs ui' to open run detail pages.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks config set-web-url <url>\n\nSet the UNCWORKS web dashboard base URL (e.g. http://192.168.1.10:30080).\nUsed by 'uncworks runs ui' to open run detail pages.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -123,7 +123,7 @@ func runConfigSetWebURL(args []string) error {
 func runConfigSetModel(args []string) error {
 	fs := flag.NewFlagSet("config set-model", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks config set-model <tier>\n\nSet the default model tier used when --model-tier is not specified.\nUse 'default' or '' to clear the default.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks config set-model <tier>\n\nSet the default model tier used when --model-tier is not specified.\nUse 'default' or '' to clear the default.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -157,7 +157,7 @@ func runConfigSetModel(args []string) error {
 func runConfigSetStringField(args []string, cmd, field string, setter func(*Config, string), label string) error {
 	fs := flag.NewFlagSet("config "+cmd, flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: uncworks config %s <value>\n\nSet the %s. Use 'none' to clear.\n", cmd, label)
+		_, _ = fmt.Fprintf(fs.Output(), "Usage: uncworks config %s <value>\n\nSet the %s. Use 'none' to clear.\n", cmd, label)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {

@@ -30,7 +30,7 @@ func runStatus(args []string) error {
 	output := fs.String("output", "", `Output format. One of: json`)
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks status [flags]\n\nShow health of the UNCWORKS stack.\nExits non-zero if any pod is not ready.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks status [flags]\n\nShow health of the UNCWORKS stack.\nExits non-zero if any pod is not ready.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -49,7 +49,7 @@ func runStatus(args []string) error {
 	if *kubeContext != "" {
 		kubectlArgs = append([]string{"--context", *kubeContext}, kubectlArgs...)
 	}
-	out, err := exec.Command("kubectl", kubectlArgs...).Output()
+	out, err := exec.CommandContext(context.Background(), "kubectl", kubectlArgs...).Output()
 	if err != nil {
 		return fmt.Errorf("kubectl get pods: %w", err)
 	}
@@ -112,7 +112,7 @@ func runStatus(args []string) error {
 
 	if *output != "json" {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "POD\tPHASE\tREADY")
+		_, _ = fmt.Fprintln(w, "POD\tPHASE\tREADY")
 		for _, ps := range statuses {
 			readyStr := "Yes"
 			if !ps.Ready {
@@ -121,9 +121,9 @@ func runStatus(args []string) error {
 					readyStr = "No (" + ps.Reason + ")"
 				}
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", ps.Name, ps.Phase, readyStr)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", ps.Name, ps.Phase, readyStr)
 		}
-		w.Flush()
+		_ = w.Flush()
 	}
 
 	// Check gRPC API connectivity and active run count

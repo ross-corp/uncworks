@@ -20,7 +20,7 @@ func runInput(args []string) error {
 	follow := fs.Bool("follow", false, "Stream logs after sending input until the run completes")
 	lastRun := fs.Bool("last", false, "Send input to the most recently WAITING run (auto-detect)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks input <run-id> [<text>] [flags]
+		_, _ = fmt.Fprintln(fs.Output(), `Usage: uncworks input <run-id> [<text>] [flags]
 
 Send a human-in-the-loop response to a paused agent run.
 If <text> is omitted, reads from stdin.
@@ -95,7 +95,7 @@ Flags:`)
 	if getErr == nil {
 		phase := getResp.Msg.GetStatus().GetPhase()
 		if phase != apiv1.AgentRunPhase_AGENT_RUN_PHASE_WAITING_FOR_INPUT {
-			fmt.Fprintf(os.Stderr, "warning: run %s is in phase %s, not WAITING — input may be ignored\n", id, phaseLabel(phase))
+			_, _ = fmt.Fprintf(os.Stderr, "warning: run %s is in phase %s, not WAITING — input may be ignored\n", id, phaseLabel(phase))
 		} else if prompt := getResp.Msg.GetStatus().GetMessage(); prompt != "" {
 			fmt.Printf("Agent is asking: %s\n", prompt)
 		}

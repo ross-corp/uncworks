@@ -60,7 +60,7 @@ Run 'uncworks <command> --help' for command-specific flags.
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
+		_, _ = fmt.Fprint(os.Stderr, usage)
 		os.Exit(1)
 	}
 
@@ -144,16 +144,16 @@ func main() {
 	case "gate":
 		err = runGate(args)
 	case "-h", "--help", "help":
-		fmt.Fprint(os.Stdout, usage)
+		_, _ = fmt.Fprint(os.Stdout, usage)
 	case "-v", "--version", "version":
 		fmt.Printf("uncworks %s (commit %s)\n", Version, Commit)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %q\n\n%s", cmd, usage)
+		_, _ = fmt.Fprintf(os.Stderr, "unknown command: %q\n\n%s", cmd, usage)
 		os.Exit(1)
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }

@@ -65,7 +65,7 @@ func TestSSE_WatchGraph_ConnectsWithoutEventBus(t *testing.T) {
 	if resp != nil {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"))
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 }
 
@@ -116,7 +116,7 @@ func TestSSE_WatchGraph_EventsArriveCausally(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
@@ -218,7 +218,7 @@ func TestSSE_WatchGraph_LogEventsBeforePhaseChange(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {

@@ -120,7 +120,7 @@ Shorthand subcommands:
 
 func runRuns(args []string) error {
 	if len(args) == 0 {
-		fmt.Fprint(os.Stderr, runsUsage)
+		_, _ = fmt.Fprint(os.Stderr, runsUsage)
 		os.Exit(2)
 	}
 	sub := args[0]
@@ -250,7 +250,7 @@ func runRuns(args []string) error {
 		return runRunsWait(append([]string{"--notify"}, rest...))
 	case "children":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "usage: uncworks runs children <parent-run-id>")
+			_, _ = fmt.Fprintln(os.Stderr, "usage: uncworks runs children <parent-run-id>")
 			return fmt.Errorf("parent run ID required")
 		}
 		return runRunsList(append([]string{"--parent-run-id", rest[0], "--all"}, rest[1:]...))
@@ -289,10 +289,10 @@ func runRuns(args []string) error {
 	case "approvals":
 		return runRunsList(append([]string{"--phase", "WAITING", "--show-approval", "--all"}, rest...))
 	case "-h", "--help", "help":
-		fmt.Fprint(os.Stdout, runsUsage)
+		_, _ = fmt.Fprint(os.Stdout, runsUsage)
 		return nil
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n%s", sub, runsUsage)
+		_, _ = fmt.Fprintf(os.Stderr, "unknown subcommand %q\n\n%s", sub, runsUsage)
 		os.Exit(2)
 	}
 	return nil
@@ -369,7 +369,7 @@ func runRunsWatch(args []string) error {
 	sortBy := fs.String("sort", "", "Sort by field: started, phase, elapsed, title, model, project")
 	noColor := fs.Bool("no-color", false, "Disable ANSI color in output")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs watch [flags]\n\nAuto-refresh the runs list every N seconds. Press Ctrl+C to stop.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs watch [flags]\n\nAuto-refresh the runs list every N seconds. Press Ctrl+C to stop.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -508,7 +508,7 @@ func runRunsList(args []string) error {
 	showApproval := fs.Bool("show-approval", false, "Add an APPROVAL column to the output")
 	compact := fs.Bool("compact", false, "Compact output: 20-char title, no model column")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs list [flags]\n\nList recent agent runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -911,7 +911,7 @@ func runRunsList(args []string) error {
 		if *showApproval {
 			hdr += "\tAPPROVAL"
 		}
-		fmt.Fprintln(w, hdr)
+		_, _ = fmt.Fprintln(w, hdr)
 	}
 	for _, r := range runs {
 		title := r.GetSpec().GetDisplayName()
@@ -1027,10 +1027,9 @@ func runRunsList(args []string) error {
 			}
 			row += "\t" + approval
 		}
-		fmt.Fprintln(w, row)
+		_, _ = fmt.Fprintln(w, row)
 	}
-	w.Flush()
-
+	_ = w.Flush()
 	output := listBuf.String()
 	if useColor {
 		output = strings.NewReplacer(
@@ -1080,7 +1079,7 @@ func runRunsList(args []string) error {
 
 	switch {
 	case nextCursor != "" && !*all:
-		fmt.Fprintf(os.Stderr, "next-cursor: %s\n", nextCursor)
+		_, _ = fmt.Fprintf(os.Stderr, "next-cursor: %s\n", nextCursor)
 		fmt.Printf("Showing %d run(s)%s%s, use --all or --limit to see more\n", len(runs), phaseSummary(), diffFooter)
 	case *all:
 		fmt.Printf("Showing all %d run(s)%s%s\n", len(runs), phaseSummary(), diffFooter)
@@ -1115,7 +1114,7 @@ func runRunsGet(args []string) error {
 	field := fs.String("field", "", "Print only this field's value: id, phase, title, model, project, feature, branch, repo, pr-url, pod, duration, prompt, message, stage, age, created-at, created-at-iso, started-at, started-at-iso, completed-at, completed-at-iso, parent, tags")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs get <id> [flags]\n\nShow full detail for an agent run.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -1539,7 +1538,7 @@ func runRunsTail(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs tail <id> [flags]\n\nStream logs and show a summary when the run completes.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs tail <id> [flags]\n\nStream logs and show a summary when the run completes.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -1625,7 +1624,7 @@ func runRunsLogs(args []string) error {
 	save := fs.String("save", "", "Save log output to a file (in addition to stdout)")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs logs <id> [flags]\n\nStream log output until the run completes.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -1658,7 +1657,7 @@ func runRunsLogs(args []string) error {
 
 	// --save only works in --no-follow mode.
 	if *save != "" && !*noFollow {
-		fmt.Fprintf(os.Stderr, "note: --save only works with --no-follow; output will not be saved in streaming mode\n")
+		_, _ = fmt.Fprintf(os.Stderr, "note: --save only works with --no-follow; output will not be saved in streaming mode\n")
 	}
 
 	client, err := newClient(*server)
@@ -1687,7 +1686,7 @@ func runRunsLogs(args []string) error {
 	if *noFollow {
 		logOutput := getResp.Msg.GetStatus().GetLogOutput()
 		if logOutput == "" {
-			fmt.Fprintf(os.Stderr, "No stored log output for run %s\n", id)
+			_, _ = fmt.Fprintf(os.Stderr, "No stored log output for run %s\n", id)
 			return nil
 		}
 		allLines := strings.Split(logOutput, "\n")
@@ -1724,9 +1723,9 @@ func runRunsLogs(args []string) error {
 		}
 		if *save != "" {
 			if saveErr := os.WriteFile(*save, []byte(output+"\n"), 0o644); saveErr != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to save log to %q: %v\n", *save, saveErr)
+				_, _ = fmt.Fprintf(os.Stderr, "warning: failed to save log to %q: %v\n", *save, saveErr)
 			} else {
-				fmt.Fprintf(os.Stderr, "log saved to %s\n", *save)
+				_, _ = fmt.Fprintf(os.Stderr, "log saved to %s\n", *save)
 			}
 		}
 		return nil
@@ -1801,10 +1800,10 @@ func runRunsLogs(args []string) error {
 			}
 		}
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_FAILED:
-		fmt.Fprintln(os.Stderr, "Run failed.")
+		_, _ = fmt.Fprintln(os.Stderr, "Run failed.")
 		os.Exit(1)
 	case apiv1.AgentRunPhase_AGENT_RUN_PHASE_CANCELLED:
-		fmt.Fprintln(os.Stderr, "Run cancelled.")
+		_, _ = fmt.Fprintln(os.Stderr, "Run cancelled.")
 		os.Exit(1)
 	}
 	return nil
@@ -1822,7 +1821,7 @@ func runRunsArchive(args []string, archived bool) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: uncworks runs %s <id> [<id> ...] [flags]\n\nFlags:\n", verb)
+		_, _ = fmt.Fprintf(fs.Output(), "Usage: uncworks runs %s <id> [<id> ...] [flags]\n\nFlags:\n", verb)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -1879,7 +1878,7 @@ func runRunsArchive(args []string, archived bool) error {
 	}
 	if len(errs) > 0 {
 		for _, e := range errs {
-			fmt.Fprintf(os.Stderr, "error: %s\n", e)
+			_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", e)
 		}
 		return fmt.Errorf("%d operation(s) failed", len(errs))
 	}
@@ -1894,7 +1893,7 @@ func runRunsArchiveDone(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "Print what would be archived without doing it")
 	minAge := fs.Duration("min-age", 0, "Only archive runs completed longer ago than this (e.g. 24h, 7d)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs archive-done [flags]\n\nBulk archive all SUCCEEDED runs.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs archive-done [flags]\n\nBulk archive all SUCCEEDED runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -1959,18 +1958,18 @@ func runRunsArchiveDone(args []string) error {
 		url := serverBaseURL(*server) + "/api/v1/runs/" + id + "/archive"
 		archReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(archiveBody))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
 			continue
 		}
 		archReq.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(archReq)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
 			continue
 		}
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
 			continue
 		}
 		archived++
@@ -1987,7 +1986,7 @@ func runRunsArchiveFailed(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "Print what would be archived without doing it")
 	minAge := fs.Duration("min-age", 0, "Only archive runs completed longer ago than this (e.g. 24h)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs archive-failed [flags]\n\nBulk archive all FAILED runs.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs archive-failed [flags]\n\nBulk archive all FAILED runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -2052,18 +2051,18 @@ func runRunsArchiveFailed(args []string) error {
 		url := serverBaseURL(*server) + "/api/v1/runs/" + id + "/archive"
 		archReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(archiveBody))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
 			continue
 		}
 		archReq.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(archReq)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
 			continue
 		}
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
 			continue
 		}
 		archived++
@@ -2084,7 +2083,7 @@ func runRunsPrune(args []string) error {
 	failedOnly := fs.Bool("failed", false, "Only prune FAILED runs (exclude DONE and CANCELLED)")
 	doneOnly := fs.Bool("done", false, "Only prune DONE/SUCCEEDED runs (exclude FAILED and CANCELLED)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs prune [flags]\n\nBulk archive all terminal (DONE, FAILED, CANCELLED) runs older than the given age.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs prune [flags]\n\nBulk archive all terminal (DONE, FAILED, CANCELLED) runs older than the given age.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -2156,7 +2155,7 @@ func runRunsPrune(args []string) error {
 	if !*yes {
 		fmt.Printf("Archive %d terminal run(s) older than %s? [y/N] ", len(toArchive), *olderThan)
 		var answer string
-		fmt.Scanln(&answer)
+		_, _ = fmt.Scanln(&answer)
 		if answer != "y" && answer != "Y" && answer != "yes" {
 			fmt.Println("Aborted.")
 			return nil
@@ -2169,18 +2168,18 @@ func runRunsPrune(args []string) error {
 		url := serverBaseURL(*server) + "/api/v1/runs/" + id + "/archive"
 		archReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(archiveBody))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to build request for %s: %v\n", id, err)
 			continue
 		}
 		archReq.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(archReq)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to archive %s: %v\n", id, err)
 			continue
 		}
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to archive %s: status %d\n", id, resp.StatusCode)
 			continue
 		}
 		archived++
@@ -2208,7 +2207,7 @@ func runRunsStats(args []string) error {
 	trend := fs.Bool("trend", false, "Compare current --since window to the previous equal window (requires --since)")
 	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs stats [flags]\n\nShow aggregate counts of agent runs by phase.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -2454,7 +2453,7 @@ func runRunsStats(args []string) error {
 	}
 	var statsBuf bytes.Buffer
 	w := tabwriter.NewWriter(&statsBuf, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "PHASE\tCOUNT\tPCT\tBAR")
+	_, _ = fmt.Fprintln(w, "PHASE\tCOUNT\tPCT\tBAR")
 	for _, phase := range order {
 		pct := 0.0
 		if total > 0 {
@@ -2465,7 +2464,7 @@ func runRunsStats(args []string) error {
 			barLen = int(float64(counts[phase]) / float64(maxCount) * 20)
 		}
 		bar := strings.Repeat("█", barLen)
-		fmt.Fprintf(w, "%s\t%d\t%.1f%%\t%s\n", phase, counts[phase], pct, bar)
+		_, _ = fmt.Fprintf(w, "%s\t%d\t%.1f%%\t%s\n", phase, counts[phase], pct, bar)
 	}
 	_ = w.Flush()
 	statsOutput := statsBuf.String()
@@ -2549,7 +2548,7 @@ func runRunsStats(args []string) error {
 			if total > 0 {
 				pct = float64(p.count) / float64(total) * 100
 			}
-			fmt.Fprintf(bw, "  %s\t%d\t(%.1f%%)\n", p.key, p.count, pct)
+			_, _ = fmt.Fprintf(bw, "  %s\t%d\t(%.1f%%)\n", p.key, p.count, pct)
 		}
 		_ = bw.Flush()
 	}
@@ -2639,7 +2638,7 @@ func runRunsOpen(args []string) error {
 	printURL := fs.Bool("print-url", false, "Print the PR URL instead of opening the browser")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs open <id> [flags]\n\nOpen the PR URL for a completed agent run in the default browser.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs open <id> [flags]\n\nOpen the PR URL for a completed agent run in the default browser.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -2713,7 +2712,7 @@ func runRunsUI(args []string) error {
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs ui <id> [flags]\n\nOpen a run in the UNCWORKS web dashboard.\nRequires web_url in config (run: uncworks config set-web-url <url>).\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs ui <id> [flags]\n\nOpen a run in the UNCWORKS web dashboard.\nRequires web_url in config (run: uncworks config set-web-url <url>).\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -2773,7 +2772,7 @@ func runRunsInspect(args []string) error {
 	logLines := fs.Int("log-lines", 20, "Number of log tail lines to show (0 = all)")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs inspect <id> [flags]\n\nDiagnostic view for a run: full details, graph, and log tail.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs inspect <id> [flags]\n\nDiagnostic view for a run: full details, graph, and log tail.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -2858,7 +2857,7 @@ func runRunsVerify(args []string) error {
 	jsonOut := fs.Bool("json", false, "Print raw JSON output")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs verify <id> [flags]\n\nFetch and display the verification result for a spec-driven run.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs verify <id> [flags]\n\nFetch and display the verification result for a spec-driven run.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -2905,7 +2904,7 @@ func runRunsVerify(args []string) error {
 	if err != nil {
 		return fmt.Errorf("fetch verification: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("reading response: %w", err)
@@ -3005,7 +3004,7 @@ func runRunsDiff(args []string) error {
 	printCmd := fs.Bool("print-cmd", false, "Print git commands instead of executing them")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs diff <id> [flags]\n\nFetch and show the git diff for a completed run's branch.\nWhen stdout is a TTY, runs git automatically; otherwise prints the git commands.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs diff <id> [flags]\n\nFetch and show the git diff for a completed run's branch.\nWhen stdout is a TTY, runs git automatically; otherwise prints the git commands.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -3083,14 +3082,14 @@ func runRunsDiff(args []string) error {
 	shouldExec := *execFlag || (!*printCmd && term.IsTerminal(int(os.Stdout.Fd())))
 	if shouldExec {
 		fmt.Printf("$ git fetch origin %s\n", agentBranch)
-		fetchCmd := exec.Command("git", "fetch", "origin", agentBranch)
+		fetchCmd := exec.CommandContext(context.Background(), "git", "fetch", "origin", agentBranch)
 		fetchCmd.Stdout = os.Stdout
 		fetchCmd.Stderr = os.Stderr
 		if err := fetchCmd.Run(); err != nil {
 			return fmt.Errorf("git fetch failed: %w", err)
 		}
 		fmt.Printf("$ git %s\n\n", strings.Join(diffArgs, " "))
-		diffCmd := exec.Command("git", diffArgs...)
+		diffCmd := exec.CommandContext(context.Background(), "git", diffArgs...)
 		diffCmd.Stdout = os.Stdout
 		diffCmd.Stderr = os.Stderr
 		return diffCmd.Run()
@@ -3117,7 +3116,7 @@ func runRunsCommits(args []string) error {
 	printCmd := fs.Bool("print-cmd", false, "Print git commands instead of executing them")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs commits <id> [flags]\n\nShow git commits made by a run on its feature branch.\nWhen stdout is a TTY, runs git automatically; otherwise prints the git commands.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs commits <id> [flags]\n\nShow git commits made by a run on its feature branch.\nWhen stdout is a TTY, runs git automatically; otherwise prints the git commands.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -3180,14 +3179,14 @@ func runRunsCommits(args []string) error {
 	shouldExec := *execFlag || (!*printCmd && term.IsTerminal(int(os.Stdout.Fd())))
 	if shouldExec {
 		fmt.Printf("$ git fetch origin %s\n", agentBranch)
-		fetchCmd := exec.Command("git", "fetch", "origin", agentBranch)
+		fetchCmd := exec.CommandContext(context.Background(), "git", "fetch", "origin", agentBranch)
 		fetchCmd.Stdout = os.Stdout
 		fetchCmd.Stderr = os.Stderr
 		if err := fetchCmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "git fetch failed: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "git fetch failed: %v\n", err)
 		}
 		fmt.Printf("$ git %s\n\n", strings.Join(logArgs, " "))
-		logCmd := exec.Command("git", logArgs...)
+		logCmd := exec.CommandContext(context.Background(), "git", logArgs...)
 		logCmd.Stdout = os.Stdout
 		logCmd.Stderr = os.Stderr
 		return logCmd.Run()
@@ -3227,7 +3226,7 @@ func runRunsRetry(args []string) error {
 	fs.Var(&tagFlags, "tag", "Override tags (repeatable); replaces all tags if any are provided")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run. Use flags to override specific fields.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry <id> [flags]\n\nCreate a new run with the same spec as an existing run. Use flags to override specific fields.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -3259,8 +3258,8 @@ func runRunsRetry(args []string) error {
 		}
 		tmpPath := tmpf.Name()
 		_ = tmpf.Close()
-		defer os.Remove(tmpPath)
-		editorCmd := exec.Command(editor, tmpPath)
+		defer func() { _ = os.Remove(tmpPath) }()
+		editorCmd := exec.CommandContext(context.Background(), editor, tmpPath)
 		editorCmd.Stdin = os.Stdin
 		editorCmd.Stdout = os.Stdout
 		editorCmd.Stderr = os.Stderr
@@ -3349,7 +3348,7 @@ func runRunsRetry(args []string) error {
 				subArgs = append(subArgs, "--add-env="+e)
 			}
 			if err := runRunsRetry(subArgs); err != nil {
-				fmt.Fprintf(os.Stderr, "  failed to retry %s: %v\n", rid, err)
+				_, _ = fmt.Fprintf(os.Stderr, "  failed to retry %s: %v\n", rid, err)
 			} else if *outputID {
 				newIDs = append(newIDs, rid) // id is printed in subArgs call
 			}
@@ -3502,7 +3501,7 @@ func runRunsRetryFailed(args []string) error {
 	modelTier := fs.String("model-tier", "", "Override model tier for all retried runs")
 	appendPrompt := fs.String("append-prompt", "", "Append this text to the original prompt of each retried run")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry-failed [flags]\n\nBulk retry all FAILED runs matching the given filters.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs retry-failed [flags]\n\nBulk retry all FAILED runs matching the given filters.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -3565,7 +3564,7 @@ func runRunsRetryFailed(args []string) error {
 
 	if *listOnly {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "ID\tSTARTED\tTITLE\n")
+		_, _ = fmt.Fprintf(w, "ID\tSTARTED\tTITLE\n")
 		for _, r := range failedRuns {
 			title := r.GetSpec().GetDisplayName()
 			if title == "" {
@@ -3578,9 +3577,9 @@ func runRunsRetryFailed(args []string) error {
 			if ts := r.GetCreatedAt(); ts != nil {
 				started = relativeTime(ts.AsTime())
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", r.GetId(), started, title)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.GetId(), started, title)
 		}
-		w.Flush()
+		_ = w.Flush()
 		fmt.Printf("\n%d run(s) would be retried.\n", len(failedRuns))
 		return nil
 	}
@@ -3616,7 +3615,7 @@ func runRunsRetryFailed(args []string) error {
 	if !*yes {
 		fmt.Printf("\nRetry %d run(s)? [y/N] ", len(failedRuns))
 		var resp string
-		fmt.Scanln(&resp)
+		_, _ = fmt.Scanln(&resp)
 		if strings.ToLower(strings.TrimSpace(resp)) != "y" {
 			fmt.Println("Aborted.")
 			return nil
@@ -3647,7 +3646,7 @@ func runRunsRetryFailed(args []string) error {
 		}
 		createResp, err := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: newSpec}))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s → error: %s\n", r.GetId(), humanizeErr(err))
+			_, _ = fmt.Fprintf(os.Stderr, "  %s → error: %s\n", r.GetId(), humanizeErr(err))
 			continue
 		}
 		fmt.Printf("  %s → %s\n", r.GetId(), createResp.Msg.GetAgentRun().GetId())
@@ -3670,7 +3669,7 @@ func runRunsCancelAll(args []string) error {
 	tag := fs.String("tag", "", "Only cancel runs with this tag")
 	titleContains := fs.String("title-contains", "", "Only cancel runs whose title contains this string (case-insensitive)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cancel-all [flags]\n\nCancel all active (non-terminal) runs.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs cancel-all [flags]\n\nCancel all active (non-terminal) runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -3785,7 +3784,7 @@ func runRunsCancelAll(args []string) error {
 	for _, id := range activeRuns {
 		_, err := client.CancelAgentRun(context.Background(), connect.NewRequest(&apiv1.CancelAgentRunRequest{Id: id}))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to cancel %s: %s\n", id, humanizeErr(err))
+			_, _ = fmt.Fprintf(os.Stderr, "  failed to cancel %s: %s\n", id, humanizeErr(err))
 		} else {
 			fmt.Printf("  cancelled %s\n", id)
 			cancelled++
@@ -3814,7 +3813,7 @@ func runRunsLatest(args []string) error {
 	showLog := fs.Bool("log", false, "Also print the stored agent log output")
 	idsOnly := fs.Bool("ids-only", false, "Print only run IDs (one per line, for scripting)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs latest [flags]\n\nShow the most recent agent run in detail.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs latest [flags]\n\nShow the most recent agent run in detail.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -3901,7 +3900,7 @@ func runRunsExport(args []string) error {
 	outFile := fs.String("out", "", "Write output to file instead of stdout")
 	format := fs.String("format", "csv", "Output format: csv, tsv, json, or markdown")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs export [flags]\n\nExport runs as CSV (stdout by default).\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs export [flags]\n\nExport runs as CSV (stdout by default).\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -3976,7 +3975,7 @@ func runRunsExport(args []string) error {
 		if err != nil {
 			return fmt.Errorf("create %s: %w", *outFile, err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		out = f
 	} else {
 		out = os.Stdout
@@ -4039,14 +4038,14 @@ func runRunsExport(args []string) error {
 			return fmt.Errorf("json encode: %w", err)
 		}
 		if *outFile != "" {
-			fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
+			_, _ = fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
 		}
 		return nil
 	}
 
 	if *format == "markdown" {
-		fmt.Fprintln(out, "| ID | Title | Phase | Project | Feature | Model | Duration | Started | PR |")
-		fmt.Fprintln(out, "|---|---|---|---|---|---|---|---|---|")
+		_, _ = fmt.Fprintln(out, "| ID | Title | Phase | Project | Feature | Model | Duration | Started | PR |")
+		_, _ = fmt.Fprintln(out, "|---|---|---|---|---|---|---|---|---|")
 		for _, r := range allRuns {
 			title := r.GetSpec().GetDisplayName()
 			started := ""
@@ -4059,13 +4058,13 @@ func runRunsExport(args []string) error {
 			if prURL != "" {
 				prCell = "[PR](" + prURL + ")"
 			}
-			fmt.Fprintf(out, "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+			_, _ = fmt.Fprintf(out, "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
 				r.GetId(), title, phaseLabel(r.GetStatus().GetPhase()),
 				r.GetSpec().GetProject(), r.GetSpec().GetFeature(),
 				r.GetSpec().GetModelTier(), dur, started, prCell)
 		}
 		if *outFile != "" {
-			fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
+			_, _ = fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
 		}
 		return nil
 	}
@@ -4117,7 +4116,7 @@ func runRunsExport(args []string) error {
 		return fmt.Errorf("csv write: %w", err)
 	}
 	if *outFile != "" {
-		fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
+		_, _ = fmt.Fprintf(os.Stderr, "Exported %d run(s) to %s\n", len(allRuns), *outFile)
 	}
 	return nil
 }
@@ -4136,7 +4135,7 @@ func runRunsHistogram(args []string) error {
 	jsonOut := fs.Bool("json", false, "Output as JSON array of bucket objects")
 	sparkline := fs.Bool("sparkline", false, "Output a compact single-line sparkline using Unicode block chars")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs histogram [flags]\n\nShow a bar chart of run starts bucketed over a time window.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs histogram [flags]\n\nShow a bar chart of run starts bucketed over a time window.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -4359,7 +4358,7 @@ func runRunsCount(args []string) error {
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	modelFilter := fs.String("model", "", "Filter by model tier substring (case-insensitive)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs count [flags]\n\nPrint the number of runs matching the given filters.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -4494,13 +4493,13 @@ func runRunsCount(args []string) error {
 	switch {
 	case *byPhase:
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "PHASE\tCOUNT")
+		_, _ = fmt.Fprintln(w, "PHASE\tCOUNT")
 		for _, ph := range []string{"RUNNING", "PENDING", "WAITING", "DONE", "FAILED", "CANCELLED", "UNKNOWN"} {
 			if n, ok := phaseCounts[ph]; ok {
-				fmt.Fprintf(w, "%s\t%d\n", ph, n)
+				_, _ = fmt.Fprintf(w, "%s\t%d\n", ph, n)
 			}
 		}
-		w.Flush()
+		_ = w.Flush()
 		fmt.Printf("Total: %d\n", count)
 	case *byFeature:
 		type pair struct {
@@ -4518,11 +4517,11 @@ func runRunsCount(args []string) error {
 			return pairs[i].k < pairs[j].k
 		})
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "FEATURE\tCOUNT")
+		_, _ = fmt.Fprintln(w, "FEATURE\tCOUNT")
 		for _, p := range pairs {
-			fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
+			_, _ = fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
 		}
-		w.Flush()
+		_ = w.Flush()
 		fmt.Printf("Total: %d\n", count)
 	case *byTag:
 		type pair struct {
@@ -4540,11 +4539,11 @@ func runRunsCount(args []string) error {
 			return pairs[i].k < pairs[j].k
 		})
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "TAG\tCOUNT")
+		_, _ = fmt.Fprintln(w, "TAG\tCOUNT")
 		for _, p := range pairs {
-			fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
+			_, _ = fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
 		}
-		w.Flush()
+		_ = w.Flush()
 		fmt.Printf("Total: %d\n", count)
 	case *byProject:
 		type pair struct {
@@ -4562,11 +4561,11 @@ func runRunsCount(args []string) error {
 			return pairs[i].k < pairs[j].k
 		})
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "PROJECT\tCOUNT")
+		_, _ = fmt.Fprintln(w, "PROJECT\tCOUNT")
 		for _, p := range pairs {
-			fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
+			_, _ = fmt.Fprintf(w, "%s\t%d\n", p.k, p.v)
 		}
-		w.Flush()
+		_ = w.Flush()
 		fmt.Printf("Total: %d\n", count)
 	default:
 		fmt.Println(count)
@@ -4584,7 +4583,7 @@ func runRunsSummary(args []string) error {
 	watch := fs.Bool("watch", false, "Auto-refresh the summary every --interval seconds (Ctrl+C to stop)")
 	interval := fs.Int("interval", 10, "Refresh interval in seconds for --watch mode")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs summary [flags]\n\nShow a dashboard summary of recent run activity.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs summary [flags]\n\nShow a dashboard summary of recent run activity.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -4808,7 +4807,7 @@ func runRunsSummary(args []string) error {
 		}
 		fmt.Printf("runs summary — %s  (every %ds, Ctrl+C to stop)\n\n", time.Now().Format("15:04:05"), *interval)
 		if err := doSummary(); err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		}
 		time.Sleep(time.Duration(*interval) * time.Second)
 	}
@@ -4831,7 +4830,7 @@ func runRunsWait(args []string) error {
 	anyFlag := fs.Bool("any", false, "Return as soon as any one run completes (default: wait for all)")
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs wait <id> [<id2> ...] [flags]\n\nBlock until run(s) reach a terminal phase.\nExits 0 if all succeed, 1 if any fail or are cancelled.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs wait <id> [<id2> ...] [flags]\n\nBlock until run(s) reach a terminal phase.\nExits 0 if all succeed, 1 if any fail or are cancelled.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -4990,12 +4989,12 @@ func runRunsWait(args []string) error {
 		if shellCmd == "" {
 			return
 		}
-		cmd := exec.Command("sh", "-c", shellCmd)
+		cmd := exec.CommandContext(context.Background(), "sh", "-c", shellCmd)
 		cmd.Env = append(os.Environ(), append([]string{"RUN_ID=" + id}, extraEnv...)...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil && !*quiet {
-			fmt.Fprintf(os.Stderr, "hook error: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "hook error: %v\n", err)
 		}
 	}
 
@@ -5004,7 +5003,7 @@ func runRunsWait(args []string) error {
 			return
 		}
 		script := fmt.Sprintf(`display notification %q with title %q`, body, title)
-		_ = exec.Command("osascript", "-e", script).Run()
+		_ = exec.CommandContext(context.Background(), "osascript", "-e", script).Run()
 	}
 
 	switch phase {
@@ -5050,7 +5049,7 @@ func runRunsTop(args []string) error {
 	oneShot := fs.Bool("one-shot", false, "Print once and exit (useful for scripting)")
 	jsonOut := fs.Bool("json", false, "Output active runs as JSON (implies --one-shot)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs top [flags]\n\nLive view of active runs sorted by elapsed time.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs top [flags]\n\nLive view of active runs sorted by elapsed time.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -5194,7 +5193,7 @@ func runRunsTop(args []string) error {
 		} else {
 			var buf bytes.Buffer
 			w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tELAPSED\tPHASE\tSTAGE\tTITLE")
+			_, _ = fmt.Fprintln(w, "ID\tELAPSED\tPHASE\tSTAGE\tTITLE")
 			shown := allActive
 			if *limit > 0 && len(shown) > *limit {
 				shown = shown[:*limit]
@@ -5210,7 +5209,7 @@ func runRunsTop(args []string) error {
 				phase := phaseLabel(r.GetStatus().GetPhase())
 				elapsed := runDuration(r)
 				stage := r.GetStatus().GetStage()
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), elapsed, phase, stage, title)
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), elapsed, phase, stage, title)
 			}
 			_ = w.Flush()
 			output := buf.String()
@@ -5245,7 +5244,7 @@ func runRunsMultiTail(args []string) error {
 	feature := fs.String("feature", "", "Filter auto-discovered active runs by feature (requires --active)")
 	tag := fs.String("tag", "", "Filter auto-discovered active runs by tag (requires --active)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs multi-tail <id> [<id> ...] [flags]\n\nTail logs from multiple runs simultaneously.\nEach log line is prefixed with the run ID.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs multi-tail <id> [<id> ...] [flags]\n\nTail logs from multiple runs simultaneously.\nEach log line is prefixed with the run ID.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -5384,7 +5383,7 @@ func runRunsBatch(args []string) error {
 	wait := fs.Bool("wait", false, "Wait for all runs to complete before exiting")
 	outputIDs := fs.Bool("output-ids", false, "Print only run IDs (one per line) for scripting")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks runs batch <file.json> [flags]
+		_, _ = fmt.Fprintln(fs.Output(), `Usage: uncworks runs batch <file.json> [flags]
 
 Submit multiple runs from a JSON file. The file should contain a JSON array of run specs.
 
@@ -5447,11 +5446,11 @@ Flags:`)
 
 	// Auto-detect repo from git if not specified in any spec.
 	defaultRepo := ""
-	if out, gitErr := exec.Command("git", "remote", "get-url", "origin").Output(); gitErr == nil {
+	if out, gitErr := exec.CommandContext(context.Background(), "git", "remote", "get-url", "origin").Output(); gitErr == nil {
 		defaultRepo = strings.TrimSpace(string(out))
 	}
 	defaultBranch := "main"
-	if out, gitErr := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output(); gitErr == nil {
+	if out, gitErr := exec.CommandContext(context.Background(), "git", "rev-parse", "--abbrev-ref", "HEAD").Output(); gitErr == nil {
 		b := strings.TrimSpace(string(out))
 		if b != "" && b != "HEAD" {
 			defaultBranch = b
@@ -5537,7 +5536,7 @@ Flags:`)
 
 		resp, createErr := client.CreateAgentRun(context.Background(), connect.NewRequest(&apiv1.CreateAgentRunRequest{Spec: spec}))
 		if createErr != nil {
-			fmt.Fprintf(os.Stderr, "  spec %d: %s\n", i+1, humanizeErr(createErr))
+			_, _ = fmt.Fprintf(os.Stderr, "  spec %d: %s\n", i+1, humanizeErr(createErr))
 			continue
 		}
 		id := resp.Msg.GetAgentRun().GetId()
@@ -5597,7 +5596,7 @@ func runRunsGroup(args []string) error {
 	jsonOut := fs.Bool("json", false, "Output grouped runs as JSON object")
 	countOnly := fs.Bool("count-only", false, "Show only group names and run counts (no individual runs)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs group [flags]\n\nShow runs organized into groups.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs group [flags]\n\nShow runs organized into groups.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -5767,11 +5766,11 @@ func runRunsGroup(args []string) error {
 
 	if *countOnly {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "GROUP\tCOUNT\n")
+		_, _ = fmt.Fprintf(w, "GROUP\tCOUNT\n")
 		for _, key := range groupOrder {
-			fmt.Fprintf(w, "%s\t%d\n", key, len(groups[key]))
+			_, _ = fmt.Fprintf(w, "%s\t%d\n", key, len(groups[key]))
 		}
-		w.Flush()
+		_ = w.Flush()
 		fmt.Printf("\nTotal: %d run(s) in %d group(s)\n", total, len(groupOrder))
 		return nil
 	}
@@ -5833,10 +5832,10 @@ func runRunsGroup(args []string) error {
 			if ts := r.GetCreatedAt(); ts != nil {
 				age = relativeTime(ts.AsTime())
 			}
-			fmt.Fprintf(w, "  %s\t%-*s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(w, "  %s\t%-*s\t%s\t%s\t%s\n",
 				r.GetId(), tw, title, phaseColor(ph), dur, age)
 		}
-		w.Flush()
+		_ = w.Flush()
 	}
 	fmt.Printf("\nTotal: %d run(s) in %d group(s)\n", total, len(groupOrder))
 	return nil
@@ -5875,7 +5874,7 @@ func runRunsSearch(args []string) error {
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
 	jsonOut := fs.Bool("json", false, "Output matching runs as JSON array")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs search <term> [flags]\n\nSearch runs by prompt text, title, or project name.\nThe search term is matched case-insensitively against the run prompt, display name, and project.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs search <term> [flags]\n\nSearch runs by prompt text, title, or project name.\nThe search term is matched case-insensitively against the run prompt, display name, and project.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -6008,7 +6007,7 @@ func runRunsSearch(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tPHASE\tPROJECT\tAGE\tTITLE")
+	_, _ = fmt.Fprintln(w, "ID\tPHASE\tPROJECT\tAGE\tTITLE")
 	for _, r := range matches {
 		title := r.GetSpec().GetDisplayName()
 		if title == "" {
@@ -6023,9 +6022,9 @@ func runRunsSearch(args []string) error {
 		}
 		phase := colorPhase(phaseLabel(r.GetStatus().GetPhase()))
 		proj := r.GetSpec().GetProject()
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), phase, proj, age, title)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.GetId(), phase, proj, age, title)
 	}
-	w.Flush()
+	_ = w.Flush()
 	return nil
 }
 
@@ -6043,7 +6042,7 @@ func runRunsTimeline(args []string) error {
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
 	jsonOut := fs.Bool("json", false, "Output as JSON array")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs timeline [flags]\n\nShow a chronological view of completed runs with durations.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs timeline [flags]\n\nShow a chronological view of completed runs with durations.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -6193,7 +6192,7 @@ func runRunsTimeline(args []string) error {
 
 	fmt.Printf("Timeline: %d completed run(s) in the last %s\n\n", len(runs), *since)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "COMPLETED\tID\tPHASE\tDURATION\tPROJECT\tTITLE")
+	_, _ = fmt.Fprintln(w, "COMPLETED\tID\tPHASE\tDURATION\tPROJECT\tTITLE")
 	for _, r := range runs {
 		title := r.GetSpec().GetDisplayName()
 		if title == "" {
@@ -6209,9 +6208,9 @@ func runRunsTimeline(args []string) error {
 		ph := colorPhase(phaseLabel(r.GetStatus().GetPhase()))
 		dur := runDuration(r)
 		proj := r.GetSpec().GetProject()
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", completedStr, r.GetId(), ph, dur, proj, title)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", completedStr, r.GetId(), ph, dur, proj, title)
 	}
-	w.Flush()
+	_ = w.Flush()
 	return nil
 }
 
@@ -6223,7 +6222,7 @@ func runRunsCompare(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	jsonOut := fs.Bool("json", false, "Output comparison as JSON")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs compare <id1> <id2> [flags]\n\nShow a side-by-side field comparison of two runs.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs compare <id1> <id2> [flags]\n\nShow a side-by-side field comparison of two runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -6334,8 +6333,8 @@ func runRunsCompare(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "FIELD\t%-22s\t%-22s\n", id1, id2)
-	fmt.Fprintf(w, "─────\t%s\t%s\n", strings.Repeat("─", 22), strings.Repeat("─", 22))
+	_, _ = fmt.Fprintf(w, "FIELD\t%-22s\t%-22s\n", id1, id2)
+	_, _ = fmt.Fprintf(w, "─────\t%s\t%s\n", strings.Repeat("─", 22), strings.Repeat("─", 22))
 	for _, r := range rows {
 		if r.a == "" && r.b == "" {
 			continue
@@ -6347,9 +6346,9 @@ func runRunsCompare(args []string) error {
 		if len(b) > 40 {
 			b = b[:37] + "..."
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", r.field, a, b)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.field, a, b)
 	}
-	w.Flush()
+	_ = w.Flush()
 	return nil
 }
 
@@ -6400,16 +6399,15 @@ func runRunsAlias(args []string) error {
 	fmt.Println("Flag aliases:")
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, a := range flagAliases {
-		fmt.Fprintf(w, "  %s\t→  %s\n", a.alias, a.expandsTo)
+		_, _ = fmt.Fprintf(w, "  %s\t→  %s\n", a.alias, a.expandsTo)
 	}
-	w.Flush()
-
+	_ = w.Flush()
 	fmt.Println("\nCommand aliases:")
 	w2 := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, a := range cmdAliases {
-		fmt.Fprintf(w2, "  %s\t→  %s\n", a.alias, a.expandsTo)
+		_, _ = fmt.Fprintf(w2, "  %s\t→  %s\n", a.alias, a.expandsTo)
 	}
-	w2.Flush()
+	_ = w2.Flush()
 	return nil
 }
 
@@ -6423,7 +6421,7 @@ func runRunsEnv(args []string) error {
 	lastRun := fs.Bool("last", false, "Use the most recent run (auto-detect ID)")
 	jsonOut := fs.Bool("json", false, "Output as JSON object")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs env <id> [flags]\n\nShow environment variables configured for a run.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs env <id> [flags]\n\nShow environment variables configured for a run.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -6501,7 +6499,7 @@ func runRunsSlow(args []string) error {
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
 	jsonOut := fs.Bool("json", false, "Output as JSON array")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs slow [flags]\n\nShow the slowest completed runs sorted by duration.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs slow [flags]\n\nShow the slowest completed runs sorted by duration.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -6608,7 +6606,7 @@ func runRunsSlow(args []string) error {
 	_ = !*noColor && term.IsTerminal(int(os.Stdout.Fd())) // reserved for future coloring
 	fmt.Printf("Slowest %d run(s) in the last %s:\n\n", len(runs), *since)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "DURATION\tID\tPHASE\tPROJECT\tTITLE")
+	_, _ = fmt.Fprintln(w, "DURATION\tID\tPHASE\tPROJECT\tTITLE")
 	for _, r := range runs {
 		dur := runDuration(r)
 		title := r.GetSpec().GetDisplayName()
@@ -6619,9 +6617,9 @@ func runRunsSlow(args []string) error {
 			title = title[:37] + "..."
 		}
 		ph := phaseLabel(r.GetStatus().GetPhase())
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", dur, r.GetId(), ph, r.GetSpec().GetProject(), title)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", dur, r.GetId(), ph, r.GetSpec().GetProject(), title)
 	}
-	w.Flush()
+	_ = w.Flush()
 	return nil
 }
 
@@ -6636,7 +6634,7 @@ func runRunsScore(args []string) error {
 	includeArchived := fs.Bool("include-archived", false, "Include archived runs in the score calculation")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs score [flags]\n\nShow success rate across multiple time windows (1h, 24h, 7d, 30d).\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs score [flags]\n\nShow success rate across multiple time windows (1h, 24h, 7d, 30d).\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -6743,7 +6741,7 @@ func runRunsScore(args []string) error {
 
 	useColor := term.IsTerminal(int(os.Stdout.Fd()))
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "WINDOW\tTOTAL\tDONE\tFAILED\tSUCCESS RATE")
+	_, _ = fmt.Fprintln(w, "WINDOW\tTOTAL\tDONE\tFAILED\tSUCCESS RATE")
 	for _, r := range results {
 		rateStr := "—"
 		if r.Done+r.Failed > 0 {
@@ -6759,7 +6757,7 @@ func runRunsScore(args []string) error {
 				}
 			}
 		}
-		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", r.Window, r.Total, r.Done, r.Failed, rateStr)
+		_, _ = fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", r.Window, r.Total, r.Done, r.Failed, rateStr)
 	}
 	return w.Flush()
 }
@@ -6777,7 +6775,7 @@ func runRunsTally(args []string) error {
 	noColor := fs.Bool("no-color", false, "Disable ANSI color")
 	jsonOut := fs.Bool("json", false, "Output as JSON array")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs tally [flags]\n\nShow daily run counts for the past N days.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs tally [flags]\n\nShow daily run counts for the past N days.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -6883,7 +6881,7 @@ func runRunsTally(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "DATE\tTOTAL\tDONE\tFAILED\tBAR")
+	_, _ = fmt.Fprintln(w, "DATE\tTOTAL\tDONE\tFAILED\tBAR")
 	for _, d := range sorted {
 		b := buckets[d]
 		barLen := 0
@@ -6901,7 +6899,7 @@ func runRunsTally(args []string) error {
 				bar = "\033[32m" + bar + "\033[0m"
 			}
 		}
-		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", d, b.Total, b.Done, b.Failed, bar)
+		_, _ = fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", d, b.Total, b.Done, b.Failed, bar)
 	}
 	return w.Flush()
 }
@@ -6913,7 +6911,7 @@ func runRunsCost(args []string) error {
 	since := fs.String("since", "", "Filter window (e.g. 24h, 7d, 30d)")
 	model := fs.String("model", "", "Filter by model tier substring")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs cost [flags]\n\nShow cost and diff summary across agent runs.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs cost [flags]\n\nShow cost and diff summary across agent runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -7029,7 +7027,7 @@ func runRunsVelocity(args []string) error {
 	project := fs.String("project", "", "Filter by project name")
 	buckets := fs.Int("buckets", 24, "Number of hourly buckets to show (default 24 = last 24h)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs velocity [flags]\n\nShow runs-per-hour for the past N hours.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs velocity [flags]\n\nShow runs-per-hour for the past N hours.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -7112,7 +7110,7 @@ func runRunsPercentiles(args []string) error {
 	project := fs.String("project", "", "Filter by project name")
 	since := fs.String("since", "", "Filter window (e.g. 24h, 7d, 30d)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs percentiles [flags]\n\nShow p50/p95/p99 duration for completed runs.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs percentiles [flags]\n\nShow p50/p95/p99 duration for completed runs.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -7211,7 +7209,7 @@ func runRunsAnomalies(args []string) error {
 	since := fs.String("since", "7d", "Filter window (default 7d)")
 	threshold := fs.Float64("threshold", 2.0, "Flag runs with duration > threshold * p75")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks runs anomalies [flags]\n\nShow succeeded runs with unusually long duration.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks runs anomalies [flags]\n\nShow succeeded runs with unusually long duration.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -7317,11 +7315,11 @@ func runRunsAnomalies(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "DURATION\tID\tSTARTED\tTITLE")
+	_, _ = fmt.Fprintln(w, "DURATION\tID\tSTARTED\tTITLE")
 	for _, a := range anomalies {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", formatDuration(a.duration), a.id, relativeTime(a.started), a.title)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", formatDuration(a.duration), a.id, relativeTime(a.started), a.title)
 	}
-	w.Flush()
+	_ = w.Flush()
 	plural := "ies"
 	if len(anomalies) == 1 {
 		plural = "y"
@@ -7335,7 +7333,7 @@ func runRunsCredits(args []string) error {
 	fs := flag.NewFlagSet("credits", flag.ContinueOnError)
 	jsonOut := fs.Bool("json", false, "Output raw JSON response")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks runs credits [--json]
+		_, _ = fmt.Fprintln(fs.Output(), `Usage: uncworks runs credits [--json]
 
 Check OpenRouter API key balance and credit usage.
 Reads key from OPENROUTER_API_KEY environment variable.`)
@@ -7362,7 +7360,7 @@ Reads key from OPENROUTER_API_KEY environment variable.`)
 	if err != nil {
 		return fmt.Errorf("calling OpenRouter API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("reading response: %w", err)

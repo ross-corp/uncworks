@@ -186,7 +186,7 @@ func TestWithAuth_WebhookExempt(t *testing.T) {
 // --- env helper tests ---
 
 func TestEnvIntOrDefault_UsesDefault(t *testing.T) {
-	os.Unsetenv("TEST_INT_KEY_UNUSED")
+	_ = os.Unsetenv("TEST_INT_KEY_UNUSED")
 	if got := envIntOrDefault("TEST_INT_KEY_UNUSED", 42); got != 42 {
 		t.Errorf("envIntOrDefault with unset key = %d, want 42", got)
 	}
@@ -207,7 +207,7 @@ func TestEnvIntOrDefault_InvalidFallsBack(t *testing.T) {
 }
 
 func TestEnvFloatOrDefault_UsesDefault(t *testing.T) {
-	os.Unsetenv("TEST_FLOAT_UNUSED")
+	_ = os.Unsetenv("TEST_FLOAT_UNUSED")
 	if got := envFloatOrDefault("TEST_FLOAT_UNUSED", 3.14); got != 3.14 {
 		t.Errorf("envFloatOrDefault with unset key = %f, want 3.14", got)
 	}
@@ -221,7 +221,7 @@ func TestEnvFloatOrDefault_ReadsEnv(t *testing.T) {
 }
 
 func TestEnvOrDefault_UsesDefault(t *testing.T) {
-	os.Unsetenv("TEST_STR_UNUSED")
+	_ = os.Unsetenv("TEST_STR_UNUSED")
 	if got := envOrDefault("TEST_STR_UNUSED", "fallback"); got != "fallback" {
 		t.Errorf("envOrDefault with unset key = %q, want %q", got, "fallback")
 	}

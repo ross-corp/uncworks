@@ -1,6 +1,7 @@
 package sidecar
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,7 @@ func initTestRepo(t *testing.T) string {
 
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := exec.CommandContext(context.Background(), args[0], args[1:]...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(),
 			"GIT_AUTHOR_NAME=test",
@@ -81,7 +82,7 @@ func TestCreateGitCheckpoint_CreatesCommit(t *testing.T) {
 	}
 
 	// Verify the commit message contains the tool name
-	logCmd := exec.Command("git", "log", "-1", "--pretty=%s")
+	logCmd := exec.CommandContext(context.Background(), "git", "log", "-1", "--pretty=%s")
 	logCmd.Dir = dir
 	out, err := logCmd.Output()
 	if err != nil {

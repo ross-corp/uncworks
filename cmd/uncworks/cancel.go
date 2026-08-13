@@ -18,7 +18,7 @@ func runCancel(args []string) error {
 	server := fs.String("server", "", "gRPC server address (overrides config)")
 	lastRun := fs.Bool("last", false, "Cancel the most recent active run (auto-detect ID)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks cancel <run-id> [<run-id> ...] [flags]\n\nRequest cancellation of one or more running agents.\n\nFlags:")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks cancel <run-id> [<run-id> ...] [flags]\n\nRequest cancellation of one or more running agents.\n\nFlags:")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -68,7 +68,7 @@ func runCancel(args []string) error {
 	}
 	if len(errs) > 0 {
 		for _, e := range errs {
-			fmt.Fprintf(os.Stderr, "error: %s\n", e)
+			_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", e)
 		}
 		return fmt.Errorf("%d cancellation(s) failed", len(errs))
 	}

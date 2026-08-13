@@ -15,7 +15,7 @@ func runConnect(args []string) error {
 	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
 	test := fs.Bool("test", false, "Verify connectivity after saving the address")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks connect <address> [flags]
+		_, _ = fmt.Fprintln(fs.Output(), `Usage: uncworks connect <address> [flags]
 
 Store a gRPC server address for use by 'uncworks tui'.
 Pass "local" to reset to the default local port-forward.

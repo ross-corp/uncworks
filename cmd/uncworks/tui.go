@@ -565,7 +565,7 @@ func runTUI(args []string) error {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
 	serverAddr := fs.String("server", "", "gRPC server address (overrides config)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks tui [flags]\n\nLaunch the terminal UI.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks tui [flags]\n\nLaunch the terminal UI.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {

@@ -269,11 +269,14 @@ func (g *Gateway) StartAgent(_ context.Context, req *connect.Request[agentv1.Sta
 	}
 	currentModelMu.Unlock()
 
-	// Configure git for checkpoint commits
-	gitConfigCmd := exec.Command("git", "config", "user.name", "aot-agent")
+	// Configure git for checkpoint commits. These run on a background context
+	// rather than the request's: StartAgent returns as soon as the process is
+	// spawned, so binding either to the RPC would cancel work the caller is
+	// waiting to have finished.
+	gitConfigCmd := exec.CommandContext(context.Background(), "git", "config", "user.name", "aot-agent")
 	gitConfigCmd.Dir = resolvedDir
 	_ = gitConfigCmd.Run()
-	gitEmailCmd := exec.Command("git", "config", "user.email", "agent@aot.uncworks.io")
+	gitEmailCmd := exec.CommandContext(context.Background(), "git", "config", "user.email", "agent@aot.uncworks.io")
 	gitEmailCmd.Dir = resolvedDir
 	_ = gitEmailCmd.Run()
 
@@ -339,7 +342,10 @@ func startAgentProcess(req *agentv1.StartAgentRequest) (*AgentProcess, error) {
 	if model := os.Getenv("PI_MODEL"); model != "" {
 		args = append(args, "--model", model)
 	}
-	cmd := exec.Command("pi", args...)
+	// The agent outlives the RPC that started it: StopAgent ends it, not a
+	// cancelled context. Binding it to the request context would kill the agent
+	// the moment StartAgent returned.
+	cmd := exec.CommandContext(context.Background(), "pi", args...)
 	cmd.Dir = resolveWorkDir(req.RepoPath)
 
 	// Inherit current environment and add request-specific vars on top.
@@ -911,7 +917,7 @@ func (g *Gateway) waitForSingleProcess(proc *AgentProcess) error {
 // restartAgentProcess creates a new agent process using the same command arguments
 // as the original process.
 func restartAgentProcess(origCmd *exec.Cmd) (*AgentProcess, error) {
-	cmd := exec.Command(origCmd.Path, origCmd.Args[1:]...)
+	cmd := exec.CommandContext(context.Background(), origCmd.Path, origCmd.Args[1:]...)
 	cmd.Dir = origCmd.Dir
 	cmd.Env = origCmd.Env
 
@@ -988,7 +994,7 @@ func restartAgentProcessWithModel(origCmd *exec.Cmd, model string) (*AgentProces
 		newArgs = append(newArgs, "--model", model)
 	}
 
-	cmd := exec.Command(origCmd.Path, newArgs...)
+	cmd := exec.CommandContext(context.Background(), origCmd.Path, newArgs...)
 	cmd.Dir = origCmd.Dir
 	cmd.Env = origCmd.Env
 
@@ -2093,7 +2099,7 @@ func isLLMResponseLog(payload string) bool {
 // the commit SHA + diff against the previous checkpoint. Returns ("", nil) if no changes.
 func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 	// 1. git add -A (stage everything including untracked)
-	addCmd := exec.Command("git", "add", "-A")
+	addCmd := exec.CommandContext(context.Background(), "git", "add", "-A")
 	addCmd.Dir = workDir
 	if err := addCmd.Run(); err != nil {
 		slog.Warn("git checkpoint: add failed", "workDir", workDir, "err", err)
@@ -2101,7 +2107,7 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 	}
 
 	// 2. Check if anything to commit
-	statusCmd := exec.Command("git", "status", "--porcelain")
+	statusCmd := exec.CommandContext(context.Background(), "git", "status", "--porcelain")
 	statusCmd.Dir = workDir
 	var statusOut bytes.Buffer
 	statusCmd.Stdout = &statusOut
@@ -2112,7 +2118,7 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 
 	// 3. Commit with checkpoint message
 	msg := fmt.Sprintf("aot-checkpoint: %s", toolName)
-	commitCmd := exec.Command("git", "commit", "--no-verify", "--allow-empty", "-m", msg)
+	commitCmd := exec.CommandContext(context.Background(), "git", "commit", "--no-verify", "--allow-empty", "-m", msg)
 	commitCmd.Dir = workDir
 	commitCmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME=aot-agent",
@@ -2126,7 +2132,7 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 	}
 
 	// 4. Get current SHA
-	shaCmd := exec.Command("git", "rev-parse", "HEAD")
+	shaCmd := exec.CommandContext(context.Background(), "git", "rev-parse", "HEAD")
 	shaCmd.Dir = workDir
 	var shaOut bytes.Buffer
 	shaCmd.Stdout = &shaOut
@@ -2143,9 +2149,9 @@ func createGitCheckpoint(workDir, toolName string) (string, *SpanDiff) {
 
 	var diffCmd *exec.Cmd
 	if prevSHA != "" {
-		diffCmd = exec.Command("git", "diff", prevSHA+".."+currentSHA)
+		diffCmd = exec.CommandContext(context.Background(), "git", "diff", prevSHA+".."+currentSHA)
 	} else {
-		diffCmd = exec.Command("git", "diff", "HEAD~1..HEAD")
+		diffCmd = exec.CommandContext(context.Background(), "git", "diff", "HEAD~1..HEAD")
 	}
 	diffCmd.Dir = workDir
 	var diffOut bytes.Buffer

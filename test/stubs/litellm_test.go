@@ -19,7 +19,7 @@ func TestLiteLLMStub_DefaultResponse(t *testing.T) {
 	resp, err := postJSON(t, stub.URL()+"/chat/completions",
 		bytes.NewBufferString(`{"model":"gpt-4","messages":[{"role":"user","content":"hello"}]}`))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -38,8 +38,7 @@ func TestLiteLLMStub_RecordsRequests(t *testing.T) {
 	body := `{"model":"test-model","messages":[{"role":"user","content":"what is 2+2?"}]}`
 	resp, err := postJSON(t, stub.URL()+"/chat/completions", bytes.NewBufferString(body))
 	require.NoError(t, err)
-	resp.Body.Close()
-
+	_ = resp.Body.Close()
 	assert.Equal(t, 1, stub.RequestCount())
 	require.Len(t, stub.Requests, 1)
 	assert.Equal(t, "test-model", stub.Requests[0].Model)
@@ -59,7 +58,7 @@ func TestLiteLLMStub_SequencedResponses(t *testing.T) {
 		resp, err := postJSON(t, stub.URL()+"/chat/completions",
 			bytes.NewBufferString(`{"model":"m","messages":[]}`))
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		var cr CompletionResponse
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&cr))
 		require.Len(t, cr.Choices, 1)
@@ -87,7 +86,7 @@ func TestLiteLLMStub_FallsBackToLastWhenExhausted(t *testing.T) {
 		require.NoError(t, err)
 		var cr CompletionResponse
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&cr))
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		assert.Equal(t, "only", cr.Choices[0].Message.Content)
 	}
 	assert.Equal(t, 3, stub.RequestCount())

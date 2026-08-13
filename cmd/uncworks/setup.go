@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -48,7 +49,7 @@ func runSetup(args []string) error {
 	valuesFile := fs.String("values", "", "Additional Helm values file")
 	withTemporal := fs.Bool("with-temporal", false, "Deploy a Temporal dev server into the cluster (for local dev)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: uncworks setup [flags]\n\nDeploy UNCWORKS into a local Kubernetes cluster.")
+		_, _ = fmt.Fprintln(fs.Output(), "Usage: uncworks setup [flags]\n\nDeploy UNCWORKS into a local Kubernetes cluster.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -258,11 +259,11 @@ func helmInstall(cfg *setupConfig) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpValues)
+	defer func() { _ = os.Remove(tmpValues) }()
 	helmArgs = append(helmArgs, "-f", tmpValues)
 
 	fmt.Printf("Installing UNCWORKS (release: %s, namespace: %s)...\n", defaultReleaseName, cfg.Namespace)
-	cmd := exec.Command("helm", helmArgs...)
+	cmd := exec.CommandContext(context.Background(), "helm", helmArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -277,7 +278,7 @@ func writeTempValues(cfg *setupConfig) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var sb strings.Builder
 	if cfg.LLMKey != "" {
@@ -327,25 +328,24 @@ spec:
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err := f.WriteString(manifest); err != nil {
 		return err
 	}
-	f.Close()
-
+	_ = f.Close()
 	// Ensure namespace exists.
 	nsCreateArgs := []string{"create", "namespace", namespace}
 	if kubeCtx != "" {
 		nsCreateArgs = append([]string{"--context", kubeCtx}, nsCreateArgs...)
 	}
-	cmd := exec.Command("kubectl", nsCreateArgs...)
+	cmd := exec.CommandContext(context.Background(), "kubectl", nsCreateArgs...)
 	_ = cmd.Run() // ignore error if namespace already exists
 
 	kubectlArgs := []string{"apply", "--namespace", namespace, "-f", f.Name()}
 	if kubeCtx != "" {
 		kubectlArgs = append([]string{"--context", kubeCtx}, kubectlArgs...)
 	}
-	cmd = exec.Command("kubectl", kubectlArgs...)
+	cmd = exec.CommandContext(context.Background(), "kubectl", kubectlArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -400,13 +400,13 @@ func readSecret(label string) string {
 		return readLine()
 	}
 	// Disable echo via stty so the secret is not visible as the user types.
-	sttyOff := exec.Command("stty", "-echo")
+	sttyOff := exec.CommandContext(context.Background(), "stty", "-echo")
 	sttyOff.Stdin = os.Stdin
 	_ = sttyOff.Run()
 
 	val := readLine()
 
-	sttyOn := exec.Command("stty", "echo")
+	sttyOn := exec.CommandContext(context.Background(), "stty", "echo")
 	sttyOn.Stdin = os.Stdin
 	_ = sttyOn.Run()
 	fmt.Println() // newline after masked input

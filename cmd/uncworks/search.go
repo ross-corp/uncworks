@@ -30,7 +30,7 @@ func runSearch(args []string) error {
 	minScore := fs.Float64("min-score", 0, "Minimum similarity score threshold (0.0-1.0; 0 = no filter)")
 	idsOnly := fs.Bool("ids-only", false, "Print only matching run IDs (one per line)")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), `Usage: uncworks search <query> [flags]
+		_, _ = fmt.Fprintln(fs.Output(), `Usage: uncworks search <query> [flags]
 
 Search the knowledge base for relevant past work.
 
