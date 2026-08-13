@@ -43,10 +43,13 @@ var images = []imageSpec{
 
 // goBase returns a Go container with the source mounted and modules cached.
 // TODO: Replace with devbox-in-Dagger once Nix daemon-less containers are solved.
-// Versions are kept in sync with devbox.json manually.
+// Versions are kept in sync with go.mod's `go` directive manually: golangci-lint
+// refuses to run when the toolchain that built it is older than the version a
+// module targets, and go build/test/install fail the same way under
+// GOTOOLCHAIN=local, which this container does not override.
 func (m *Ci) goBase(source *dagger.Directory) *dagger.Container {
 	return dag.Container().
-		From("golang:1.25-bookworm").
+		From("golang:1.26-bookworm").
 		WithMountedDirectory("/src", source).
 		WithWorkdir("/src").
 		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).

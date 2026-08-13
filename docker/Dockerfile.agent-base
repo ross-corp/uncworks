@@ -1,7 +1,7 @@
 # Base image for AOT agent pods with devbox and bun pre-installed.
 # Use golang image as intermediate to get working CA certs (bookworm-slim
 # ca-certificates postinst segfaults on some kernel/Docker combinations).
-FROM golang:1.25-bookworm AS certs
+FROM golang:1.26-bookworm AS certs
 
 FROM debian:bookworm-slim AS base
 

@@ -1,5 +1,5 @@
 # Hydration init-container image.
-FROM golang:1.25-bookworm AS builder
+FROM golang:1.26-bookworm AS builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -7,7 +7,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /hydration ./cmd/hydration
 
-FROM golang:1.25-bookworm AS runtime
+FROM golang:1.26-bookworm AS runtime
 # golang base already has git, curl, ca-certificates
 # Install devbox for workspace dependency management
 RUN curl -fsSL https://get.jetify.com/devbox | bash -s -- -f
