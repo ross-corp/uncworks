@@ -138,7 +138,7 @@ func TestRunLifecycle_GetNotFound(t *testing.T) {
 	defer cleanup()
 
 	_, err := connectClient.GetAgentRun(context.Background(), connect.NewRequest(&apiv1.GetAgentRunRequest{
-		Id: "ar-does-not-exist",
+		Id: "ar-notfound",
 	}))
 	require.Error(t, err, "GetAgentRun for non-existent ID should return an error")
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(err),
