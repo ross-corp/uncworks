@@ -28,6 +28,9 @@ var ErrFailed = errors.New("required gate verdict failed")
 type Tier string
 
 const (
+	// TierAmendment rewrites the durable spec corpus. Code cannot merge against
+	// a spec that is under revision, so this tier never passes on its own.
+	TierAmendment Tier = "amendment"
 	// TierExperiment is a branch with no spec. It may target only another
 	// experiment branch.
 	TierExperiment Tier = "experiment"
@@ -55,6 +58,18 @@ type Result struct {
 	Tier     Tier      `json:"tier"`
 	Reason   string    `json:"tierReason"`
 	Verdicts []Verdict `json:"verdicts"`
+}
+
+// Only narrows a result to one verdict, so a workflow can publish one check run
+// per verdict and give branch protection a name to require.
+func (r Result) Only(name string) Result {
+	narrowed := Result{Change: r.Change, Tier: r.Tier, Reason: r.Reason}
+	for _, v := range r.Verdicts {
+		if v.Name == name {
+			narrowed.Verdicts = append(narrowed.Verdicts, v)
+		}
+	}
+	return narrowed
 }
 
 // Failed reports whether a required verdict failed.
@@ -101,7 +116,7 @@ func Check(ctx context.Context, repo Repo, opts Options) (Result, error) {
 	result := Result{Change: opts.ChangeID, Tier: tier, Reason: reason}
 
 	result.Verdicts = append(result.Verdicts,
-		tierVerdict(ctx, repo, opts, tier, reason),
+		tierVerdict(ctx, repo, opts, tier, reason, changed),
 		citationsVerdict(opts),
 		conformanceVerdict(opts, changed),
 		orderVerdict(ctx, repo, opts, changed),
@@ -113,14 +128,33 @@ func Check(ctx context.Context, repo Repo, opts Options) (Result, error) {
 }
 
 // docPrefixes and docSuffixes mark a path as documentation or test-only.
+//
+// openspec/ is deliberately absent. A change to openspec/specs/ rewrites the
+// contract other work is measured against, so treating it as documentation
+// would make a spec amendment the one diff shape the classifier cannot fail.
 var (
-	docPrefixes  = []string{"docs/", "openspec/", ".github/ISSUE_TEMPLATE/"}
+	docPrefixes  = []string{"docs/", ".github/ISSUE_TEMPLATE/"}
 	testSuffixes = []string{"_test.go", ".test.ts", ".spec.ts"}
 	testPrefixes = []string{"test/", "e2e/", "web/e2e/"}
 
 	// publicSurfaces are the paths where a change alters something a caller
 	// outside this repository can observe.
-	publicSurfaces = []string{"proto/", "api/", "deploy/", "docker/", "gen/"}
+	//
+	// internal/server is here despite the internal/ prefix: it implements the
+	// REST and ConnectRPC surface that docs/reference/api.md documents, so a
+	// field rename there is observable by every out-of-repo client. The prefix
+	// list would otherwise only catch surfaces declared in a schema directory.
+	publicSurfaces = []string{
+		"proto/", "api/", "deploy/", "docker/", "gen/", "internal/server/",
+	}
+
+	// specPrefix marks a change to the durable spec corpus. An open amendment
+	// to it blocks code that is measured against the text being rewritten.
+	specPrefix = "openspec/specs/"
+
+	// changePrefix marks a change's own artifacts, which are not the diff a
+	// conformance or tier check is about.
+	changePrefix = "openspec/changes/"
 )
 
 // ClassifyTier computes a change's tier from the paths it touches.
@@ -134,15 +168,27 @@ func ClassifyTier(changed []string) (Tier, string) {
 		return TierT1, "the diff is empty"
 	}
 
+	// A spec amendment is checked before anything else. It is the diff shape
+	// the escalation protocol exists for, and reading it as documentation is
+	// what let it through.
+	var amended []string
+	for _, p := range changed {
+		if strings.HasPrefix(p, specPrefix) {
+			amended = append(amended, p)
+		}
+	}
+	if len(amended) > 0 {
+		return TierAmendment, fmt.Sprintf("the diff amends the spec corpus: %s",
+			strings.Join(amended, ", "))
+	}
+
 	var surfaces []string
 	capabilities := map[string]bool{}
 	codeChanged := false
 
 	for _, p := range changed {
 		switch {
-		case isDoc(p):
-			continue
-		case isTest(p):
+		case isDoc(p), isTest(p), strings.HasPrefix(p, changePrefix):
 			continue
 		}
 		codeChanged = true

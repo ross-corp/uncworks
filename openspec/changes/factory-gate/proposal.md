@@ -47,15 +47,20 @@ editor.
 - B1: `uncworks gate check --change <id> --base <ref> --head <ref>` exits 0 when
   every required verdict passes, and 1 when any required verdict fails.
 - B2: The tier verdict is required. A change whose tier demands a merged spec
-  fails when `openspec/changes/<id>/` is absent from the base ref.
+  fails when `openspec/changes/<id>/` is absent from the base ref, and also when
+  the named change's `## Impact` claims none of the changed code paths.
 - B3: The spec-conformance verdict is advisory. It names each changed path that
   no `## Impact` entry covers, and each declared path the diff never touches.
 - B4: The order verdict is advisory. It fails when the head ref changes code and
   the spec for the named change is not present in the base ref.
 - B5: The citations verdict is required. It runs the offline gate, so it reaches
-  no network and returns the same verdict for the same tree.
-- B6: A tier is computed from the diff and the spec, never from the pull request
-  title or the branch name, so renaming a branch cannot lower the bar.
+  no network and returns the same verdict for the same tree. It fails when the
+  change carries no `citations.lock` at all.
+- B6: A tier is computed from the diff, never from the pull request title or the
+  branch name. Renaming a branch cannot lower the bar, and neither can naming a
+  different change, because the named change must claim the diff.
+- B9: A diff that touches `openspec/specs/` is an amendment and never passes the
+  tier verdict on its own.
 - B7: `uncworks gate check --json` emits one object per verdict, so a CI job
   can render it without parsing prose.
 - B8: `task test:go` passes with the gate package present.
@@ -64,7 +69,8 @@ editor.
 
 - Code: `internal/gate/`, `cmd/uncworks/gate.go`
 - Specs: `openspec/specs/factory-gate/spec.md`
-- CI: `.github/workflows/ci.yml`
+- CI: `.github/workflows/ci.yml`, three jobs, two of them named for the required
+  verdicts so branch protection has something to select
 - Impactful actions, each of which becomes an owner gate in tasks.md:
   making `factory/tier` and `factory/citations` required checks on the default
   branch, because that changes what can merge.

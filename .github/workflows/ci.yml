@@ -25,13 +25,16 @@ jobs:
           module: ./ci
           call: all --source .
 
-  gate:
-    name: Factory Gate
+  # Two jobs rather than one, named for the checks the design asks the owner to
+  # mark required. A single job would give branch protection only its own name,
+  # so step 4 of the rollout would have nothing to select.
+  #
+  # Neither carries continue-on-error. An unrequired check that fails does not
+  # block a merge, so the staged rollout works without pretending the job
+  # passed, and the kill switch stays a settings change.
+  gate-tier:
+    name: factory/tier
     runs-on: ubuntu-latest
-    # Reporting only until the owner marks factory/tier and factory/citations
-    # required in branch protection. See openspec/changes/factory-gate.
-    continue-on-error: true
-    if: github.event_name != 'push'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,16 +44,74 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Compute the factory-gate verdicts
+      - name: Compute the tier verdict
         env:
-          BASE_REF: ${{ github.event.pull_request.base.ref || 'main' }}
+          # github.head_ref is empty on merge_group, because the queue rewrites
+          # the branch. The Change-Id trailer travels with the commit, so the
+          # merge-group run resolves the same change the pull-request run did.
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref || 'main' }}
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
+          BASE_REF="${BASE_REF#refs/heads/}"
           git fetch --no-tags origin "$BASE_REF"
           go run ./cmd/uncworks gate check \
             --base "origin/$BASE_REF" \
             --head HEAD \
-            --branch "$HEAD_BRANCH"
+            --branch "$HEAD_BRANCH" \
+            --message "$(git log -1 --format=%B)" \
+            --only factory/tier
+
+  gate-citations:
+    name: factory/citations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Compute the citations verdict
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref || 'main' }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          BASE_REF="${BASE_REF#refs/heads/}"
+          git fetch --no-tags origin "$BASE_REF"
+          go run ./cmd/uncworks gate check \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --branch "$HEAD_BRANCH" \
+            --message "$(git log -1 --format=%B)" \
+            --only factory/citations
+
+  gate-advisory:
+    name: Factory Gate (advisory)
+    runs-on: ubuntu-latest
+    # The two advisory verdicts report and never block, so this job absorbs
+    # their exit code rather than the required jobs doing it.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Report the advisory verdicts
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref || 'main' }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          BASE_REF="${BASE_REF#refs/heads/}"
+          git fetch --no-tags origin "$BASE_REF"
+          go run ./cmd/uncworks gate check \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --branch "$HEAD_BRANCH" \
+            --message "$(git log -1 --format=%B)"
 
   release:
     name: Release Please

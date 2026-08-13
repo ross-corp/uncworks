@@ -27,12 +27,21 @@ func changePath(id string) string {
 // It requires the spec to be present, not to be perfect. The changes that were
 // in flight when this landed predate the schema and do not pass the rubric
 // lint, and blocking them here would gate old work on a rule written after it.
-func tierVerdict(ctx context.Context, repo Repo, opts Options, tier Tier, reason string) Verdict {
+func tierVerdict(ctx context.Context, repo Repo, opts Options, tier Tier, reason string, changed []string) Verdict {
 	verdict := Verdict{Name: "factory/tier", Required: true, Summary: string(tier) + ": " + reason}
 
 	switch tier {
 	case TierExperiment, TierT1:
 		verdict.Pass = true
+		return verdict
+	case TierAmendment:
+		// An amendment rewrites the contract other work is measured against, so
+		// it never passes on its own. The owner merges it as its own change,
+		// and the code that depends on it comes afterwards.
+		verdict.Detail = append(verdict.Detail,
+			"this diff amends openspec/specs/, so it is an escalation rather than an "+
+				"implementation. Merge the amendment on its own, then reopen the code "+
+				"against the amended spec")
 		return verdict
 	}
 
@@ -53,6 +62,23 @@ func tierVerdict(ctx context.Context, repo Repo, opts Options, tier Tier, reason
 		verdict.Detail = append(verdict.Detail,
 			fmt.Sprintf("tier %s needs a merged spec, and %s is absent from %s",
 				tier, proposal, opts.Base))
+		return verdict
+	}
+
+	// The change id comes from a flag or a branch name, both of which the
+	// author writes. Checking only that the named change exists lets any diff
+	// borrow any merged change's spec, which is the same bar-lowering the tier
+	// classifier refuses to allow through a rename. Require the named change to
+	// have claimed this work.
+	change, err := specutil.Load(changeDir(opts.Root, opts.ChangeID))
+	if err != nil {
+		verdict.Detail = append(verdict.Detail, "could not read the change: "+err.Error())
+		return verdict
+	}
+	if unclaimed := unclaimedPaths(change, changed); len(unclaimed) > 0 {
+		verdict.Detail = append(verdict.Detail,
+			fmt.Sprintf("the change %q does not claim this work: its Impact covers none of %s",
+				opts.ChangeID, strings.Join(truncateList(unclaimed, 5), ", ")))
 		return verdict
 	}
 
@@ -84,6 +110,35 @@ func tierVerdict(ctx context.Context, repo Repo, opts Options, tier Tier, reason
 	return verdict
 }
 
+// unclaimedPaths returns the changed code paths the change's Impact does not
+// cover. It returns nothing when at least one path is claimed, because a
+// partial declaration is the conformance check's business, not the tier's. The
+// tier only asks whether this change is about this diff at all.
+func unclaimedPaths(change *specutil.Change, changed []string) []string {
+	declared := declaredPaths(change)
+	var code, unclaimed []string
+	for _, p := range changed {
+		if isGenerated(p) || isChangeArtifact(p) || isDoc(p) || isTest(p) {
+			continue
+		}
+		code = append(code, p)
+		if !coveredBy(declared, p) {
+			unclaimed = append(unclaimed, p)
+		}
+	}
+	if len(code) == 0 || len(unclaimed) < len(code) {
+		return nil
+	}
+	return unclaimed
+}
+
+func truncateList(items []string, n int) []string {
+	if len(items) <= n {
+		return items
+	}
+	return append(items[:n:n], fmt.Sprintf("and %d more", len(items)-n))
+}
+
 // citationsVerdict runs the offline gate over the change's pinned claims.
 //
 // It performs no live fetch. A live fetch would make the verdict a function of
@@ -100,6 +155,14 @@ func citationsVerdict(opts Options) Verdict {
 	if _, err := os.Stat(dir); err != nil {
 		verdict.Pass = true
 		verdict.Summary = "the change directory is not in this tree"
+		return verdict
+	}
+	// citelock.Verify treats an absent lock as nothing to do, which is right
+	// for the library and wrong here: the schema requires every change to carry
+	// one, so an absent lock cannot be read as "there was nothing to cite".
+	if _, err := os.Stat(filepath.Join(dir, "citations.lock")); err != nil {
+		verdict.Summary = "the change carries no citations.lock. Write {\"records\":[]} " +
+			"to state that it cites nothing"
 		return verdict
 	}
 

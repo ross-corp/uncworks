@@ -31,7 +31,10 @@ func TestClassifyTier(t *testing.T) {
 		{"documentation only", []string{"docs/guides/models.md", "README.md"}, TierT1},
 		{"tests only", []string{"test/contract/boundary_test.go", "internal/gate/gate_test.go"}, TierT1},
 		{"one capability", []string{"internal/gate/gate.go", "internal/gate/verdicts.go"}, TierT2},
-		{"two capabilities", []string{"internal/gate/gate.go", "internal/server/grpc.go"}, TierT3},
+		{"two capabilities", []string{"internal/gate/gate.go", "internal/cli/open.go"}, TierT3},
+		{"the REST surface", []string{"internal/server/files.go"}, TierT3},
+		{"a spec amendment", []string{"openspec/specs/run-pipeline/spec.md"}, TierAmendment},
+		{"a change's own artifacts", []string{"openspec/changes/foo/proposal.md"}, TierT1},
 		{"a proto change", []string{"proto/api.proto"}, TierT3},
 		{"a deploy change", []string{"deploy/helm/aot/values.yaml"}, TierT3},
 		{"an empty diff", nil, TierT1},
@@ -104,8 +107,9 @@ func TestTierVerdict_NamesTheMissingChangeWhenNoneIsGiven(t *testing.T) {
 func TestTierVerdict_T3NeedsARecordedOwnerDecision(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "openspec", "changes", "wide")
-	writeFile(t, filepath.Join(dir, "proposal.md"), "# P\n\n## Impact\n\n- internal/gate/\n")
+	writeFile(t, filepath.Join(dir, "proposal.md"), "# P\n\n## Impact\n\n- proto/\n")
 	writeFile(t, filepath.Join(dir, "review.md"), "# R\n\n## Owner decision\n\npending\n")
+	writeFile(t, filepath.Join(dir, "citations.lock"), `{"records":[]}`)
 
 	repo := fakeRepo{
 		changed: []string{"proto/api.proto"},
@@ -279,5 +283,100 @@ func writeFile(t *testing.T, path, body string) {
 	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
+	}
+}
+
+// The tests below each pin one objection from the round 1 adversarial review,
+// so a regression reintroduces a named finding rather than a nameless bug.
+
+func TestTierVerdict_ANamedChangeMustClaimTheDiff(t *testing.T) {
+	// Round 1, objection 1, upheld by all three critics. The change id comes
+	// from a branch name the author writes, so a diff could borrow any merged
+	// change's spec and pass the required verdict.
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "openspec", "changes", "keybindings", "proposal.md"),
+		"# P\n\n## Impact\n\n- Code: `web/src/hooks/`\n")
+
+	repo := fakeRepo{
+		changed: []string{"internal/cli/open.go"},
+		atBase:  map[string]bool{"openspec/changes/keybindings/proposal.md": true},
+	}
+	result, err := Check(context.Background(), repo,
+		Options{ChangeID: "keybindings", Base: "main", Head: "HEAD", Root: root})
+	if err == nil {
+		t.Fatal("a change whose Impact covers none of the diff must not pass the tier verdict")
+	}
+	detail := strings.Join(verdict(result, "factory/tier").Detail, " ")
+	if !strings.Contains(detail, "does not claim this work") {
+		t.Fatalf("the verdict must say the change does not claim the diff, got %q", detail)
+	}
+}
+
+func TestTierVerdict_AClaimedDiffPasses(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "openspec", "changes", "opener", "proposal.md"),
+		"# P\n\n## Impact\n\n- Code: `internal/cli/`\n")
+
+	repo := fakeRepo{
+		changed: []string{"internal/cli/open.go"},
+		atBase:  map[string]bool{"openspec/changes/opener/proposal.md": true},
+	}
+	writeFile(t, filepath.Join(root, "openspec", "changes", "opener", "citations.lock"), `{"records":[]}`)
+	if _, err := Check(context.Background(), repo,
+		Options{ChangeID: "opener", Base: "main", Head: "HEAD", Root: root}); err != nil {
+		t.Fatalf("a change that claims its diff must pass: %v", err)
+	}
+}
+
+func TestTierVerdict_ASpecAmendmentNeverPassesOnItsOwn(t *testing.T) {
+	// Round 1, objection 4. openspec/ counted as documentation, so the one diff
+	// shape the escalation protocol exists for was the one shape that could not
+	// fail.
+	repo := fakeRepo{changed: []string{"openspec/specs/run-pipeline/spec.md"}}
+	result, err := Check(context.Background(), repo,
+		Options{Base: "main", Head: "HEAD", Root: t.TempDir()})
+	if err == nil {
+		t.Fatal("an amendment to the spec corpus must not pass the tier verdict")
+	}
+	if result.Tier != TierAmendment {
+		t.Fatalf("tier: got %s, want %s", result.Tier, TierAmendment)
+	}
+	if !strings.Contains(strings.Join(verdict(result, "factory/tier").Detail, " "), "escalation") {
+		t.Fatal("the verdict must name the diff as an escalation")
+	}
+}
+
+func TestCitations_AnAbsentLockFailsTheRequiredVerdict(t *testing.T) {
+	// Round 1, objection from the bypass lens. citelock.Verify reads an absent
+	// lock as nothing to do, which made the required verdict vacuous exactly
+	// where the schema demands a lock.
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "openspec", "changes", "nolock", "proposal.md"),
+		"# P\n\n## Impact\n\n- docs/\n")
+
+	repo := fakeRepo{changed: []string{"docs/x.md"}}
+	result, err := Check(context.Background(), repo,
+		Options{ChangeID: "nolock", Base: "main", Head: "HEAD", Root: root})
+	if err == nil {
+		t.Fatal("a change with no citations.lock must fail the required citations verdict")
+	}
+	if !strings.Contains(verdict(result, "factory/citations").Summary, "no citations.lock") {
+		t.Fatalf("the verdict must name the missing lock, got %q",
+			verdict(result, "factory/citations").Summary)
+	}
+}
+
+func TestResult_OnlyNarrowsToOneVerdict(t *testing.T) {
+	// Round 1, objection 3. Branch protection needs one check name per verdict,
+	// and a single job only ever gave it the job's own name.
+	repo := fakeRepo{changed: []string{"docs/x.md"}}
+	result, _ := Check(context.Background(), repo, Options{Base: "main", Head: "HEAD", Root: t.TempDir()})
+
+	only := result.Only("factory/tier")
+	if len(only.Verdicts) != 1 || only.Verdicts[0].Name != "factory/tier" {
+		t.Fatalf("expected exactly the tier verdict, got %+v", only.Verdicts)
+	}
+	if len(result.Only("factory/nonexistent").Verdicts) != 0 {
+		t.Fatal("an unknown name must narrow to nothing, so the caller can report it")
 	}
 }

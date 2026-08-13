@@ -16,9 +16,11 @@
       `deps:` 1.1 `writes:` internal/gate/citations.go
 - [x] 1.5 Add `uncworks gate check`, which runs every verdict and reports them as
       text or JSON `deps:` 1.2, 1.3, 1.4 `writes:` internal/gate/gate.go, cmd/uncworks/gate.go
-- [ ] 1.6 Adversarial review of this phase against the proposal Behavior
+- [x] 1.6 Adversarial review of this phase against the proposal Behavior
       criteria. Run `uncworks spec check factory-gate` and append a round block
       to review.md `deps:` 1.5
+- [ ] 1.7 Revise against the round 1 objections that remain open, then run
+      round 2 `deps:` 1.6
 
 ## 2. CI wiring
 
@@ -31,7 +33,7 @@
 - [x] 2.2 Add the workflow job on `pull_request` and `merge_group`, with
       continue-on-error until the owner marks the required checks required
       `deps:` 2.1 `writes:` .github/workflows/ci.yml
-- [ ] 2.3 Adversarial review of this phase. Run `uncworks spec check factory-gate`
+- [x] 2.3 Adversarial review of this phase. Run `uncworks spec check factory-gate`
       and append a round block to review.md `deps:` 2.2
 
 ## 3. Rollout

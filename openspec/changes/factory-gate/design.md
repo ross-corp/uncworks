@@ -63,6 +63,38 @@ Non-goals:
   legitimate combined spec-and-code pull request, which is the right shape for a
   small change.
 
+- Decision: the tier verdict requires the named change's Impact to claim the
+  diff, not merely to exist.
+- Alternative rejected: checking only that `openspec/changes/<id>/proposal.md`
+  is present at the base ref. The round 1 review found, from three critics
+  independently, that the change id reaches the gate from a branch name the
+  author writes, so any diff could borrow any merged change's spec and pass the
+  required verdict. Checking existence alone reintroduces the bar-lowering the
+  second Decision rejects, one layer down.
+
+- Decision: read the change id from a `Change-Id:` commit trailer as well as
+  from the branch.
+- Alternative rejected: the branch name alone. A merge queue rewrites the
+  branch, so `github.head_ref` is empty on a `merge_group` event and every T2
+  and T3 change would fail the recheck for want of a change id. The trailer
+  travels with the commit, so the merge-group run resolves the same change the
+  pull-request run did, which is what makes the recheck a recheck.
+
+- Decision: publish one job per required verdict, named `factory/tier` and
+  `factory/citations`, and carry no `continue-on-error` on either.
+- Alternative rejected: one job with `continue-on-error: true`. The check names
+  the design asks the owner to mark required were never published, so branch
+  protection saw only the job's own name, and `continue-on-error` made GitHub
+  report that job as success whatever the step returned. An unrequired check
+  that fails does not block a merge, so the staged rollout works without
+  pretending the job passed, and the kill switch stays a settings change.
+
+- Decision: treat a diff that touches `openspec/specs/` as its own tier, which
+  never passes on its own.
+- Alternative rejected: counting `openspec/` as documentation. That made a spec
+  amendment T1, so the one diff shape the escalation protocol exists for was the
+  one shape the classifier could not fail.
+
 - Decision: type an escalation from the amendment diff, not from the person who
   raises it.
 - Alternative rejected: letting the raiser declare the escalation type. With one
@@ -88,15 +120,20 @@ Non-goals:
 1. Land `internal/gate` and `cmd/uncworks/gate.go`. Gate: `task test:go` exits 0.
 2. Land the spec under `openspec/specs/factory-gate/spec.md`. Gate:
    `uncworks spec check factory-gate` exits 0.
-3. Add the CI job, reporting only. Gate: the job runs on a pull request and its
-   output is readable.
+3. Add three CI jobs: `factory/tier`, `factory/citations`, and an advisory job
+   for the other two verdicts. Gate: each runs on a pull request and its output
+   is readable.
 4. Apply: mark `factory/tier` and `factory/citations` required in branch
-   protection. Gate: the job has run green on at least one real pull request.
+   protection. Gate: both have run green on at least one real pull request.
    This is an owner gate, because it changes what can merge.
 
+The two required jobs carry no `continue-on-error`. An unrequired check that
+fails does not block a merge, so a failing job before step 4 reports honestly
+rather than reporting success. Only the advisory job absorbs its exit code.
+
 Kill switch: the required checks are branch-protection settings, so unmarking
-them restores the previous behavior with no code change. Until step 4, every
-verdict is advisory by construction.
+them restores the previous behavior with no code change. Before step 4 nothing
+blocks, because nothing is required.
 
 ## Risks / Trade-offs
 
@@ -104,6 +141,13 @@ verdict is advisory by construction.
   by making the classification visible in the job output and by keeping the
   owner's judgment as the override. The classifier reports its reason, so a
   wrong verdict is arguable rather than opaque.
+- The classifier groups a Go package as one capability, while the corpus can
+  hold several capability specs implemented in one package. `internal/server`
+  holds four. The round 1 review found this understates the tier for a diff
+  spanning them. It is mitigated for the public-surface half by listing
+  `internal/server/` as a public surface, so any change there is T3. The general
+  case, mapping a path to a capability through the corpus, is open and recorded
+  in Open Questions.
 - Spec-conformance will produce false positives on generated files, mitigated by
   keeping it advisory and by excluding `gen/` from the comparison.
 - A gate with one owner can always be overridden by that owner, so it deters
@@ -129,3 +173,8 @@ confirm that a deliberately non-conforming branch is blocked.
   yet. The spec records the contract so the answer can be filled in later.
 - Whether `experiment` mode needs branch-targeting enforcement, or whether the
   tier check naming the mode is enough.
+- How a path maps to a capability in the corpus. The classifier currently uses
+  the package directory, which is right for most of the tree and wrong for
+  `internal/server`, where four capability specs share one package. Reading the
+  mapping from `openspec/specs/` needs the specs to record which paths implement
+  them, which none of them do today.

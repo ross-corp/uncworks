@@ -12,6 +12,10 @@ lower its own bar.
 
 The tiers are:
 
+- `amendment`: a diff that touches `openspec/specs/`. It rewrites the contract
+  other work is measured against, so it MUST NOT pass on its own. The owner
+  merges the amendment as its own change, and the code that depends on it comes
+  afterwards.
 - `experiment`: a branch with no spec. It MAY target only another experiment
   branch, and it MUST NOT merge into the default branch.
 - `T1`: a change confined to documentation, tests, or a single non-exported
@@ -26,6 +30,12 @@ The tiers are:
 - **WHEN** the diff touches only `docs/` and `*.md`
 - **THEN** the tier verdict is `T1` and passes with no change directory present
 
+#### Scenario: A spec amendment is not documentation
+- **POLARITY** negative
+- **WHEN** the diff rewrites a requirement in `openspec/specs/`
+- **THEN** the tier is `amendment` and the verdict fails, rather than reading the
+  diff as documentation and passing
+
 #### Scenario: A branch renamed to look small keeps its computed tier
 - **POLARITY** negative
 - **WHEN** a diff that alters a public surface is pushed to a branch named `docs/typo`
@@ -37,6 +47,32 @@ The tiers are:
 - **WHEN** the diff touches two capabilities and `openspec/changes/<id>/` is
   absent from the base ref
 - **THEN** the tier verdict fails and names the change id it looked for
+
+### Requirement: The named change MUST claim the diff
+
+The change id reaches the gate from a flag, a commit trailer, or a branch name,
+and the author writes all three. The gate MUST therefore check more than that the
+named change exists: it MUST confirm the change's `## Impact` covers at least one
+changed code path.
+
+Without this, any diff borrows any merged change's spec and passes the required
+tier verdict, which is the same bar-lowering the tier classifier refuses to allow
+through a rename.
+
+The check asks only whether the change is about this diff at all. Whether every
+path is declared is the conformance verdict's business, and that one is advisory.
+
+#### Scenario: A change that claims the diff passes
+- **POLARITY** positive
+- **WHEN** the named change's `## Impact` covers a changed code path
+- **THEN** the tier verdict proceeds to its remaining checks
+
+#### Scenario: Borrowing an unrelated merged change fails
+- **POLARITY** negative
+- **WHEN** the branch names a merged change whose `## Impact` covers none of the
+  changed code paths
+- **THEN** the tier verdict fails and reports that the change does not claim the
+  work
 
 ### Requirement: The order check confirms the spec merged before the code
 
@@ -85,7 +121,9 @@ owner to override it, which costs more than the check returns.
 ### Requirement: The citations verdict runs the offline gate only
 
 The gate MUST run the offline citation gate over the change's `citations.lock`,
-and MUST NOT perform a live fetch. A live fetch would make the verdict a
+and MUST NOT perform a live fetch. It MUST fail when the change carries no lock
+at all, because the schema requires one from every change and an absent lock
+cannot be read as "there was nothing to cite". A live fetch would make the verdict a
 function of network state, so an untouched pull request would start failing on
 its own.
 
@@ -100,6 +138,11 @@ its own.
 - **WHEN** a snapshot no longer hashes to the sha256 recorded for it
 - **THEN** the citations verdict fails and names the claim id
 
+#### Scenario: An absent lock fails
+- **POLARITY** negative
+- **WHEN** the change directory exists and carries no `citations.lock`
+- **THEN** the citations verdict fails and says to write an empty records list
+
 ### Requirement: An escalation is typed from the amendment diff
 
 When a change's spec turns out to be wrong or infeasible, the author MUST raise
@@ -110,9 +153,19 @@ declared by the person raising it.
 A repository with one owner cannot delegate this judgment, so the typing is what
 stops a scope change from being relabelled as a correction to skip a gate.
 
-An amendment that changes a `## Behavior` criterion or a requirement's normative
-text is an intent change. An amendment confined to wording, examples, or a
-non-normative note is a correction.
+An amendment is an intent change when it edits any of: a `## Behavior` criterion,
+a requirement's normative text, a `#### Scenario:` heading, or a scenario's
+`WHEN`, `THEN`, or `POLARITY` line. An amendment confined to prose that none of
+those carry is a correction.
+
+The scenarios are named explicitly because they are the machine-readable
+acceptance criteria, not examples. `uncworks spec check` enforces them at error
+severity, so rewriting a scenario's `THEN` from "the verdict fails" to "the
+verdict passes" converts a required check into a reporting-only one while leaving
+every requirement paragraph untouched.
+
+A change to `### Non-goals` that retires an obligation is also an intent change,
+for the same reason: it removes a requirement without editing one.
 
 While an amendment is open, the tier verdict MUST fail, so code cannot merge
 against a spec that is under revision.
@@ -122,6 +175,13 @@ against a spec that is under revision.
 - **WHEN** the amendment diff edits a line under `## Behavior`
 - **THEN** the escalation is typed as an intent change and the tier verdict
   fails until the amendment merges or is withdrawn
+
+#### Scenario: Rewriting a scenario is an intent change
+- **POLARITY** negative
+- **WHEN** the amendment rewrites a `#### Scenario:` THEN line so a failing
+  verdict becomes a passing one, and edits no requirement paragraph
+- **THEN** the escalation is typed as an intent change, because the scenario is
+  the acceptance criterion rather than an example
 
 #### Scenario: A raiser cannot declare the type
 - **POLARITY** negative
@@ -136,11 +196,21 @@ verdict on the merge-group SHA. A verdict computed on the pull-request SHA was
 computed against a base the queue may have moved past, so it can be wrong for
 the commit that actually lands.
 
+A merge queue rewrites the branch, so the branch name cannot carry the change id
+into the merge-group run. The change id MUST therefore also be readable from a
+`Change-Id: <id>` trailer on the head commit, which travels with the commit.
+
 #### Scenario: A queued pull request is rechecked
 - **POLARITY** positive
 - **WHEN** a pull request enters the merge queue
 - **THEN** the workflow runs again on the merge-group SHA and the required
   verdicts are computed from that tree
+
+#### Scenario: The change id survives the queue
+- **POLARITY** negative
+- **WHEN** the merge-group run reads an empty branch name
+- **THEN** it resolves the change id from the commit trailer instead, rather than
+  computing a verdict that fails for want of a change id
 
 #### Scenario: A stale pass does not carry over
 - **POLARITY** negative
